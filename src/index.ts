@@ -593,9 +593,10 @@ async function executeProviderTool({
     summary: response.summary,
     itemCount: response.itemCount,
   };
+  const text = await truncateAndSave(response.text, capability);
 
   return {
-    content: [{ type: "text" as const, text: response.text }],
+    content: [{ type: "text" as const, text }],
     details,
   };
 }
@@ -2084,6 +2085,7 @@ function truncateInline(text: string, maxLength: number): string {
 }
 
 export const __test__ = {
+  executeProviderTool,
   extractTextContent,
   getAvailableManagedToolNames,
   getAvailableProviderIdsForCapability,
