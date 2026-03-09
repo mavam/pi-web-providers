@@ -1,7 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { StringEnum } from "@mariozechner/pi-ai";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -66,12 +65,16 @@ const CAPABILITY_TOOL_NAMES: Record<ProviderCapability, string> = {
   research: "web_research",
 };
 const MANAGED_TOOL_NAMES = Object.values(CAPABILITY_TOOL_NAMES);
+const PROVIDER_OVERRIDE_GUIDELINES = [
+  "Do not set provider unless the user asks for one.",
+];
+const WEB_SEARCH_PROMPT_GUIDELINES = [
+  ...PROVIDER_OVERRIDE_GUIDELINES,
+  "Use at most one web_search per question unless the first result is clearly insufficient or off-topic.",
+];
 
 export default function webProvidersExtension(pi: ExtensionAPI) {
-  registerWebSearchTool(pi);
-  registerWebContentsTool(pi);
-  registerWebAnswerTool(pi);
-  registerWebResearchTool(pi);
+  registerManagedTools(pi);
 
   pi.registerCommand("web-providers", {
     description: "Configure web search providers",
@@ -86,21 +89,50 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    await syncManagedToolAvailability(pi, ctx.cwd, { addAvailable: true });
+    await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
-    await syncManagedToolAvailability(pi, ctx.cwd, { addAvailable: false });
+    await refreshManagedTools(pi, ctx.cwd, { addAvailable: false });
   });
 }
 
-function registerWebSearchTool(pi: ExtensionAPI): void {
+function registerManagedTools(
+  pi: ExtensionAPI,
+  providerIdsByCapability: Partial<
+    Record<ProviderCapability, ProviderId[]>
+  > = {},
+): void {
+  registerWebSearchTool(pi, providerIdsByCapability.search ?? PROVIDER_IDS);
+  registerWebContentsTool(
+    pi,
+    providerIdsByCapability.contents ?? getProviderIdsForCapability("contents"),
+  );
+  registerWebAnswerTool(
+    pi,
+    providerIdsByCapability.answer ?? getProviderIdsForCapability("answer"),
+  );
+  registerWebResearchTool(
+    pi,
+    providerIdsByCapability.research ?? getProviderIdsForCapability("research"),
+  );
+}
+
+function registerWebSearchTool(
+  pi: ExtensionAPI,
+  providerIds: readonly ProviderId[],
+): void {
+  const visibleProviderIds =
+    providerIds.length > 0 ? providerIds : PROVIDER_IDS;
+
   pi.registerTool({
     name: "web_search",
     label: "Web Search",
     description:
       "Search the public web and return results with titles, URLs, and snippets. " +
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
+    promptSnippet: "Search once; answer from the sources.",
+    promptGuidelines: WEB_SEARCH_PROMPT_GUIDELINES,
     parameters: Type.Object({
       query: Type.String({ description: "What to search for on the web" }),
       maxResults: Type.Optional(
@@ -110,11 +142,9 @@ function registerWebSearchTool(pi: ExtensionAPI): void {
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
-      provider: Type.Optional(
-        StringEnum(PROVIDER_IDS, {
-          description:
-            "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
-        }),
+      provider: providerEnum(
+        visibleProviderIds,
+        "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
       ),
     }),
 
@@ -191,8 +221,10 @@ function registerWebSearchTool(pi: ExtensionAPI): void {
   });
 }
 
-function registerWebContentsTool(pi: ExtensionAPI): void {
-  const providerIds = getProviderIdsForCapability("contents");
+function registerWebContentsTool(
+  pi: ExtensionAPI,
+  providerIds: readonly ProviderId[],
+): void {
   if (providerIds.length === 0) return;
 
   pi.registerTool({
@@ -211,6 +243,7 @@ function registerWebContentsTool(pi: ExtensionAPI): void {
         "Provider override. If omitted, uses the active configured provider that supports web contents.",
       ),
     }),
+    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "contents",
@@ -250,8 +283,10 @@ function registerWebContentsTool(pi: ExtensionAPI): void {
   });
 }
 
-function registerWebAnswerTool(pi: ExtensionAPI): void {
-  const providerIds = getProviderIdsForCapability("answer");
+function registerWebAnswerTool(
+  pi: ExtensionAPI,
+  providerIds: readonly ProviderId[],
+): void {
   if (providerIds.length === 0) return;
 
   pi.registerTool({
@@ -266,6 +301,7 @@ function registerWebAnswerTool(pi: ExtensionAPI): void {
         "Provider override. If omitted, uses the active configured provider that supports web answers.",
       ),
     }),
+    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "answer",
@@ -305,8 +341,10 @@ function registerWebAnswerTool(pi: ExtensionAPI): void {
   });
 }
 
-function registerWebResearchTool(pi: ExtensionAPI): void {
-  const providerIds = getProviderIdsForCapability("research");
+function registerWebResearchTool(
+  pi: ExtensionAPI,
+  providerIds: readonly ProviderId[],
+): void {
   if (providerIds.length === 0) return;
 
   pi.registerTool({
@@ -322,6 +360,7 @@ function registerWebResearchTool(pi: ExtensionAPI): void {
         "Provider override. If omitted, uses the active configured provider that supports research.",
       ),
     }),
+    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "research",
@@ -380,40 +419,64 @@ async function runWebProvidersConfig(
       ),
   );
 
-  await syncManagedToolAvailability(pi, ctx.cwd, { addAvailable: true });
+  await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
+}
+
+function getAvailableProviderIdsForCapability(
+  config: WebProvidersConfig,
+  cwd: string,
+  capability: ProviderCapability,
+): ProviderId[] {
+  const providerIds: ProviderId[] = [];
+
+  for (const providerId of getProviderIdsForCapability(capability)) {
+    try {
+      resolveProviderForCapability(config, providerId, cwd, capability);
+      providerIds.push(providerId);
+    } catch {
+      // Exclude unavailable or disabled providers from the visible override list.
+    }
+  }
+
+  return providerIds;
 }
 
 function getAvailableManagedToolNames(
   config: WebProvidersConfig,
   cwd: string,
 ): string[] {
-  const activeToolNames: string[] = [];
-
-  for (const capability of Object.keys(
-    CAPABILITY_TOOL_NAMES,
-  ) as ProviderCapability[]) {
-    try {
-      const provider =
-        capability === "search"
-          ? resolveProviderChoice(config, undefined, cwd)
-          : resolveProviderForCapability(config, undefined, cwd, capability);
-      if (getEffectiveProviderConfig(config, provider.id)) {
-        activeToolNames.push(CAPABILITY_TOOL_NAMES[capability]);
-      }
-    } catch {
-      // Keep the tool inactive when no provider is available for this capability.
-    }
-  }
-
-  return activeToolNames;
+  return (Object.keys(CAPABILITY_TOOL_NAMES) as ProviderCapability[])
+    .filter(
+      (capability) =>
+        getAvailableProviderIdsForCapability(config, cwd, capability).length >
+        0,
+    )
+    .map((capability) => CAPABILITY_TOOL_NAMES[capability]);
 }
 
-async function syncManagedToolAvailability(
+async function refreshManagedTools(
   pi: ExtensionAPI,
   cwd: string,
   options: { addAvailable: boolean },
 ): Promise<void> {
   const config = await loadConfig();
+
+  registerManagedTools(pi, {
+    search: getAvailableProviderIdsForCapability(config, cwd, "search"),
+    contents: getAvailableProviderIdsForCapability(config, cwd, "contents"),
+    answer: getAvailableProviderIdsForCapability(config, cwd, "answer"),
+    research: getAvailableProviderIdsForCapability(config, cwd, "research"),
+  });
+
+  await syncManagedToolAvailability(pi, config, cwd, options);
+}
+
+async function syncManagedToolAvailability(
+  pi: ExtensionAPI,
+  config: WebProvidersConfig,
+  cwd: string,
+  options: { addAvailable: boolean },
+): Promise<void> {
   const availableToolNames = new Set(getAvailableManagedToolNames(config, cwd));
   const activeTools = new Set(pi.getActiveTools());
   let changed = false;
@@ -445,7 +508,7 @@ function getProviderIdsForCapability(
   ).map((provider) => provider.id);
 }
 
-function providerEnum(providerIds: ProviderId[], description: string) {
+function providerEnum(providerIds: readonly ProviderId[], description: string) {
   if (providerIds.length === 1) {
     return Type.Optional(Type.Literal(providerIds[0], { description }));
   }
@@ -2023,6 +2086,7 @@ function truncateInline(text: string, maxLength: number): string {
 export const __test__ = {
   extractTextContent,
   getAvailableManagedToolNames,
+  getAvailableProviderIdsForCapability,
   renderCallHeader,
   renderCollapsedSearchSummary,
 };

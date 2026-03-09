@@ -7,6 +7,29 @@ afterEach(() => {
 });
 
 describe("managed tool availability", () => {
+  it("only exposes available provider overrides to the model", () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        codex: {
+          enabled: true,
+        },
+        exa: {
+          enabled: false,
+          apiKey: "EXA_API_KEY",
+        },
+      },
+    };
+
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "search",
+      ),
+    ).toEqual(["codex"]);
+  });
+
   it("keeps web_search available via implicit Codex fallback", () => {
     const config: WebProvidersConfig = { version: 1 };
 
