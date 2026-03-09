@@ -142,7 +142,7 @@ function registerWebSearchTool(
       ),
       provider: providerEnum(
         visibleProviderIds,
-        "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
+        "Provider override. If omitted, uses the active configured provider or falls back to Codex first and then Claude for search when they are not explicitly disabled.",
       ),
     }),
 

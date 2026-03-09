@@ -108,6 +108,10 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
     if (!authStatus.loggedIn) {
       return { available: false, summary: "missing Claude auth" };
     }
+    const queryAccessStatus = getClaudeQueryAccessStatus(executablePath);
+    if (!queryAccessStatus.available) {
+      return { available: false, summary: queryAccessStatus.summary };
+    }
     return { available: true, summary: "enabled" };
   }
 
@@ -280,10 +284,22 @@ interface CachedClaudeAuthStatus extends ClaudeAuthStatus {
   checkedAt: number;
 }
 
+interface ClaudeQueryAccessStatus {
+  available: boolean;
+  summary: string;
+}
+
+interface CachedClaudeQueryAccessStatus extends ClaudeQueryAccessStatus {
+  checkedAt: number;
+}
+
 const CLAUDE_AUTH_CACHE_TTL_MS = 5_000;
+const CLAUDE_QUERY_ACCESS_CACHE_TTL_MS = 60_000;
+const CLAUDE_QUERY_ACCESS_PROMPT = "Reply with OK.";
 
 let defaultClaudeExecutablePath: string | undefined;
 const claudeAuthStatusCache = new Map<string, CachedClaudeAuthStatus>();
+const claudeQueryAccessCache = new Map<string, CachedClaudeQueryAccessStatus>();
 
 function resolveClaudeExecutablePath(
   config: ClaudeProviderConfig,
@@ -354,9 +370,65 @@ function cacheClaudeAuthStatus(
   return status;
 }
 
+function getClaudeQueryAccessStatus(
+  executablePath: string | undefined,
+): ClaudeQueryAccessStatus {
+  if (!executablePath) {
+    return {
+      available: false,
+      summary: "missing Claude Code executable",
+    };
+  }
+
+  const cachedStatus = claudeQueryAccessCache.get(executablePath);
+  if (
+    cachedStatus &&
+    Date.now() - cachedStatus.checkedAt < CLAUDE_QUERY_ACCESS_CACHE_TTL_MS
+  ) {
+    return {
+      available: cachedStatus.available,
+      summary: cachedStatus.summary,
+    };
+  }
+
+  const [command, ...args] = getClaudeQueryAccessCommand(executablePath);
+
+  try {
+    execFileSync(command, args, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+      timeout: 15_000,
+    });
+    return cacheClaudeQueryAccessStatus(executablePath, {
+      available: true,
+      summary: "enabled",
+    });
+  } catch (error) {
+    return cacheClaudeQueryAccessStatus(executablePath, {
+      available: false,
+      summary: parseClaudeQueryAccessFailure(
+        getExecOutput((error as { stdout?: string | Buffer }).stdout),
+        getExecOutput((error as { stderr?: string | Buffer }).stderr),
+      ),
+    });
+  }
+}
+
+function cacheClaudeQueryAccessStatus(
+  executablePath: string,
+  status: ClaudeQueryAccessStatus,
+): ClaudeQueryAccessStatus {
+  claudeQueryAccessCache.set(executablePath, {
+    ...status,
+    checkedAt: Date.now(),
+  });
+  return status;
+}
+
 export function resetClaudeProviderCachesForTests(): void {
   defaultClaudeExecutablePath = undefined;
   claudeAuthStatusCache.clear();
+  claudeQueryAccessCache.clear();
 }
 
 function getClaudeAuthCommand(executablePath: string): string[] {
@@ -365,6 +437,24 @@ function getClaudeAuthCommand(executablePath: string): string[] {
     return [process.execPath, executablePath, "auth", "status", "--json"];
   }
   return [executablePath, "auth", "status", "--json"];
+}
+
+function getClaudeQueryAccessCommand(executablePath: string): string[] {
+  const args = [
+    "-p",
+    "--output-format",
+    "json",
+    "--no-session-persistence",
+    "--tools",
+    "",
+    CLAUDE_QUERY_ACCESS_PROMPT,
+  ];
+
+  const extension = extname(executablePath);
+  if (extension === ".js" || extension === ".cjs" || extension === ".mjs") {
+    return [process.execPath, executablePath, ...args];
+  }
+  return [executablePath, ...args];
 }
 
 function getExecOutput(output: string | Buffer | undefined): string {
@@ -384,6 +474,20 @@ function parseClaudeAuthStatus(raw: string): ClaudeAuthStatus {
   } catch {
     return { loggedIn: false };
   }
+}
+
+function parseClaudeQueryAccessFailure(
+  stdout: string,
+  stderr: string,
+): string {
+  const output = [stderr, stdout].filter(Boolean).join("\n").toLowerCase();
+  if (
+    output.includes("authentication_failed") ||
+    output.includes("does not have access to claude")
+  ) {
+    return "missing Claude query access";
+  }
+  return "Claude query access unavailable";
 }
 
 function handleProgressMessage(

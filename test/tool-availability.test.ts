@@ -2,8 +2,25 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { execFileSyncMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn(),
+}));
+
+vi.mock("node:child_process", async () => {
+  const actual =
+    await vi.importActual<typeof import("node:child_process")>(
+      "node:child_process",
+    );
+  return {
+    ...actual,
+    execFileSync: execFileSyncMock,
+  };
+});
+
 import webProvidersExtension, { __test__ } from "../src/index.js";
+import { resetClaudeProviderCachesForTests } from "../src/providers/claude.js";
 import type { WebProvidersConfig } from "../src/types.js";
 
 const originalHome = process.env.HOME;
@@ -18,6 +35,8 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.EXA_API_KEY;
   delete process.env.CODEX_API_KEY;
+  execFileSyncMock.mockReset();
+  resetClaudeProviderCachesForTests();
   if (originalHome === undefined) {
     delete process.env.HOME;
   } else {
@@ -109,6 +128,16 @@ describe("managed tool availability", () => {
     expect(
       __test__.getAvailableManagedToolNames(config, process.cwd()),
     ).toEqual(["web_search"]);
+  });
+
+  it("keeps web_search and web_answer available via implicit Claude fallback", () => {
+    mockClaudeAvailable();
+
+    const config: WebProvidersConfig = { version: 1 };
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual(["web_search", "web_answer"]);
   });
 
   it("hides managed tools when no provider is available", () => {
@@ -216,3 +245,15 @@ describe("managed tool availability", () => {
     expect(Array.from(activeTools)).toEqual(["web_search"]);
   });
 });
+
+function mockClaudeAvailable(): void {
+  execFileSyncMock.mockImplementation((_command, args: string[]) => {
+    if (args.includes("auth") && args.includes("status")) {
+      return '{"loggedIn":true,"authMethod":"claude.ai"}';
+    }
+    if (args.includes("-p")) {
+      return '{"result":"OK"}';
+    }
+    throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
+  });
+}
