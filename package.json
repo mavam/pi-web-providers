@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "0.1.0",
-  "description": "Web access extension for pi with configurable Codex, Exa, Gemini, Parallel, and Valyu providers.",
+  "description": "Configurable web access extension for pi that routes search, contents, answers, and research across Codex, Exa, Gemini, Parallel, and Valyu providers.",
   "type": "module",
   "files": [
     "dist",
