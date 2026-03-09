@@ -1,0 +1,5 @@
+created: 2026-03-09
+title: Multi-provider web access for pi
+intro: "Adds flexible web access to pi through five interchangeable providers\u2014\
+  Codex, Exa, Gemini, Parallel, and Valyu\u2014with a TUI for easy provider selection\
+  \ and configuration."
