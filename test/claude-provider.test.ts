@@ -20,11 +20,15 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: queryMock,
 }));
 
-import { ClaudeProvider } from "../src/providers/claude.js";
+import {
+  ClaudeProvider,
+  resetClaudeProviderCachesForTests,
+} from "../src/providers/claude.js";
 
 afterEach(() => {
   execFileSyncMock.mockReset();
   queryMock.mockReset();
+  resetClaudeProviderCachesForTests();
 });
 
 describe("ClaudeProvider", () => {
@@ -37,7 +41,12 @@ describe("ClaudeProvider", () => {
 
     const provider = new ClaudeProvider();
 
-    expect(provider.getStatus({ enabled: true })).toEqual({
+    expect(
+      provider.getStatus({
+        enabled: true,
+        pathToClaudeCodeExecutable: process.execPath,
+      }),
+    ).toEqual({
       available: false,
       summary: "missing Claude auth",
     });
@@ -50,10 +59,77 @@ describe("ClaudeProvider", () => {
 
     const provider = new ClaudeProvider();
 
-    expect(provider.getStatus({ enabled: true })).toEqual({
+    expect(
+      provider.getStatus({
+        enabled: true,
+        pathToClaudeCodeExecutable: process.execPath,
+      }),
+    ).toEqual({
       available: true,
       summary: "enabled",
     });
+  });
+
+  it("caches Claude auth status across repeated availability checks", () => {
+    execFileSyncMock.mockReturnValue(
+      '{"loggedIn":true,"authMethod":"claude.ai"}',
+    );
+
+    const config = {
+      enabled: true,
+      pathToClaudeCodeExecutable: process.execPath,
+    };
+
+    expect(new ClaudeProvider().getStatus(config)).toEqual({
+      available: true,
+      summary: "enabled",
+    });
+    expect(new ClaudeProvider().getStatus(config)).toEqual({
+      available: true,
+      summary: "enabled",
+    });
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables Claude session persistence for provider queries", async () => {
+    queryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: "result",
+          subtype: "success",
+          result: "",
+          structured_output: {
+            sources: [
+              {
+                title: "Claude docs",
+                url: "https://docs.anthropic.com",
+                snippet: "Official documentation",
+              },
+            ],
+          },
+          errors: [],
+        };
+      },
+      close() {},
+    }));
+
+    const provider = new ClaudeProvider();
+    await provider.search(
+      "latest Claude docs",
+      1,
+      { enabled: true },
+      {
+        cwd: process.cwd(),
+      },
+    );
+
+    expect(queryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          persistSession: false,
+        }),
+      }),
+    );
   });
 
   it("propagates cancellation into Claude queries", async () => {

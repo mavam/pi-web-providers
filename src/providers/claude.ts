@@ -231,6 +231,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
           schema,
         },
         pathToClaudeCodeExecutable: config.pathToClaudeCodeExecutable,
+        persistSession: false,
         permissionMode: "dontAsk",
         systemPrompt: {
           type: "preset",
@@ -275,7 +276,14 @@ interface ClaudeAuthStatus {
   loggedIn: boolean;
 }
 
+interface CachedClaudeAuthStatus extends ClaudeAuthStatus {
+  checkedAt: number;
+}
+
+const CLAUDE_AUTH_CACHE_TTL_MS = 5_000;
+
 let defaultClaudeExecutablePath: string | undefined;
+const claudeAuthStatusCache = new Map<string, CachedClaudeAuthStatus>();
 
 function resolveClaudeExecutablePath(
   config: ClaudeProviderConfig,
@@ -302,6 +310,14 @@ function getClaudeAuthStatus(
     return { loggedIn: false };
   }
 
+  const cachedStatus = claudeAuthStatusCache.get(executablePath);
+  if (
+    cachedStatus &&
+    Date.now() - cachedStatus.checkedAt < CLAUDE_AUTH_CACHE_TTL_MS
+  ) {
+    return { loggedIn: cachedStatus.loggedIn };
+  }
+
   const [command, ...args] = getClaudeAuthCommand(executablePath);
 
   try {
@@ -309,16 +325,38 @@ function getClaudeAuthStatus(
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    return parseClaudeAuthStatus(stdout);
+    return cacheClaudeAuthStatus(
+      executablePath,
+      parseClaudeAuthStatus(stdout),
+    );
   } catch (error) {
     const stdout = getExecOutput(
       (error as { stdout?: string | Buffer }).stdout,
     );
     if (stdout) {
-      return parseClaudeAuthStatus(stdout);
+      return cacheClaudeAuthStatus(
+        executablePath,
+        parseClaudeAuthStatus(stdout),
+      );
     }
-    return { loggedIn: false };
+    return cacheClaudeAuthStatus(executablePath, { loggedIn: false });
   }
+}
+
+function cacheClaudeAuthStatus(
+  executablePath: string,
+  status: ClaudeAuthStatus,
+): ClaudeAuthStatus {
+  claudeAuthStatusCache.set(executablePath, {
+    ...status,
+    checkedAt: Date.now(),
+  });
+  return status;
+}
+
+export function resetClaudeProviderCachesForTests(): void {
+  defaultClaudeExecutablePath = undefined;
+  claudeAuthStatusCache.clear();
 }
 
 function getClaudeAuthCommand(executablePath: string): string[] {
