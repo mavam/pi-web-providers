@@ -20,6 +20,25 @@ describe("web_search renderer", () => {
     expect(rendered).toContain("provider=codex maxResults=7");
   });
 
+  it("shows an ellipsis when the query preview is truncated", () => {
+    const rendered = renderComponentText(
+      __test__.renderCallHeader(
+        {
+          query:
+            "What are the main use cases of Tenzir, the security data pipeline platform? Include modern SOC and AI workflows.",
+          provider: "gemini",
+          maxResults: 10,
+        },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain(
+      '"What are the main use cases of Tenzir, the security data pipeline platform? Inc…"',
+    );
+  });
+
   it("collapses search results to the first line until expanded", () => {
     const summary = renderComponentText(
       __test__.renderCollapsedSearchSummary(

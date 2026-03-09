@@ -8,7 +8,6 @@ import type {
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { trimSnippet } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
@@ -61,22 +60,24 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     const model = config.defaults?.searchModel ?? DEFAULT_SEARCH_MODEL;
 
     context.onProgress?.(`Searching Gemini for: ${query}`);
-    const interaction = await ai.interactions.create({
-      model,
-      input: query,
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        tool_choice: "any",
-      },
-    });
+    const interaction = await createSearchInteraction(ai, model, query);
 
-    const results = extractGoogleSearchResults(interaction.outputs)
-      .slice(0, maxResults)
-      .map((result) => ({
-        title: result.title ?? result.url ?? "Untitled",
-        url: result.url ?? "",
-        snippet: trimSnippet(result.rendered_content ?? ""),
-      }));
+    const results = await Promise.all(
+      extractGoogleSearchResults(interaction.outputs)
+        .slice(0, maxResults)
+        .map(async (result) => {
+          const resolvedUrl = await resolveGoogleSearchUrl(result.url);
+          return {
+            title:
+              result.title ??
+              resolvedUrl ??
+              result.url ??
+              "Untitled",
+            url: resolvedUrl ?? result.url ?? "",
+            snippet: "",
+          };
+        }),
+    );
 
     return {
       provider: this.id,
@@ -114,7 +115,9 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       lines.push("Sources:");
       for (const [index, source] of sources.entries()) {
         lines.push(`${index + 1}. ${source.title}`);
-        lines.push(`   ${source.url}`);
+        if (source.url) {
+          lines.push(`   ${source.url}`);
+        }
       }
     }
 
@@ -136,6 +139,8 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     const agent = config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT;
     const pollIntervalMs = getPollInterval(options);
     const requestOptions = stripPollIntervalOption(options);
+    const startedAt = Date.now();
+    let lastStatus: string | undefined;
 
     context.onProgress?.("Starting Gemini deep research");
     const initialInteraction = await ai.interactions.create({
@@ -153,7 +158,13 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       }
 
       const interaction = await ai.interactions.get(initialInteraction.id);
-      context.onProgress?.(`Gemini research status: ${interaction.status}`);
+      const now = Date.now();
+      if (interaction.status !== lastStatus) {
+        context.onProgress?.(
+          `Gemini research status: ${interaction.status} (${formatElapsed(now - startedAt)} elapsed)`,
+        );
+        lastStatus = interaction.status;
+      }
 
       if (interaction.status === "completed") {
         const text = formatInteractionOutputs(interaction.outputs);
@@ -196,6 +207,7 @@ function extractGoogleSearchResults(
     url?: string;
     rendered_content?: string;
   }> = [];
+
   if (!Array.isArray(outputs)) {
     return results;
   }
@@ -204,15 +216,18 @@ function extractGoogleSearchResults(
     if (typeof output !== "object" || output === null) {
       continue;
     }
+
     const content = output as { type?: unknown; result?: unknown };
     if (content.type !== "google_search_result") {
       continue;
     }
+
     const items = Array.isArray(content.result) ? content.result : [];
     for (const item of items) {
       if (typeof item !== "object" || item === null) {
         continue;
       }
+
       const record = item as Record<string, unknown>;
       results.push({
         title: typeof record.title === "string" ? record.title : undefined,
@@ -224,6 +239,7 @@ function extractGoogleSearchResults(
       });
     }
   }
+
   return results;
 }
 
@@ -232,6 +248,7 @@ function extractGroundingSources(
 ): Array<{ title: string; url: string }> {
   const seen = new Set<string>();
   const sources: Array<{ title: string; url: string }> = [];
+  const maxSources = 5;
 
   if (!Array.isArray(chunks)) {
     return sources;
@@ -248,14 +265,24 @@ function extractGroundingSources(
         : undefined;
     if (!web) continue;
 
-    const url = typeof web.uri === "string" ? web.uri : undefined;
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
+    const rawUrl = typeof web.uri === "string" ? web.uri : "";
+    const title = formatGroundingSourceTitle(
+      typeof web.title === "string" ? web.title : rawUrl,
+      rawUrl,
+    );
+    const url = formatGroundingSourceUrl(rawUrl);
+    const key = [title.toLowerCase(), url.toLowerCase()].join("::");
+    if (seen.has(key)) continue;
+    seen.add(key);
 
     sources.push({
-      title: typeof web.title === "string" ? web.title : url,
+      title,
       url,
     });
+
+    if (sources.length >= maxSources) {
+      break;
+    }
   }
 
   return sources;
@@ -287,6 +314,117 @@ function formatInteractionOutputs(outputs: unknown): string {
   return lines.join("\n\n").trim();
 }
 
+function formatGroundingSourceTitle(title: string | undefined, url: string): string {
+  const trimmedTitle = title?.trim();
+  if (trimmedTitle) {
+    return trimmedTitle;
+  }
+
+  if (url) {
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return url;
+    }
+  }
+
+  return "Untitled";
+}
+
+function formatGroundingSourceUrl(url: string): string {
+  if (!url) {
+    return "";
+  }
+
+  if (isGoogleGroundingRedirect(url)) {
+    return "";
+  }
+
+  return url;
+}
+
+function isGoogleGroundingRedirect(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.hostname === "vertexaisearch.cloud.google.com" &&
+      parsed.pathname.startsWith("/grounding-api-redirect/")
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function createSearchInteraction(
+  ai: GoogleGenAI,
+  model: string,
+  query: string,
+) {
+  const request = {
+    model,
+    input: query,
+    tools: [{ type: "google_search" as const }],
+  };
+
+  try {
+    return await ai.interactions.create({
+      ...request,
+      generation_config: {
+        tool_choice: "any",
+      },
+    });
+  } catch (error) {
+    if (!isBuiltInToolChoiceError(error)) {
+      throw error;
+    }
+
+    return ai.interactions.create(request);
+  }
+}
+
+function isBuiltInToolChoiceError(error: unknown): boolean {
+  if (error instanceof Error) {
+    return error.message.includes(
+      "Function calling config is set without function_declarations",
+    );
+  }
+
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  ) {
+    return error.message.includes(
+      "Function calling config is set without function_declarations",
+    );
+  }
+
+  return false;
+}
+
+async function resolveGoogleSearchUrl(
+  url: string | undefined,
+): Promise<string | undefined> {
+  if (!url) {
+    return undefined;
+  }
+
+  if (!isGoogleGroundingRedirect(url)) {
+    return url;
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "manual",
+    });
+    return response.headers.get("location") || url;
+  } catch {
+    return url;
+  }
+}
+
 async function sleep(
   ms: number,
   signal: AbortSignal | undefined,
@@ -309,6 +447,18 @@ async function sleep(
 
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${totalSeconds}s`;
 }
 
 function getPollInterval(options: Record<string, unknown> | undefined): number {

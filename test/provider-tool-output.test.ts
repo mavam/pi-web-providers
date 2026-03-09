@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { dirname } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { __test__ } from "../src/index.js";
 import type { WebProvidersConfig } from "../src/types.js";
 
@@ -52,6 +52,57 @@ describe("provider tool output", () => {
     expect(fullPath).toBeTruthy();
     if (fullPath) {
       cleanupDirs.push(dirname(fullPath));
+    }
+  });
+
+  it("emits heartbeat updates for long-running research tools", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const config: WebProvidersConfig = {
+        version: 1,
+        providers: {
+          gemini: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      };
+
+      const updates: string[] = [];
+      const resultPromise = __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "gemini",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: (update) => {
+          const text = update.content[0]?.text;
+          if (text) {
+            updates.push(text);
+          }
+        },
+        invoke: async (_provider, _providerConfig, context) => {
+          context.onProgress?.("Starting research");
+          await new Promise((resolve) => setTimeout(resolve, 20000));
+          return {
+            provider: "gemini",
+            text: "Research complete",
+            summary: "Research via Gemini",
+          };
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(20000);
+      const result = await resultPromise;
+
+      expect(result.content[0]?.text).toBe("Research complete");
+      expect(updates).toContain("Starting research");
+      expect(updates).toContain(
+        "web_research still running via gemini (15s elapsed)",
+      );
+    } finally {
+      vi.useRealTimers();
     }
   });
 });

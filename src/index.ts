@@ -57,6 +57,7 @@ import { PROVIDER_IDS } from "./types.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
+const RESEARCH_HEARTBEAT_MS = 15000;
 type ProviderCapability = ProviderToolId;
 const CAPABILITY_TOOL_NAMES: Record<ProviderCapability, string> = {
   search: "web_search",
@@ -321,7 +322,7 @@ function registerWebAnswerTool(
     renderCall(args, theme) {
       return renderToolCallHeader(
         "web_answer",
-        `"${cleanSingleLine(String((args as { query?: string }).query ?? "")).slice(0, 80)}"`,
+        formatQuotedPreview(String((args as { query?: string }).query ?? "")),
         [
           `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
         ],
@@ -381,7 +382,7 @@ function registerWebResearchTool(
     renderCall(args, theme) {
       return renderToolCallHeader(
         "web_research",
-        `"${cleanSingleLine(String((args as { input?: string }).input ?? "")).slice(0, 80)}"`,
+        formatQuotedPreview(String((args as { input?: string }).input ?? "")),
         [
           `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
         ],
@@ -587,19 +588,26 @@ async function executeProviderTool({
     throw new Error(`Provider '${provider.id}' is not configured.`);
   }
 
-  const response = await invoke(
-    provider,
-    providerConfig as ProviderConfigUnion,
-    {
-      cwd: ctx.cwd,
-      signal: signal ?? undefined,
-      onProgress: (message) =>
-        onUpdate?.({
-          content: [{ type: "text", text: message }],
-          details: {},
-        }),
-    },
+  const progress = createToolProgressReporter(
+    capability,
+    provider.id,
+    onUpdate,
   );
+
+  let response: ProviderToolOutput;
+  try {
+    response = await invoke(
+      provider,
+      providerConfig as ProviderConfigUnion,
+      {
+        cwd: ctx.cwd,
+        signal: signal ?? undefined,
+        onProgress: progress.report,
+      },
+    );
+  } finally {
+    progress.stop();
+  }
 
   const details: ProviderToolDetails = {
     tool: `web_${capability}`,
@@ -617,6 +625,58 @@ async function executeProviderTool({
 
 function normalizeOptions(value: unknown): JsonObject | undefined {
   return isJsonObject(value) ? value : undefined;
+}
+
+function createToolProgressReporter(
+  capability: ProviderCapability,
+  providerId: ProviderId,
+  onUpdate:
+    | ((update: {
+        content: Array<{ type: "text"; text: string }>;
+        details: {};
+      }) => void)
+    | undefined,
+): {
+  report?: (message: string) => void;
+  stop: () => void;
+} {
+  if (!onUpdate) {
+    return { report: undefined, stop: () => {} };
+  }
+
+  const emit = (message: string) =>
+    onUpdate({
+      content: [{ type: "text", text: message }],
+      details: {},
+    });
+
+  const startedAt = Date.now();
+  let lastUpdateAt = startedAt;
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  if (capability === "research") {
+    timer = setInterval(() => {
+      if (Date.now() - lastUpdateAt < RESEARCH_HEARTBEAT_MS) {
+        return;
+      }
+
+      const elapsed = formatElapsed(Date.now() - startedAt);
+      emit(`web_research still running via ${providerId} (${elapsed} elapsed)`);
+      lastUpdateAt = Date.now();
+    }, RESEARCH_HEARTBEAT_MS);
+  }
+
+  return {
+    report: (message: string) => {
+      lastUpdateAt = Date.now();
+      emit(message);
+    },
+    stop: () => {
+      if (timer) {
+        clearInterval(timer);
+      }
+    },
+  };
 }
 
 function renderToolCallHeader(
@@ -1959,7 +2019,7 @@ function renderCallHeader(
       let header = theme.fg("toolTitle", theme.bold("web_search"));
       const query = cleanSingleLine(String(params.query ?? "")).trim();
       if (query.length > 0) {
-        header += ` ${theme.fg("accent", `"${query.slice(0, 80)}"`)} `;
+        header += ` ${theme.fg("accent", formatQuotedPreview(query))} `;
       }
 
       const lines: string[] = [];
@@ -2037,6 +2097,22 @@ function getExpandHint(): string {
 
 function cleanSingleLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function formatQuotedPreview(text: string, maxLength = 80): string {
+  return `"${truncateInline(cleanSingleLine(text), maxLength)}"`;
+}
+
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${totalSeconds}s`;
 }
 
 function formatSearchResponse(response: SearchResponse): string {
