@@ -1,11 +1,14 @@
-import type { ProviderId, WebProvider } from "../types.js";
 import type {
+  ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
   ParallelProviderConfig,
+  ProviderId,
   ValyuProviderConfig,
+  WebProvider,
 } from "../types.js";
+import { ClaudeProvider } from "./claude.js";
 import { CodexProvider } from "./codex.js";
 import { ExaProvider } from "./exa.js";
 import { GeminiProvider } from "./gemini.js";
@@ -14,6 +17,7 @@ import { ValyuProvider } from "./valyu.js";
 
 export const PROVIDERS: ReadonlyArray<
   WebProvider<
+    | ClaudeProviderConfig
     | CodexProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
@@ -21,6 +25,7 @@ export const PROVIDERS: ReadonlyArray<
     | ValyuProviderConfig
   >
 > = [
+  new ClaudeProvider(),
   new CodexProvider(),
   new ExaProvider(),
   new GeminiProvider(),
@@ -31,6 +36,7 @@ export const PROVIDERS: ReadonlyArray<
 export const PROVIDER_MAP: Record<
   ProviderId,
   WebProvider<
+    | ClaudeProviderConfig
     | CodexProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
@@ -38,9 +44,10 @@ export const PROVIDER_MAP: Record<
     | ValyuProviderConfig
   >
 > = {
-  codex: PROVIDERS[0],
-  exa: PROVIDERS[1],
-  gemini: PROVIDERS[2],
-  parallel: PROVIDERS[3],
-  valyu: PROVIDERS[4],
+  claude: PROVIDERS[0],
+  codex: PROVIDERS[1],
+  exa: PROVIDERS[2],
+  gemini: PROVIDERS[3],
+  parallel: PROVIDERS[4],
+  valyu: PROVIDERS[5],
 };

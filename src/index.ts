@@ -40,6 +40,7 @@ import {
 } from "./provider-tools.js";
 import { PROVIDER_MAP, PROVIDERS } from "./providers/index.js";
 import type {
+  ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
@@ -755,6 +756,9 @@ interface ProviderMenuOption {
     | "apiKey"
     | "baseUrl"
     | "model"
+    | "claudePathToExecutable"
+    | "claudeEffort"
+    | "claudeMaxTurns"
     | "modelReasoningEffort"
     | "webSearchMode"
     | "networkAccessEnabled"
@@ -812,6 +816,8 @@ function buildProviderMenuOptions(
       | "apiKey"
       | "baseUrl"
       | "model"
+      | "claudePathToExecutable"
+      | "claudeMaxTurns"
       | "additionalDirectories"
       | "geminiSearchModel"
       | "geminiAnswerModel"
@@ -829,6 +835,7 @@ function buildProviderMenuOptions(
 
   const pushValues = (
     key:
+      | "claudeEffort"
       | "modelReasoningEffort"
       | "webSearchMode"
       | "networkAccessEnabled"
@@ -853,6 +860,31 @@ function buildProviderMenuOptions(
       values,
     });
   };
+
+  if (providerId === "claude") {
+    pushText(
+      "model",
+      "Model",
+      "Optional Claude model override. Leave empty to use the local default.",
+    );
+    pushValues(
+      "claudeEffort",
+      "Effort",
+      "How much effort Claude should use. 'default' uses the SDK default.",
+      ["default", "low", "medium", "high", "max"],
+    );
+    pushText(
+      "claudeMaxTurns",
+      "Max turns",
+      "Optional maximum number of Claude turns. Leave empty to use the SDK default.",
+    );
+    pushText(
+      "claudePathToExecutable",
+      "Executable path",
+      "Optional path to the Claude Code executable. Leave empty to use the bundled/default executable.",
+    );
+    return options;
+  }
 
   if (providerId === "codex") {
     pushText(
@@ -1146,6 +1178,7 @@ class WebProvidersSettingsView implements Component {
           this.activeProvider,
           providerConfig,
           option.key as
+            | "claudeEffort"
             | "modelReasoningEffort"
             | "webSearchMode"
             | "networkAccessEnabled"
@@ -1168,22 +1201,30 @@ class WebProvidersSettingsView implements Component {
     if (option.kind === "text") {
       const key = option.key as ProviderMenuOption["key"];
       const currentValue =
-        key === "model" || key === "additionalDirectories"
-          ? getCodexTextSettingValue(
-              providerConfig as CodexProviderConfig | undefined,
+        this.activeProvider === "claude" &&
+        (key === "model" ||
+          key === "claudePathToExecutable" ||
+          key === "claudeMaxTurns")
+          ? getClaudeTextSettingValue(
+              providerConfig as ClaudeProviderConfig | undefined,
               key,
             )
-          : key === "geminiSearchModel" ||
-              key === "geminiAnswerModel" ||
-              key === "geminiResearchAgent"
-            ? getGeminiTextSettingValue(
-                providerConfig as GeminiProviderConfig | undefined,
+          : key === "model" || key === "additionalDirectories"
+            ? getCodexTextSettingValue(
+                providerConfig as CodexProviderConfig | undefined,
                 key,
               )
-            : getProviderStringValue(
-                providerConfig,
-                key as "apiKey" | "baseUrl",
-              );
+            : key === "geminiSearchModel" ||
+                key === "geminiAnswerModel" ||
+                key === "geminiResearchAgent"
+              ? getGeminiTextSettingValue(
+                  providerConfig as GeminiProviderConfig | undefined,
+                  key,
+                )
+              : getProviderStringValue(
+                  providerConfig,
+                  key as "apiKey" | "baseUrl",
+                );
       const secret = key === "apiKey";
       return {
         id: key,
@@ -1345,6 +1386,17 @@ class WebProvidersSettingsView implements Component {
     if (id === "apiKey" || id === "baseUrl") {
       return getProviderStringValue(providerConfig, id);
     }
+    if (
+      this.activeProvider === "claude" &&
+      (id === "model" ||
+        id === "claudePathToExecutable" ||
+        id === "claudeMaxTurns")
+    ) {
+      return getClaudeTextSettingValue(
+        providerConfig as ClaudeProviderConfig | undefined,
+        id,
+      );
+    }
     if (id === "model" || id === "additionalDirectories") {
       return getCodexTextSettingValue(
         providerConfig as CodexProviderConfig | undefined,
@@ -1405,6 +1457,15 @@ class WebProvidersSettingsView implements Component {
 
       if (id === "apiKey" || id === "baseUrl") {
         assignOptionalString(providerConfig, id, value);
+      } else if (
+        this.activeProvider === "claude" &&
+        applyClaudeSettingChange(
+          providerConfig as unknown as ClaudeProviderConfig,
+          id,
+          value,
+        )
+      ) {
+        // handled above
       } else if (
         this.activeProvider === "codex" &&
         applyCodexSettingChange(
@@ -1604,6 +1665,7 @@ function getProviderChoiceValue(
   providerId: ProviderId,
   config: ProviderConfigUnion | undefined,
   key:
+    | "claudeEffort"
     | "modelReasoningEffort"
     | "webSearchMode"
     | "networkAccessEnabled"
@@ -1617,6 +1679,13 @@ function getProviderChoiceValue(
     | "valyuSearchType"
     | "valyuResponseLength",
 ): string {
+  if (providerId === "claude") {
+    const defaults = (config as ClaudeProviderConfig | undefined)?.defaults;
+    if (key === "claudeEffort") {
+      return typeof defaults?.effort === "string" ? defaults.effort : "default";
+    }
+  }
+
   if (providerId === "codex") {
     const defaults = (config as CodexProviderConfig | undefined)?.defaults;
     if (key === "networkAccessEnabled" || key === "webSearchEnabled") {
@@ -1693,6 +1762,24 @@ function getProviderChoiceValue(
   throw new Error(`Unsupported choice setting '${key}' for '${providerId}'.`);
 }
 
+function getClaudeTextSettingValue(
+  config: ClaudeProviderConfig | undefined,
+  key: "model" | "claudePathToExecutable" | "claudeMaxTurns",
+): string | undefined {
+  if (key === "claudePathToExecutable") {
+    return config?.pathToClaudeCodeExecutable;
+  }
+
+  const defaults = config?.defaults;
+  if (!defaults) return undefined;
+  if (key === "claudeMaxTurns") {
+    return typeof defaults.maxTurns === "number"
+      ? String(defaults.maxTurns)
+      : undefined;
+  }
+  return defaults.model;
+}
+
 function getCodexTextSettingValue(
   config: CodexProviderConfig | undefined,
   key: "model" | "additionalDirectories",
@@ -1726,6 +1813,60 @@ function assignOptionalString(
     delete target[key];
   } else {
     target[key] = trimmed;
+  }
+}
+
+function applyClaudeSettingChange(
+  target: ClaudeProviderConfig,
+  key: string,
+  value: string,
+): boolean {
+  target.defaults ??= {};
+
+  switch (key) {
+    case "model":
+      assignOptionalString(
+        target.defaults as Record<
+          string,
+          JsonObject | string | boolean | undefined
+        >,
+        "model",
+        value,
+      );
+      cleanupClaudeDefaults(target);
+      return true;
+    case "claudePathToExecutable":
+      assignOptionalString(
+        target as Record<string, JsonObject | string | boolean | undefined>,
+        "pathToClaudeCodeExecutable",
+        value,
+      );
+      cleanupClaudeDefaults(target);
+      return true;
+    case "claudeMaxTurns": {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        delete target.defaults.maxTurns;
+      } else {
+        const parsed = Number(trimmed);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          throw new Error("Claude max turns must be a positive integer.");
+        }
+        target.defaults.maxTurns = parsed;
+      }
+      cleanupClaudeDefaults(target);
+      return true;
+    }
+    case "claudeEffort":
+      if (value === "default") {
+        delete target.defaults.effort;
+      } else {
+        target.defaults.effort = value as never;
+      }
+      cleanupClaudeDefaults(target);
+      return true;
+    default:
+      return false;
   }
 }
 
@@ -1945,6 +2086,12 @@ function applyParallelSettingChange(
       return true;
     default:
       return false;
+  }
+}
+
+function cleanupClaudeDefaults(target: ClaudeProviderConfig): void {
+  if (target.defaults && Object.keys(target.defaults).length === 0) {
+    delete target.defaults;
   }
 }
 

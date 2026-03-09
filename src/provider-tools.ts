@@ -1,4 +1,5 @@
 import type {
+  ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
@@ -17,6 +18,7 @@ export const PROVIDER_TOOL_IDS = [
 export type ProviderToolId = (typeof PROVIDER_TOOL_IDS)[number];
 
 export const PROVIDER_TOOLS: Record<ProviderId, readonly ProviderToolId[]> = {
+  claude: ["search", "answer"],
   codex: ["search"],
   exa: ["search", "contents", "answer", "research"],
   gemini: ["search", "answer", "research"],
@@ -47,6 +49,7 @@ export const PROVIDER_TOOL_META: Record<
 };
 
 export type ProviderConfigUnion =
+  | ClaudeProviderConfig
   | CodexProviderConfig
   | ExaProviderConfig
   | GeminiProviderConfig

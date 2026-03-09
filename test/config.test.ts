@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -67,6 +67,15 @@ describe("config parsing", () => {
     await mkdir(process.env.PI_CODING_AGENT_DIR, { recursive: true });
 
     const config = createDefaultConfig();
+    config.providers!.claude = {
+      enabled: false,
+      pathToClaudeCodeExecutable: "/tmp/claude-code",
+      defaults: {
+        model: "claude-sonnet-4-5",
+        effort: "high",
+        maxTurns: 6,
+      },
+    };
     config.providers!.codex!.defaults!.additionalDirectories = ["docs"];
     config.providers!.exa = {
       enabled: true,
@@ -99,6 +108,12 @@ describe("config parsing", () => {
     await writeFile(getConfigPath(), serializeConfig(config), "utf-8");
 
     const loaded = await loadConfig();
+    expect(loaded.providers?.claude?.pathToClaudeCodeExecutable).toBe(
+      "/tmp/claude-code",
+    );
+    expect(loaded.providers?.claude?.defaults?.model).toBe("claude-sonnet-4-5");
+    expect(loaded.providers?.claude?.defaults?.effort).toBe("high");
+    expect(loaded.providers?.claude?.defaults?.maxTurns).toBe(6);
     expect(loaded.providers?.codex?.defaults?.webSearchMode).toBe("cached");
     expect(loaded.providers?.codex?.defaults?.additionalDirectories).toEqual([
       "notes",

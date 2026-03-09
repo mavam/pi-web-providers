@@ -54,6 +54,21 @@ describe("provider resolution", () => {
     expect(provider.id).toBe("exa");
   });
 
+  it("rejects Claude when it is explicitly enabled without local auth", () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        claude: {
+          enabled: true,
+        },
+      },
+    };
+
+    expect(() =>
+      resolveProviderChoice(config, "claude", process.cwd()),
+    ).toThrow(/Provider 'claude' is not available: missing Claude auth/);
+  });
+
   it("prefers explicitly enabled providers in alphabetical order", () => {
     process.env.EXA_API_KEY = "test-key";
     process.env.GOOGLE_API_KEY = "test-key";

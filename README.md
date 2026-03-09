@@ -28,8 +28,8 @@ tool prompt aligned with the tools that the agent can actually call.
 
 - **Provider-driven tool surface** — tools are injected based on what the active
   provider actually supports, not a fixed list
-- **Five providers**: Codex, Exa, Gemini, Parallel, Valyu — each with its own
-  SDK, strengths, and capability set
+- **Six providers**: Claude, Codex, Exa, Gemini, Parallel, Valyu — each with
+  its own SDK, strengths, and capability set
 - **One config command** (`/web-providers`) with a TUI that adapts to the
   selected provider
 - **Transparent fallback** — search falls back to Codex when no provider is
@@ -57,8 +57,9 @@ This command edits a single global config file:
 
 The flow is provider-first: pick the active provider, then configure only that
 provider's tool toggles and settings. Each provider view surfaces the knobs that
-actually apply—Codex shows reasoning-effort and web-search-mode toggles; Exa
-shows search type and text-content flags; and so on.
+actually apply—Claude shows model/effort/turns settings; Codex shows
+reasoning-effort and web-search-mode toggles; Exa shows search type and
+text-content flags; and so on.
 
 ## 🔧 Tools
 
@@ -70,11 +71,11 @@ corresponding tool is never exposed to the agent.
 
 Search the web and return titles, URLs, and snippets.
 
-| Parameter    | Type    | Default  | Description                                                         |
-| ------------ | ------- | -------- | ------------------------------------------------------------------- |
-| `query`      | string  | required | What to search for                                                  |
-| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                     |
-| `provider`   | string  | auto     | Optional override: `codex`, `exa`, `gemini`, `parallel`, or `valyu` |
+| Parameter    | Type    | Default  | Description                                                                   |
+| ------------ | ------- | -------- | ----------------------------------------------------------------------------- |
+| `query`      | string  | required | What to search for                                                            |
+| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                               |
+| `provider`   | string  | auto     | Optional override: `claude`, `codex`, `exa`, `gemini`, `parallel`, or `valyu` |
 
 ### `web_contents`
 
@@ -111,13 +112,21 @@ Run a longer-form research task.
 Every provider is a thin adapter around an official SDK. The table below
 summarises which capabilities each provider exposes:
 
-| Provider     | search | contents | answer | research | Auth                 |
-| ------------ | :----: | :------: | :----: | :------: | -------------------- |
-| **Codex**    |   ✓    |          |        |          | Local Codex CLI auth |
-| **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`        |
-| **Gemini**   |   ✓    |          |   ✓    |    ✓     | `GOOGLE_API_KEY`     |
-| **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`   |
-| **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`      |
+| Provider     | search | contents | answer | research | Auth                   |
+| ------------ | :----: | :------: | :----: | :------: | ---------------------- |
+| **Claude**   |   ✓    |          |   ✓    |          | Local Claude Code auth |
+| **Codex**    |   ✓    |          |        |          | Local Codex CLI auth   |
+| **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
+| **Gemini**   |   ✓    |          |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
+| **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
+
+### Claude
+
+- SDK: `@anthropic-ai/claude-agent-sdk`
+- Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
+  structured JSON adapter
+- Great for search plus grounded answers if you already use Claude Code locally
 
 ### Codex
 
@@ -174,6 +183,13 @@ Example:
 {
   "version": 1,
   "providers": {
+    "claude": {
+      "enabled": false,
+      "tools": {
+        "search": true,
+        "answer": true
+      }
+    },
     "codex": {
       "enabled": true,
       "tools": {

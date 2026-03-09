@@ -130,6 +130,24 @@ describe("managed tool availability", () => {
     ).toEqual([]);
   });
 
+  it("hides Claude-managed tools when Claude auth is missing", () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        claude: {
+          enabled: true,
+        },
+        codex: {
+          enabled: false,
+        },
+      },
+    };
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual([]);
+  });
+
   it("hides the implicit Codex fallback when Codex auth is missing", () => {
     const config: WebProvidersConfig = { version: 1 };
 

@@ -1,8 +1,14 @@
-import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import {
+  PROVIDER_TOOLS,
+  type ProviderToolId,
+  supportsProviderTool,
+} from "./provider-tools.js";
 import type {
+  ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
@@ -12,11 +18,6 @@ import type {
   ValyuProviderConfig,
   WebProvidersConfig,
 } from "./types.js";
-import {
-  type ProviderToolId,
-  PROVIDER_TOOLS,
-  supportsProviderTool,
-} from "./provider-tools.js";
 
 const LEGACY_TOOL_ALIASES: Partial<
   Record<ProviderId, Partial<Record<string, ProviderToolId | null>>>
@@ -44,6 +45,13 @@ export function createDefaultConfig(): WebProvidersConfig {
   return {
     version: VERSION,
     providers: {
+      claude: {
+        enabled: false,
+        tools: {
+          search: true,
+          answer: true,
+        },
+      },
       codex: {
         enabled: true,
         tools: {
@@ -166,6 +174,7 @@ export function parseProviderConfig(
   text: string,
   source = CONFIG_FILE_NAME,
 ):
+  | ClaudeProviderConfig
   | CodexProviderConfig
   | ExaProviderConfig
   | GeminiProviderConfig
@@ -279,6 +288,12 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     }
 
     config.providers = {};
+    if (raw.providers.claude !== undefined) {
+      config.providers.claude = normalizeClaudeProvider(
+        raw.providers.claude,
+        source,
+      );
+    }
     if (raw.providers.codex !== undefined) {
       config.providers.codex = normalizeCodexProvider(
         raw.providers.codex,
@@ -309,6 +324,7 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
 
     const unknownProviders = Object.keys(raw.providers).filter(
       (key) =>
+        key !== "claude" &&
         key !== "codex" &&
         key !== "exa" &&
         key !== "gemini" &&
@@ -323,6 +339,58 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
   }
 
   return config;
+}
+
+function normalizeClaudeProvider(
+  raw: unknown,
+  source: string,
+): ClaudeProviderConfig {
+  const provider = parseProviderObject(raw, source, "claude");
+  const defaults = parseOptionalJsonObject(
+    provider.defaults,
+    source,
+    "providers.claude.defaults",
+  );
+
+  return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.claude.enabled",
+    ),
+    tools: parseOptionalProviderTools(
+      "claude",
+      provider.tools,
+      source,
+      "providers.claude.tools",
+    ) as ClaudeProviderConfig["tools"],
+    pathToClaudeCodeExecutable: parseOptionalString(
+      provider.pathToClaudeCodeExecutable,
+      source,
+      "providers.claude.pathToClaudeCodeExecutable",
+    ),
+    defaults:
+      defaults === undefined
+        ? undefined
+        : {
+            model: parseOptionalString(
+              defaults.model,
+              source,
+              "providers.claude.defaults.model",
+            ),
+            effort: parseOptionalLiteral(
+              defaults.effort,
+              source,
+              "providers.claude.defaults.effort",
+              ["low", "medium", "high", "max"] as const,
+            ),
+            maxTurns: parseOptionalInteger(
+              defaults.maxTurns,
+              source,
+              "providers.claude.defaults.maxTurns",
+            ),
+          },
+  };
 }
 
 function normalizeCodexProvider(
@@ -719,6 +787,18 @@ function parseOptionalString(
 function parseString(value: unknown, source: string, field: string): string {
   if (typeof value !== "string") {
     throw new Error(`'${field}' in ${source} must be a string.`);
+  }
+  return value;
+}
+
+function parseOptionalInteger(
+  value: unknown,
+  source: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(`'${field}' in ${source} must be a positive integer.`);
   }
   return value;
 }

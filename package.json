@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "0.1.0",
-  "description": "Configurable web access extension for pi that routes search, contents, answers, and research across Codex, Exa, Gemini, Parallel, and Valyu providers.",
+  "description": "Configurable web access extension for pi that routes search, contents, answers, and research across Claude, Codex, Exa, Gemini, Parallel, and Valyu providers.",
   "type": "module",
   "files": [
     "dist",
@@ -13,6 +13,7 @@
     "pi-extension",
     "coding-agent",
     "web-search",
+    "claude",
     "codex",
     "exa",
     "gemini",
@@ -37,7 +38,7 @@
     ]
   },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@google/genai --external:@openai/codex-sdk --external:exa-js --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:exa-js --external:parallel-web --external:valyu-js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
@@ -47,11 +48,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.71",
     "@google/genai": "^1.44.0",
     "@openai/codex-sdk": "^0.111.0",
     "exa-js": "^2.7.0",
     "parallel-web": "^0.3.1",
-    "valyu-js": "^2.5.9"
+    "valyu-js": "^2.5.9",
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

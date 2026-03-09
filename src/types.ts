@@ -1,6 +1,7 @@
 import type { ModelReasoningEffort, WebSearchMode } from "@openai/codex-sdk";
 
 export const PROVIDER_IDS = [
+  "claude",
   "codex",
   "exa",
   "gemini",
@@ -52,6 +53,20 @@ export interface ProviderToolDetails {
   provider: ProviderId;
   summary?: string;
   itemCount?: number;
+}
+
+export interface ClaudeProviderConfig {
+  enabled?: boolean;
+  tools?: {
+    search?: boolean;
+    answer?: boolean;
+  };
+  pathToClaudeCodeExecutable?: string;
+  defaults?: {
+    model?: string;
+    effort?: "low" | "medium" | "high" | "max";
+    maxTurns?: number;
+  };
 }
 
 export interface CodexProviderConfig {
@@ -133,6 +148,7 @@ export interface ValyuProviderConfig {
 export interface WebProvidersConfig {
   version: 1;
   providers?: {
+    claude?: ClaudeProviderConfig;
     codex?: CodexProviderConfig;
     exa?: ExaProviderConfig;
     gemini?: GeminiProviderConfig;
