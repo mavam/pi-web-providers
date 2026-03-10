@@ -181,4 +181,37 @@ describe("PerplexityProvider", () => {
     );
     expect(response.summary).toBe("Research via Perplexity with 1 source(s)");
   });
+
+  it("falls back to citations when search_results is empty", async () => {
+    process.env.PERPLEXITY_API_KEY = "test-key";
+    chatCreateMock.mockResolvedValue({
+      choices: [
+        {
+          message: {
+            role: "assistant",
+            content: "Answer with citations fallback",
+          },
+        },
+      ],
+      search_results: [],
+      citations: ["https://example.com/fallback"],
+    });
+
+    const provider = new PerplexityProvider();
+    const response = await provider.answer(
+      "What changed?",
+      undefined,
+      {
+        enabled: true,
+        apiKey: "PERPLEXITY_API_KEY",
+      },
+      { cwd: process.cwd() },
+    );
+
+    expect(response.text).toBe(
+      "Answer with citations fallback\n\nSources:\n1. https://example.com/fallback\n   https://example.com/fallback",
+    );
+    expect(response.summary).toBe("Answer via Perplexity with 1 source(s)");
+    expect(response.itemCount).toBe(1);
+  });
 });

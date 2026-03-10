@@ -160,17 +160,7 @@ export class PerplexityProvider
       buildRequestOptions(context),
     );
     const content = extractMessageText(response.choices[0]?.message?.content);
-    const sources = dedupeSources(
-      response.search_results?.map((result) => ({
-        title: result.title,
-        url: result.url,
-      })) ??
-        response.citations?.map((citation) => ({
-          title: citation,
-          url: citation,
-        })) ??
-        [],
-    );
+    const sources = dedupeSources(extractSources(response));
 
     const lines: string[] = [];
     lines.push(content || `No ${label.toLowerCase()} returned.`);
@@ -265,6 +255,32 @@ function dedupeSources(
   }
 
   return unique;
+}
+
+function extractSources(response: {
+  search_results?: Array<{ title?: string | null; url?: string | null }> | null;
+  citations?: Array<string | null> | null;
+}): Array<{ title: string; url: string }> {
+  const searchResults =
+    response.search_results?.flatMap((result) => {
+      const url = result.url?.trim() ?? "";
+      if (!url) {
+        return [];
+      }
+      return [{ title: result.title?.trim() ?? url, url }];
+    }) ?? [];
+
+  if (searchResults.length > 0) {
+    return searchResults;
+  }
+
+  return (
+    response.citations?.flatMap((citation) => {
+      const url = citation?.trim() ?? "";
+      return url ? [{ title: url, url }] : [];
+    }) ??
+    []
+  );
 }
 
 function buildRequestOptions(
