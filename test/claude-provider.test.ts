@@ -38,10 +38,13 @@ describe("ClaudeProvider", () => {
     const provider = new ClaudeProvider();
 
     expect(
-      provider.getStatus({
-        enabled: true,
-        pathToClaudeCodeExecutable: process.execPath,
-      }, process.cwd()),
+      provider.getStatus(
+        {
+          enabled: true,
+          pathToClaudeCodeExecutable: process.execPath,
+        },
+        process.cwd(),
+      ),
     ).toEqual({
       available: false,
       summary: "missing Claude auth",
@@ -55,10 +58,13 @@ describe("ClaudeProvider", () => {
     const provider = new ClaudeProvider();
 
     expect(
-      provider.getStatus({
-        enabled: true,
-        pathToClaudeCodeExecutable: process.execPath,
-      }, process.cwd()),
+      provider.getStatus(
+        {
+          enabled: true,
+          pathToClaudeCodeExecutable: process.execPath,
+        },
+        process.cwd(),
+      ),
     ).toEqual({
       available: true,
       summary: "enabled",

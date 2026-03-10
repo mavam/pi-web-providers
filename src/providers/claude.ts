@@ -328,10 +328,7 @@ function getClaudeAuthStatus(
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     });
-    return cacheClaudeAuthStatus(
-      executablePath,
-      parseClaudeAuthStatus(stdout),
-    );
+    return cacheClaudeAuthStatus(executablePath, parseClaudeAuthStatus(stdout));
   } catch (error) {
     const stdout = getExecOutput(
       (error as { stdout?: string | Buffer }).stdout,

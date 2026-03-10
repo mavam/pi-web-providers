@@ -597,15 +597,11 @@ async function executeProviderTool({
 
   let response: ProviderToolOutput;
   try {
-    response = await invoke(
-      provider,
-      providerConfig as ProviderConfigUnion,
-      {
-        cwd: ctx.cwd,
-        signal: signal ?? undefined,
-        onProgress: progress.report,
-      },
-    );
+    response = await invoke(provider, providerConfig as ProviderConfigUnion, {
+      cwd: ctx.cwd,
+      signal: signal ?? undefined,
+      onProgress: progress.report,
+    });
   } finally {
     progress.stop();
   }

@@ -80,7 +80,7 @@ describe("GeminiProvider search", () => {
                   title: "Tenzir",
                   url: "https://vertexaisearch.cloud.google.com/grounding-api-redirect/opaque",
                   rendered_content:
-                    '<style>.x{display:none}</style><div>Tenzir &amp; Security</div><svg><text>noise</text></svg><p>Flexible operations</p>',
+                    "<style>.x{display:none}</style><div>Tenzir &amp; Security</div><svg><text>noise</text></svg><p>Flexible operations</p>",
                 },
               ],
             },
@@ -247,7 +247,9 @@ describe("GeminiProvider answer", () => {
     expect(response.text).toContain(
       "Tenzir helps route and transform security telemetry.",
     );
-    expect(response.text).toContain("Sources:\n1. Tenzir overview\n2. Tenzir docs");
+    expect(response.text).toContain(
+      "Sources:\n1. Tenzir overview\n2. Tenzir docs",
+    );
     expect(response.text).toContain("   https://tenzir.com/docs");
     expect(response.text).not.toContain("vertexaisearch.cloud.google.com");
     expect(response.summary).toBe("Answer via Gemini with 2 source(s)");
@@ -303,8 +305,12 @@ describe("GeminiProvider research", () => {
       expect(response.text).toBe("Research result");
       expect(messages).toContain("Starting Gemini deep research");
       expect(messages).toContain("Gemini research started: research-1");
-      expect(messages).toContain("Gemini research status: in_progress (0s elapsed)");
-      expect(messages).toContain("Gemini research status: completed (20s elapsed)");
+      expect(messages).toContain(
+        "Gemini research status: in_progress (0s elapsed)",
+      );
+      expect(messages).toContain(
+        "Gemini research status: completed (20s elapsed)",
+      );
     } finally {
       vi.useRealTimers();
     }

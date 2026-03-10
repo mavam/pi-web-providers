@@ -68,11 +68,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         .map(async (result) => {
           const resolvedUrl = await resolveGoogleSearchUrl(result.url);
           return {
-            title:
-              result.title ??
-              resolvedUrl ??
-              result.url ??
-              "Untitled",
+            title: result.title ?? resolvedUrl ?? result.url ?? "Untitled",
             url: resolvedUrl ?? result.url ?? "",
             snippet: "",
           };
@@ -314,7 +310,10 @@ function formatInteractionOutputs(outputs: unknown): string {
   return lines.join("\n\n").trim();
 }
 
-function formatGroundingSourceTitle(title: string | undefined, url: string): string {
+function formatGroundingSourceTitle(
+  title: string | undefined,
+  url: string,
+): string {
   const trimmedTitle = title?.trim();
   if (trimmedTitle) {
     return trimmedTitle;

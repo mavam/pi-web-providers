@@ -6,9 +6,7 @@ import {
 import { PROVIDER_MAP, PROVIDERS } from "./providers/index.js";
 import type { ProviderId, WebProvidersConfig } from "./types.js";
 
-const IMPLICIT_PROVIDER_FALLBACKS: readonly ProviderId[] = [
-  "codex",
-] as const;
+const IMPLICIT_PROVIDER_FALLBACKS: readonly ProviderId[] = ["codex"] as const;
 
 export function resolveProviderChoice(
   config: WebProvidersConfig,
