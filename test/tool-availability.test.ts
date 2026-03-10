@@ -35,6 +35,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.EXA_API_KEY;
   delete process.env.CODEX_API_KEY;
+  delete process.env.PERPLEXITY_API_KEY;
   execFileSyncMock.mockReset();
   resetClaudeProviderCachesForTests();
   if (originalHome === undefined) {
@@ -52,7 +53,11 @@ afterEach(() => {
 
 describe("managed tool availability", () => {
   it("keeps tool descriptions concise and capability-specific", () => {
-    const tools: Array<{ name: string; description: string }> = [];
+    const tools: Array<{
+      name: string;
+      description: string;
+      parameters?: { properties?: Record<string, unknown> };
+    }> = [];
 
     webProvidersExtension({
       registerTool(tool: { name: string; description: string }) {
@@ -75,6 +80,7 @@ describe("managed tool availability", () => {
       "Find likely sources on the public web",
     );
     expect(webSearch?.description).toContain("titles, URLs, and snippets");
+    expect(webSearch?.parameters?.properties).toHaveProperty("options");
     expect(webContents?.description).toBe(
       "Read and extract the main contents of one or more web pages.",
     );
@@ -235,6 +241,28 @@ describe("managed tool availability", () => {
     );
 
     expect(Array.from(activeTools)).toEqual(["web_search"]);
+  });
+
+  it("surfaces Perplexity overrides when Perplexity is available", () => {
+    process.env.PERPLEXITY_API_KEY = "test-key";
+
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        perplexity: {
+          enabled: true,
+          apiKey: "PERPLEXITY_API_KEY",
+        },
+      },
+    };
+
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "answer",
+      ),
+    ).toEqual(["perplexity"]);
   });
 });
 

@@ -52,6 +52,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   async search(
     query: string,
     maxResults: number,
+    options: Record<string, unknown> | undefined,
     config: ParallelProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
@@ -61,6 +62,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     context.onProgress?.(`Searching Parallel for: ${query}`);
     const response = await client.beta.search({
       ...defaults,
+      ...(options ?? {}),
       objective: query,
       max_results: maxResults,
     });

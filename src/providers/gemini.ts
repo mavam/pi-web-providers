@@ -57,6 +57,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   async search(
     query: string,
     maxResults: number,
+    _options: Record<string, unknown> | undefined,
     config: GeminiProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {

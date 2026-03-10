@@ -5,6 +5,7 @@ export const PROVIDER_IDS = [
   "codex",
   "exa",
   "gemini",
+  "perplexity",
   "parallel",
   "valyu",
 ] as const;
@@ -120,6 +121,22 @@ export interface GeminiProviderConfig {
   };
 }
 
+export interface PerplexityProviderConfig {
+  enabled?: boolean;
+  tools?: {
+    search?: boolean;
+    answer?: boolean;
+    research?: boolean;
+  };
+  apiKey?: string;
+  baseUrl?: string;
+  defaults?: {
+    search?: JsonObject;
+    answer?: JsonObject;
+    research?: JsonObject;
+  };
+}
+
 export interface ParallelProviderConfig {
   enabled?: boolean;
   tools?: {
@@ -154,6 +171,7 @@ export interface WebProvidersConfig {
     codex?: CodexProviderConfig;
     exa?: ExaProviderConfig;
     gemini?: GeminiProviderConfig;
+    perplexity?: PerplexityProviderConfig;
     parallel?: ParallelProviderConfig;
     valyu?: ValyuProviderConfig;
   };
@@ -180,6 +198,7 @@ export interface WebProvider<TConfig> {
   search?(
     query: string,
     maxResults: number,
+    options: JsonObject | undefined,
     config: TConfig,
     context: ProviderContext,
   ): Promise<SearchResponse>;

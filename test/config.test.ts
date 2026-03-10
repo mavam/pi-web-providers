@@ -24,6 +24,7 @@ afterEach(async () => {
   delete process.env.PI_CODING_AGENT_DIR;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.PERPLEXITY_API_KEY;
 });
 
 describe("config parsing", () => {
@@ -102,6 +103,21 @@ describe("config parsing", () => {
         contentsModel: "gemini-2.5-pro",
       },
     };
+    config.providers!.perplexity = {
+      enabled: true,
+      apiKey: "PERPLEXITY_API_KEY",
+      defaults: {
+        search: {
+          country: "US",
+        },
+        answer: {
+          model: "sonar",
+        },
+        research: {
+          model: "sonar-deep-research",
+        },
+      },
+    };
 
     config.providers!.codex!.defaults!.webSearchMode = "cached";
     config.providers!.codex!.defaults!.additionalDirectories = ["notes"];
@@ -123,6 +139,10 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini?.defaults?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.defaults?.contentsModel).toBe(
       "gemini-2.5-pro",
+    );
+    expect(loaded.providers?.perplexity?.defaults?.search?.country).toBe("US");
+    expect(loaded.providers?.perplexity?.defaults?.research?.model).toBe(
+      "sonar-deep-research",
     );
     expect(loaded.providers?.parallel?.defaults?.search?.mode).toBe("one-shot");
   });

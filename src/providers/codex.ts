@@ -90,6 +90,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
   async search(
     query: string,
     maxResults: number,
+    _options: Record<string, unknown> | undefined,
     config: CodexProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {

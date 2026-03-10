@@ -51,6 +51,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
   async search(
     query: string,
     maxResults: number,
+    searchOptions: Record<string, unknown> | undefined,
     config: ExaProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
@@ -62,6 +63,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     const client = new Exa(apiKey, config.baseUrl);
     const options = {
       ...asJsonObject(config.defaults),
+      ...(searchOptions ?? {}),
       numResults: maxResults,
     };
 

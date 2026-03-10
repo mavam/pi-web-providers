@@ -117,6 +117,7 @@ describe("ClaudeProvider", () => {
     await provider.search(
       "latest Claude docs",
       1,
+      undefined,
       { enabled: true },
       {
         cwd: process.cwd(),
@@ -163,6 +164,7 @@ describe("ClaudeProvider", () => {
     const searchPromise = provider.search(
       "latest Claude docs",
       1,
+      undefined,
       { enabled: true },
       {
         cwd: process.cwd(),

@@ -3,6 +3,7 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
+  PerplexityProviderConfig,
   ParallelProviderConfig,
   ProviderId,
   ValyuProviderConfig,
@@ -22,6 +23,7 @@ export const PROVIDER_TOOLS: Record<ProviderId, readonly ProviderToolId[]> = {
   codex: ["search"],
   exa: ["search", "contents", "answer", "research"],
   gemini: ["search", "contents", "answer", "research"],
+  perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
 };
@@ -53,6 +55,7 @@ export type ProviderConfigUnion =
   | CodexProviderConfig
   | ExaProviderConfig
   | GeminiProviderConfig
+  | PerplexityProviderConfig
   | ParallelProviderConfig
   | ValyuProviderConfig;
 

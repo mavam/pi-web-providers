@@ -45,6 +45,7 @@ import type {
   ExaProviderConfig,
   GeminiProviderConfig,
   JsonObject,
+  PerplexityProviderConfig,
   ParallelProviderConfig,
   ProviderId,
   ProviderToolDetails,
@@ -139,6 +140,7 @@ function registerWebSearchTool(
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
+      options: jsonOptionsSchema("Provider-specific search options."),
       provider: providerEnum(
         visibleProviderIds,
         "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
@@ -158,6 +160,7 @@ function registerWebSearchTool(
       const response = await provider.search!(
         params.query,
         maxResults,
+        normalizeOptions(params.options),
         providerConfig as never,
         {
           cwd: ctx.cwd,
@@ -979,6 +982,10 @@ function buildProviderMenuOptions(
       "Research agent",
       "Agent used for Gemini deep research runs.",
     );
+    return options;
+  }
+
+  if (providerId === "perplexity") {
     return options;
   }
 

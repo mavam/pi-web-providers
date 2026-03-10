@@ -49,6 +49,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
   async search(
     query: string,
     maxResults: number,
+    searchOptions: Record<string, unknown> | undefined,
     config: ValyuProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
@@ -60,6 +61,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     const client = new Valyu(apiKey, config.baseUrl);
     const options = {
       ...asJsonObject(config.defaults),
+      ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
 

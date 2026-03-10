@@ -28,7 +28,8 @@ tool prompt aligned with the tools that the agent can actually call.
 
 - **Provider-driven tool surface** — tools are injected based on what the active
   provider actually supports, not a fixed list
-- **Six providers**: Claude, Codex, Exa, Gemini, Parallel, Valyu — each with
+- **Multiple providers**: Claude, Codex, Exa, Gemini, Perplexity, Parallel,
+  Valyu — each with
   its own SDK, strengths, and capability set
 - **One config command** (`/web-providers`) with a TUI that adapts to the
   selected provider
@@ -75,7 +76,8 @@ Find likely sources on the public web and return titles, URLs, and snippets.
 | ------------ | ------- | -------- | ----------------------------------------------------------------------------- |
 | `query`      | string  | required | What to search for                                                            |
 | `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                               |
-| `provider`   | string  | auto     | Optional override: `claude`, `codex`, `exa`, `gemini`, `parallel`, or `valyu` |
+| `options`    | object  | —        | Provider-specific search options                                              |
+| `provider`   | string  | auto     | Optional override: `claude`, `codex`, `exa`, `gemini`, `perplexity`, `parallel`, or `valyu` |
 
 ### `web_contents`
 
@@ -118,6 +120,7 @@ summarises which capabilities each provider exposes:
 | **Codex**    |   ✓    |          |        |          | Local Codex CLI auth   |
 | **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
 | **Gemini**   |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Perplexity** | ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
 | **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
 | **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
 
@@ -145,6 +148,14 @@ summarises which capabilities each provider exposes:
 - SDK: `@google/genai`
 - Google Search grounding for answers and URL Context extraction for page contents
 - Deep-research agents via Google's Gemini API
+
+### Perplexity
+
+- SDK: `@perplexity-ai/perplexity_ai`
+- Uses Perplexity Search for `web_search`
+- Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
+- Supports provider-specific `web_search.options` such as `country`,
+  `search_mode`, `search_domain_filter`, and `search_recency_filter`
 
 ### Parallel
 
@@ -231,6 +242,26 @@ Example:
         "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
         "researchAgent": "deep-research-pro-preview-12-2025"
+      }
+    },
+    "perplexity": {
+      "enabled": false,
+      "tools": {
+        "search": true,
+        "answer": true,
+        "research": true
+      },
+      "apiKey": "PERPLEXITY_API_KEY",
+      "defaults": {
+        "search": {
+          "country": "US"
+        },
+        "answer": {
+          "model": "sonar"
+        },
+        "research": {
+          "model": "sonar-deep-research"
+        }
       }
     },
     "parallel": {

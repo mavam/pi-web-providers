@@ -33,6 +33,7 @@ describe("GeminiProvider search", () => {
     const response = await provider.search(
       "example query",
       5,
+      undefined,
       createConfig(),
       createContext(),
     );
@@ -92,6 +93,7 @@ describe("GeminiProvider search", () => {
     const response = await provider.search(
       "tenzir",
       5,
+      undefined,
       createConfig(),
       createContext(),
     );
@@ -132,6 +134,7 @@ describe("GeminiProvider search", () => {
     const response = await provider.search(
       "fallback query",
       5,
+      undefined,
       createConfig(),
       createContext(),
     );
@@ -187,6 +190,7 @@ describe("GeminiProvider search", () => {
     const response = await provider.search(
       "example query",
       1,
+      undefined,
       createConfig(),
       createContext(),
     );

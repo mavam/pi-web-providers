@@ -117,6 +117,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   async search(
     queryText: string,
     maxResults: number,
+    _options: Record<string, unknown> | undefined,
     config: ClaudeProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {

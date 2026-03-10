@@ -3,6 +3,7 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
+  PerplexityProviderConfig,
   ParallelProviderConfig,
   ProviderId,
   ValyuProviderConfig,
@@ -12,6 +13,7 @@ import { ClaudeProvider } from "./claude.js";
 import { CodexProvider } from "./codex.js";
 import { ExaProvider } from "./exa.js";
 import { GeminiProvider } from "./gemini.js";
+import { PerplexityProvider } from "./perplexity.js";
 import { ParallelProvider } from "./parallel.js";
 import { ValyuProvider } from "./valyu.js";
 
@@ -21,6 +23,7 @@ export const PROVIDERS: ReadonlyArray<
     | CodexProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
+    | PerplexityProviderConfig
     | ParallelProviderConfig
     | ValyuProviderConfig
   >
@@ -29,6 +32,7 @@ export const PROVIDERS: ReadonlyArray<
   new CodexProvider(),
   new ExaProvider(),
   new GeminiProvider(),
+  new PerplexityProvider(),
   new ParallelProvider(),
   new ValyuProvider(),
 ];
@@ -40,6 +44,7 @@ export const PROVIDER_MAP: Record<
     | CodexProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
+    | PerplexityProviderConfig
     | ParallelProviderConfig
     | ValyuProviderConfig
   >
@@ -48,6 +53,7 @@ export const PROVIDER_MAP: Record<
   codex: PROVIDERS[1],
   exa: PROVIDERS[2],
   gemini: PROVIDERS[3],
-  parallel: PROVIDERS[4],
-  valyu: PROVIDERS[5],
+  perplexity: PROVIDERS[4],
+  parallel: PROVIDERS[5],
+  valyu: PROVIDERS[6],
 };

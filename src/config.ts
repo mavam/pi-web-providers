@@ -13,6 +13,7 @@ import type {
   ExaProviderConfig,
   GeminiProviderConfig,
   JsonObject,
+  PerplexityProviderConfig,
   ParallelProviderConfig,
   ProviderId,
   ValyuProviderConfig,
@@ -93,6 +94,23 @@ export function createDefaultConfig(): WebProvidersConfig {
           contentsModel: "gemini-2.5-flash",
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
+        },
+      },
+      perplexity: {
+        enabled: false,
+        tools: {
+          search: true,
+          answer: true,
+          research: true,
+        },
+        apiKey: "PERPLEXITY_API_KEY",
+        defaults: {
+          answer: {
+            model: "sonar",
+          },
+          research: {
+            model: "sonar-deep-research",
+          },
         },
       },
       parallel: {
@@ -180,6 +198,7 @@ export function parseProviderConfig(
   | CodexProviderConfig
   | ExaProviderConfig
   | GeminiProviderConfig
+  | PerplexityProviderConfig
   | ParallelProviderConfig
   | ValyuProviderConfig {
   let raw: unknown;
@@ -311,6 +330,12 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
         source,
       );
     }
+    if (raw.providers.perplexity !== undefined) {
+      config.providers.perplexity = normalizePerplexityProvider(
+        raw.providers.perplexity,
+        source,
+      );
+    }
     if (raw.providers.parallel !== undefined) {
       config.providers.parallel = normalizeParallelProvider(
         raw.providers.parallel,
@@ -330,6 +355,7 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
         key !== "codex" &&
         key !== "exa" &&
         key !== "gemini" &&
+        key !== "perplexity" &&
         key !== "parallel" &&
         key !== "valyu",
     );
@@ -601,6 +627,62 @@ function normalizeGeminiProvider(
               defaults.researchAgent,
               source,
               "providers.gemini.defaults.researchAgent",
+            ),
+          },
+  };
+}
+
+function normalizePerplexityProvider(
+  raw: unknown,
+  source: string,
+): PerplexityProviderConfig {
+  const provider = parseProviderObject(raw, source, "perplexity");
+  const defaults = parseOptionalJsonObject(
+    provider.defaults,
+    source,
+    "providers.perplexity.defaults",
+  );
+
+  return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.perplexity.enabled",
+    ),
+    tools: parseOptionalProviderTools(
+      "perplexity",
+      provider.tools,
+      source,
+      "providers.perplexity.tools",
+    ) as PerplexityProviderConfig["tools"],
+    apiKey: parseOptionalString(
+      provider.apiKey,
+      source,
+      "providers.perplexity.apiKey",
+    ),
+    baseUrl: parseOptionalString(
+      provider.baseUrl,
+      source,
+      "providers.perplexity.baseUrl",
+    ),
+    defaults:
+      defaults === undefined
+        ? undefined
+        : {
+            search: parseOptionalJsonObject(
+              defaults.search,
+              source,
+              "providers.perplexity.defaults.search",
+            ),
+            answer: parseOptionalJsonObject(
+              defaults.answer,
+              source,
+              "providers.perplexity.defaults.answer",
+            ),
+            research: parseOptionalJsonObject(
+              defaults.research,
+              source,
+              "providers.perplexity.defaults.research",
             ),
           },
   };

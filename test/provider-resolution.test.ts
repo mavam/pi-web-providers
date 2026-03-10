@@ -38,6 +38,7 @@ afterEach(() => {
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
+  delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
