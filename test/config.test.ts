@@ -99,6 +99,7 @@ describe("config parsing", () => {
       defaults: {
         apiVersion: "v1alpha",
         searchModel: "gemini-2.5-flash",
+        contentsModel: "gemini-2.5-pro",
       },
     };
 
@@ -120,6 +121,9 @@ describe("config parsing", () => {
     ]);
     expect(loaded.providers?.exa?.enabled).toBe(true);
     expect(loaded.providers?.gemini?.defaults?.apiVersion).toBe("v1alpha");
+    expect(loaded.providers?.gemini?.defaults?.contentsModel).toBe(
+      "gemini-2.5-pro",
+    );
     expect(loaded.providers?.parallel?.defaults?.search?.mode).toBe("one-shot");
   });
 

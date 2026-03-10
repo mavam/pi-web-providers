@@ -83,12 +83,14 @@ export function createDefaultConfig(): WebProvidersConfig {
         enabled: false,
         tools: {
           search: true,
+          contents: true,
           answer: true,
           research: true,
         },
         apiKey: "GOOGLE_API_KEY",
         defaults: {
           searchModel: "gemini-2.5-flash",
+          contentsModel: "gemini-2.5-flash",
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
         },
@@ -584,6 +586,11 @@ function normalizeGeminiProvider(
               defaults.searchModel,
               source,
               "providers.gemini.defaults.searchModel",
+            ),
+            contentsModel: parseOptionalString(
+              defaults.contentsModel,
+              source,
+              "providers.gemini.defaults.contentsModel",
             ),
             answerModel: parseOptionalString(
               defaults.answerModel,

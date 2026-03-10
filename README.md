@@ -117,7 +117,7 @@ summarises which capabilities each provider exposes:
 | **Claude**   |   ✓    |          |   ✓    |          | Local Claude Code auth |
 | **Codex**    |   ✓    |          |        |          | Local Codex CLI auth   |
 | **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
-| **Gemini**   |   ✓    |          |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Gemini**   |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
 | **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
 | **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
 
@@ -143,7 +143,8 @@ summarises which capabilities each provider exposes:
 ### Gemini
 
 - SDK: `@google/genai`
-- Grounded answers and deep-research agents via Google's Gemini API
+- Google Search grounding for answers and URL Context extraction for page contents
+- Deep-research agents via Google's Gemini API
 
 ### Parallel
 
@@ -220,12 +221,14 @@ Example:
       "enabled": false,
       "tools": {
         "search": true,
+        "contents": true,
         "answer": true,
         "research": true
       },
       "apiKey": "GOOGLE_API_KEY",
       "defaults": {
         "searchModel": "gemini-2.5-flash",
+        "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
         "researchAgent": "deep-research-pro-preview-12-2025"
       }
