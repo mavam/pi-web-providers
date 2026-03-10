@@ -8,7 +8,6 @@ import type { ProviderId, WebProvidersConfig } from "./types.js";
 
 const IMPLICIT_PROVIDER_FALLBACKS: readonly ProviderId[] = [
   "codex",
-  "claude",
 ] as const;
 
 export function resolveProviderChoice(

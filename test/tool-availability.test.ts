@@ -130,14 +130,14 @@ describe("managed tool availability", () => {
     ).toEqual(["web_search"]);
   });
 
-  it("keeps web_search and web_answer available via implicit Claude fallback", () => {
+  it("does not expose Claude-managed tools via implicit fallback", () => {
     mockClaudeAvailable();
 
     const config: WebProvidersConfig = { version: 1 };
 
     expect(
       __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual(["web_search", "web_answer"]);
+    ).toEqual([]);
   });
 
   it("hides managed tools when no provider is available", () => {
@@ -250,9 +250,6 @@ function mockClaudeAvailable(): void {
   execFileSyncMock.mockImplementation((_command, args: string[]) => {
     if (args.includes("auth") && args.includes("status")) {
       return '{"loggedIn":true,"authMethod":"claude.ai"}';
-    }
-    if (args.includes("-p")) {
-      return '{"result":"OK"}';
     }
     throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
   });

@@ -41,7 +41,7 @@ describe("ClaudeProvider", () => {
       provider.getStatus({
         enabled: true,
         pathToClaudeCodeExecutable: process.execPath,
-      }),
+      }, process.cwd()),
     ).toEqual({
       available: false,
       summary: "missing Claude auth",
@@ -49,7 +49,7 @@ describe("ClaudeProvider", () => {
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
   });
 
-  it("reports Claude as available when auth and query access are available", () => {
+  it("reports Claude as available when auth is available", () => {
     execFileSyncMock.mockImplementation(mockClaudeAvailable);
 
     const provider = new ClaudeProvider();
@@ -58,31 +58,15 @@ describe("ClaudeProvider", () => {
       provider.getStatus({
         enabled: true,
         pathToClaudeCodeExecutable: process.execPath,
-      }),
+      }, process.cwd()),
     ).toEqual({
       available: true,
       summary: "enabled",
     });
-    expect(execFileSyncMock).toHaveBeenCalledTimes(2);
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
   });
 
-  it("reports Claude as unavailable when auth succeeds but queries are blocked", () => {
-    execFileSyncMock.mockImplementation(mockClaudeWithoutQueryAccess);
-
-    const provider = new ClaudeProvider();
-
-    expect(
-      provider.getStatus({
-        enabled: true,
-        pathToClaudeCodeExecutable: process.execPath,
-      }),
-    ).toEqual({
-      available: false,
-      summary: "missing Claude query access",
-    });
-  });
-
-  it("caches Claude auth and query access status across repeated availability checks", () => {
+  it("caches Claude auth status across repeated availability checks", () => {
     execFileSyncMock.mockImplementation(mockClaudeAvailable);
 
     const config = {
@@ -90,15 +74,15 @@ describe("ClaudeProvider", () => {
       pathToClaudeCodeExecutable: process.execPath,
     };
 
-    expect(new ClaudeProvider().getStatus(config)).toEqual({
+    expect(new ClaudeProvider().getStatus(config, process.cwd())).toEqual({
       available: true,
       summary: "enabled",
     });
-    expect(new ClaudeProvider().getStatus(config)).toEqual({
+    expect(new ClaudeProvider().getStatus(config, process.cwd())).toEqual({
       available: true,
       summary: "enabled",
     });
-    expect(execFileSyncMock).toHaveBeenCalledTimes(2);
+    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
   });
 
   it("disables Claude session persistence for provider queries", async () => {
@@ -205,24 +189,6 @@ function mockLoggedOutClaudeStatus(): never {
 function mockClaudeAvailable(_command: string, args: string[]): string {
   if (args.includes("auth") && args.includes("status")) {
     return '{"loggedIn":true,"authMethod":"claude.ai"}';
-  }
-  if (args.includes("-p")) {
-    return '{"result":"OK"}';
-  }
-  throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
-}
-
-function mockClaudeWithoutQueryAccess(
-  _command: string,
-  args: string[],
-): string {
-  if (args.includes("auth") && args.includes("status")) {
-    return '{"loggedIn":true,"authMethod":"claude.ai"}';
-  }
-  if (args.includes("-p")) {
-    throw Object.assign(new Error("authentication_failed"), {
-      stderr: "authentication_failed: Your organization does not have access to Claude",
-    });
   }
   throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
 }

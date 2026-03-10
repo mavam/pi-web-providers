@@ -32,9 +32,8 @@ tool prompt aligned with the tools that the agent can actually call.
   its own SDK, strengths, and capability set
 - **One config command** (`/web-providers`) with a TUI that adapts to the
   selected provider
-- **Transparent fallback** — search falls back to Codex first, then Claude,
-  when no provider is explicitly enabled and the local CLI is installed and
-  authenticated
+- **Transparent fallback** — search falls back to Codex when no provider is
+  explicitly enabled and the local CLI is installed and authenticated
 - **Per-provider tool toggles** — disable individual capabilities you don't need
   without switching providers
 - **Truncated output with temp-file spillover** for large results
@@ -167,8 +166,8 @@ summarises which capabilities each provider exposes:
 - Managed tools are registered from available provider capabilities, but the
   active tool set can still be narrower if you removed a tool from the session
 - If no provider is explicitly enabled for search, the extension falls back to
-  Codex first and then Claude when the local CLI is installed and authenticated,
-  unless either provider was explicitly configured as disabled
+  Codex when the local CLI is installed and authenticated, unless Codex was
+  explicitly configured as disabled
 - Tools stay inactive when no provider is available for their capability, so
   they are not injected into the LLM prompt
 - Before each agent run, the extension removes newly unavailable managed tools

@@ -134,33 +134,6 @@ describe("provider resolution", () => {
     expect(provider.id).toBe("codex");
   });
 
-  it("falls back to implicit Claude search when Codex auth is missing", () => {
-    mockClaudeAvailable();
-
-    const provider = resolveProviderChoice({ version: 1 }, undefined, process.cwd());
-    expect(provider.id).toBe("claude");
-  });
-
-  it("prefers implicit Codex search over implicit Claude when both are available", () => {
-    process.env.CODEX_API_KEY = "test-key";
-    mockClaudeAvailable();
-
-    const provider = resolveProviderChoice({ version: 1 }, undefined, process.cwd());
-    expect(provider.id).toBe("codex");
-  });
-
-  it("falls back to implicit Claude answers when no provider is explicitly enabled", () => {
-    mockClaudeAvailable();
-
-    const provider = resolveProviderForCapability(
-      { version: 1 },
-      undefined,
-      process.cwd(),
-      "answer",
-    );
-    expect(provider.id).toBe("claude");
-  });
-
   it("allows explicit Codex search without a config file entry", () => {
     process.env.CODEX_API_KEY = "test-key";
 
@@ -196,7 +169,7 @@ describe("provider resolution", () => {
     ).toThrow(/No provider is configured for 'search'/);
   });
 
-  it("rejects implicit Claude fallback when Claude cannot execute queries", () => {
+  it("does not implicitly fall back to Claude when Codex auth is missing", () => {
     mockClaudeWithoutQueryAccess();
 
     expect(() =>
@@ -251,9 +224,6 @@ function mockClaudeAvailable(): void {
     if (args.includes("auth") && args.includes("status")) {
       return '{"loggedIn":true,"authMethod":"claude.ai"}';
     }
-    if (args.includes("-p")) {
-      return '{"result":"OK"}';
-    }
     throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
   });
 }
@@ -262,11 +232,6 @@ function mockClaudeWithoutQueryAccess(): void {
   execFileSyncMock.mockImplementation((_command, args: string[]) => {
     if (args.includes("auth") && args.includes("status")) {
       return '{"loggedIn":true,"authMethod":"claude.ai"}';
-    }
-    if (args.includes("-p")) {
-      throw Object.assign(new Error("authentication_failed"), {
-        stderr: "authentication_failed: Your organization does not have access to Claude",
-      });
     }
     throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
   });
