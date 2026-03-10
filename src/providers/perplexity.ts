@@ -278,8 +278,7 @@ function extractSources(response: {
     response.citations?.flatMap((citation) => {
       const url = citation?.trim() ?? "";
       return url ? [{ title: url, url }] : [];
-    }) ??
-    []
+    }) ?? []
   );
 }
 

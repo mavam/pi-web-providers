@@ -117,7 +117,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   async search(
     queryText: string,
     maxResults: number,
-    _options: Record<string, unknown> | undefined,
+    options: Record<string, unknown> | undefined,
     config: ClaudeProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
@@ -138,6 +138,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
         tools: ["WebSearch"],
         config,
         context,
+        options,
       }),
     );
 
@@ -168,14 +169,12 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
           "Only cite sources you actually used.",
           "",
           `User query: ${queryText}`,
-          options ? `Additional options: ${JSON.stringify(options)}` : "",
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        ].join("\n"),
         schema: ANSWER_OUTPUT_SCHEMA,
         tools: ["WebSearch", "WebFetch"],
         config,
         context,
+        options,
       }),
     );
 
@@ -205,12 +204,14 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
     tools,
     config,
     context,
+    options,
   }: {
     prompt: string;
     schema: Record<string, unknown>;
     tools: string[];
     config: ClaudeProviderConfig;
     context: ProviderContext;
+    options: Record<string, unknown> | undefined;
   }): Promise<T> {
     const abortController = new AbortController();
     if (context.signal?.aborted) {
@@ -227,9 +228,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
         abortController,
         allowedTools: tools,
         cwd: context.cwd,
-        effort: config.defaults?.effort,
-        maxTurns: config.defaults?.maxTurns,
-        model: config.defaults?.model,
+        ...getClaudeRuntimeOptions(config, options),
         outputFormat: {
           type: "json_schema",
           schema,
@@ -431,6 +430,70 @@ function parseStructuredOutput<T>(result: SDKResultMessage): T {
     }
     return JSON.parse(match[0]) as T;
   }
+}
+
+function getClaudeRuntimeOptions(
+  config: ClaudeProviderConfig,
+  options: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const model = readNonEmptyString(options?.model) ?? config.defaults?.model;
+  const effort = readEnum(options?.effort, ["low", "medium", "high", "max"]);
+  const maxTurns = readPositiveInteger(options?.maxTurns);
+  const maxThinkingTokens = readNonNegativeInteger(options?.maxThinkingTokens);
+  const maxBudgetUsd = readPositiveNumber(options?.maxBudgetUsd);
+  const thinking = isPlainObject(options?.thinking)
+    ? options?.thinking
+    : undefined;
+
+  return {
+    ...(model ? { model } : {}),
+    ...((effort ?? config.defaults?.effort)
+      ? { effort: effort ?? config.defaults?.effort }
+      : {}),
+    ...((maxTurns ?? config.defaults?.maxTurns)
+      ? { maxTurns: maxTurns ?? config.defaults?.maxTurns }
+      : {}),
+    ...(maxThinkingTokens !== undefined ? { maxThinkingTokens } : {}),
+    ...(maxBudgetUsd !== undefined ? { maxBudgetUsd } : {}),
+    ...(thinking ? { thinking } : {}),
+  };
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+function readPositiveNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function readEnum<const TValue extends string>(
+  value: unknown,
+  values: readonly TValue[],
+): TValue | undefined {
+  return typeof value === "string" && values.includes(value as TValue)
+    ? (value as TValue)
+    : undefined;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function parseClaudeSearchOutput(value: unknown): ClaudeSearchOutput {

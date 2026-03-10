@@ -57,15 +57,19 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   async search(
     query: string,
     maxResults: number,
-    _options: Record<string, unknown> | undefined,
+    options: Record<string, unknown> | undefined,
     config: GeminiProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
     const ai = this.createClient(config);
-    const model = config.defaults?.searchModel ?? DEFAULT_SEARCH_MODEL;
+    const request = buildGeminiSearchRequest(
+      query,
+      config.defaults?.searchModel ?? DEFAULT_SEARCH_MODEL,
+      options,
+    );
 
     context.onProgress?.(`Searching Gemini for: ${query}`);
-    const interaction = await createSearchInteraction(ai, model, query);
+    const interaction = await createSearchInteraction(ai, request);
 
     const results = await Promise.all(
       extractGoogleSearchResults(interaction.outputs)
@@ -100,18 +104,20 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     );
 
     const urlList = urls.map((url) => `- ${url}`).join("\n");
-    const response = await ai.models.generateContent({
-      model,
-      contents: [
+    const request = buildGeminiGenerateContentRequest({
+      defaultModel: config.defaults?.contentsModel ?? DEFAULT_CONTENTS_MODEL,
+      prompt:
         `Extract the main textual content from each of the following URLs. ` +
-          `For each URL, return the page title followed by the cleaned body text. ` +
-          `Preserve the original structure (headings, paragraphs, lists) but remove ` +
-          `navigation, ads, and boilerplate.\n\n${urlList}`,
-      ],
-      config: {
-        ...(options ?? {}),
-        tools: [{ urlContext: {} }],
-      },
+        `For each URL, return the page title followed by the cleaned body text. ` +
+        `Preserve the original structure (headings, paragraphs, lists) but remove ` +
+        `navigation, ads, and boilerplate.\n\n${urlList}`,
+      options,
+      toolConfig: { urlContext: {} },
+    });
+    const response = await ai.models.generateContent({
+      model: request.model,
+      contents: [request.contents],
+      config: request.config,
     });
 
     const text = response.text?.trim() || "";
@@ -158,16 +164,18 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     context: ProviderContext,
   ): Promise<ProviderToolOutput> {
     const ai = this.createClient(config);
-    const model = config.defaults?.answerModel ?? DEFAULT_ANSWER_MODEL;
+    const request = buildGeminiGenerateContentRequest({
+      defaultModel: config.defaults?.answerModel ?? DEFAULT_ANSWER_MODEL,
+      prompt: query,
+      options,
+      toolConfig: { googleSearch: {} },
+    });
 
     context.onProgress?.(`Getting Gemini answer for: ${query}`);
     const response = await ai.models.generateContent({
-      model,
-      contents: query,
-      config: {
-        ...(options ?? {}),
-        tools: [{ googleSearch: {} }],
-      },
+      model: request.model,
+      contents: request.contents,
+      config: request.config,
     });
 
     const lines: string[] = [];
@@ -204,7 +212,9 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     const ai = this.createClient(config);
     const agent = config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT;
     const pollIntervalMs = getPollInterval(options);
-    const requestOptions = stripPollIntervalOption(options);
+    const requestOptions = getGeminiResearchRequestOptions(
+      stripPollIntervalOption(options),
+    );
     const startedAt = Date.now();
     let lastStatus: string | undefined;
 
@@ -469,28 +479,43 @@ function isGoogleGroundingRedirect(url: string): boolean {
 
 async function createSearchInteraction(
   ai: GoogleGenAI,
-  model: string,
-  query: string,
+  request: {
+    model: string;
+    input: string;
+    tools: Array<{ type: "google_search" }>;
+    generation_config?: Record<string, unknown>;
+  },
 ) {
-  const request = {
-    model,
-    input: query,
-    tools: [{ type: "google_search" as const }],
+  const forcedRequest = {
+    ...request,
+    ...(request.generation_config
+      ? {
+          generation_config: {
+            ...request.generation_config,
+            tool_choice: "any" as const,
+          },
+        }
+      : {
+          generation_config: {
+            tool_choice: "any" as const,
+          },
+        }),
   };
 
   try {
-    return await ai.interactions.create({
-      ...request,
-      generation_config: {
-        tool_choice: "any",
-      },
-    });
+    return await ai.interactions.create(forcedRequest);
   } catch (error) {
     if (!isBuiltInToolChoiceError(error)) {
       throw error;
     }
 
-    return ai.interactions.create(request);
+    const fallbackGenerationConfig = stripToolChoice(request.generation_config);
+    return ai.interactions.create({
+      ...request,
+      ...(fallbackGenerationConfig
+        ? { generation_config: fallbackGenerationConfig }
+        : {}),
+    });
   }
 }
 
@@ -590,4 +615,123 @@ function stripPollIntervalOption(
 
   const { pollIntervalMs: _ignored, ...rest } = options;
   return rest;
+}
+
+function buildGeminiSearchRequest(
+  query: string,
+  defaultModel: string,
+  options: Record<string, unknown> | undefined,
+): {
+  model: string;
+  input: string;
+  tools: Array<{ type: "google_search" }>;
+  generation_config?: Record<string, unknown>;
+} {
+  return {
+    model: readNonEmptyString(options?.model) ?? defaultModel,
+    input: query,
+    tools: [{ type: "google_search" }],
+    ...(isPlainObject(options?.generation_config)
+      ? { generation_config: options.generation_config }
+      : {}),
+  };
+}
+
+function buildGeminiGenerateContentRequest({
+  defaultModel,
+  prompt,
+  options,
+  toolConfig,
+}: {
+  defaultModel: string;
+  prompt: string;
+  options: Record<string, unknown> | undefined;
+  toolConfig: { urlContext: {} } | { googleSearch: {} };
+}): {
+  model: string;
+  contents: string;
+  config: Record<string, unknown>;
+} {
+  const requestOptions = isPlainObject(options) ? options : {};
+  const explicitConfig = isPlainObject(requestOptions.config)
+    ? requestOptions.config
+    : {};
+  const legacyLabels = readStringRecord(requestOptions.labels);
+  const explicitLabels = readStringRecord(explicitConfig.labels);
+  const metadataLabels = readStringRecord(requestOptions.metadata);
+  const legacyConfig = Object.fromEntries(
+    Object.entries(requestOptions).filter(
+      ([key]) =>
+        key !== "config" &&
+        key !== "contents" &&
+        key !== "metadata" &&
+        key !== "model",
+    ),
+  );
+  const labels = mergeStringRecords(
+    legacyLabels,
+    metadataLabels,
+    explicitLabels,
+  );
+
+  return {
+    model: readNonEmptyString(requestOptions.model) ?? defaultModel,
+    contents: prompt,
+    config: {
+      ...legacyConfig,
+      ...explicitConfig,
+      ...(labels ? { labels } : {}),
+      tools: [toolConfig],
+    },
+  };
+}
+
+function getGeminiResearchRequestOptions(
+  options: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!isPlainObject(options)) {
+    return {};
+  }
+
+  return { ...options };
+}
+
+function stripToolChoice(
+  generationConfig: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!generationConfig || !Object.hasOwn(generationConfig, "tool_choice")) {
+    return generationConfig;
+  }
+
+  const { tool_choice: _ignored, ...rest } = generationConfig;
+  return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function readStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const entries = Object.entries(value).filter(
+    (entry): entry is [string, string] => typeof entry[1] === "string",
+  );
+
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
+function mergeStringRecords(
+  ...records: Array<Record<string, string> | undefined>
+): Record<string, string> | undefined {
+  const merged = Object.assign({}, ...records.filter(Boolean));
+  return Object.keys(merged).length > 0 ? merged : undefined;
 }

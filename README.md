@@ -109,6 +109,11 @@ Investigate a topic across web sources and produce a longer report.
 | `options`  | object | —        | Provider-specific research options                      |
 | `provider` | string | auto     | Optional override among providers that support research |
 
+`options` are provider-native and provider-specific. Equivalent concepts can
+use different field names across SDKs, for example Perplexity uses `country`,
+Exa uses `userLocation`, and Valyu uses `countryCode`. Runtime `options`
+override provider defaults, but managed tool inputs and tool wiring stay fixed.
+
 ## 🔌 Providers
 
 Every provider is a thin adapter around an official SDK. The table below
@@ -129,12 +134,16 @@ summarises which capabilities each provider exposes:
 - SDK: `@anthropic-ai/claude-agent-sdk`
 - Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
   structured JSON adapter
+- Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
+  `maxTurns`
 - Great for search plus grounded answers if you already use Claude Code locally
 
 ### Codex
 
 - SDK: `@openai/codex-sdk`
 - Runs in read-only mode with web search enabled
+- Supports request-shaping `web_search.options` such as `model`,
+  `modelReasoningEffort`, and `webSearchMode`
 - Best if you already use the local Codex CLI and auth flow
 
 ### Exa
@@ -148,6 +157,8 @@ summarises which capabilities each provider exposes:
 - SDK: `@google/genai`
 - Google Search grounding for answers and URL Context extraction for page contents
 - Deep-research agents via Google's Gemini API
+- Supports provider-native request options such as `model`, `config`,
+  `generation_config`, and `agent_config` depending on the tool
 
 ### Perplexity
 
@@ -162,11 +173,14 @@ summarises which capabilities each provider exposes:
 - SDK: `parallel-web`
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
+- Supports provider-native search and extraction options from the Parallel SDK
 
 ### Valyu
 
 - SDK: `valyu-js`
 - Web, proprietary, and news search types
+- Supports provider-native options such as `countryCode`, `responseLength`, and
+  search/source filters
 - Configurable response length for answers and research
 
 ## 📝 Config Notes

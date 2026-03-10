@@ -90,7 +90,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
   async search(
     query: string,
     maxResults: number,
-    _options: Record<string, unknown> | undefined,
+    options: Record<string, unknown> | undefined,
     config: CodexProviderConfig,
     context: ProviderContext,
   ): Promise<SearchResponse> {
@@ -102,18 +102,9 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       env: resolveEnvMap(config.env),
     });
 
-    const thread = codex.startThread({
-      additionalDirectories: config.defaults?.additionalDirectories,
-      approvalPolicy: "never",
-      model: config.defaults?.model,
-      modelReasoningEffort: config.defaults?.modelReasoningEffort,
-      networkAccessEnabled: config.defaults?.networkAccessEnabled ?? true,
-      sandboxMode: "read-only",
-      skipGitRepoCheck: true,
-      webSearchEnabled: config.defaults?.webSearchEnabled ?? true,
-      webSearchMode: config.defaults?.webSearchMode ?? "live",
-      workingDirectory: context.cwd,
-    });
+    const thread = codex.startThread(
+      buildCodexSearchThreadOptions(config, context.cwd, options),
+    );
 
     const prompt = [
       "You are performing web research for another coding agent.",
@@ -158,6 +149,77 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       })),
     };
   }
+}
+
+function buildCodexSearchThreadOptions(
+  config: CodexProviderConfig,
+  cwd: string,
+  options: Record<string, unknown> | undefined,
+) {
+  const runtimeOptions = getCodexSearchRuntimeOptions(options);
+
+  return {
+    additionalDirectories: config.defaults?.additionalDirectories,
+    approvalPolicy: "never" as const,
+    model: runtimeOptions.model ?? config.defaults?.model,
+    modelReasoningEffort:
+      runtimeOptions.modelReasoningEffort ??
+      config.defaults?.modelReasoningEffort,
+    networkAccessEnabled: config.defaults?.networkAccessEnabled ?? true,
+    sandboxMode: "read-only" as const,
+    skipGitRepoCheck: true,
+    webSearchEnabled: config.defaults?.webSearchEnabled ?? true,
+    webSearchMode:
+      runtimeOptions.webSearchMode ?? config.defaults?.webSearchMode ?? "live",
+    workingDirectory: cwd,
+  };
+}
+
+function getCodexSearchRuntimeOptions(
+  options: Record<string, unknown> | undefined,
+): {
+  model?: string;
+  modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+  webSearchMode?: "disabled" | "cached" | "live";
+} {
+  if (!options) {
+    return {};
+  }
+
+  const model = readNonEmptyString(options.model);
+  const modelReasoningEffort = readEnum(options.modelReasoningEffort, [
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+  ]);
+  const webSearchMode = readEnum(options.webSearchMode, [
+    "disabled",
+    "cached",
+    "live",
+  ]);
+
+  return {
+    ...(model ? { model } : {}),
+    ...(modelReasoningEffort ? { modelReasoningEffort } : {}),
+    ...(webSearchMode ? { webSearchMode } : {}),
+  };
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function readEnum<const TValue extends string>(
+  value: unknown,
+  values: readonly TValue[],
+): TValue | undefined {
+  return typeof value === "string" && values.includes(value as TValue)
+    ? (value as TValue)
+    : undefined;
 }
 
 function hasCodexCredentials(config: CodexProviderConfig): boolean {
