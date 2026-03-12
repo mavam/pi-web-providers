@@ -97,7 +97,6 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     context: ProviderContext,
   ): Promise<ProviderToolOutput> {
     const ai = this.createClient(config);
-    const model = config.defaults?.contentsModel ?? DEFAULT_CONTENTS_MODEL;
 
     context.onProgress?.(
       `Fetching contents from Gemini for ${urls.length} URL(s)`,
@@ -656,31 +655,12 @@ function buildGeminiGenerateContentRequest({
   const explicitConfig = isPlainObject(requestOptions.config)
     ? requestOptions.config
     : {};
-  const legacyLabels = readStringRecord(requestOptions.labels);
-  const explicitLabels = readStringRecord(explicitConfig.labels);
-  const metadataLabels = readStringRecord(requestOptions.metadata);
-  const legacyConfig = Object.fromEntries(
-    Object.entries(requestOptions).filter(
-      ([key]) =>
-        key !== "config" &&
-        key !== "contents" &&
-        key !== "metadata" &&
-        key !== "model",
-    ),
-  );
-  const labels = mergeStringRecords(
-    legacyLabels,
-    metadataLabels,
-    explicitLabels,
-  );
 
   return {
     model: readNonEmptyString(requestOptions.model) ?? defaultModel,
     contents: prompt,
     config: {
-      ...legacyConfig,
       ...explicitConfig,
-      ...(labels ? { labels } : {}),
       tools: [toolConfig],
     },
   };
@@ -715,23 +695,4 @@ function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
     ? value
     : undefined;
-}
-
-function readStringRecord(value: unknown): Record<string, string> | undefined {
-  if (!isPlainObject(value)) {
-    return undefined;
-  }
-
-  const entries = Object.entries(value).filter(
-    (entry): entry is [string, string] => typeof entry[1] === "string",
-  );
-
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
-}
-
-function mergeStringRecords(
-  ...records: Array<Record<string, string> | undefined>
-): Record<string, string> | undefined {
-  const merged = Object.assign({}, ...records.filter(Boolean));
-  return Object.keys(merged).length > 0 ? merged : undefined;
 }

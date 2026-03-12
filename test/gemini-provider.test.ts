@@ -249,7 +249,7 @@ describe("GeminiProvider search", () => {
 });
 
 describe("GeminiProvider answer", () => {
-  it("supports request-level model overrides while keeping Google Search grounding enabled", async () => {
+  it("supports provider-native request options for answers while keeping Google Search grounding enabled", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Grounded answer",
       candidates: [],
@@ -267,10 +267,6 @@ describe("GeminiProvider answer", () => {
           temperature: 0.1,
           tools: [{ urlContext: {} }],
         },
-        metadata: {
-          request_id: "answer-1",
-        },
-        contents: "override",
       },
       createConfig(),
       createContext(),
@@ -281,7 +277,6 @@ describe("GeminiProvider answer", () => {
       contents: "What changed?",
       config: {
         labels: {
-          request_id: "answer-1",
           route: "answer",
         },
         temperature: 0.1,
@@ -490,7 +485,7 @@ describe("GeminiProvider contents", () => {
     );
   });
 
-  it("passes extra options to generateContent config", async () => {
+  it("passes provider-native generateContent config for contents", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Result.",
       candidates: [],
@@ -499,7 +494,11 @@ describe("GeminiProvider contents", () => {
     const provider = createProvider({ models: { generateContent } });
     await provider.contents(
       ["https://example.com"],
-      { temperature: 0.2 },
+      {
+        config: {
+          temperature: 0.2,
+        },
+      },
       createConfig(),
       createContext(),
     );
@@ -514,7 +513,7 @@ describe("GeminiProvider contents", () => {
     );
   });
 
-  it("supports request-level options for contents while preserving urlContext", async () => {
+  it("supports provider-native request options for contents while preserving urlContext", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Result.",
       candidates: [],
@@ -526,11 +525,11 @@ describe("GeminiProvider contents", () => {
       {
         model: "gemini-2.5-pro",
         config: {
+          labels: {
+            request_id: "contents-1",
+          },
           topK: 3,
           tools: [{ googleSearch: {} }],
-        },
-        metadata: {
-          request_id: "contents-1",
         },
       },
       createConfig(),
