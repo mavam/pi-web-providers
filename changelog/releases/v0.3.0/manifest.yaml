@@ -1,0 +1,7 @@
+created: 2026-03-12
+title: Perplexity provider and runtime options
+intro: >-
+  Adds Perplexity as a new provider for web search, answers, and research. Runtime
+  options are now forwarded to Claude, Codex, and Gemini, giving callers fine-grained
+  per-request control, and Gemini gains a web_contents tool that extracts page content
+  via URL Context.
