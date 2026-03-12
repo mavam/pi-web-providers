@@ -45,8 +45,8 @@ import type {
   ExaProviderConfig,
   GeminiProviderConfig,
   JsonObject,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
   ProviderId,
   ProviderToolDetails,
   ProviderToolOutput,
@@ -261,14 +261,42 @@ function registerWebContentsTool(
       });
     },
     renderCall(args, theme) {
-      return renderToolCallHeader(
-        "web_contents",
-        `${Array.isArray((args as { urls?: unknown[] }).urls) ? ((args as { urls?: unknown[] }).urls?.length ?? 0) : 0} url(s)`,
-        [
-          `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
-        ],
-        theme,
+      const urls: string[] = Array.isArray((args as { urls?: string[] }).urls)
+        ? ((args as { urls?: string[] }).urls ?? [])
+        : [];
+      const provider = String(
+        (args as { provider?: string }).provider ?? "auto",
       );
+      return {
+        invalidate() {},
+        render(width: number) {
+          const lines: string[] = [];
+          const header = theme.fg("toolTitle", theme.bold("web_contents"));
+          const headerLine = truncateToWidth(header.trimEnd(), width);
+          lines.push(
+            headerLine +
+              " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
+          );
+          for (const url of urls) {
+            const urlLine = truncateToWidth(
+              `  ${theme.fg("accent", url)}`,
+              width,
+            );
+            lines.push(
+              urlLine + " ".repeat(Math.max(0, width - visibleWidth(urlLine))),
+            );
+          }
+          const detailLine = truncateToWidth(
+            `  ${theme.fg("muted", `provider=${provider}`)}`,
+            width,
+          );
+          lines.push(
+            detailLine +
+              " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
+          );
+          return lines;
+        },
+      };
     },
     renderResult(result, state, theme) {
       return renderProviderToolResult(
