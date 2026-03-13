@@ -680,7 +680,10 @@ async function executeProviderTool({
         providerConfig,
         options,
       );
-      const supportsSafeStartRetries = provider.id === "gemini";
+      const supportsSafeStartRetries =
+        provider.supportsIdempotentResearchStartRetries === true;
+      const supportsPollCancellation =
+        provider.supportsResearchPollingCancellation === true;
       response = await executeResearchWithLifecycle({
         providerLabel: provider.label,
         providerId: provider.id,
@@ -698,6 +701,10 @@ async function executeProviderTool({
         startIdempotencyKey: supportsSafeStartRetries
           ? `pi-web-providers:${provider.id}:${randomUUID()}`
           : undefined,
+        startRetryOnTimeout: supportsSafeStartRetries,
+        pollRequestTimeoutMs: supportsPollCancellation
+          ? researchPolicy.requestTimeoutMs
+          : null,
         start: (input, researchOptions, context) =>
           provider.startResearch!(
             input,

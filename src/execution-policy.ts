@@ -15,6 +15,7 @@ export interface RequestExecutionPolicy {
   requestTimeoutMs?: number;
   retryCount: number;
   retryDelayMs: number;
+  retryOnTimeout?: boolean;
 }
 
 export interface ResearchExecutionPolicy extends RequestExecutionPolicy {
@@ -140,7 +141,7 @@ export async function runWithExecutionPolicy<T>(
           : undefined,
       );
     } catch (error) {
-      if (!isRetryableError(error) || attempt >= maxAttempts) {
+      if (!shouldRetryError(error, policy) || attempt >= maxAttempts) {
         throw error;
       }
 
@@ -170,6 +171,8 @@ export async function executeResearchWithLifecycle({
   startRetryCount = 0,
   startRetryNotice,
   startIdempotencyKey,
+  startRetryOnTimeout = false,
+  pollRequestTimeoutMs,
   start,
   poll,
 }: {
@@ -182,6 +185,8 @@ export async function executeResearchWithLifecycle({
   startRetryCount?: number;
   startRetryNotice?: string;
   startIdempotencyKey?: string;
+  startRetryOnTimeout?: boolean;
+  pollRequestTimeoutMs?: number | null;
   start: (
     input: string,
     options: JsonObject | undefined,
@@ -196,6 +201,10 @@ export async function executeResearchWithLifecycle({
   const startedAt = Date.now();
   let lastStatus: ProviderResearchPollResult["status"] | undefined;
   const providerOptions = stripLocalExecutionOptions(options);
+  const effectivePollRequestTimeoutMs =
+    pollRequestTimeoutMs === undefined
+      ? policy.requestTimeoutMs
+      : (pollRequestTimeoutMs ?? undefined);
   const timeoutMessage =
     policy.timeoutMs === undefined
       ? undefined
@@ -229,6 +238,7 @@ export async function executeResearchWithLifecycle({
         {
           ...policy,
           retryCount: startRetryCount,
+          retryOnTimeout: startRetryOnTimeout,
         },
         lifecycleContext,
       );
@@ -254,7 +264,10 @@ export async function executeResearchWithLifecycle({
         const result = await runWithExecutionPolicy(
           `${providerLabel} research poll`,
           (attemptContext) => poll(jobId!, providerOptions, attemptContext),
-          policy,
+          {
+            ...policy,
+            requestTimeoutMs: effectivePollRequestTimeoutMs,
+          },
           lifecycleContext,
         );
         consecutivePollErrors = 0;
@@ -318,6 +331,17 @@ export async function executeResearchWithLifecycle({
   } finally {
     cleanupLifecycle();
   }
+}
+
+function shouldRetryError(
+  error: unknown,
+  policy: Pick<RequestExecutionPolicy, "retryOnTimeout">,
+): boolean {
+  if (error instanceof RequestTimeoutError) {
+    return policy.retryOnTimeout === true;
+  }
+
+  return isRetryableError(error);
 }
 
 export function isRetryableError(error: unknown): boolean {

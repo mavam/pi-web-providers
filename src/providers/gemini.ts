@@ -27,6 +27,8 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   readonly id = "gemini";
   readonly label = "Gemini";
   readonly docsUrl = "https://github.com/googleapis/js-genai";
+  readonly supportsIdempotentResearchStartRetries = true;
+  readonly supportsResearchPollingCancellation = true;
 
   createTemplate(): GeminiProviderConfig {
     return {

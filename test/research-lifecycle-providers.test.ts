@@ -102,6 +102,59 @@ describe("research lifecycle providers", () => {
     expect(result.content[0]?.text).toBe("Exa research result");
   });
 
+  it("does not locally time out uncancellable Exa poll requests", async () => {
+    vi.useFakeTimers();
+
+    exaResearchCreateMock.mockResolvedValue({ researchId: "exa-job-1" });
+    exaResearchGetMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(() => {
+              resolve({ status: "running" });
+            }, 5);
+          }),
+      )
+      .mockResolvedValueOnce({
+        status: "completed",
+        output: {
+          content: "Exa research result",
+        },
+      });
+
+    const promise = __test__.executeProviderTool({
+      capability: "research",
+      config: {
+        version: 1,
+        providers: {
+          exa: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      } satisfies WebProvidersConfig,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
+      input: "Investigate Exa lifecycle polling",
+      invoke: async () => {
+        throw new Error("generic invoke should not run");
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(4);
+    expect(exaResearchGetMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(2);
+    const result = await promise;
+
+    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
+    expect(exaResearchGetMock).toHaveBeenCalledTimes(2);
+    expect(result.content[0]?.text).toBe("Exa research result");
+  });
+
   it("uses Valyu lifecycle polling so transient poll errors do not create duplicate jobs", async () => {
     vi.useFakeTimers();
 

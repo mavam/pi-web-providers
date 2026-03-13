@@ -209,6 +209,8 @@ export interface WebProvider<TConfig> {
   readonly id: ProviderId;
   readonly label: string;
   readonly docsUrl: string;
+  readonly supportsIdempotentResearchStartRetries?: boolean;
+  readonly supportsResearchPollingCancellation?: boolean;
 
   createTemplate(): TConfig;
   getStatus(config: TConfig | undefined, cwd: string): ProviderStatus;

@@ -209,6 +209,73 @@ describe("execution policy", () => {
     }
   });
 
+  it("retries timed-out idempotent research starts", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const progress: string[] = [];
+      const startContexts: ProviderContext[] = [];
+      const start = vi
+        .fn<
+          (
+            input: string,
+            options: JsonObject | undefined,
+            context: ProviderContext,
+          ) => Promise<{ id: string }>
+        >()
+        .mockImplementationOnce(async (_input, _options, context) => {
+          startContexts.push(context);
+          return await new Promise<{ id: string }>(() => {});
+        })
+        .mockImplementationOnce(async (_input, _options, context) => {
+          startContexts.push(context);
+          return { id: "research-123" };
+        });
+      const poll = vi.fn().mockResolvedValue({
+        status: "completed" as const,
+        output: {
+          provider: "gemini" as const,
+          text: "done",
+          summary: "Research via Gemini",
+        },
+      });
+
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "Investigate Tenzir use cases",
+        options: { requestTimeoutMs: 10, retryCount: 1 },
+        context: createContext(progress),
+        policy: {
+          requestTimeoutMs: 10,
+          retryCount: 1,
+          retryDelayMs: 1,
+          pollIntervalMs: 1,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+        },
+        startRetryCount: 1,
+        startIdempotencyKey: "stable-key",
+        startRetryOnTimeout: true,
+        start,
+        poll,
+      });
+
+      await vi.advanceTimersByTimeAsync(11);
+      const result = await promise;
+
+      expect(result.text).toBe("done");
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(startContexts[0]?.idempotencyKey).toBe("stable-key");
+      expect(startContexts[1]?.idempotencyKey).toBe("stable-key");
+      expect(progress).toContain(
+        "Gemini research start failed (Gemini research start timed out after 10ms.). Retrying in 1ms (attempt 2/2).",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not attach resume advice to terminal research failures", async () => {
     await expect(
       executeResearchWithLifecycle({
