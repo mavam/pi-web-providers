@@ -1112,7 +1112,7 @@ function buildProviderMenuOptions(
     pushText(
       "geminiRequestTimeoutMs",
       "Request timeout (ms)",
-      "Maximum time to wait for a single Gemini API request before retrying.",
+      "Maximum time to wait for a single Gemini API request before failing that attempt. Timed-out requests are not retried.",
     );
     pushText(
       "geminiRetryCount",

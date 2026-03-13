@@ -1,13 +1,15 @@
 import { Exa } from "exa-js";
+import { resolveConfigValue } from "../config.js";
 import type {
   ExaProviderConfig,
   ProviderContext,
+  ProviderResearchJob,
+  ProviderResearchPollResult,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { resolveConfigValue } from "../config.js";
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ExaProvider implements WebProvider<ExaProviderConfig> {
@@ -184,12 +186,12 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     };
   }
 
-  async research(
+  async startResearch(
     input: string,
     options: Record<string, unknown> | undefined,
     config: ExaProviderConfig,
     context: ProviderContext,
-  ): Promise<ProviderToolOutput> {
+  ): Promise<ProviderResearchJob> {
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {
       throw new Error("Exa is missing an API key.");
@@ -201,24 +203,55 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
       instructions: input,
       ...(options ?? {}),
     });
-    const result = await client.research.pollUntilFinished(task.researchId, {
-      pollInterval: 3000,
-    });
+
+    return { id: task.researchId };
+  }
+
+  async pollResearch(
+    id: string,
+    _options: Record<string, unknown> | undefined,
+    config: ExaProviderConfig,
+    _context: ProviderContext,
+  ): Promise<ProviderResearchPollResult> {
+    const apiKey = resolveConfigValue(config.apiKey);
+    if (!apiKey) {
+      throw new Error("Exa is missing an API key.");
+    }
+
+    const client = new Exa(apiKey, config.baseUrl);
+    const result = await client.research.get(id, { events: false });
+
+    if (result.status === "completed") {
+      const content = result.output?.content;
+      return {
+        status: "completed",
+        output: {
+          provider: this.id,
+          text:
+            typeof content === "string"
+              ? content
+              : content !== undefined
+                ? formatJson(content)
+                : "Exa research completed without textual output.",
+          summary: "Research via Exa",
+        },
+      };
+    }
 
     if (result.status === "failed") {
-      throw new Error(result.error ?? "Exa research failed.");
-    }
-    if (result.status === "canceled") {
-      throw new Error("Exa research was canceled.");
+      return {
+        status: "failed",
+        error: result.error ?? "Exa research failed.",
+      };
     }
 
-    return {
-      provider: this.id,
-      text:
-        typeof result.output.content === "string"
-          ? result.output.content
-          : formatJson(result.output.content),
-      summary: "Research via Exa",
-    };
+    if (result.status === "canceled") {
+      return {
+        status: "cancelled",
+        error: "Exa research was canceled.",
+      };
+    }
+
+    return { status: "in_progress" };
   }
 }
