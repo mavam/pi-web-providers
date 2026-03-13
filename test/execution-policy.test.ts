@@ -164,6 +164,93 @@ describe("execution policy", () => {
     ).rejects.toThrow("Gemini research failed.");
   });
 
+  it("turns total research timeouts into resumable errors even while sleeping between polls", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const poll = vi
+        .fn()
+        .mockResolvedValue({ status: "in_progress" as const });
+
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "ignored while resuming",
+        options: { resumeId: "research-123" },
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 0,
+          retryDelayMs: 1,
+          pollIntervalMs: 30000,
+          timeoutMs: 10000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "research-123",
+        },
+        start: vi.fn(),
+        poll,
+      });
+      const rejection = expect(promise).rejects.toThrow(
+        'Gemini research exceeded 10s. Resume the background job with options.resumeId="research-123".',
+      );
+
+      await vi.advanceTimersByTimeAsync(10000);
+      await rejection;
+      expect(poll).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("treats timed out poll requests as transient research poll failures", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const progress: string[] = [];
+      const poll = vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<never>(() => {}))
+        .mockResolvedValueOnce({
+          status: "completed" as const,
+          output: {
+            provider: "gemini" as const,
+            text: "done",
+            summary: "Research via Gemini",
+          },
+        });
+
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "ignored while resuming",
+        options: { resumeId: "research-123" },
+        context: createContext(progress),
+        policy: {
+          requestTimeoutMs: 10,
+          retryCount: 0,
+          retryDelayMs: 1,
+          pollIntervalMs: 5,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "research-123",
+        },
+        start: vi.fn(),
+        poll,
+      });
+
+      await vi.advanceTimersByTimeAsync(20);
+      const result = await promise;
+
+      expect(result.text).toBe("done");
+      expect(poll).toHaveBeenCalledTimes(2);
+      expect(progress).toContain(
+        "Gemini research poll is still retrying after transient errors (1/3 consecutive poll failures). Background job id: research-123",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("polls research jobs in the parent and supports resume ids", async () => {
     vi.useFakeTimers();
 

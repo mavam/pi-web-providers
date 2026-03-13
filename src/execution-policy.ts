@@ -188,93 +188,120 @@ export async function executeResearchWithLifecycle({
   const startedAt = Date.now();
   let lastStatus: ProviderResearchPollResult["status"] | undefined;
   const providerOptions = stripLocalExecutionOptions(options);
+  const timeoutMessage =
+    policy.timeoutMs === undefined
+      ? undefined
+      : `${providerLabel} research exceeded ${formatDuration(policy.timeoutMs)}.`;
+  const { signal: lifecycleSignal, cleanup: cleanupLifecycle } =
+    createDeadlineSignal(context.signal, policy.timeoutMs, timeoutMessage);
+  const lifecycleContext: ProviderContext = {
+    ...context,
+    signal: lifecycleSignal,
+  };
 
   let jobId = policy.resumeId;
-  if (jobId) {
-    context.onProgress?.(`Resuming ${providerLabel} research: ${jobId}`);
-  } else {
-    context.onProgress?.(`Starting ${providerLabel} research`);
-    const job = await runWithExecutionPolicy(
-      `${providerLabel} research start`,
-      (attemptContext) => start(input, providerOptions, attemptContext),
-      {
-        ...policy,
-        retryCount: 0,
-      },
-      context,
-    );
-    jobId = job.id;
-    context.onProgress?.(`${providerLabel} research started: ${jobId}`);
-  }
 
-  let consecutivePollErrors = 0;
-
-  while (true) {
-    throwIfAborted(context.signal, `${providerLabel} research aborted.`);
-
-    if (
-      policy.timeoutMs !== undefined &&
-      Date.now() - startedAt > policy.timeoutMs
-    ) {
-      throw buildResumeError(
-        `${providerLabel} research exceeded ${formatDuration(policy.timeoutMs)}.`,
-        jobId,
+  try {
+    if (jobId) {
+      lifecycleContext.onProgress?.(
+        `Resuming ${providerLabel} research: ${jobId}`,
+      );
+    } else {
+      lifecycleContext.onProgress?.(`Starting ${providerLabel} research`);
+      const job = await runWithExecutionPolicy(
+        `${providerLabel} research start`,
+        (attemptContext) => start(input, providerOptions, attemptContext),
+        {
+          ...policy,
+          retryCount: 0,
+        },
+        lifecycleContext,
+      );
+      jobId = job.id;
+      lifecycleContext.onProgress?.(
+        `${providerLabel} research started: ${jobId}`,
       );
     }
 
-    try {
-      const result = await runWithExecutionPolicy(
-        `${providerLabel} research poll`,
-        (attemptContext) => poll(jobId, providerOptions, attemptContext),
-        policy,
-        context,
-      );
-      consecutivePollErrors = 0;
-
-      if (result.status !== lastStatus) {
-        context.onProgress?.(
-          `${providerLabel} research status: ${result.status} (${formatElapsed(Date.now() - startedAt)} elapsed)`,
-        );
-        lastStatus = result.status;
-      }
-
-      if (result.status === "completed") {
-        return (
-          result.output ?? {
-            provider: providerId,
-            text: `${providerLabel} research completed without textual output.`,
-            summary: `Research via ${providerLabel}`,
-          }
-        );
-      }
-
-      if (result.status === "failed" || result.status === "cancelled") {
-        throw new NonResumableResearchError(
-          result.error || `${providerLabel} research ${result.status}.`,
-        );
-      }
-    } catch (error) {
-      if (error instanceof NonResumableResearchError) {
-        throw error;
-      }
-      if (!isRetryableError(error)) {
-        throw buildResumeError(error, jobId);
-      }
-
-      consecutivePollErrors += 1;
-      if (consecutivePollErrors >= policy.maxConsecutivePollErrors) {
-        throw buildResumeError(
-          `${providerLabel} research polling failed too many times in a row: ${formatErrorMessage(error)}`,
-          jobId,
-        );
-      }
-
-      context.onProgress?.(
-        `${providerLabel} research poll is still retrying after transient errors (${consecutivePollErrors}/${policy.maxConsecutivePollErrors} consecutive poll failures). Background job id: ${jobId}`,
-      );
+    if (!jobId) {
+      throw new Error(`${providerLabel} research did not return a job id.`);
     }
 
-    await sleep(policy.pollIntervalMs, context.signal);
+    let consecutivePollErrors = 0;
+
+    while (true) {
+      throwIfAborted(
+        lifecycleContext.signal,
+        `${providerLabel} research aborted.`,
+      );
+
+      try {
+        const result = await runWithExecutionPolicy(
+          `${providerLabel} research poll`,
+          (attemptContext) => poll(jobId!, providerOptions, attemptContext),
+          policy,
+          lifecycleContext,
+        );
+        consecutivePollErrors = 0;
+
+        if (result.status !== lastStatus) {
+          lifecycleContext.onProgress?.(
+            `${providerLabel} research status: ${result.status} (${formatElapsed(Date.now() - startedAt)} elapsed)`,
+          );
+          lastStatus = result.status;
+        }
+
+        if (result.status === "completed") {
+          return (
+            result.output ?? {
+              provider: providerId,
+              text: `${providerLabel} research completed without textual output.`,
+              summary: `Research via ${providerLabel}`,
+            }
+          );
+        }
+
+        if (result.status === "failed" || result.status === "cancelled") {
+          throw new NonResumableResearchError(
+            result.error || `${providerLabel} research ${result.status}.`,
+          );
+        }
+      } catch (error) {
+        if (error instanceof NonResumableResearchError) {
+          throw error;
+        }
+        if (isAbortErrorFromSignal(lifecycleContext.signal, error)) {
+          throw error;
+        }
+        if (
+          !(error instanceof RequestTimeoutError) &&
+          !isRetryableError(error)
+        ) {
+          throw buildResumeError(error, jobId);
+        }
+
+        consecutivePollErrors += 1;
+        if (consecutivePollErrors >= policy.maxConsecutivePollErrors) {
+          throw buildResumeError(
+            `${providerLabel} research polling failed too many times in a row: ${formatErrorMessage(error)}`,
+            jobId,
+          );
+        }
+
+        lifecycleContext.onProgress?.(
+          `${providerLabel} research poll is still retrying after transient errors (${consecutivePollErrors}/${policy.maxConsecutivePollErrors} consecutive poll failures). Background job id: ${jobId}`,
+        );
+      }
+
+      await sleep(policy.pollIntervalMs, lifecycleContext.signal);
+    }
+  } catch (error) {
+    if (jobId && isAbortErrorFromSignal(lifecycleContext.signal, error)) {
+      throw buildResumeError(error, jobId);
+    }
+    throw error;
+  } finally {
+    cleanupLifecycle();
   }
 }
 
@@ -347,7 +374,7 @@ export async function sleep(
     const onAbort = () => {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
-      reject(new Error("Operation aborted."));
+      reject(getAbortError(signal));
     };
 
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -359,7 +386,7 @@ export function throwIfAborted(
   message = "Operation aborted.",
 ): void {
   if (signal?.aborted) {
-    throw new Error(message);
+    throw getAbortError(signal, message);
   }
 }
 
@@ -371,11 +398,11 @@ function createAttemptContext(context: ProviderContext): {
   const controller = new AbortController();
 
   if (context.signal?.aborted) {
-    controller.abort(context.signal.reason);
+    controller.abort(getAbortError(context.signal));
   }
 
   const onAbort = () => {
-    controller.abort(context.signal?.reason);
+    controller.abort(getAbortError(context.signal));
   };
 
   context.signal?.addEventListener("abort", onAbort, { once: true });
@@ -408,7 +435,7 @@ async function withTimeout<T>(
 
     const onAbort = () => {
       cleanup();
-      reject(new Error("Operation aborted."));
+      reject(getAbortError(signal));
     };
 
     const cleanup = () => {
@@ -428,6 +455,72 @@ async function withTimeout<T>(
       },
     );
   });
+}
+
+function getAbortError(
+  signal: AbortSignal | undefined,
+  message = "Operation aborted.",
+): Error {
+  const reason = signal?.reason;
+  if (reason instanceof Error) {
+    return reason;
+  }
+  if (typeof reason === "string" && reason.length > 0) {
+    return new Error(reason);
+  }
+  return new Error(message);
+}
+
+function isAbortErrorFromSignal(
+  signal: AbortSignal | undefined,
+  error: unknown,
+): boolean {
+  return signal?.aborted === true && signal.reason === error;
+}
+
+function createDeadlineSignal(
+  signal: AbortSignal | undefined,
+  timeoutMs: number | undefined,
+  timeoutMessage: string | undefined,
+): {
+  signal: AbortSignal | undefined;
+  cleanup: () => void;
+} {
+  if (timeoutMs === undefined) {
+    return {
+      signal,
+      cleanup: () => {},
+    };
+  }
+
+  const controller = new AbortController();
+
+  if (signal?.aborted) {
+    controller.abort(getAbortError(signal));
+  }
+
+  const onAbort = () => {
+    controller.abort(getAbortError(signal));
+  };
+
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  const timer = setTimeout(() => {
+    controller.abort(
+      new RequestTimeoutError(
+        timeoutMessage ??
+          `Operation timed out after ${formatDuration(timeoutMs)}.`,
+      ),
+    );
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    },
+  };
 }
 
 function buildResumeError(error: string | unknown, jobId: string): Error {
