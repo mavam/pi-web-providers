@@ -1,4 +1,5 @@
 import Parallel from "parallel-web";
+import { resolveConfigValue } from "../config.js";
 import type {
   ParallelProviderConfig,
   ProviderContext,
@@ -7,7 +8,6 @@ import type {
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { resolveConfigValue } from "../config.js";
 import { asJsonObject, trimSnippet } from "./shared.js";
 
 export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
@@ -60,12 +60,15 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     const defaults = asJsonObject(config.defaults?.search);
 
     context.onProgress?.(`Searching Parallel for: ${query}`);
-    const response = await client.beta.search({
-      ...defaults,
-      ...(options ?? {}),
-      objective: query,
-      max_results: maxResults,
-    });
+    const response = await client.beta.search(
+      {
+        ...defaults,
+        ...(options ?? {}),
+        objective: query,
+        max_results: maxResults,
+      },
+      buildRequestOptions(context),
+    );
 
     return {
       provider: this.id,
@@ -89,11 +92,14 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     context.onProgress?.(
       `Fetching contents from Parallel for ${urls.length} URL(s)`,
     );
-    const response = await client.beta.extract({
-      ...defaults,
-      ...(options ?? {}),
-      urls,
-    });
+    const response = await client.beta.extract(
+      {
+        ...defaults,
+        ...(options ?? {}),
+        urls,
+      },
+      buildRequestOptions(context),
+    );
 
     const lines: string[] = [];
     for (const [index, result] of response.results.entries()) {
@@ -137,4 +143,10 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
       baseURL: resolveConfigValue(config.baseUrl),
     });
   }
+}
+
+function buildRequestOptions(
+  context: ProviderContext,
+): { signal: AbortSignal } | undefined {
+  return context.signal ? { signal: context.signal } : undefined;
 }
