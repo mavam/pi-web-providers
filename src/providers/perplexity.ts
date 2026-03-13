@@ -117,6 +117,8 @@ export class PerplexityProvider
     config: PerplexityProviderConfig,
     context: ProviderContext,
   ): Promise<ProviderToolOutput> {
+    // This remains a provider-specific blocking bypass until the Perplexity SDK
+    // exposes a resumable start/poll research lifecycle.
     context.onProgress?.("Starting Perplexity research");
     return this.runChatTool(
       input,

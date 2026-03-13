@@ -38,8 +38,8 @@ tool prompt aligned with the tools that the agent can actually call.
 - **Per-provider tool toggles** — disable individual capabilities you don't need
   without switching providers
 - **Parent-managed timeout and retry controls** — the extension can enforce
-  request timeouts, retries, polling intervals, and resumable background job
-  IDs without pushing that logic into each provider adapter
+  request timeouts and retries across all tools, plus polling intervals and
+  resumable background job IDs for lifecycle-based research providers
 - **Truncated output with temp-file spillover** for large results
 
 ## 📦 Install
@@ -119,10 +119,12 @@ override provider defaults, but managed tool inputs and tool wiring stay fixed.
 
 The extension also accepts a few local control fields for robustness:
 `requestTimeoutMs`, `retryCount`, and `retryDelayMs` on all tools, plus
-`pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
-(on Gemini, `resumeInteractionId` is accepted as a legacy alias) on
-`web_research`. These fields are handled by the extension and are not forwarded
-into the provider SDK call.
+`pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId` on
+`web_research` for lifecycle-based research providers. Perplexity research runs
+synchronously, so it only supports `requestTimeoutMs`, `retryCount`, and
+`retryDelayMs`; lifecycle fields are rejected instead of being silently ignored.
+These fields are handled by the extension and are not forwarded into the
+provider SDK call.
 
 ## 🔌 Providers
 
@@ -172,7 +174,7 @@ summarises which capabilities each provider exposes:
   timeouts, retry/backoff behavior, research polling, and total research
   deadlines
 - Can resume polling an existing background research interaction via
-  `options.resumeId` (or legacy `options.resumeInteractionId`)
+  `options.resumeId`
 - Supports provider-native request options such as `model`, `config`,
   `generation_config`, and `agent_config` depending on the tool
 
@@ -181,6 +183,9 @@ summarises which capabilities each provider exposes:
 - SDK: `@perplexity-ai/perplexity_ai`
 - Uses Perplexity Search for `web_search`
 - Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
+- `web_research` is synchronous with the current Perplexity SDK, so it may
+  block until completion and does not support `resumeId`, polling intervals, or
+  parent-managed research deadlines
 - Supports provider-specific `web_search.options` such as `country`,
   `search_mode`, `search_domain_filter`, and `search_recency_filter`
 

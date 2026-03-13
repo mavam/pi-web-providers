@@ -56,14 +56,14 @@ describe("provider tool output", () => {
     }
   });
 
-  it("emits heartbeat updates for long-running research tools", async () => {
+  it("emits heartbeat updates for long-running blocking research tools", async () => {
     vi.useFakeTimers();
 
     try {
       const config: WebProvidersConfig = {
         version: 1,
         providers: {
-          gemini: {
+          perplexity: {
             enabled: true,
             apiKey: "literal-key",
           },
@@ -74,7 +74,7 @@ describe("provider tool output", () => {
       const resultPromise = __test__.executeProviderTool({
         capability: "research",
         config,
-        explicitProvider: "gemini",
+        explicitProvider: "perplexity",
         ctx: { cwd: process.cwd() },
         signal: undefined,
         onUpdate: (update) => {
@@ -84,7 +84,7 @@ describe("provider tool output", () => {
           }
         },
         options: undefined,
-        useProviderLifecycle: false,
+        input: "Investigate the topic",
         invoke: async (
           _provider,
           _providerConfig,
@@ -94,9 +94,9 @@ describe("provider tool output", () => {
           context.onProgress?.("Starting research");
           await new Promise((resolve) => setTimeout(resolve, 20000));
           return {
-            provider: "gemini",
+            provider: "perplexity",
             text: "Research complete",
-            summary: "Research via Gemini",
+            summary: "Research via Perplexity",
           };
         },
       });
@@ -107,10 +107,77 @@ describe("provider tool output", () => {
       expect(result.content[0]?.text).toBe("Research complete");
       expect(updates).toContain("Starting research");
       expect(updates).toContain(
-        "web_research still running via gemini (15s elapsed)",
+        "web_research still running via perplexity (15s elapsed)",
       );
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("rejects lifecycle-only options for blocking Perplexity research", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        perplexity: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "perplexity",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          resumeId: "job-1",
+          timeoutMs: 60000,
+        },
+        input: "Investigate the topic",
+        invoke: async () => ({
+          provider: "perplexity",
+          text: "done",
+        }),
+      }),
+    ).rejects.toThrow(
+      "Perplexity research runs synchronously and does not support timeoutMs, resumeId. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+    );
+  });
+
+  it("rejects removed resumeInteractionId compatibility for research", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "gemini",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          resumeInteractionId: "job-1",
+        },
+        input: "Investigate the topic",
+        invoke: async () => ({
+          provider: "gemini",
+          text: "done",
+        }),
+      }),
+    ).rejects.toThrow(
+      "resumeInteractionId is not supported. Use resumeId instead.",
+    );
   });
 });

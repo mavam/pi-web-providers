@@ -233,12 +233,6 @@ export interface WebProvider<TConfig> {
     config: TConfig,
     context: ProviderContext,
   ): Promise<ProviderToolOutput>;
-  research?(
-    input: string,
-    options: JsonObject | undefined,
-    config: TConfig,
-    context: ProviderContext,
-  ): Promise<ProviderToolOutput>;
   startResearch?(
     input: string,
     options: JsonObject | undefined,

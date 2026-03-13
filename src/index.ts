@@ -62,6 +62,7 @@ import type {
   ProviderToolOutput,
   SearchResponse,
   ValyuProviderConfig,
+  WebProvider,
   WebProvidersConfig,
   WebSearchDetails,
 } from "./types.js";
@@ -71,6 +72,19 @@ const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
 const RESEARCH_HEARTBEAT_MS = 15000;
 type ProviderCapability = ProviderToolId;
+type BlockingResearchProvider = WebProvider<PerplexityProviderConfig> & {
+  id: "perplexity";
+  research: (
+    input: string,
+    options: JsonObject | undefined,
+    config: PerplexityProviderConfig,
+    context: {
+      cwd: string;
+      signal?: AbortSignal;
+      onProgress?: (message: string) => void;
+    },
+  ) => Promise<ProviderToolOutput>;
+};
 const CAPABILITY_TOOL_NAMES: Record<ProviderCapability, string> = {
   search: "web_search",
   contents: "web_contents",
@@ -431,10 +445,11 @@ function registerWebResearchTool(
         options: normalizeOptions(params.options),
         input: params.input,
         invoke: (provider, providerConfig, providerOptions, context) =>
-          provider.research!(
+          invokePerplexityResearchBypass(
+            provider,
             params.input,
             providerOptions,
-            providerConfig as never,
+            providerConfig,
             context,
           ),
       });
@@ -616,7 +631,6 @@ async function executeProviderTool({
   onUpdate,
   options,
   input,
-  useProviderLifecycle = true,
   invoke,
 }: {
   capability: Exclude<ProviderCapability, "search">;
@@ -632,7 +646,6 @@ async function executeProviderTool({
     | undefined;
   options: JsonObject | undefined;
   input?: string;
-  useProviderLifecycle?: boolean;
   invoke: (
     provider: (typeof PROVIDERS)[number],
     providerConfig: ProviderConfigUnion,
@@ -669,61 +682,77 @@ async function executeProviderTool({
 
   let response: ProviderToolOutput;
   try {
-    if (
-      useProviderLifecycle &&
-      capability === "research" &&
-      typeof provider.startResearch === "function" &&
-      typeof provider.pollResearch === "function"
-    ) {
-      const researchPolicy = resolveResearchExecutionPolicy(
-        provider.id,
-        providerConfig,
-        options,
-      );
-      const supportsSafeStartRetries =
-        provider.supportsIdempotentResearchStartRetries === true;
-      const supportsSafeStartTimeouts = supportsSafeStartRetries;
-      const supportsPollCancellation =
-        provider.supportsResearchPollingCancellation === true;
-      response = await executeResearchWithLifecycle({
-        providerLabel: provider.label,
-        providerId: provider.id,
-        input: input ?? "",
-        options,
-        context: providerContext,
-        policy: researchPolicy,
-        startRetryCount: supportsSafeStartRetries
-          ? researchPolicy.retryCount
-          : 0,
-        startRetryNotice:
-          !supportsSafeStartRetries && researchPolicy.retryCount > 0
-            ? `${provider.label} research start retries are disabled to avoid duplicate background jobs; configured retries apply after the job starts.`
+    if (capability === "research") {
+      assertResearchOptionsSupported(options);
+
+      if (isBlockingResearchProvider(provider)) {
+        // Perplexity deep research is synchronous today, so it intentionally
+        // bypasses the lifecycle path instead of introducing a second generic
+        // research abstraction.
+        assertBlockingResearchOptionsSupported(provider.label, options);
+        response = await runWithExecutionPolicy(
+          `${provider.label} research request`,
+          (attemptContext) =>
+            invoke(
+              provider,
+              providerConfig as ProviderConfigUnion,
+              providerOptions,
+              attemptContext,
+            ),
+          resolveRequestExecutionPolicy(provider.id, providerConfig, options),
+          providerContext,
+        );
+      } else {
+        const researchPolicy = resolveResearchExecutionPolicy(
+          provider.id,
+          providerConfig,
+          options,
+        );
+        const supportsSafeStartRetries =
+          provider.supportsIdempotentResearchStartRetries === true;
+        const supportsSafeStartTimeouts = supportsSafeStartRetries;
+        const supportsPollCancellation =
+          provider.supportsResearchPollingCancellation === true;
+        response = await executeResearchWithLifecycle({
+          providerLabel: provider.label,
+          providerId: provider.id,
+          input: input ?? "",
+          options,
+          context: providerContext,
+          policy: researchPolicy,
+          startRetryCount: supportsSafeStartRetries
+            ? researchPolicy.retryCount
+            : 0,
+          startRetryNotice:
+            !supportsSafeStartRetries && researchPolicy.retryCount > 0
+              ? `${provider.label} research start retries are disabled to avoid duplicate background jobs; configured retries apply after the job starts.`
+              : undefined,
+          startIdempotencyKey: supportsSafeStartRetries
+            ? `pi-web-providers:${provider.id}:${randomUUID()}`
             : undefined,
-        startIdempotencyKey: supportsSafeStartRetries
-          ? `pi-web-providers:${provider.id}:${randomUUID()}`
-          : undefined,
-        startRetryOnTimeout: supportsSafeStartRetries,
-        startRequestTimeoutMs: supportsSafeStartTimeouts
-          ? researchPolicy.requestTimeoutMs
-          : null,
-        pollRequestTimeoutMs: supportsPollCancellation
-          ? researchPolicy.requestTimeoutMs
-          : null,
-        start: (input, researchOptions, context) =>
-          provider.startResearch!(
-            input,
-            researchOptions,
-            providerConfig as never,
-            context,
-          ),
-        poll: (id, researchOptions, context) =>
-          provider.pollResearch!(
-            id,
-            researchOptions,
-            providerConfig as never,
-            context,
-          ),
-      });
+          startRetryOnTimeout: supportsSafeStartRetries,
+          startRequestTimeoutMs: supportsSafeStartTimeouts
+            ? researchPolicy.requestTimeoutMs
+            : null,
+          pollRequestTimeoutMs: supportsPollCancellation
+            ? researchPolicy.requestTimeoutMs
+            : null,
+          start: (input, researchOptions, context) =>
+            provider.startResearch!(
+              input,
+              researchOptions,
+              providerConfig as never,
+              context,
+            ),
+          poll: (id, researchOptions, context) =>
+            provider.pollResearch!(
+              id,
+              researchOptions,
+              providerConfig as never,
+              context,
+            ),
+        });
+      }
     } else {
       response = await runWithExecutionPolicy(
         `${provider.label} ${capability} request`,
@@ -754,6 +783,69 @@ async function executeProviderTool({
     content: [{ type: "text" as const, text }],
     details,
   };
+}
+
+function invokePerplexityResearchBypass(
+  provider: (typeof PROVIDERS)[number],
+  input: string,
+  options: JsonObject | undefined,
+  providerConfig: ProviderConfigUnion,
+  context: {
+    cwd: string;
+    signal?: AbortSignal;
+    onProgress?: (message: string) => void;
+  },
+): Promise<ProviderToolOutput> {
+  if (isBlockingResearchProvider(provider)) {
+    return provider.research(
+      input,
+      options,
+      providerConfig as PerplexityProviderConfig,
+      context,
+    );
+  }
+
+  throw new Error(
+    `Provider '${provider.id}' does not use the Perplexity research bypass.`,
+  );
+}
+
+function isBlockingResearchProvider(
+  provider: (typeof PROVIDERS)[number],
+): provider is BlockingResearchProvider {
+  return (
+    provider.id === "perplexity" &&
+    "research" in provider &&
+    typeof provider.research === "function"
+  );
+}
+
+function assertResearchOptionsSupported(options: JsonObject | undefined): void {
+  if (options?.resumeInteractionId !== undefined) {
+    throw new Error(
+      "resumeInteractionId is not supported. Use resumeId instead.",
+    );
+  }
+}
+
+function assertBlockingResearchOptionsSupported(
+  providerLabel: string,
+  options: JsonObject | undefined,
+): void {
+  const unsupported = [
+    ["pollIntervalMs", options?.pollIntervalMs],
+    ["timeoutMs", options?.timeoutMs],
+    ["maxConsecutivePollErrors", options?.maxConsecutivePollErrors],
+    ["resumeId", options?.resumeId],
+  ].flatMap(([key, value]) => (value === undefined ? [] : [key]));
+
+  if (unsupported.length === 0) {
+    return;
+  }
+
+  throw new Error(
+    `${providerLabel} research runs synchronously and does not support ${unsupported.join(", ")}. Use requestTimeoutMs/retryCount/retryDelayMs instead.`,
+  );
 }
 
 function normalizeOptions(value: unknown): JsonObject | undefined {

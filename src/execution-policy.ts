@@ -47,7 +47,6 @@ export function stripLocalExecutionOptions(
     pollIntervalMs: _pollIntervalMs,
     timeoutMs: _timeoutMs,
     maxConsecutivePollErrors: _maxConsecutivePollErrors,
-    resumeInteractionId: _resumeInteractionId,
     resumeId: _resumeId,
     ...rest
   } = options;
@@ -102,9 +101,7 @@ export function resolveResearchExecutionPolicy(
       readPositiveInteger(options?.maxConsecutivePollErrors) ??
       geminiDefaults?.researchMaxConsecutivePollErrors ??
       3,
-    resumeId:
-      readNonEmptyString(options?.resumeId) ??
-      readNonEmptyString(options?.resumeInteractionId),
+    resumeId: readNonEmptyString(options?.resumeId),
   };
 }
 

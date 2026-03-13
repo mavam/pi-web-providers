@@ -2,11 +2,7 @@ import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
-import {
-  PROVIDER_TOOLS,
-  type ProviderToolId,
-  supportsProviderTool,
-} from "./provider-tools.js";
+import { type ProviderToolId, supportsProviderTool } from "./provider-tools.js";
 import type {
   ClaudeProviderConfig,
   CodexProviderConfig,
@@ -19,17 +15,6 @@ import type {
   ValyuProviderConfig,
   WebProvidersConfig,
 } from "./types.js";
-
-const LEGACY_TOOL_ALIASES: Partial<
-  Record<ProviderId, Partial<Record<string, ProviderToolId | null>>>
-> = {
-  exa: {
-    websetsPreview: null,
-  },
-  valyu: {
-    deepResearch: "research",
-  },
-};
 
 const CONFIG_FILE_NAME = "web-providers.json";
 const VERSION = 1 as const;
@@ -811,41 +796,17 @@ function parseOptionalProviderTools(
 
   const parsed: Partial<Record<ProviderToolId, boolean>> = {};
   for (const [key, entry] of Object.entries(value)) {
-    const normalizedKey = normalizeProviderToolKey(providerId, key);
-    if (normalizedKey === null) {
-      continue;
-    }
-    if (!supportsProviderTool(providerId, normalizedKey)) {
+    if (!supportsProviderTool(providerId, key as ProviderToolId)) {
       throw new Error(`Unknown tools for ${providerId} in ${source}: ${key}.`);
     }
-    parsed[normalizedKey] = parseBoolean(entry, source, `${field}.${key}`);
-  }
-
-  const unknownTools = Object.keys(value).filter((toolId) => {
-    const normalizedKey = normalizeProviderToolKey(providerId, toolId);
-    return (
-      normalizedKey !== null &&
-      !PROVIDER_TOOLS[providerId].includes(normalizedKey)
-    );
-  });
-  if (unknownTools.length > 0) {
-    throw new Error(
-      `Unknown tools for ${providerId} in ${source}: ${unknownTools.join(", ")}.`,
+    parsed[key as ProviderToolId] = parseBoolean(
+      entry,
+      source,
+      `${field}.${key}`,
     );
   }
 
   return parsed;
-}
-
-function normalizeProviderToolKey(
-  providerId: ProviderId,
-  key: string,
-): ProviderToolId | null {
-  const alias = LEGACY_TOOL_ALIASES[providerId]?.[key];
-  if (alias !== undefined) {
-    return alias;
-  }
-  return key as ProviderToolId;
 }
 
 function parseOptionalStringMap(

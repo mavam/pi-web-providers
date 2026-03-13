@@ -60,6 +60,24 @@ describe("config parsing", () => {
     ).toThrow(/Unknown tools for codex/);
   });
 
+  it("rejects removed provider tool aliases", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          version: 1,
+          providers: {
+            valyu: {
+              tools: {
+                deepResearch: true,
+              },
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/Unknown tools for valyu/);
+  });
+
   it("loads the global config", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-web-providers-config-"));
     cleanupDirs.push(root);

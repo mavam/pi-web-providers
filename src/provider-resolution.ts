@@ -13,8 +13,10 @@ export function supportsProviderCapability(
   capability: ProviderToolId,
 ): boolean {
   if (capability === "research") {
+    // Research is lifecycle-based everywhere except Perplexity, whose SDK only
+    // exposes a single blocking deep-research call today.
     return (
-      typeof provider.research === "function" ||
+      provider.id === "perplexity" ||
       (typeof provider.startResearch === "function" &&
         typeof provider.pollResearch === "function")
     );

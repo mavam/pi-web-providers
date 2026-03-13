@@ -218,6 +218,31 @@ describe("provider resolution", () => {
     );
     expect(provider.id).toBe("parallel");
   });
+
+  it("treats Perplexity research as an explicit blocking-provider exception", () => {
+    process.env.PERPLEXITY_API_KEY = "test-key";
+
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        perplexity: {
+          enabled: true,
+          apiKey: "PERPLEXITY_API_KEY",
+          tools: {
+            research: true,
+          },
+        },
+      },
+    };
+
+    const provider = resolveProviderForCapability(
+      config,
+      undefined,
+      process.cwd(),
+      "research",
+    );
+    expect(provider.id).toBe("perplexity");
+  });
 });
 
 function mockClaudeAvailable(): void {
