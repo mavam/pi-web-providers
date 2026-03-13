@@ -171,6 +171,7 @@ export async function executeResearchWithLifecycle({
   startRetryOnTimeout = false,
   startRequestTimeoutMs,
   pollRequestTimeoutMs,
+  deferDeadlineUntilStarted = false,
   start,
   poll,
 }: {
@@ -186,6 +187,7 @@ export async function executeResearchWithLifecycle({
   startRetryOnTimeout?: boolean;
   startRequestTimeoutMs?: number | null;
   pollRequestTimeoutMs?: number | null;
+  deferDeadlineUntilStarted?: boolean;
   start: (
     input: string,
     options: JsonObject | undefined,
@@ -197,8 +199,6 @@ export async function executeResearchWithLifecycle({
     context: ProviderContext,
   ) => Promise<ProviderResearchPollResult>;
 }): Promise<ProviderToolOutput> {
-  const startedAt = Date.now();
-  let lastStatus: ProviderResearchPollResult["status"] | undefined;
   const providerOptions = stripLocalExecutionOptions(options);
   const effectiveStartRequestTimeoutMs =
     startRequestTimeoutMs === undefined
@@ -212,14 +212,35 @@ export async function executeResearchWithLifecycle({
     policy.timeoutMs === undefined
       ? undefined
       : `${providerLabel} research exceeded ${formatDuration(policy.timeoutMs)}.`;
-  const { signal: lifecycleSignal, cleanup: cleanupLifecycle } =
-    createDeadlineSignal(context.signal, policy.timeoutMs, timeoutMessage);
-  const lifecycleContext: ProviderContext = {
+
+  let lastStatus: ProviderResearchPollResult["status"] | undefined;
+  let lifecycleStartedAt = Date.now();
+  let lifecycleSignal = context.signal;
+  let cleanupLifecycle = () => {};
+  let lifecycleContext: ProviderContext = {
     ...context,
     signal: lifecycleSignal,
   };
 
+  const activateLifecycleDeadline = () => {
+    const deadline = createDeadlineSignal(
+      context.signal,
+      policy.timeoutMs,
+      timeoutMessage,
+    );
+    lifecycleSignal = deadline.signal;
+    cleanupLifecycle = deadline.cleanup;
+    lifecycleStartedAt = Date.now();
+    lifecycleContext = {
+      ...context,
+      signal: lifecycleSignal,
+    };
+  };
+
   let jobId = policy.resumeId;
+  if (jobId || !deferDeadlineUntilStarted) {
+    activateLifecycleDeadline();
+  }
 
   try {
     if (jobId) {
@@ -247,6 +268,9 @@ export async function executeResearchWithLifecycle({
         lifecycleContext,
       );
       jobId = job.id;
+      if (deferDeadlineUntilStarted) {
+        activateLifecycleDeadline();
+      }
       lifecycleContext.onProgress?.(
         `${providerLabel} research started: ${jobId}`,
       );
@@ -278,7 +302,7 @@ export async function executeResearchWithLifecycle({
 
         if (result.status !== lastStatus) {
           lifecycleContext.onProgress?.(
-            `${providerLabel} research status: ${result.status} (${formatElapsed(Date.now() - startedAt)} elapsed)`,
+            `${providerLabel} research status: ${result.status} (${formatElapsed(Date.now() - lifecycleStartedAt)} elapsed)`,
           );
           lastStatus = result.status;
         }

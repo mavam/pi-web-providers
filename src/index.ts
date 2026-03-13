@@ -737,6 +737,7 @@ async function executeProviderTool({
           pollRequestTimeoutMs: supportsPollCancellation
             ? researchPolicy.requestTimeoutMs
             : null,
+          deferDeadlineUntilStarted: !supportsSafeStartRetries,
           start: (input, researchOptions, context) =>
             provider.startResearch!(
               input,
@@ -1228,7 +1229,7 @@ function buildProviderMenuOptions(
     pushText(
       "geminiRequestTimeoutMs",
       "Request timeout (ms)",
-      "Maximum time to wait for a single Gemini API request before failing that attempt. Timed-out requests are not retried.",
+      "Maximum time to wait for a single Gemini API request before failing that attempt. Timed-out requests are generally not retried, except for idempotent research-start operations.",
     );
     pushText(
       "geminiRetryCount",

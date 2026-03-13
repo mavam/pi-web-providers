@@ -276,6 +276,60 @@ describe("execution policy", () => {
     }
   });
 
+  it("starts the overall research deadline after non-idempotent job creation", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const start = vi.fn().mockImplementationOnce(
+        () =>
+          new Promise<{ id: string }>((resolve) => {
+            setTimeout(() => {
+              resolve({ id: "research-123" });
+            }, 20);
+          }),
+      );
+      const poll = vi
+        .fn()
+        .mockResolvedValueOnce({ status: "in_progress" as const });
+
+      let settled = false;
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Exa",
+        providerId: "exa",
+        input: "Investigate Exa lifecycle polling",
+        options: { timeoutMs: 10 },
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 0,
+          retryDelayMs: 1,
+          pollIntervalMs: 30000,
+          timeoutMs: 10,
+          maxConsecutivePollErrors: 3,
+        },
+        deferDeadlineUntilStarted: true,
+        start,
+        poll,
+      }).finally(() => {
+        settled = true;
+      });
+
+      await vi.advanceTimersByTimeAsync(15);
+      expect(settled).toBe(false);
+
+      const rejection = expect(promise).rejects.toThrow(
+        'Exa research exceeded 10ms. Resume the background job with options.resumeId="research-123".',
+      );
+      await vi.advanceTimersByTimeAsync(15);
+      await rejection;
+
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(poll).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not attach resume advice to terminal research failures", async () => {
     await expect(
       executeResearchWithLifecycle({
