@@ -13,8 +13,8 @@ import type {
   ExaProviderConfig,
   GeminiProviderConfig,
   JsonObject,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
   ProviderId,
   ValyuProviderConfig,
   WebProvidersConfig,
@@ -94,6 +94,12 @@ export function createDefaultConfig(): WebProvidersConfig {
           contentsModel: "gemini-2.5-flash",
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
+          requestTimeoutMs: 30000,
+          retryCount: 3,
+          retryDelayMs: 2000,
+          researchPollIntervalMs: 3000,
+          researchTimeoutMs: 21600000,
+          researchMaxConsecutivePollErrors: 10,
         },
       },
       perplexity: {
@@ -628,6 +634,36 @@ function normalizeGeminiProvider(
               source,
               "providers.gemini.defaults.researchAgent",
             ),
+            requestTimeoutMs: parseOptionalInteger(
+              defaults.requestTimeoutMs,
+              source,
+              "providers.gemini.defaults.requestTimeoutMs",
+            ),
+            retryCount: parseOptionalNonNegativeInteger(
+              defaults.retryCount,
+              source,
+              "providers.gemini.defaults.retryCount",
+            ),
+            retryDelayMs: parseOptionalInteger(
+              defaults.retryDelayMs,
+              source,
+              "providers.gemini.defaults.retryDelayMs",
+            ),
+            researchPollIntervalMs: parseOptionalInteger(
+              defaults.researchPollIntervalMs,
+              source,
+              "providers.gemini.defaults.researchPollIntervalMs",
+            ),
+            researchTimeoutMs: parseOptionalInteger(
+              defaults.researchTimeoutMs,
+              source,
+              "providers.gemini.defaults.researchTimeoutMs",
+            ),
+            researchMaxConsecutivePollErrors: parseOptionalInteger(
+              defaults.researchMaxConsecutivePollErrors,
+              source,
+              "providers.gemini.defaults.researchMaxConsecutivePollErrors",
+            ),
           },
   };
 }
@@ -888,6 +924,18 @@ function parseOptionalInteger(
   if (value === undefined) return undefined;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
     throw new Error(`'${field}' in ${source} must be a positive integer.`);
+  }
+  return value;
+}
+
+function parseOptionalNonNegativeInteger(
+  value: unknown,
+  source: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`'${field}' in ${source} must be a non-negative integer.`);
   }
   return value;
 }

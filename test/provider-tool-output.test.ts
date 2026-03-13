@@ -34,6 +34,7 @@ describe("provider tool output", () => {
       ctx: { cwd: process.cwd() },
       signal: undefined,
       onUpdate: undefined,
+      options: undefined,
       invoke: async () => ({
         provider: "exa",
         text: Array.from(
@@ -82,7 +83,14 @@ describe("provider tool output", () => {
             updates.push(text);
           }
         },
-        invoke: async (_provider, _providerConfig, context) => {
+        options: undefined,
+        useProviderLifecycle: false,
+        invoke: async (
+          _provider,
+          _providerConfig,
+          _providerOptions,
+          context,
+        ) => {
           context.onProgress?.("Starting research");
           await new Promise((resolve) => setTimeout(resolve, 20000));
           return {

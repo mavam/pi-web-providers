@@ -37,6 +37,9 @@ tool prompt aligned with the tools that the agent can actually call.
   explicitly enabled and the local CLI is installed and authenticated
 - **Per-provider tool toggles** — disable individual capabilities you don't need
   without switching providers
+- **Parent-managed timeout and retry controls** — the extension can enforce
+  request timeouts, retries, polling intervals, and resumable background job
+  IDs without pushing that logic into each provider adapter
 - **Truncated output with temp-file spillover** for large results
 
 ## 📦 Install
@@ -72,11 +75,11 @@ corresponding tool is never exposed to the agent.
 
 Find likely sources on the public web and return titles, URLs, and snippets.
 
-| Parameter    | Type    | Default  | Description                                                                   |
-| ------------ | ------- | -------- | ----------------------------------------------------------------------------- |
-| `query`      | string  | required | What to search for                                                            |
-| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                               |
-| `options`    | object  | —        | Provider-specific search options                                              |
+| Parameter    | Type    | Default  | Description                                                                                 |
+| ------------ | ------- | -------- | ------------------------------------------------------------------------------------------- |
+| `query`      | string  | required | What to search for                                                                          |
+| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                                             |
+| `options`    | object  | —        | Provider-specific search options                                                            |
 | `provider`   | string  | auto     | Optional override: `claude`, `codex`, `exa`, `gemini`, `perplexity`, `parallel`, or `valyu` |
 
 ### `web_contents`
@@ -114,20 +117,27 @@ use different field names across SDKs, for example Perplexity uses `country`,
 Exa uses `userLocation`, and Valyu uses `countryCode`. Runtime `options`
 override provider defaults, but managed tool inputs and tool wiring stay fixed.
 
+The extension also accepts a few local control fields for robustness:
+`requestTimeoutMs`, `retryCount`, and `retryDelayMs` on all tools, plus
+`pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
+(on Gemini, `resumeInteractionId` is accepted as a legacy alias) on
+`web_research`. These fields are handled by the extension and are not forwarded
+into the provider SDK call.
+
 ## 🔌 Providers
 
 Every provider is a thin adapter around an official SDK. The table below
 summarises which capabilities each provider exposes:
 
-| Provider     | search | contents | answer | research | Auth                   |
-| ------------ | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude**   |   ✓    |          |   ✓    |          | Local Claude Code auth |
-| **Codex**    |   ✓    |          |        |          | Local Codex CLI auth   |
-| **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
-| **Gemini**   |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
-| **Perplexity** | ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
-| **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
-| **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
+| Provider       | search | contents | answer | research | Auth                   |
+| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
+| **Claude**     |   ✓    |          |   ✓    |          | Local Claude Code auth |
+| **Codex**      |   ✓    |          |        |          | Local Codex CLI auth   |
+| **Exa**        |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
+| **Gemini**     |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Perplexity** |   ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
+| **Parallel**   |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
+| **Valyu**      |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
 
 ### Claude
 
@@ -155,8 +165,14 @@ summarises which capabilities each provider exposes:
 ### Gemini
 
 - SDK: `@google/genai`
-- Google Search grounding for answers and URL Context extraction for page contents
+- Google Search grounding for answers and URL Context extraction for page
+  contents
 - Deep-research agents via Google's Gemini API
+- Works with the extension's parent-managed timeout/retry controls for request
+  timeouts, retry/backoff behavior, research polling, and total research
+  deadlines
+- Can resume polling an existing background research interaction via
+  `options.resumeId` (or legacy `options.resumeInteractionId`)
 - Supports provider-native request options such as `model`, `config`,
   `generation_config`, and `agent_config` depending on the tool
 
@@ -255,7 +271,13 @@ Example:
         "searchModel": "gemini-2.5-flash",
         "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
-        "researchAgent": "deep-research-pro-preview-12-2025"
+        "researchAgent": "deep-research-pro-preview-12-2025",
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 10
       }
     },
     "perplexity": {

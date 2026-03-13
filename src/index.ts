@@ -27,9 +27,18 @@ import {
 import { Type } from "@sinclair/typebox";
 import { loadConfig, writeConfigFile } from "./config.js";
 import {
+  executeResearchWithLifecycle,
+  formatElapsed,
+  resolveRequestExecutionPolicy,
+  resolveResearchExecutionPolicy,
+  runWithExecutionPolicy,
+  stripLocalExecutionOptions,
+} from "./execution-policy.js";
+import {
   getEffectiveProviderConfig,
   resolveProviderChoice,
   resolveProviderForCapability,
+  supportsProviderCapability,
 } from "./provider-resolution.js";
 import {
   isProviderToolEnabled,
@@ -157,21 +166,45 @@ function registerWebSearchTool(
         throw new Error(`Provider '${provider.id}' is not configured.`);
       }
 
-      const response = await provider.search!(
-        params.query,
-        maxResults,
-        normalizeOptions(params.options),
-        providerConfig as never,
-        {
-          cwd: ctx.cwd,
-          signal: signal ?? undefined,
-          onProgress: (message) =>
-            onUpdate?.({
-              content: [{ type: "text", text: message }],
-              details: {},
-            }),
-        },
+      const progress = createToolProgressReporter(
+        "search",
+        provider.id,
+        onUpdate,
       );
+      const options = normalizeOptions(params.options);
+      const providerOptions = stripLocalExecutionOptions(options);
+      const policy = resolveRequestExecutionPolicy(
+        provider.id,
+        providerConfig,
+        options,
+      );
+
+      let response: SearchResponse;
+      try {
+        response = await runWithExecutionPolicy(
+          `${provider.label} search request`,
+          () =>
+            provider.search!(
+              params.query,
+              maxResults,
+              providerOptions,
+              providerConfig as never,
+              {
+                cwd: ctx.cwd,
+                signal: signal ?? undefined,
+                onProgress: progress.report,
+              },
+            ),
+          policy,
+          {
+            cwd: ctx.cwd,
+            signal: signal ?? undefined,
+            onProgress: progress.report,
+          },
+        );
+      } finally {
+        progress.stop();
+      }
 
       const rendered = await truncateAndSave(
         formatSearchResponse(response),
@@ -251,10 +284,11 @@ function registerWebContentsTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
+        options: normalizeOptions(params.options),
+        invoke: (provider, providerConfig, providerOptions, context) =>
           provider.contents!(
             params.urls,
-            normalizeOptions(params.options),
+            providerOptions,
             providerConfig as never,
             context,
           ),
@@ -337,10 +371,11 @@ function registerWebAnswerTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
+        options: normalizeOptions(params.options),
+        invoke: (provider, providerConfig, providerOptions, context) =>
           provider.answer!(
             params.query,
-            normalizeOptions(params.options),
+            providerOptions,
             providerConfig as never,
             context,
           ),
@@ -396,10 +431,12 @@ function registerWebResearchTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
+        options: normalizeOptions(params.options),
+        input: params.input,
+        invoke: (provider, providerConfig, providerOptions, context) =>
           provider.research!(
             params.input,
-            normalizeOptions(params.options),
+            providerOptions,
             providerConfig as never,
             context,
           ),
@@ -544,8 +581,8 @@ async function syncManagedToolAvailability(
 function getProviderIdsForCapability(
   capability: ProviderCapability,
 ): ProviderId[] {
-  return PROVIDERS.filter(
-    (provider) => typeof provider[capability] === "function",
+  return PROVIDERS.filter((provider) =>
+    supportsProviderCapability(provider, capability),
   ).map((provider) => provider.id);
 }
 
@@ -580,6 +617,9 @@ async function executeProviderTool({
   ctx,
   signal,
   onUpdate,
+  options,
+  input,
+  useProviderLifecycle = true,
   invoke,
 }: {
   capability: Exclude<ProviderCapability, "search">;
@@ -593,9 +633,13 @@ async function executeProviderTool({
         details: {};
       }) => void)
     | undefined;
+  options: JsonObject | undefined;
+  input?: string;
+  useProviderLifecycle?: boolean;
   invoke: (
     provider: (typeof PROVIDERS)[number],
     providerConfig: ProviderConfigUnion,
+    providerOptions: JsonObject | undefined,
     context: {
       cwd: string;
       signal?: AbortSignal;
@@ -619,14 +663,61 @@ async function executeProviderTool({
     provider.id,
     onUpdate,
   );
+  const providerOptions = stripLocalExecutionOptions(options);
+  const providerContext = {
+    cwd: ctx.cwd,
+    signal: signal ?? undefined,
+    onProgress: progress.report,
+  };
 
   let response: ProviderToolOutput;
   try {
-    response = await invoke(provider, providerConfig as ProviderConfigUnion, {
-      cwd: ctx.cwd,
-      signal: signal ?? undefined,
-      onProgress: progress.report,
-    });
+    if (
+      useProviderLifecycle &&
+      capability === "research" &&
+      typeof provider.startResearch === "function" &&
+      typeof provider.pollResearch === "function"
+    ) {
+      response = await executeResearchWithLifecycle({
+        providerLabel: provider.label,
+        providerId: provider.id,
+        input: input ?? "",
+        options,
+        context: providerContext,
+        policy: resolveResearchExecutionPolicy(
+          provider.id,
+          providerConfig,
+          options,
+        ),
+        start: (input, researchOptions, context) =>
+          provider.startResearch!(
+            input,
+            researchOptions,
+            providerConfig as never,
+            context,
+          ),
+        poll: (id, researchOptions, context) =>
+          provider.pollResearch!(
+            id,
+            researchOptions,
+            providerConfig as never,
+            context,
+          ),
+      });
+    } else {
+      response = await runWithExecutionPolicy(
+        `${provider.label} ${capability} request`,
+        () =>
+          invoke(
+            provider,
+            providerConfig as ProviderConfigUnion,
+            providerOptions,
+            providerContext,
+          ),
+        resolveRequestExecutionPolicy(provider.id, providerConfig, options),
+        providerContext,
+      );
+    }
   } finally {
     progress.stop();
   }
@@ -792,6 +883,12 @@ interface ProviderMenuOption {
     | "geminiContentsModel"
     | "geminiAnswerModel"
     | "geminiResearchAgent"
+    | "geminiRequestTimeoutMs"
+    | "geminiRetryCount"
+    | "geminiRetryDelayMs"
+    | "geminiResearchPollIntervalMs"
+    | "geminiResearchTimeoutMs"
+    | "geminiResearchMaxPollErrors"
     | "parallelSearchMode"
     | "parallelExtractExcerpts"
     | "parallelExtractFullContent"
@@ -844,7 +941,13 @@ function buildProviderMenuOptions(
       | "geminiSearchModel"
       | "geminiContentsModel"
       | "geminiAnswerModel"
-      | "geminiResearchAgent",
+      | "geminiResearchAgent"
+      | "geminiRequestTimeoutMs"
+      | "geminiRetryCount"
+      | "geminiRetryDelayMs"
+      | "geminiResearchPollIntervalMs"
+      | "geminiResearchTimeoutMs"
+      | "geminiResearchMaxPollErrors",
     label: string,
     help: string,
   ) => {
@@ -1009,6 +1112,36 @@ function buildProviderMenuOptions(
       "geminiResearchAgent",
       "Research agent",
       "Agent used for Gemini deep research runs.",
+    );
+    pushText(
+      "geminiRequestTimeoutMs",
+      "Request timeout (ms)",
+      "Maximum time to wait for a single Gemini API request before retrying.",
+    );
+    pushText(
+      "geminiRetryCount",
+      "Retry count",
+      "How many times Gemini requests should be retried after transient failures.",
+    );
+    pushText(
+      "geminiRetryDelayMs",
+      "Retry delay (ms)",
+      "Initial delay before retrying failed Gemini requests. Later retries back off automatically.",
+    );
+    pushText(
+      "geminiResearchPollIntervalMs",
+      "Research poll interval (ms)",
+      "How often to poll Gemini background research jobs for updates.",
+    );
+    pushText(
+      "geminiResearchTimeoutMs",
+      "Research timeout (ms)",
+      "Maximum total time to wait for Gemini research before returning a resumable timeout error.",
+    );
+    pushText(
+      "geminiResearchMaxPollErrors",
+      "Max poll errors",
+      "How many consecutive polling failures to tolerate before the Gemini research run stops locally.",
     );
     return options;
   }
@@ -1249,7 +1382,13 @@ class WebProvidersSettingsView implements Component {
             : key === "geminiSearchModel" ||
                 key === "geminiContentsModel" ||
                 key === "geminiAnswerModel" ||
-                key === "geminiResearchAgent"
+                key === "geminiResearchAgent" ||
+                key === "geminiRequestTimeoutMs" ||
+                key === "geminiRetryCount" ||
+                key === "geminiRetryDelayMs" ||
+                key === "geminiResearchPollIntervalMs" ||
+                key === "geminiResearchTimeoutMs" ||
+                key === "geminiResearchMaxPollErrors"
               ? getGeminiTextSettingValue(
                   providerConfig as GeminiProviderConfig | undefined,
                   key,
@@ -1440,7 +1579,13 @@ class WebProvidersSettingsView implements Component {
       id === "geminiSearchModel" ||
       id === "geminiContentsModel" ||
       id === "geminiAnswerModel" ||
-      id === "geminiResearchAgent"
+      id === "geminiResearchAgent" ||
+      id === "geminiRequestTimeoutMs" ||
+      id === "geminiRetryCount" ||
+      id === "geminiRetryDelayMs" ||
+      id === "geminiResearchPollIntervalMs" ||
+      id === "geminiResearchTimeoutMs" ||
+      id === "geminiResearchMaxPollErrors"
     ) {
       return getGeminiTextSettingValue(
         providerConfig as GeminiProviderConfig | undefined,
@@ -1832,14 +1977,48 @@ function getGeminiTextSettingValue(
     | "geminiSearchModel"
     | "geminiContentsModel"
     | "geminiAnswerModel"
-    | "geminiResearchAgent",
+    | "geminiResearchAgent"
+    | "geminiRequestTimeoutMs"
+    | "geminiRetryCount"
+    | "geminiRetryDelayMs"
+    | "geminiResearchPollIntervalMs"
+    | "geminiResearchTimeoutMs"
+    | "geminiResearchMaxPollErrors",
 ): string | undefined {
   const defaults = config?.defaults;
   if (!defaults) return undefined;
   if (key === "geminiSearchModel") return defaults.searchModel;
   if (key === "geminiContentsModel") return defaults.contentsModel;
   if (key === "geminiAnswerModel") return defaults.answerModel;
-  return defaults.researchAgent;
+  if (key === "geminiResearchAgent") return defaults.researchAgent;
+  if (key === "geminiRequestTimeoutMs") {
+    return typeof defaults.requestTimeoutMs === "number"
+      ? String(defaults.requestTimeoutMs)
+      : undefined;
+  }
+  if (key === "geminiRetryCount") {
+    return typeof defaults.retryCount === "number"
+      ? String(defaults.retryCount)
+      : undefined;
+  }
+  if (key === "geminiRetryDelayMs") {
+    return typeof defaults.retryDelayMs === "number"
+      ? String(defaults.retryDelayMs)
+      : undefined;
+  }
+  if (key === "geminiResearchPollIntervalMs") {
+    return typeof defaults.researchPollIntervalMs === "number"
+      ? String(defaults.researchPollIntervalMs)
+      : undefined;
+  }
+  if (key === "geminiResearchTimeoutMs") {
+    return typeof defaults.researchTimeoutMs === "number"
+      ? String(defaults.researchTimeoutMs)
+      : undefined;
+  }
+  return typeof defaults.researchMaxConsecutivePollErrors === "number"
+    ? String(defaults.researchMaxConsecutivePollErrors)
+    : undefined;
 }
 
 function assignOptionalString(
@@ -1853,6 +2032,28 @@ function assignOptionalString(
   } else {
     target[key] = trimmed;
   }
+}
+
+function assignOptionalInteger(
+  target: Record<string, JsonObject | string | number | boolean | undefined>,
+  key: string,
+  value: string,
+  errorMessage: string,
+  options?: { allowZero?: boolean },
+): void {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    delete target[key];
+    return;
+  }
+
+  const parsed = Number(trimmed);
+  const minimum = options?.allowZero ? 0 : 1;
+  if (!Number.isInteger(parsed) || parsed < minimum) {
+    throw new Error(errorMessage);
+  }
+
+  target[key] = parsed;
 }
 
 function applyClaudeSettingChange(
@@ -2091,6 +2292,79 @@ function applyGeminiSettingChange(
       );
       cleanupGeminiDefaults(target);
       return true;
+    case "geminiRequestTimeoutMs":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "requestTimeoutMs",
+        value,
+        "Gemini request timeout must be a positive integer.",
+      );
+      cleanupGeminiDefaults(target);
+      return true;
+    case "geminiRetryCount":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "retryCount",
+        value,
+        "Gemini retry count must be a non-negative integer.",
+        { allowZero: true },
+      );
+      cleanupGeminiDefaults(target);
+      return true;
+    case "geminiRetryDelayMs":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "retryDelayMs",
+        value,
+        "Gemini retry delay must be a positive integer.",
+      );
+      cleanupGeminiDefaults(target);
+      return true;
+    case "geminiResearchPollIntervalMs":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "researchPollIntervalMs",
+        value,
+        "Gemini research poll interval must be a positive integer.",
+      );
+      cleanupGeminiDefaults(target);
+      return true;
+    case "geminiResearchTimeoutMs":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "researchTimeoutMs",
+        value,
+        "Gemini research timeout must be a positive integer.",
+      );
+      cleanupGeminiDefaults(target);
+      return true;
+    case "geminiResearchMaxPollErrors":
+      assignOptionalInteger(
+        target.defaults as Record<
+          string,
+          JsonObject | string | number | boolean | undefined
+        >,
+        "researchMaxConsecutivePollErrors",
+        value,
+        "Gemini max poll errors must be a positive integer.",
+      );
+      cleanupGeminiDefaults(target);
+      return true;
     default:
       return false;
   }
@@ -2298,18 +2572,6 @@ function cleanSingleLine(text: string): string {
 
 function formatQuotedPreview(text: string, maxLength = 80): string {
   return `"${truncateInline(cleanSingleLine(text), maxLength)}"`;
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-
-  return `${totalSeconds}s`;
 }
 
 function formatSearchResponse(response: SearchResponse): string {

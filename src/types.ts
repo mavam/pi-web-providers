@@ -42,6 +42,16 @@ export interface ProviderToolOutput {
   itemCount?: number;
 }
 
+export interface ProviderResearchJob {
+  id: string;
+}
+
+export interface ProviderResearchPollResult {
+  status: "in_progress" | "completed" | "failed" | "cancelled";
+  output?: ProviderToolOutput;
+  error?: string;
+}
+
 export interface WebSearchDetails {
   tool: "web_search";
   query: string;
@@ -118,6 +128,12 @@ export interface GeminiProviderConfig {
     contentsModel?: string;
     answerModel?: string;
     researchAgent?: string;
+    requestTimeoutMs?: number;
+    retryCount?: number;
+    retryDelayMs?: number;
+    researchPollIntervalMs?: number;
+    researchTimeoutMs?: number;
+    researchMaxConsecutivePollErrors?: number;
   };
 }
 
@@ -220,4 +236,16 @@ export interface WebProvider<TConfig> {
     config: TConfig,
     context: ProviderContext,
   ): Promise<ProviderToolOutput>;
+  startResearch?(
+    input: string,
+    options: JsonObject | undefined,
+    config: TConfig,
+    context: ProviderContext,
+  ): Promise<ProviderResearchJob>;
+  pollResearch?(
+    id: string,
+    options: JsonObject | undefined,
+    config: TConfig,
+    context: ProviderContext,
+  ): Promise<ProviderResearchPollResult>;
 }

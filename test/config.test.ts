@@ -101,6 +101,12 @@ describe("config parsing", () => {
         apiVersion: "v1alpha",
         searchModel: "gemini-2.5-flash",
         contentsModel: "gemini-2.5-pro",
+        requestTimeoutMs: 45000,
+        retryCount: 5,
+        retryDelayMs: 4000,
+        researchPollIntervalMs: 6000,
+        researchTimeoutMs: 28800000,
+        researchMaxConsecutivePollErrors: 12,
       },
     };
     config.providers!.perplexity = {
@@ -140,6 +146,18 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini?.defaults?.contentsModel).toBe(
       "gemini-2.5-pro",
     );
+    expect(loaded.providers?.gemini?.defaults?.requestTimeoutMs).toBe(45000);
+    expect(loaded.providers?.gemini?.defaults?.retryCount).toBe(5);
+    expect(loaded.providers?.gemini?.defaults?.retryDelayMs).toBe(4000);
+    expect(loaded.providers?.gemini?.defaults?.researchPollIntervalMs).toBe(
+      6000,
+    );
+    expect(loaded.providers?.gemini?.defaults?.researchTimeoutMs).toBe(
+      28800000,
+    );
+    expect(
+      loaded.providers?.gemini?.defaults?.researchMaxConsecutivePollErrors,
+    ).toBe(12);
     expect(loaded.providers?.perplexity?.defaults?.search?.country).toBe("US");
     expect(loaded.providers?.perplexity?.defaults?.research?.model).toBe(
       "sonar-deep-research",

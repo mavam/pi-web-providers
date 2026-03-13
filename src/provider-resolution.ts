@@ -4,9 +4,24 @@ import {
   type ProviderToolId,
 } from "./provider-tools.js";
 import { PROVIDER_MAP, PROVIDERS } from "./providers/index.js";
-import type { ProviderId, WebProvidersConfig } from "./types.js";
+import type { ProviderId, WebProvider, WebProvidersConfig } from "./types.js";
 
 const IMPLICIT_PROVIDER_FALLBACKS: readonly ProviderId[] = ["codex"] as const;
+
+export function supportsProviderCapability(
+  provider: WebProvider<unknown>,
+  capability: ProviderToolId,
+): boolean {
+  if (capability === "research") {
+    return (
+      typeof provider.research === "function" ||
+      (typeof provider.startResearch === "function" &&
+        typeof provider.pollResearch === "function")
+    );
+  }
+
+  return typeof provider[capability] === "function";
+}
 
 export function resolveProviderChoice(
   config: WebProvidersConfig,
@@ -44,7 +59,7 @@ export function resolveProviderForCapability(
   if (explicit) {
     const provider = PROVIDER_MAP[explicit];
     const providerConfig = getEffectiveProviderConfig(config, explicit);
-    if (typeof provider[capability] !== "function") {
+    if (!supportsProviderCapability(provider, capability)) {
       throw new Error(
         `Provider '${explicit}' does not support '${capability}'.`,
       );
@@ -64,7 +79,7 @@ export function resolveProviderForCapability(
   }
 
   for (const provider of PROVIDERS) {
-    if (typeof provider[capability] !== "function") continue;
+    if (!supportsProviderCapability(provider, capability)) continue;
     const providerConfig = config.providers?.[provider.id];
     if (providerConfig?.enabled !== true) continue;
     if (
@@ -82,7 +97,7 @@ export function resolveProviderForCapability(
 
   for (const providerId of IMPLICIT_PROVIDER_FALLBACKS) {
     const provider = PROVIDER_MAP[providerId];
-    if (typeof provider[capability] !== "function") continue;
+    if (!supportsProviderCapability(provider, capability)) continue;
     const providerConfig = getEffectiveProviderConfig(config, provider.id);
     if (!isProviderToolEnabled(provider.id, providerConfig, capability)) {
       continue;

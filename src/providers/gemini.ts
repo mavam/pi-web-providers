@@ -4,6 +4,8 @@ import type {
   GeminiProviderConfig,
   JsonObject,
   ProviderContext,
+  ProviderResearchJob,
+  ProviderResearchPollResult,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
@@ -14,7 +16,12 @@ const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_CONTENTS_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
-const DEFAULT_POLL_INTERVAL_MS = 3000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
+const DEFAULT_RETRY_COUNT = 3;
+const DEFAULT_RETRY_DELAY_MS = 2000;
+const DEFAULT_RESEARCH_POLL_INTERVAL_MS = 3000;
+const DEFAULT_RESEARCH_TIMEOUT_MS = 21600000;
+const DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS = 10;
 
 export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   readonly id = "gemini";
@@ -36,6 +43,13 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         contentsModel: DEFAULT_CONTENTS_MODEL,
         answerModel: DEFAULT_ANSWER_MODEL,
         researchAgent: DEFAULT_RESEARCH_AGENT,
+        requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
+        retryCount: DEFAULT_RETRY_COUNT,
+        retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+        researchPollIntervalMs: DEFAULT_RESEARCH_POLL_INTERVAL_MS,
+        researchTimeoutMs: DEFAULT_RESEARCH_TIMEOUT_MS,
+        researchMaxConsecutivePollErrors:
+          DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
       },
     };
   }
@@ -75,7 +89,10 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       extractGoogleSearchResults(interaction.outputs)
         .slice(0, maxResults)
         .map(async (result) => {
-          const resolvedUrl = await resolveGoogleSearchUrl(result.url);
+          const resolvedUrl = await resolveGoogleSearchUrl(
+            result.url,
+            context.signal,
+          );
           return {
             title: result.title ?? resolvedUrl ?? result.url ?? "Untitled",
             url: resolvedUrl ?? result.url ?? "",
@@ -202,63 +219,60 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     };
   }
 
-  async research(
+  async startResearch(
     input: string,
-    options: Record<string, unknown> | undefined,
+    options: JsonObject | undefined,
     config: GeminiProviderConfig,
-    context: ProviderContext,
-  ): Promise<ProviderToolOutput> {
+    _context: ProviderContext,
+  ): Promise<ProviderResearchJob> {
     const ai = this.createClient(config);
-    const agent = config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT;
-    const pollIntervalMs = getPollInterval(options);
-    const requestOptions = getGeminiResearchRequestOptions(
-      stripPollIntervalOption(options),
-    );
-    const startedAt = Date.now();
-    let lastStatus: string | undefined;
-
-    context.onProgress?.("Starting Gemini deep research");
-    const initialInteraction = await ai.interactions.create({
+    const requestOptions = getGeminiResearchRequestOptions(options);
+    const interaction = await ai.interactions.create({
       ...requestOptions,
       input,
-      agent,
+      agent: config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT,
       background: true,
     });
 
-    context.onProgress?.(`Gemini research started: ${initialInteraction.id}`);
+    return { id: interaction.id };
+  }
 
-    while (true) {
-      if (context.signal?.aborted) {
-        throw new Error("Gemini research aborted.");
-      }
+  async pollResearch(
+    id: string,
+    _options: JsonObject | undefined,
+    config: GeminiProviderConfig,
+    _context: ProviderContext,
+  ): Promise<ProviderResearchPollResult> {
+    const ai = this.createClient(config);
+    const interaction = await ai.interactions.get(id);
 
-      const interaction = await ai.interactions.get(initialInteraction.id);
-      const now = Date.now();
-      if (interaction.status !== lastStatus) {
-        context.onProgress?.(
-          `Gemini research status: ${interaction.status} (${formatElapsed(now - startedAt)} elapsed)`,
-        );
-        lastStatus = interaction.status;
-      }
-
-      if (interaction.status === "completed") {
-        const text = formatInteractionOutputs(interaction.outputs);
-        return {
+    if (interaction.status === "completed") {
+      const text = formatInteractionOutputs(interaction.outputs);
+      return {
+        status: "completed",
+        output: {
           provider: this.id,
           text: text || "Gemini research completed without textual output.",
           summary: "Research via Gemini",
-        };
-      }
-
-      if (
-        interaction.status === "failed" ||
-        interaction.status === "cancelled"
-      ) {
-        throw new Error(`Gemini research ${interaction.status}.`);
-      }
-
-      await sleep(pollIntervalMs, context.signal);
+        },
+      };
     }
+
+    if (interaction.status === "failed") {
+      return {
+        status: "failed",
+        error: "Gemini research failed.",
+      };
+    }
+
+    if (interaction.status === "cancelled") {
+      return {
+        status: "cancelled",
+        error: "Gemini research cancelled.",
+      };
+    }
+
+    return { status: "in_progress" };
   }
 
   private createClient(config: GeminiProviderConfig): GoogleGenAI {
@@ -541,6 +555,7 @@ function isBuiltInToolChoiceError(error: unknown): boolean {
 
 async function resolveGoogleSearchUrl(
   url: string | undefined,
+  signal: AbortSignal | undefined,
 ): Promise<string | undefined> {
   if (!url) {
     return undefined;
@@ -554,66 +569,12 @@ async function resolveGoogleSearchUrl(
     const response = await fetch(url, {
       method: "HEAD",
       redirect: "manual",
+      signal,
     });
     return response.headers.get("location") || url;
   } catch {
     return url;
   }
-}
-
-async function sleep(
-  ms: number,
-  signal: AbortSignal | undefined,
-): Promise<void> {
-  if (signal?.aborted) {
-    throw new Error("Operation aborted.");
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-
-    const onAbort = () => {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", onAbort);
-      reject(new Error("Operation aborted."));
-    };
-
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-
-  return `${totalSeconds}s`;
-}
-
-function getPollInterval(options: Record<string, unknown> | undefined): number {
-  const raw = options?.pollIntervalMs;
-  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 1000) {
-    return Math.trunc(raw);
-  }
-  return DEFAULT_POLL_INTERVAL_MS;
-}
-
-function stripPollIntervalOption(
-  options: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!options || !Object.hasOwn(options, "pollIntervalMs")) {
-    return options;
-  }
-
-  const { pollIntervalMs: _ignored, ...rest } = options;
-  return rest;
 }
 
 function buildGeminiSearchRequest(
