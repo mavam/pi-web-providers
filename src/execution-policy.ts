@@ -28,6 +28,10 @@ class RequestTimeoutError extends Error {
   override name = "RequestTimeoutError";
 }
 
+class NonResumableResearchError extends Error {
+  override name = "NonResumableResearchError";
+}
+
 export function stripLocalExecutionOptions(
   options: JsonObject | undefined,
 ): JsonObject | undefined {
@@ -105,7 +109,7 @@ export function resolveResearchExecutionPolicy(
 
 export async function runWithExecutionPolicy<T>(
   label: string,
-  operation: () => Promise<T>,
+  operation: (context: ProviderContext) => Promise<T>,
   policy: RequestExecutionPolicy,
   context: ProviderContext,
 ): Promise<T> {
@@ -114,16 +118,24 @@ export async function runWithExecutionPolicy<T>(
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     throwIfAborted(context.signal);
 
+    const {
+      context: attemptContext,
+      abort,
+      cleanup,
+    } = createAttemptContext(context);
+
     try {
-      const result = operation();
+      const result = operation(attemptContext);
       if (policy.requestTimeoutMs === undefined) {
         return await result;
       }
+      const timeoutMessage = `${label} timed out after ${formatDuration(policy.requestTimeoutMs)}.`;
       return await withTimeout(
         result,
         policy.requestTimeoutMs,
         context.signal,
-        `${label} timed out after ${formatDuration(policy.requestTimeoutMs)}.`,
+        timeoutMessage,
+        () => abort(new RequestTimeoutError(timeoutMessage)),
       );
     } catch (error) {
       if (!isRetryableError(error) || attempt >= maxAttempts) {
@@ -138,6 +150,8 @@ export async function runWithExecutionPolicy<T>(
         `${label} failed (${formatErrorMessage(error)}). Retrying in ${formatDuration(delayMs)} (attempt ${attempt + 1}/${maxAttempts}).`,
       );
       await sleep(delayMs, context.signal);
+    } finally {
+      cleanup();
     }
   }
 
@@ -182,8 +196,11 @@ export async function executeResearchWithLifecycle({
     context.onProgress?.(`Starting ${providerLabel} research`);
     const job = await runWithExecutionPolicy(
       `${providerLabel} research start`,
-      () => start(input, providerOptions, context),
-      policy,
+      (attemptContext) => start(input, providerOptions, attemptContext),
+      {
+        ...policy,
+        retryCount: 0,
+      },
       context,
     );
     jobId = job.id;
@@ -208,7 +225,7 @@ export async function executeResearchWithLifecycle({
     try {
       const result = await runWithExecutionPolicy(
         `${providerLabel} research poll`,
-        () => poll(jobId, providerOptions, context),
+        (attemptContext) => poll(jobId, providerOptions, attemptContext),
         policy,
         context,
       );
@@ -232,12 +249,14 @@ export async function executeResearchWithLifecycle({
       }
 
       if (result.status === "failed" || result.status === "cancelled") {
-        throw buildResumeError(
+        throw new NonResumableResearchError(
           result.error || `${providerLabel} research ${result.status}.`,
-          jobId,
         );
       }
     } catch (error) {
+      if (error instanceof NonResumableResearchError) {
+        throw error;
+      }
       if (!isRetryableError(error)) {
         throw buildResumeError(error, jobId);
       }
@@ -261,7 +280,7 @@ export async function executeResearchWithLifecycle({
 
 export function isRetryableError(error: unknown): boolean {
   if (error instanceof RequestTimeoutError) {
-    return true;
+    return false;
   }
 
   const message = formatErrorMessage(error).toLowerCase();
@@ -344,16 +363,45 @@ export function throwIfAborted(
   }
 }
 
+function createAttemptContext(context: ProviderContext): {
+  context: ProviderContext;
+  abort: (reason?: unknown) => void;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+
+  if (context.signal?.aborted) {
+    controller.abort(context.signal.reason);
+  }
+
+  const onAbort = () => {
+    controller.abort(context.signal?.reason);
+  };
+
+  context.signal?.addEventListener("abort", onAbort, { once: true });
+
+  return {
+    context: {
+      ...context,
+      signal: controller.signal,
+    },
+    abort: (reason?: unknown) => controller.abort(reason),
+    cleanup: () => context.signal?.removeEventListener("abort", onAbort),
+  };
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
   signal: AbortSignal | undefined,
   message: string,
+  onTimeout?: () => void,
 ): Promise<T> {
   throwIfAborted(signal);
 
   return await new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
+      onTimeout?.();
       cleanup();
       reject(new RequestTimeoutError(message));
     }, timeoutMs);

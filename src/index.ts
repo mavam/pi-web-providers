@@ -183,17 +183,13 @@ function registerWebSearchTool(
       try {
         response = await runWithExecutionPolicy(
           `${provider.label} search request`,
-          () =>
+          (attemptContext) =>
             provider.search!(
               params.query,
               maxResults,
               providerOptions,
               providerConfig as never,
-              {
-                cwd: ctx.cwd,
-                signal: signal ?? undefined,
-                onProgress: progress.report,
-              },
+              attemptContext,
             ),
           policy,
           {
@@ -707,12 +703,12 @@ async function executeProviderTool({
     } else {
       response = await runWithExecutionPolicy(
         `${provider.label} ${capability} request`,
-        () =>
+        (attemptContext) =>
           invoke(
             provider,
             providerConfig as ProviderConfigUnion,
             providerOptions,
-            providerContext,
+            attemptContext,
           ),
         resolveRequestExecutionPolicy(provider.id, providerConfig, options),
         providerContext,

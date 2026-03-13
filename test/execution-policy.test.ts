@@ -49,7 +49,7 @@ describe("execution policy", () => {
 
   it("retries transient failures in the parent execution wrapper", async () => {
     const operation = vi
-      .fn<() => Promise<string>>()
+      .fn<(context: ProviderContext) => Promise<string>>()
       .mockRejectedValueOnce(new Error("fetch failed"))
       .mockResolvedValueOnce("ok");
     const progress: string[] = [];
@@ -73,6 +73,95 @@ describe("execution policy", () => {
     expect(progress).toContain(
       "Gemini answer request failed (fetch failed). Retrying in 1ms (attempt 2/2).",
     );
+  });
+
+  it("does not retry timed out requests and aborts the attempt signal", async () => {
+    vi.useFakeTimers();
+
+    try {
+      let attemptSignal: AbortSignal | undefined;
+      const operation = vi.fn(async (context: ProviderContext) => {
+        attemptSignal = context.signal;
+        return await new Promise<string>(() => {});
+      });
+
+      const promise = runWithExecutionPolicy(
+        "Gemini answer request",
+        operation,
+        {
+          requestTimeoutMs: 10,
+          retryCount: 2,
+          retryDelayMs: 1,
+        },
+        {
+          cwd: process.cwd(),
+        },
+      );
+      const rejection = expect(promise).rejects.toThrow(
+        "Gemini answer request timed out after 10ms.",
+      );
+
+      await vi.advanceTimersByTimeAsync(10);
+      await rejection;
+
+      expect(operation).toHaveBeenCalledTimes(1);
+      expect(attemptSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not attach resume advice to terminal research failures", async () => {
+    await expect(
+      executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "Investigate Tenzir use cases",
+        options: { resumeId: "research-123" },
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 1,
+          retryDelayMs: 1,
+          pollIntervalMs: 1,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "research-123",
+        },
+        start: vi.fn(),
+        poll: vi.fn().mockResolvedValue({
+          status: "failed" as const,
+          error: "Gemini research failed.",
+        }),
+      }),
+    ).rejects.toThrow("Gemini research failed.");
+
+    await expect(
+      executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "Investigate Tenzir use cases",
+        options: { resumeId: "research-123" },
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 1,
+          retryDelayMs: 1,
+          pollIntervalMs: 1,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "research-123",
+        },
+        start: vi.fn(),
+        poll: vi.fn().mockResolvedValue({
+          status: "failed" as const,
+          error: "Gemini research failed.",
+        }),
+      }).catch((error) => {
+        expect((error as Error).message).not.toContain("options.resumeId");
+        throw error;
+      }),
+    ).rejects.toThrow("Gemini research failed.");
   });
 
   it("polls research jobs in the parent and supports resume ids", async () => {

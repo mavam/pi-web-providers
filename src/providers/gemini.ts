@@ -83,7 +83,11 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     );
 
     context.onProgress?.(`Searching Gemini for: ${query}`);
-    const interaction = await createSearchInteraction(ai, request);
+    const interaction = await createSearchInteraction(
+      ai,
+      request,
+      context.signal,
+    );
 
     const results = await Promise.all(
       extractGoogleSearchResults(interaction.outputs)
@@ -133,7 +137,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     const response = await ai.models.generateContent({
       model: request.model,
       contents: [request.contents],
-      config: request.config,
+      config: addAbortSignalToGeminiConfig(request.config, context.signal),
     });
 
     const text = response.text?.trim() || "";
@@ -191,7 +195,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     const response = await ai.models.generateContent({
       model: request.model,
       contents: request.contents,
-      config: request.config,
+      config: addAbortSignalToGeminiConfig(request.config, context.signal),
     });
 
     const lines: string[] = [];
@@ -223,16 +227,19 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     input: string,
     options: JsonObject | undefined,
     config: GeminiProviderConfig,
-    _context: ProviderContext,
+    context: ProviderContext,
   ): Promise<ProviderResearchJob> {
     const ai = this.createClient(config);
     const requestOptions = getGeminiResearchRequestOptions(options);
-    const interaction = await ai.interactions.create({
-      ...requestOptions,
-      input,
-      agent: config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT,
-      background: true,
-    });
+    const interaction = await ai.interactions.create(
+      {
+        ...requestOptions,
+        input,
+        agent: config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT,
+        background: true,
+      },
+      buildGeminiRequestOptions(context.signal),
+    );
 
     return { id: interaction.id };
   }
@@ -241,10 +248,14 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     id: string,
     _options: JsonObject | undefined,
     config: GeminiProviderConfig,
-    _context: ProviderContext,
+    context: ProviderContext,
   ): Promise<ProviderResearchPollResult> {
     const ai = this.createClient(config);
-    const interaction = await ai.interactions.get(id);
+    const interaction = await ai.interactions.get(
+      id,
+      undefined,
+      buildGeminiRequestOptions(context.signal),
+    );
 
     if (interaction.status === "completed") {
       const text = formatInteractionOutputs(interaction.outputs);
@@ -286,6 +297,24 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       apiVersion: config.defaults?.apiVersion,
     });
   }
+}
+
+function buildGeminiRequestOptions(signal: AbortSignal | undefined) {
+  return signal ? { signal } : undefined;
+}
+
+function addAbortSignalToGeminiConfig(
+  config: Record<string, unknown> | undefined,
+  signal: AbortSignal | undefined,
+): Record<string, unknown> | undefined {
+  if (!signal) {
+    return config;
+  }
+
+  return {
+    ...(config ?? {}),
+    abortSignal: signal,
+  };
 }
 
 function extractGoogleSearchResults(
@@ -498,6 +527,7 @@ async function createSearchInteraction(
     tools: Array<{ type: "google_search" }>;
     generation_config?: Record<string, unknown>;
   },
+  signal: AbortSignal | undefined,
 ) {
   const forcedRequest = {
     ...request,
@@ -516,19 +546,25 @@ async function createSearchInteraction(
   };
 
   try {
-    return await ai.interactions.create(forcedRequest);
+    return await ai.interactions.create(
+      forcedRequest,
+      buildGeminiRequestOptions(signal),
+    );
   } catch (error) {
     if (!isBuiltInToolChoiceError(error)) {
       throw error;
     }
 
     const fallbackGenerationConfig = stripToolChoice(request.generation_config);
-    return ai.interactions.create({
-      ...request,
-      ...(fallbackGenerationConfig
-        ? { generation_config: fallbackGenerationConfig }
-        : {}),
-    });
+    return ai.interactions.create(
+      {
+        ...request,
+        ...(fallbackGenerationConfig
+          ? { generation_config: fallbackGenerationConfig }
+          : {}),
+      },
+      buildGeminiRequestOptions(signal),
+    );
   }
 }
 

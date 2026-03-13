@@ -38,14 +38,17 @@ describe("GeminiProvider search", () => {
       createContext(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      model: "gemini-2.5-flash",
-      input: "example query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        tool_choice: "any",
+    expect(create).toHaveBeenCalledWith(
+      {
+        model: "gemini-2.5-flash",
+        input: "example query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          tool_choice: "any",
+        },
       },
-    });
+      undefined,
+    );
     expect(response.results).toEqual([
       {
         title: "Alpha",
@@ -140,19 +143,27 @@ describe("GeminiProvider search", () => {
     );
 
     expect(create).toHaveBeenCalledTimes(2);
-    expect(create).toHaveBeenNthCalledWith(1, {
-      model: "gemini-2.5-flash",
-      input: "fallback query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        tool_choice: "any",
+    expect(create).toHaveBeenNthCalledWith(
+      1,
+      {
+        model: "gemini-2.5-flash",
+        input: "fallback query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          tool_choice: "any",
+        },
       },
-    });
-    expect(create).toHaveBeenNthCalledWith(2, {
-      model: "gemini-2.5-flash",
-      input: "fallback query",
-      tools: [{ type: "google_search" }],
-    });
+      undefined,
+    );
+    expect(create).toHaveBeenNthCalledWith(
+      2,
+      {
+        model: "gemini-2.5-flash",
+        input: "fallback query",
+        tools: [{ type: "google_search" }],
+      },
+      undefined,
+    );
     expect(response.results).toEqual([
       {
         title: "Fallback",
@@ -236,15 +247,18 @@ describe("GeminiProvider search", () => {
       createContext(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      model: "gemini-2.5-pro",
-      input: "configured query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        temperature: 0.1,
-        tool_choice: "any",
+    expect(create).toHaveBeenCalledWith(
+      {
+        model: "gemini-2.5-pro",
+        input: "configured query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          temperature: 0.1,
+          tool_choice: "any",
+        },
       },
-    });
+      undefined,
+    );
   });
 });
 
@@ -599,21 +613,24 @@ describe("GeminiProvider research", () => {
     );
 
     expect(job).toEqual({ id: "research-1" });
-    expect(create).toHaveBeenCalledWith({
-      agent_config: {
-        response_length: "short",
+    expect(create).toHaveBeenCalledWith(
+      {
+        agent_config: {
+          response_length: "short",
+        },
+        store: true,
+        response_format: {
+          type: "json_schema",
+        },
+        response_modalities: ["TEXT"],
+        system_instruction: "Focus on official sources.",
+        tools: [{ urlContext: {} }],
+        input: "Investigate Tenzir use cases",
+        agent: "deep-research-pro-preview-12-2025",
+        background: true,
       },
-      store: true,
-      response_format: {
-        type: "json_schema",
-      },
-      response_modalities: ["TEXT"],
-      system_instruction: "Focus on official sources.",
-      tools: [{ urlContext: {} }],
-      input: "Investigate Tenzir use cases",
-      agent: "deep-research-pro-preview-12-2025",
-      background: true,
-    });
+      undefined,
+    );
   });
 
   it("returns in-progress Gemini research status from polling", async () => {
@@ -632,7 +649,7 @@ describe("GeminiProvider research", () => {
       createContext(),
     );
 
-    expect(get).toHaveBeenCalledWith("research-1");
+    expect(get).toHaveBeenCalledWith("research-1", undefined, undefined);
     expect(result).toEqual({ status: "in_progress" });
   });
 
