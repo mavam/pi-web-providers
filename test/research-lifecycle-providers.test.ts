@@ -102,6 +102,58 @@ describe("research lifecycle providers", () => {
     expect(result.content[0]?.text).toBe("Exa research result");
   });
 
+  it("does not locally time out non-idempotent Exa research starts", async () => {
+    vi.useFakeTimers();
+
+    exaResearchCreateMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ researchId: "exa-job-1" });
+          }, 5);
+        }),
+    );
+    exaResearchGetMock.mockResolvedValueOnce({
+      status: "completed",
+      output: {
+        content: "Exa research result",
+      },
+    });
+
+    const promise = __test__.executeProviderTool({
+      capability: "research",
+      config: {
+        version: 1,
+        providers: {
+          exa: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      } satisfies WebProvidersConfig,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
+      input: "Investigate Exa lifecycle polling",
+      invoke: async () => {
+        throw new Error("generic invoke should not run");
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(4);
+    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
+    expect(exaResearchGetMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(2);
+    const result = await promise;
+
+    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
+    expect(exaResearchGetMock).toHaveBeenCalledTimes(1);
+    expect(result.content[0]?.text).toBe("Exa research result");
+  });
+
   it("does not locally time out uncancellable Exa poll requests", async () => {
     vi.useFakeTimers();
 

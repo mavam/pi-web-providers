@@ -682,6 +682,7 @@ async function executeProviderTool({
       );
       const supportsSafeStartRetries =
         provider.supportsIdempotentResearchStartRetries === true;
+      const supportsSafeStartTimeouts = supportsSafeStartRetries;
       const supportsPollCancellation =
         provider.supportsResearchPollingCancellation === true;
       response = await executeResearchWithLifecycle({
@@ -702,6 +703,9 @@ async function executeProviderTool({
           ? `pi-web-providers:${provider.id}:${randomUUID()}`
           : undefined,
         startRetryOnTimeout: supportsSafeStartRetries,
+        startRequestTimeoutMs: supportsSafeStartTimeouts
+          ? researchPolicy.requestTimeoutMs
+          : null,
         pollRequestTimeoutMs: supportsPollCancellation
           ? researchPolicy.requestTimeoutMs
           : null,

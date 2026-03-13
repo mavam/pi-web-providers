@@ -172,6 +172,7 @@ export async function executeResearchWithLifecycle({
   startRetryNotice,
   startIdempotencyKey,
   startRetryOnTimeout = false,
+  startRequestTimeoutMs,
   pollRequestTimeoutMs,
   start,
   poll,
@@ -186,6 +187,7 @@ export async function executeResearchWithLifecycle({
   startRetryNotice?: string;
   startIdempotencyKey?: string;
   startRetryOnTimeout?: boolean;
+  startRequestTimeoutMs?: number | null;
   pollRequestTimeoutMs?: number | null;
   start: (
     input: string,
@@ -201,6 +203,10 @@ export async function executeResearchWithLifecycle({
   const startedAt = Date.now();
   let lastStatus: ProviderResearchPollResult["status"] | undefined;
   const providerOptions = stripLocalExecutionOptions(options);
+  const effectiveStartRequestTimeoutMs =
+    startRequestTimeoutMs === undefined
+      ? policy.requestTimeoutMs
+      : (startRequestTimeoutMs ?? undefined);
   const effectivePollRequestTimeoutMs =
     pollRequestTimeoutMs === undefined
       ? policy.requestTimeoutMs
@@ -237,6 +243,7 @@ export async function executeResearchWithLifecycle({
           }),
         {
           ...policy,
+          requestTimeoutMs: effectiveStartRequestTimeoutMs,
           retryCount: startRetryCount,
           retryOnTimeout: startRetryOnTimeout,
         },
