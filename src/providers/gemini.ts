@@ -238,7 +238,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         agent: config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT,
         background: true,
       },
-      buildGeminiRequestOptions(context.signal),
+      buildGeminiRequestOptions(context.signal, context.idempotencyKey),
     );
 
     return { id: interaction.id };
@@ -299,8 +299,18 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   }
 }
 
-function buildGeminiRequestOptions(signal: AbortSignal | undefined) {
-  return signal ? { signal } : undefined;
+function buildGeminiRequestOptions(
+  signal: AbortSignal | undefined,
+  idempotencyKey?: string,
+) {
+  if (!signal && !idempotencyKey) {
+    return undefined;
+  }
+
+  return {
+    ...(signal ? { signal } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  };
 }
 
 function addAbortSignalToGeminiConfig(

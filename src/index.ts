@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -674,17 +675,29 @@ async function executeProviderTool({
       typeof provider.startResearch === "function" &&
       typeof provider.pollResearch === "function"
     ) {
+      const researchPolicy = resolveResearchExecutionPolicy(
+        provider.id,
+        providerConfig,
+        options,
+      );
+      const supportsSafeStartRetries = provider.id === "gemini";
       response = await executeResearchWithLifecycle({
         providerLabel: provider.label,
         providerId: provider.id,
         input: input ?? "",
         options,
         context: providerContext,
-        policy: resolveResearchExecutionPolicy(
-          provider.id,
-          providerConfig,
-          options,
-        ),
+        policy: researchPolicy,
+        startRetryCount: supportsSafeStartRetries
+          ? researchPolicy.retryCount
+          : 0,
+        startRetryNotice:
+          !supportsSafeStartRetries && researchPolicy.retryCount > 0
+            ? `${provider.label} research start retries are disabled to avoid duplicate background jobs; configured retries apply after the job starts.`
+            : undefined,
+        startIdempotencyKey: supportsSafeStartRetries
+          ? `pi-web-providers:${provider.id}:${randomUUID()}`
+          : undefined,
         start: (input, researchOptions, context) =>
           provider.startResearch!(
             input,

@@ -111,6 +111,104 @@ describe("execution policy", () => {
     }
   });
 
+  it("aborts hung requests when the parent signal is aborted without a per-request timeout", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const controller = new AbortController();
+      const operation = vi.fn(async () => await new Promise<string>(() => {}));
+
+      const promise = runWithExecutionPolicy(
+        "Gemini answer request",
+        operation,
+        {
+          requestTimeoutMs: undefined,
+          retryCount: 0,
+          retryDelayMs: 1,
+        },
+        {
+          cwd: process.cwd(),
+          signal: controller.signal,
+        },
+      );
+      const rejection = expect(promise).rejects.toThrow("parent aborted");
+
+      controller.abort(new Error("parent aborted"));
+      await vi.runAllTimersAsync();
+      await rejection;
+
+      expect(operation).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries research start when a stable idempotency key is available", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const progress: string[] = [];
+      const startContexts: ProviderContext[] = [];
+      const start = vi
+        .fn<
+          (
+            input: string,
+            options: JsonObject | undefined,
+            context: ProviderContext,
+          ) => Promise<{ id: string }>
+        >()
+        .mockImplementationOnce(async (_input, _options, context) => {
+          startContexts.push(context);
+          throw new Error("fetch failed");
+        })
+        .mockImplementationOnce(async (_input, _options, context) => {
+          startContexts.push(context);
+          return { id: "research-123" };
+        });
+      const poll = vi.fn().mockResolvedValue({
+        status: "completed" as const,
+        output: {
+          provider: "gemini" as const,
+          text: "done",
+          summary: "Research via Gemini",
+        },
+      });
+
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "Investigate Tenzir use cases",
+        options: { retryCount: 1 },
+        context: createContext(progress),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 1,
+          retryDelayMs: 1,
+          pollIntervalMs: 1,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+        },
+        startRetryCount: 1,
+        startIdempotencyKey: "stable-key",
+        start,
+        poll,
+      });
+
+      await vi.advanceTimersByTimeAsync(1);
+      const result = await promise;
+
+      expect(result.text).toBe("done");
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(startContexts[0]?.idempotencyKey).toBe("stable-key");
+      expect(startContexts[1]?.idempotencyKey).toBe("stable-key");
+      expect(progress).toContain(
+        "Gemini research start failed (fetch failed). Retrying in 1ms (attempt 2/2).",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not attach resume advice to terminal research failures", async () => {
     await expect(
       executeResearchWithLifecycle({
@@ -171,6 +269,44 @@ describe("execution policy", () => {
       const poll = vi
         .fn()
         .mockResolvedValue({ status: "in_progress" as const });
+
+      const promise = executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        input: "ignored while resuming",
+        options: { resumeId: "research-123" },
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 0,
+          retryDelayMs: 1,
+          pollIntervalMs: 30000,
+          timeoutMs: 10000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "research-123",
+        },
+        start: vi.fn(),
+        poll,
+      });
+      const rejection = expect(promise).rejects.toThrow(
+        'Gemini research exceeded 10s. Resume the background job with options.resumeId="research-123".',
+      );
+
+      await vi.advanceTimersByTimeAsync(10000);
+      await rejection;
+      expect(poll).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("turns total research timeouts into resumable errors even when a poll request ignores aborts", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const poll = vi
+        .fn()
+        .mockImplementationOnce(() => new Promise<never>(() => {}));
 
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",

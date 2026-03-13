@@ -202,6 +202,7 @@ export interface ProviderContext {
   cwd: string;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  idempotencyKey?: string;
 }
 
 export interface WebProvider<TConfig> {

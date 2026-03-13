@@ -609,7 +609,7 @@ describe("GeminiProvider research", () => {
         input: "override",
       },
       createConfig(),
-      createContext(),
+      { ...createContext(), idempotencyKey: "stable-key" },
     );
 
     expect(job).toEqual({ id: "research-1" });
@@ -629,7 +629,7 @@ describe("GeminiProvider research", () => {
         agent: "deep-research-pro-preview-12-2025",
         background: true,
       },
-      undefined,
+      { idempotencyKey: "stable-key" },
     );
   });
 

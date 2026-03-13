@@ -126,16 +126,18 @@ export async function runWithExecutionPolicy<T>(
 
     try {
       const result = operation(attemptContext);
-      if (policy.requestTimeoutMs === undefined) {
-        return await result;
-      }
-      const timeoutMessage = `${label} timed out after ${formatDuration(policy.requestTimeoutMs)}.`;
-      return await withTimeout(
+      const timeoutMessage =
+        policy.requestTimeoutMs === undefined
+          ? undefined
+          : `${label} timed out after ${formatDuration(policy.requestTimeoutMs)}.`;
+      return await withAbortAndOptionalTimeout(
         result,
         policy.requestTimeoutMs,
         context.signal,
         timeoutMessage,
-        () => abort(new RequestTimeoutError(timeoutMessage)),
+        timeoutMessage
+          ? () => abort(new RequestTimeoutError(timeoutMessage))
+          : undefined,
       );
     } catch (error) {
       if (!isRetryableError(error) || attempt >= maxAttempts) {
@@ -165,6 +167,9 @@ export async function executeResearchWithLifecycle({
   options,
   context,
   policy,
+  startRetryCount = 0,
+  startRetryNotice,
+  startIdempotencyKey,
   start,
   poll,
 }: {
@@ -174,6 +179,9 @@ export async function executeResearchWithLifecycle({
   options: JsonObject | undefined;
   context: ProviderContext;
   policy: ResearchExecutionPolicy;
+  startRetryCount?: number;
+  startRetryNotice?: string;
+  startIdempotencyKey?: string;
   start: (
     input: string,
     options: JsonObject | undefined,
@@ -208,12 +216,19 @@ export async function executeResearchWithLifecycle({
       );
     } else {
       lifecycleContext.onProgress?.(`Starting ${providerLabel} research`);
+      if (startRetryNotice) {
+        lifecycleContext.onProgress?.(startRetryNotice);
+      }
       const job = await runWithExecutionPolicy(
         `${providerLabel} research start`,
-        (attemptContext) => start(input, providerOptions, attemptContext),
+        (attemptContext) =>
+          start(input, providerOptions, {
+            ...attemptContext,
+            idempotencyKey: startIdempotencyKey,
+          }),
         {
           ...policy,
-          retryCount: 0,
+          retryCount: startRetryCount,
         },
         lifecycleContext,
       );
@@ -417,21 +432,33 @@ function createAttemptContext(context: ProviderContext): {
   };
 }
 
-async function withTimeout<T>(
+async function withAbortAndOptionalTimeout<T>(
   promise: Promise<T>,
-  timeoutMs: number,
+  timeoutMs: number | undefined,
   signal: AbortSignal | undefined,
-  message: string,
+  message: string | undefined,
   onTimeout?: () => void,
 ): Promise<T> {
+  if (timeoutMs === undefined && !signal) {
+    return await promise;
+  }
+
   throwIfAborted(signal);
 
   return await new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      onTimeout?.();
-      cleanup();
-      reject(new RequestTimeoutError(message));
-    }, timeoutMs);
+    const timer =
+      timeoutMs === undefined
+        ? undefined
+        : setTimeout(() => {
+            onTimeout?.();
+            cleanup();
+            reject(
+              new RequestTimeoutError(
+                message ??
+                  `Operation timed out after ${formatDuration(timeoutMs)}.`,
+              ),
+            );
+          }, timeoutMs);
 
     const onAbort = () => {
       cleanup();
@@ -439,7 +466,9 @@ async function withTimeout<T>(
     };
 
     const cleanup = () => {
-      clearTimeout(timer);
+      if (timer) {
+        clearTimeout(timer);
+      }
       signal?.removeEventListener("abort", onAbort);
     };
 
