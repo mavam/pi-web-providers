@@ -1,8 +1,10 @@
 import Perplexity from "@perplexity-ai/perplexity_ai";
 import { resolveConfigValue } from "../config.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   PerplexityProviderConfig,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
@@ -16,9 +18,10 @@ const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 export class PerplexityProvider
   implements WebProvider<PerplexityProviderConfig>
 {
-  readonly id = "perplexity";
+  readonly id: "perplexity" = "perplexity";
   readonly label = "Perplexity";
   readonly docsUrl = "https://docs.perplexity.ai/docs/sdk/overview.md";
+  readonly capabilities = ["search", "answer", "research"] as const;
 
   createTemplate(): PerplexityProviderConfig {
     return {
@@ -29,7 +32,7 @@ export class PerplexityProvider
         research: true,
       },
       apiKey: "PERPLEXITY_API_KEY",
-      defaults: {
+      native: {
         answer: {
           model: DEFAULT_ANSWER_MODEL,
         },
@@ -54,6 +57,58 @@ export class PerplexityProvider
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(
+    request: ProviderOperationRequest,
+    config: PerplexityProviderConfig,
+  ) {
+    switch (request.capability) {
+      case "search":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits: {
+            policyDefaults: config.policy,
+          },
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        };
+      case "answer":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits: {
+            policyDefaults: config.policy,
+          },
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        };
+      case "research":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits: {
+            policyDefaults: config.policy,
+          },
+          execute: (context: ProviderContext) =>
+            this.research(request.input, request.options, config, context),
+        };
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -62,8 +117,9 @@ export class PerplexityProvider
     context: ProviderContext,
   ): Promise<SearchResponse> {
     const client = this.createClient(config);
+    const native = config.native ?? config.defaults;
     const request = {
-      ...asJsonObject(config.defaults?.search),
+      ...(stripLocalExecutionOptions(asJsonObject(native?.search)) ?? {}),
       ...(options ?? {}),
       query,
       max_results: maxResults,
@@ -141,19 +197,20 @@ export class PerplexityProvider
     isResearch = false,
   ): Promise<ProviderToolOutput> {
     const client = this.createClient(config);
-    const defaults = isResearch
-      ? config.defaults?.research
-      : config.defaults?.answer;
+    const native = config.native ?? config.defaults;
+    const defaults =
+      stripLocalExecutionOptions(
+        isResearch
+          ? asJsonObject(native?.research)
+          : asJsonObject(native?.answer),
+      ) ?? {};
     const request = {
-      ...asJsonObject(defaults),
+      ...defaults,
       ...(options ?? {}),
       messages: [{ role: "user", content: input }],
       model:
-        resolveModel(
-          (options ?? {}).model,
-          asJsonObject(defaults).model,
-          fallbackModel,
-        ) ?? fallbackModel,
+        resolveModel((options ?? {}).model, defaults.model, fallbackModel) ??
+        fallbackModel,
       stream: false,
     };
 

@@ -65,10 +65,6 @@ describe("research lifecycle providers", () => {
         },
       });
 
-    const invoke = vi.fn(async () => {
-      throw new Error("generic invoke should not run");
-    });
-
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
@@ -86,13 +82,11 @@ describe("research lifecycle providers", () => {
       onUpdate: undefined,
       options: { pollIntervalMs: 1 },
       input: "Investigate Exa lifecycle polling",
-      invoke,
     });
 
     await vi.advanceTimersByTimeAsync(1);
     const result = await promise;
 
-    expect(invoke).not.toHaveBeenCalled();
     expect(exaCtorMock).toHaveBeenCalledWith("literal-key", undefined);
     expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
     expect(exaResearchGetMock).toHaveBeenCalledTimes(2);
@@ -137,9 +131,6 @@ describe("research lifecycle providers", () => {
       onUpdate: undefined,
       options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
       input: "Investigate Exa lifecycle polling",
-      invoke: async () => {
-        throw new Error("generic invoke should not run");
-      },
     });
 
     await vi.advanceTimersByTimeAsync(4);
@@ -191,9 +182,6 @@ describe("research lifecycle providers", () => {
       onUpdate: undefined,
       options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
       input: "Investigate Exa lifecycle polling",
-      invoke: async () => {
-        throw new Error("generic invoke should not run");
-      },
     });
 
     await vi.advanceTimersByTimeAsync(4);
@@ -231,10 +219,6 @@ describe("research lifecycle providers", () => {
         ],
       });
 
-    const invoke = vi.fn(async () => {
-      throw new Error("generic invoke should not run");
-    });
-
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
@@ -252,13 +236,11 @@ describe("research lifecycle providers", () => {
       onUpdate: undefined,
       options: { pollIntervalMs: 1 },
       input: "Investigate Valyu lifecycle polling",
-      invoke,
     });
 
     await vi.advanceTimersByTimeAsync(1);
     const result = await promise;
 
-    expect(invoke).not.toHaveBeenCalled();
     expect(valyuCtorMock).toHaveBeenCalledWith("literal-key", undefined);
     expect(valyuDeepResearchCreateMock).toHaveBeenCalledTimes(1);
     expect(valyuDeepResearchStatusMock).toHaveBeenCalledTimes(2);

@@ -2,14 +2,15 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
+import { resolveConfigValue, resolveEnvMap } from "../config.js";
 import type {
   CodexProviderConfig,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderStatus,
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { resolveConfigValue, resolveEnvMap } from "../config.js";
 import { trimSnippet } from "./shared.js";
 
 const OUTPUT_SCHEMA = {
@@ -42,9 +43,10 @@ interface CodexOutput {
 }
 
 export class CodexProvider implements WebProvider<CodexProviderConfig> {
-  readonly id = "codex";
+  readonly id: "codex" = "codex";
   readonly label = "Codex";
   readonly docsUrl = "https://github.com/openai/codex/tree/main/sdk/typescript";
+  readonly capabilities = ["search"] as const;
 
   createTemplate(): CodexProviderConfig {
     return {
@@ -52,7 +54,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       tools: {
         search: true,
       },
-      defaults: {
+      native: {
         networkAccessEnabled: true,
         webSearchEnabled: true,
         webSearchMode: "live",
@@ -85,6 +87,27 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       return { available: false, summary: "missing Codex auth" };
     }
     return { available: true, summary: "enabled" };
+  }
+
+  buildPlan(request: ProviderOperationRequest, config: CodexProviderConfig) {
+    if (request.capability !== "search") {
+      return null;
+    }
+
+    return {
+      capability: request.capability,
+      providerId: this.id,
+      providerLabel: this.label,
+      mode: "single" as const,
+      execute: (context: ProviderContext) =>
+        this.search(
+          request.query,
+          request.maxResults,
+          request.options,
+          config,
+          context,
+        ),
+    };
   }
 
   async search(
@@ -157,20 +180,20 @@ function buildCodexSearchThreadOptions(
   options: Record<string, unknown> | undefined,
 ) {
   const runtimeOptions = getCodexSearchRuntimeOptions(options);
+  const native = config.native ?? config.defaults;
 
   return {
-    additionalDirectories: config.defaults?.additionalDirectories,
+    additionalDirectories: native?.additionalDirectories,
     approvalPolicy: "never" as const,
-    model: runtimeOptions.model ?? config.defaults?.model,
+    model: runtimeOptions.model ?? native?.model,
     modelReasoningEffort:
-      runtimeOptions.modelReasoningEffort ??
-      config.defaults?.modelReasoningEffort,
-    networkAccessEnabled: config.defaults?.networkAccessEnabled ?? true,
+      runtimeOptions.modelReasoningEffort ?? native?.modelReasoningEffort,
+    networkAccessEnabled: native?.networkAccessEnabled ?? true,
     sandboxMode: "read-only" as const,
     skipGitRepoCheck: true,
-    webSearchEnabled: config.defaults?.webSearchEnabled ?? true,
+    webSearchEnabled: native?.webSearchEnabled ?? true,
     webSearchMode:
-      runtimeOptions.webSearchMode ?? config.defaults?.webSearchMode ?? "live",
+      runtimeOptions.webSearchMode ?? native?.webSearchMode ?? "live",
     workingDirectory: cwd,
   };
 }

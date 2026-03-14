@@ -10,6 +10,7 @@ import {
 import type {
   ClaudeProviderConfig,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
@@ -78,10 +79,11 @@ interface ClaudeAnswerOutput {
 }
 
 export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
-  readonly id = "claude";
+  readonly id: "claude" = "claude";
   readonly label = "Claude";
   readonly docsUrl =
     "https://github.com/anthropics/claude-agent-sdk-typescript";
+  readonly capabilities = ["search", "answer"] as const;
 
   createTemplate(): ClaudeProviderConfig {
     return {
@@ -112,6 +114,37 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
       return { available: false, summary: "missing Claude auth" };
     }
     return { available: true, summary: "enabled" };
+  }
+
+  buildPlan(request: ProviderOperationRequest, config: ClaudeProviderConfig) {
+    switch (request.capability) {
+      case "search":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        };
+      case "answer":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        };
+      default:
+        return null;
+    }
   }
 
   async search(
@@ -436,7 +469,8 @@ function getClaudeRuntimeOptions(
   config: ClaudeProviderConfig,
   options: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
-  const model = readNonEmptyString(options?.model) ?? config.defaults?.model;
+  const native = config.native ?? config.defaults;
+  const model = readNonEmptyString(options?.model) ?? native?.model;
   const effort = readEnum(options?.effort, ["low", "medium", "high", "max"]);
   const maxTurns = readPositiveInteger(options?.maxTurns);
   const maxThinkingTokens = readNonNegativeInteger(options?.maxThinkingTokens);
@@ -447,11 +481,9 @@ function getClaudeRuntimeOptions(
 
   return {
     ...(model ? { model } : {}),
-    ...((effort ?? config.defaults?.effort)
-      ? { effort: effort ?? config.defaults?.effort }
-      : {}),
-    ...((maxTurns ?? config.defaults?.maxTurns)
-      ? { maxTurns: maxTurns ?? config.defaults?.maxTurns }
+    ...((effort ?? native?.effort) ? { effort: effort ?? native?.effort } : {}),
+    ...((maxTurns ?? native?.maxTurns)
+      ? { maxTurns: maxTurns ?? native?.maxTurns }
       : {}),
     ...(maxThinkingTokens !== undefined ? { maxThinkingTokens } : {}),
     ...(maxBudgetUsd !== undefined ? { maxBudgetUsd } : {}),

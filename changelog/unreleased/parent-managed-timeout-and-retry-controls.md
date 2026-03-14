@@ -32,5 +32,6 @@ Gemini research exceeded 6h. Resume the background job with
 options.resumeId="abc123".
 ```
 
-Defaults for all settings are configurable per provider in
-`~/.pi/agent/web-providers.json`.
+All settings are configurable per provider in
+`~/.pi/agent/web-providers.json`, with provider-native knobs under `native`
+and parent-managed runtime controls under `policy`.

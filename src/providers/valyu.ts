@@ -1,7 +1,9 @@
 import { Valyu } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   ProviderContext,
+  ProviderOperationRequest,
   ProviderResearchJob,
   ProviderResearchPollResult,
   ProviderStatus,
@@ -13,9 +15,10 @@ import type {
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
-  readonly id = "valyu";
+  readonly id: "valyu" = "valyu";
   readonly label = "Valyu";
   readonly docsUrl = "https://docs.valyu.ai/sdk/typescript-sdk";
+  readonly capabilities = ["search", "contents", "answer", "research"] as const;
 
   createTemplate(): ValyuProviderConfig {
     return {
@@ -27,7 +30,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
         research: true,
       },
       apiKey: "VALYU_API_KEY",
-      defaults: {
+      native: {
         searchType: "all",
         responseLength: "short",
       },
@@ -48,6 +51,65 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(request: ProviderOperationRequest, config: ValyuProviderConfig) {
+    const traits = {
+      policyDefaults: config.policy,
+    };
+
+    switch (request.capability) {
+      case "search":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        };
+      case "contents":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.contents(request.urls, request.options, config, context),
+        };
+      case "answer":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        };
+      case "research":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "job" as const,
+          traits,
+          start: (context: ProviderContext) =>
+            this.startResearch(request.input, request.options, config, context),
+          poll: (id: string, context: ProviderContext) =>
+            this.pollResearch(id, request.options, config, context),
+        };
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -61,8 +123,9 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     }
 
     const client = new Valyu(apiKey, config.baseUrl);
+    const native = config.native ?? config.defaults;
     const options = {
-      ...asJsonObject(config.defaults),
+      ...(stripLocalExecutionOptions(asJsonObject(native)) ?? {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };

@@ -11,6 +11,7 @@ export const PROVIDER_IDS = [
 ] as const;
 
 export type ProviderId = (typeof PROVIDER_IDS)[number];
+export type ProviderCapability = "search" | "contents" | "answer" | "research";
 
 export type JsonValue =
   | string
@@ -66,6 +67,40 @@ export interface ProviderToolDetails {
   itemCount?: number;
 }
 
+export interface ClaudeProviderNativeConfig {
+  model?: string;
+  effort?: "low" | "medium" | "high" | "max";
+  maxTurns?: number;
+}
+
+export interface CodexProviderNativeConfig {
+  model?: string;
+  modelReasoningEffort?: ModelReasoningEffort;
+  networkAccessEnabled?: boolean;
+  webSearchMode?: WebSearchMode;
+  webSearchEnabled?: boolean;
+  additionalDirectories?: string[];
+}
+
+export interface GeminiProviderNativeConfig {
+  apiVersion?: string;
+  searchModel?: string;
+  contentsModel?: string;
+  answerModel?: string;
+  researchAgent?: string;
+}
+
+export interface PerplexityProviderNativeConfig {
+  search?: JsonObject;
+  answer?: JsonObject;
+  research?: JsonObject;
+}
+
+export interface ParallelProviderNativeConfig {
+  search?: JsonObject;
+  extract?: JsonObject;
+}
+
 export interface ClaudeProviderConfig {
   enabled?: boolean;
   tools?: {
@@ -73,11 +108,9 @@ export interface ClaudeProviderConfig {
     answer?: boolean;
   };
   pathToClaudeCodeExecutable?: string;
-  defaults?: {
-    model?: string;
-    effort?: "low" | "medium" | "high" | "max";
-    maxTurns?: number;
-  };
+  native?: ClaudeProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: ClaudeProviderNativeConfig;
 }
 
 export interface CodexProviderConfig {
@@ -90,14 +123,9 @@ export interface CodexProviderConfig {
   apiKey?: string;
   env?: Record<string, string>;
   config?: JsonObject;
-  defaults?: {
-    model?: string;
-    modelReasoningEffort?: ModelReasoningEffort;
-    networkAccessEnabled?: boolean;
-    webSearchMode?: WebSearchMode;
-    webSearchEnabled?: boolean;
-    additionalDirectories?: string[];
-  };
+  native?: CodexProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: CodexProviderNativeConfig;
 }
 
 export interface ExaProviderConfig {
@@ -110,6 +138,8 @@ export interface ExaProviderConfig {
   };
   apiKey?: string;
   baseUrl?: string;
+  native?: JsonObject;
+  policy?: ExecutionPolicyDefaults;
   defaults?: JsonObject;
 }
 
@@ -122,19 +152,9 @@ export interface GeminiProviderConfig {
     research?: boolean;
   };
   apiKey?: string;
-  defaults?: {
-    apiVersion?: string;
-    searchModel?: string;
-    contentsModel?: string;
-    answerModel?: string;
-    researchAgent?: string;
-    requestTimeoutMs?: number;
-    retryCount?: number;
-    retryDelayMs?: number;
-    researchPollIntervalMs?: number;
-    researchTimeoutMs?: number;
-    researchMaxConsecutivePollErrors?: number;
-  };
+  native?: GeminiProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: GeminiProviderNativeConfig & ExecutionPolicyDefaults;
 }
 
 export interface PerplexityProviderConfig {
@@ -146,11 +166,9 @@ export interface PerplexityProviderConfig {
   };
   apiKey?: string;
   baseUrl?: string;
-  defaults?: {
-    search?: JsonObject;
-    answer?: JsonObject;
-    research?: JsonObject;
-  };
+  native?: PerplexityProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: PerplexityProviderNativeConfig;
 }
 
 export interface ParallelProviderConfig {
@@ -161,10 +179,9 @@ export interface ParallelProviderConfig {
   };
   apiKey?: string;
   baseUrl?: string;
-  defaults?: {
-    search?: JsonObject;
-    extract?: JsonObject;
-  };
+  native?: ParallelProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: ParallelProviderNativeConfig;
 }
 
 export interface ValyuProviderConfig {
@@ -177,6 +194,8 @@ export interface ValyuProviderConfig {
   };
   apiKey?: string;
   baseUrl?: string;
+  native?: JsonObject;
+  policy?: ExecutionPolicyDefaults;
   defaults?: JsonObject;
 }
 
@@ -205,44 +224,88 @@ export interface ProviderContext {
   idempotencyKey?: string;
 }
 
+export interface ExecutionPolicyDefaults {
+  requestTimeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  researchPollIntervalMs?: number;
+  researchTimeoutMs?: number;
+  researchMaxConsecutivePollErrors?: number;
+}
+
+export interface SearchOperationRequest {
+  capability: "search";
+  query: string;
+  maxResults: number;
+  options?: JsonObject;
+}
+
+export interface ContentsOperationRequest {
+  capability: "contents";
+  urls: string[];
+  options?: JsonObject;
+}
+
+export interface AnswerOperationRequest {
+  capability: "answer";
+  query: string;
+  options?: JsonObject;
+}
+
+export interface ResearchOperationRequest {
+  capability: "research";
+  input: string;
+  options?: JsonObject;
+}
+
+export type ProviderOperationRequest =
+  | SearchOperationRequest
+  | ContentsOperationRequest
+  | AnswerOperationRequest
+  | ResearchOperationRequest;
+
+export interface ProviderPlanTraits {
+  policyDefaults?: ExecutionPolicyDefaults;
+  supportsIdempotentStartRetries?: boolean;
+  supportsPollCancellation?: boolean;
+}
+
+export interface SingleProviderOperationPlan<TResult> {
+  capability: ProviderCapability;
+  providerId: ProviderId;
+  providerLabel: string;
+  mode: "single";
+  traits?: ProviderPlanTraits;
+  execute: (context: ProviderContext) => Promise<TResult>;
+}
+
+export interface JobProviderOperationPlan {
+  capability: "research";
+  providerId: ProviderId;
+  providerLabel: string;
+  mode: "job";
+  traits?: ProviderPlanTraits;
+  start: (context: ProviderContext) => Promise<ProviderResearchJob>;
+  poll: (
+    id: string,
+    context: ProviderContext,
+  ) => Promise<ProviderResearchPollResult>;
+}
+
+export type ProviderOperationPlan<
+  TResult = SearchResponse | ProviderToolOutput,
+> = SingleProviderOperationPlan<TResult> | JobProviderOperationPlan;
+
 export interface WebProvider<TConfig> {
   readonly id: ProviderId;
   readonly label: string;
   readonly docsUrl: string;
-  readonly supportsIdempotentResearchStartRetries?: boolean;
-  readonly supportsResearchPollingCancellation?: boolean;
+  readonly capabilities: readonly ProviderCapability[];
 
   createTemplate(): TConfig;
   getStatus(config: TConfig | undefined, cwd: string): ProviderStatus;
-  search?(
-    query: string,
-    maxResults: number,
-    options: JsonObject | undefined,
+  buildPlan(
+    request: ProviderOperationRequest,
     config: TConfig,
-    context: ProviderContext,
-  ): Promise<SearchResponse>;
-  contents?(
-    urls: string[],
-    options: JsonObject | undefined,
-    config: TConfig,
-    context: ProviderContext,
-  ): Promise<ProviderToolOutput>;
-  answer?(
-    query: string,
-    options: JsonObject | undefined,
-    config: TConfig,
-    context: ProviderContext,
-  ): Promise<ProviderToolOutput>;
-  startResearch?(
-    input: string,
-    options: JsonObject | undefined,
-    config: TConfig,
-    context: ProviderContext,
-  ): Promise<ProviderResearchJob>;
-  pollResearch?(
-    id: string,
-    options: JsonObject | undefined,
-    config: TConfig,
-    context: ProviderContext,
-  ): Promise<ProviderResearchPollResult>;
+  ): ProviderOperationPlan | null;
 }

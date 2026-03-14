@@ -40,7 +40,13 @@ describe("execution policy", () => {
       },
     };
 
-    expect(resolveRequestExecutionPolicy("gemini", config, undefined)).toEqual({
+    expect(
+      resolveRequestExecutionPolicy(undefined, {
+        requestTimeoutMs: config.defaults?.requestTimeoutMs,
+        retryCount: config.defaults?.retryCount,
+        retryDelayMs: config.defaults?.retryDelayMs,
+      }),
+    ).toEqual({
       requestTimeoutMs: 45000,
       retryCount: 5,
       retryDelayMs: 4000,
@@ -150,18 +156,12 @@ describe("execution policy", () => {
       const progress: string[] = [];
       const startContexts: ProviderContext[] = [];
       const start = vi
-        .fn<
-          (
-            input: string,
-            options: JsonObject | undefined,
-            context: ProviderContext,
-          ) => Promise<{ id: string }>
-        >()
-        .mockImplementationOnce(async (_input, _options, context) => {
+        .fn<(context: ProviderContext) => Promise<{ id: string }>>()
+        .mockImplementationOnce(async (context) => {
           startContexts.push(context);
           throw new Error("fetch failed");
         })
-        .mockImplementationOnce(async (_input, _options, context) => {
+        .mockImplementationOnce(async (context) => {
           startContexts.push(context);
           return { id: "research-123" };
         });
@@ -177,8 +177,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "Investigate Tenzir use cases",
-        options: { retryCount: 1 },
         context: createContext(progress),
         policy: {
           requestTimeoutMs: undefined,
@@ -216,18 +214,12 @@ describe("execution policy", () => {
       const progress: string[] = [];
       const startContexts: ProviderContext[] = [];
       const start = vi
-        .fn<
-          (
-            input: string,
-            options: JsonObject | undefined,
-            context: ProviderContext,
-          ) => Promise<{ id: string }>
-        >()
-        .mockImplementationOnce(async (_input, _options, context) => {
+        .fn<(context: ProviderContext) => Promise<{ id: string }>>()
+        .mockImplementationOnce(async (context) => {
           startContexts.push(context);
           return await new Promise<{ id: string }>(() => {});
         })
-        .mockImplementationOnce(async (_input, _options, context) => {
+        .mockImplementationOnce(async (context) => {
           startContexts.push(context);
           return { id: "research-123" };
         });
@@ -243,8 +235,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "Investigate Tenzir use cases",
-        options: { requestTimeoutMs: 10, retryCount: 1 },
         context: createContext(progress),
         policy: {
           requestTimeoutMs: 10,
@@ -296,8 +286,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Exa",
         providerId: "exa",
-        input: "Investigate Exa lifecycle polling",
-        options: { timeoutMs: 10 },
         context: createContext([]),
         policy: {
           requestTimeoutMs: undefined,
@@ -335,8 +323,6 @@ describe("execution policy", () => {
       executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "Investigate Tenzir use cases",
-        options: { resumeId: "research-123" },
         context: createContext([]),
         policy: {
           requestTimeoutMs: undefined,
@@ -359,8 +345,6 @@ describe("execution policy", () => {
       executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "Investigate Tenzir use cases",
-        options: { resumeId: "research-123" },
         context: createContext([]),
         policy: {
           requestTimeoutMs: undefined,
@@ -394,8 +378,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "ignored while resuming",
-        options: { resumeId: "research-123" },
         context: createContext([]),
         policy: {
           requestTimeoutMs: undefined,
@@ -432,8 +414,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "ignored while resuming",
-        options: { resumeId: "research-123" },
         context: createContext([]),
         policy: {
           requestTimeoutMs: undefined,
@@ -479,8 +459,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "ignored while resuming",
-        options: { resumeId: "research-123" },
         context: createContext(progress),
         policy: {
           requestTimeoutMs: 10,
@@ -528,8 +506,6 @@ describe("execution policy", () => {
       const promise = executeResearchWithLifecycle({
         providerLabel: "Gemini",
         providerId: "gemini",
-        input: "ignored while resuming",
-        options: { resumeId: "research-123" },
         context: createContext(progress),
         policy: {
           requestTimeoutMs: undefined,
@@ -550,7 +526,6 @@ describe("execution policy", () => {
       expect(result.text).toBe("done");
       expect(poll).toHaveBeenCalledWith(
         "research-123",
-        undefined,
         expect.objectContaining({ cwd: process.cwd() }),
       );
       expect(progress).toContain("Resuming Gemini research: research-123");

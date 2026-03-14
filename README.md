@@ -115,7 +115,8 @@ Investigate a topic across web sources and produce a longer report.
 `options` are provider-native and provider-specific. Equivalent concepts can
 use different field names across SDKs, for example Perplexity uses `country`,
 Exa uses `userLocation`, and Valyu uses `countryCode`. Runtime `options`
-override provider defaults, but managed tool inputs and tool wiring stay fixed.
+override provider-native config, but managed tool inputs and tool wiring stay
+fixed.
 
 The extension also accepts a few local control fields for robustness:
 `requestTimeoutMs`, `retryCount`, and `retryDelayMs` on all tools, plus
@@ -210,6 +211,8 @@ summarises which capabilities each provider exposes:
   for the selected provider and `enabled: false` for the others
 - Each provider can also enable or disable its individual tools through a `tools`
   block
+- Provider configuration is split into `native` settings that are forwarded to
+  the SDK and `policy` settings that are enforced by the extension runtime
 - Managed tools are registered from available provider capabilities, but the
   active tool set can still be narrower if you removed a tool from the session
 - If no provider is explicitly enabled for search, the extension falls back to
@@ -223,6 +226,8 @@ summarises which capabilities each provider exposes:
   - literal strings
   - environment variable names such as `EXA_API_KEY`
   - shell commands prefixed with `!`
+- Legacy `defaults` blocks are still accepted when reading config files, but the
+  extension now writes split `native` and `policy` blocks
 
 Example:
 
@@ -242,9 +247,14 @@ Example:
       "tools": {
         "search": true
       },
-      "defaults": {
+      "native": {
         "webSearchMode": "live",
         "networkAccessEnabled": true
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "exa": {
@@ -256,11 +266,19 @@ Example:
         "research": true
       },
       "apiKey": "EXA_API_KEY",
-      "defaults": {
+      "native": {
         "type": "auto",
         "contents": {
           "text": true
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 3
       }
     },
     "gemini": {
@@ -272,11 +290,13 @@ Example:
         "research": true
       },
       "apiKey": "GOOGLE_API_KEY",
-      "defaults": {
+      "native": {
         "searchModel": "gemini-2.5-flash",
         "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
-        "researchAgent": "deep-research-pro-preview-12-2025",
+        "researchAgent": "deep-research-pro-preview-12-2025"
+      },
+      "policy": {
         "requestTimeoutMs": 30000,
         "retryCount": 3,
         "retryDelayMs": 2000,
@@ -293,7 +313,7 @@ Example:
         "research": true
       },
       "apiKey": "PERPLEXITY_API_KEY",
-      "defaults": {
+      "native": {
         "search": {
           "country": "US"
         },
@@ -303,6 +323,11 @@ Example:
         "research": {
           "model": "sonar-deep-research"
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "parallel": {
@@ -312,7 +337,7 @@ Example:
         "contents": true
       },
       "apiKey": "PARALLEL_API_KEY",
-      "defaults": {
+      "native": {
         "search": {
           "mode": "agentic"
         },
@@ -320,6 +345,11 @@ Example:
           "excerpts": true,
           "full_content": false
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "valyu": {
@@ -331,9 +361,17 @@ Example:
         "research": true
       },
       "apiKey": "VALYU_API_KEY",
-      "defaults": {
+      "native": {
         "searchType": "all",
         "responseLength": "short"
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 3
       }
     }
   }

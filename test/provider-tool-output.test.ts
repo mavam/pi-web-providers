@@ -35,15 +35,22 @@ describe("provider tool output", () => {
       signal: undefined,
       onUpdate: undefined,
       options: undefined,
-      invoke: async () => ({
-        provider: "exa",
-        text: Array.from(
-          { length: 2500 },
-          (_, index) => `line ${index + 1}: ${"x".repeat(40)}`,
-        ).join("\n"),
-        summary: "Large contents via Exa",
-        itemCount: 2500,
-      }),
+      urls: ["https://example.com"],
+      planOverride: {
+        capability: "contents",
+        providerId: "exa",
+        providerLabel: "Exa",
+        mode: "single",
+        execute: async () => ({
+          provider: "exa",
+          text: Array.from(
+            { length: 2500 },
+            (_, index) => `line ${index + 1}: ${"x".repeat(40)}`,
+          ).join("\n"),
+          summary: "Large contents via Exa",
+          itemCount: 2500,
+        }),
+      },
     });
 
     const text = result.content[0]?.text ?? "";
@@ -85,19 +92,20 @@ describe("provider tool output", () => {
         },
         options: undefined,
         input: "Investigate the topic",
-        invoke: async (
-          _provider,
-          _providerConfig,
-          _providerOptions,
-          context,
-        ) => {
-          context.onProgress?.("Starting research");
-          await new Promise((resolve) => setTimeout(resolve, 20000));
-          return {
-            provider: "perplexity",
-            text: "Research complete",
-            summary: "Research via Perplexity",
-          };
+        planOverride: {
+          capability: "research",
+          providerId: "perplexity",
+          providerLabel: "Perplexity",
+          mode: "single",
+          execute: async (context) => {
+            context.onProgress?.("Starting research");
+            await new Promise((resolve) => setTimeout(resolve, 20000));
+            return {
+              provider: "perplexity",
+              text: "Research complete",
+              summary: "Research via Perplexity",
+            };
+          },
         },
       });
 
@@ -138,10 +146,6 @@ describe("provider tool output", () => {
           timeoutMs: 60000,
         },
         input: "Investigate the topic",
-        invoke: async () => ({
-          provider: "perplexity",
-          text: "done",
-        }),
       }),
     ).rejects.toThrow(
       "Perplexity research runs synchronously and does not support timeoutMs, resumeId. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
@@ -171,10 +175,6 @@ describe("provider tool output", () => {
           resumeInteractionId: "job-1",
         },
         input: "Investigate the topic",
-        invoke: async () => ({
-          provider: "gemini",
-          text: "done",
-        }),
       }),
     ).rejects.toThrow(
       "resumeInteractionId is not supported. Use resumeId instead.",

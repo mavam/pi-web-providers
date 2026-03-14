@@ -1,8 +1,10 @@
 import { Exa } from "exa-js";
 import { resolveConfigValue } from "../config.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   ExaProviderConfig,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderResearchJob,
   ProviderResearchPollResult,
   ProviderStatus,
@@ -13,9 +15,10 @@ import type {
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ExaProvider implements WebProvider<ExaProviderConfig> {
-  readonly id = "exa";
+  readonly id: "exa" = "exa";
   readonly label = "Exa";
   readonly docsUrl = "https://exa.ai/docs/sdks/typescript-sdk-specification";
+  readonly capabilities = ["search", "contents", "answer", "research"] as const;
 
   createTemplate(): ExaProviderConfig {
     return {
@@ -27,7 +30,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
         research: true,
       },
       apiKey: "EXA_API_KEY",
-      defaults: {
+      native: {
         type: "auto",
         contents: {
           text: true,
@@ -50,6 +53,65 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(request: ProviderOperationRequest, config: ExaProviderConfig) {
+    const traits = {
+      policyDefaults: config.policy,
+    };
+
+    switch (request.capability) {
+      case "search":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        };
+      case "contents":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.contents(request.urls, request.options, config, context),
+        };
+      case "answer":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        };
+      case "research":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "job" as const,
+          traits,
+          start: (context: ProviderContext) =>
+            this.startResearch(request.input, request.options, config, context),
+          poll: (id: string, context: ProviderContext) =>
+            this.pollResearch(id, request.options, config, context),
+        };
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -63,8 +125,9 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     }
 
     const client = new Exa(apiKey, config.baseUrl);
+    const native = config.native ?? config.defaults;
     const options = {
-      ...asJsonObject(config.defaults),
+      ...(stripLocalExecutionOptions(asJsonObject(native)) ?? {}),
       ...(searchOptions ?? {}),
       numResults: maxResults,
     };

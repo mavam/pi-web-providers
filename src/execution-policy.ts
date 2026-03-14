@@ -1,5 +1,5 @@
 import type {
-  GeminiProviderConfig,
+  ExecutionPolicyDefaults,
   JsonObject,
   ProviderContext,
   ProviderId,
@@ -34,7 +34,7 @@ class NonResumableResearchError extends Error {
 }
 
 export function stripLocalExecutionOptions(
-  options: JsonObject | undefined,
+  options: Record<string, unknown> | JsonObject | undefined,
 ): JsonObject | undefined {
   if (!options) {
     return undefined;
@@ -51,55 +51,66 @@ export function stripLocalExecutionOptions(
     ...rest
   } = options;
 
-  return Object.keys(rest).length > 0 ? rest : undefined;
+  return Object.keys(rest).length > 0 ? (rest as JsonObject) : undefined;
+}
+
+export function extractExecutionPolicyDefaults(
+  options: Record<string, unknown> | JsonObject | undefined,
+): ExecutionPolicyDefaults | undefined {
+  if (!options) {
+    return undefined;
+  }
+
+  const defaults: ExecutionPolicyDefaults = {
+    requestTimeoutMs: readPositiveInteger(options.requestTimeoutMs),
+    retryCount: readNonNegativeInteger(options.retryCount),
+    retryDelayMs: readPositiveInteger(options.retryDelayMs),
+    researchPollIntervalMs: readPositiveInteger(options.pollIntervalMs),
+    researchTimeoutMs: readPositiveInteger(options.timeoutMs),
+    researchMaxConsecutivePollErrors: readPositiveInteger(
+      options.maxConsecutivePollErrors,
+    ),
+  };
+
+  return Object.values(defaults).some((value) => value !== undefined)
+    ? defaults
+    : undefined;
 }
 
 export function resolveRequestExecutionPolicy(
-  providerId: ProviderId,
-  providerConfig: unknown,
   options: JsonObject | undefined,
+  defaults: ExecutionPolicyDefaults | undefined,
 ): RequestExecutionPolicy {
-  const geminiDefaults = getGeminiDefaults(providerId, providerConfig);
-
   return {
     requestTimeoutMs:
       readPositiveInteger(options?.requestTimeoutMs) ??
-      geminiDefaults?.requestTimeoutMs,
+      defaults?.requestTimeoutMs,
     retryCount:
-      readNonNegativeInteger(options?.retryCount) ??
-      geminiDefaults?.retryCount ??
-      0,
+      readNonNegativeInteger(options?.retryCount) ?? defaults?.retryCount ?? 0,
     retryDelayMs:
       readPositiveInteger(options?.retryDelayMs) ??
-      geminiDefaults?.retryDelayMs ??
+      defaults?.retryDelayMs ??
       2000,
   };
 }
 
 export function resolveResearchExecutionPolicy(
-  providerId: ProviderId,
-  providerConfig: unknown,
   options: JsonObject | undefined,
+  defaults: ExecutionPolicyDefaults | undefined,
 ): ResearchExecutionPolicy {
-  const request = resolveRequestExecutionPolicy(
-    providerId,
-    providerConfig,
-    options,
-  );
-  const geminiDefaults = getGeminiDefaults(providerId, providerConfig);
+  const request = resolveRequestExecutionPolicy(options, defaults);
 
   return {
     ...request,
     pollIntervalMs:
       readPositiveInteger(options?.pollIntervalMs) ??
-      geminiDefaults?.researchPollIntervalMs ??
+      defaults?.researchPollIntervalMs ??
       DEFAULT_RESEARCH_POLL_INTERVAL_MS,
     timeoutMs:
-      readPositiveInteger(options?.timeoutMs) ??
-      geminiDefaults?.researchTimeoutMs,
+      readPositiveInteger(options?.timeoutMs) ?? defaults?.researchTimeoutMs,
     maxConsecutivePollErrors:
       readPositiveInteger(options?.maxConsecutivePollErrors) ??
-      geminiDefaults?.researchMaxConsecutivePollErrors ??
+      defaults?.researchMaxConsecutivePollErrors ??
       3,
     resumeId: readNonEmptyString(options?.resumeId),
   };
@@ -161,8 +172,6 @@ export async function runWithExecutionPolicy<T>(
 export async function executeResearchWithLifecycle({
   providerLabel,
   providerId,
-  input,
-  options,
   context,
   policy,
   startRetryCount = 0,
@@ -177,8 +186,6 @@ export async function executeResearchWithLifecycle({
 }: {
   providerLabel: string;
   providerId: ProviderId;
-  input: string;
-  options: JsonObject | undefined;
   context: ProviderContext;
   policy: ResearchExecutionPolicy;
   startRetryCount?: number;
@@ -188,18 +195,12 @@ export async function executeResearchWithLifecycle({
   startRequestTimeoutMs?: number | null;
   pollRequestTimeoutMs?: number | null;
   deferDeadlineUntilStarted?: boolean;
-  start: (
-    input: string,
-    options: JsonObject | undefined,
-    context: ProviderContext,
-  ) => Promise<ProviderResearchJob>;
+  start: (context: ProviderContext) => Promise<ProviderResearchJob>;
   poll: (
     id: string,
-    options: JsonObject | undefined,
     context: ProviderContext,
   ) => Promise<ProviderResearchPollResult>;
 }): Promise<ProviderToolOutput> {
-  const providerOptions = stripLocalExecutionOptions(options);
   const effectiveStartRequestTimeoutMs =
     startRequestTimeoutMs === undefined
       ? policy.requestTimeoutMs
@@ -255,7 +256,7 @@ export async function executeResearchWithLifecycle({
       const job = await runWithExecutionPolicy(
         `${providerLabel} research start`,
         (attemptContext) =>
-          start(input, providerOptions, {
+          start({
             ...attemptContext,
             idempotencyKey: startIdempotencyKey,
           }),
@@ -291,7 +292,7 @@ export async function executeResearchWithLifecycle({
       try {
         const result = await runWithExecutionPolicy(
           `${providerLabel} research poll`,
-          (attemptContext) => poll(jobId!, providerOptions, attemptContext),
+          (attemptContext) => poll(jobId!, attemptContext),
           {
             ...policy,
             requestTimeoutMs: effectivePollRequestTimeoutMs,
@@ -609,17 +610,6 @@ function buildResumeError(error: string | unknown, jobId: string): Error {
   return new Error(
     `${message} Resume the background job with options.resumeId=${JSON.stringify(jobId)}.`,
   );
-}
-
-function getGeminiDefaults(
-  providerId: ProviderId,
-  providerConfig: unknown,
-): GeminiProviderConfig["defaults"] | undefined {
-  if (providerId !== "gemini") {
-    return undefined;
-  }
-
-  return (providerConfig as GeminiProviderConfig | undefined)?.defaults;
 }
 
 function readPositiveInteger(value: unknown): number | undefined {

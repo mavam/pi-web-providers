@@ -4,6 +4,7 @@ import type {
   GeminiProviderConfig,
   JsonObject,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderResearchJob,
   ProviderResearchPollResult,
   ProviderStatus,
@@ -24,11 +25,10 @@ const DEFAULT_RESEARCH_TIMEOUT_MS = 21600000;
 const DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS = 10;
 
 export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
-  readonly id = "gemini";
+  readonly id: "gemini" = "gemini";
   readonly label = "Gemini";
   readonly docsUrl = "https://github.com/googleapis/js-genai";
-  readonly supportsIdempotentResearchStartRetries = true;
-  readonly supportsResearchPollingCancellation = true;
+  readonly capabilities = ["search", "contents", "answer", "research"] as const;
 
   createTemplate(): GeminiProviderConfig {
     return {
@@ -40,11 +40,13 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         research: true,
       },
       apiKey: "GOOGLE_API_KEY",
-      defaults: {
+      native: {
         searchModel: DEFAULT_SEARCH_MODEL,
         contentsModel: DEFAULT_CONTENTS_MODEL,
         answerModel: DEFAULT_ANSWER_MODEL,
         researchAgent: DEFAULT_RESEARCH_AGENT,
+      },
+      policy: {
         requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
         retryCount: DEFAULT_RETRY_COUNT,
         retryDelayMs: DEFAULT_RETRY_DELAY_MS,
@@ -70,6 +72,69 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(request: ProviderOperationRequest, config: GeminiProviderConfig) {
+    const traits = {
+      policyDefaults: getGeminiExecutionPolicyDefaults(config),
+    };
+
+    switch (request.capability) {
+      case "search":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        };
+      case "contents":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.contents(request.urls, request.options, config, context),
+        };
+      case "answer":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "single" as const,
+          traits,
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        };
+      case "research":
+        return {
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          mode: "job" as const,
+          traits: {
+            ...traits,
+            supportsIdempotentStartRetries: true,
+            supportsPollCancellation: true,
+          },
+          start: (context: ProviderContext) =>
+            this.startResearch(request.input, request.options, config, context),
+          poll: (id: string, context: ProviderContext) =>
+            this.pollResearch(id, request.options, config, context),
+        };
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -78,9 +143,10 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     context: ProviderContext,
   ): Promise<SearchResponse> {
     const ai = this.createClient(config);
+    const native = getGeminiNativeConfig(config);
     const request = buildGeminiSearchRequest(
       query,
-      config.defaults?.searchModel ?? DEFAULT_SEARCH_MODEL,
+      native?.searchModel ?? DEFAULT_SEARCH_MODEL,
       options,
     );
 
@@ -126,8 +192,9 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     );
 
     const urlList = urls.map((url) => `- ${url}`).join("\n");
+    const native = getGeminiNativeConfig(config);
     const request = buildGeminiGenerateContentRequest({
-      defaultModel: config.defaults?.contentsModel ?? DEFAULT_CONTENTS_MODEL,
+      defaultModel: native?.contentsModel ?? DEFAULT_CONTENTS_MODEL,
       prompt:
         `Extract the main textual content from each of the following URLs. ` +
         `For each URL, return the page title followed by the cleaned body text. ` +
@@ -186,8 +253,9 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     context: ProviderContext,
   ): Promise<ProviderToolOutput> {
     const ai = this.createClient(config);
+    const native = getGeminiNativeConfig(config);
     const request = buildGeminiGenerateContentRequest({
-      defaultModel: config.defaults?.answerModel ?? DEFAULT_ANSWER_MODEL,
+      defaultModel: native?.answerModel ?? DEFAULT_ANSWER_MODEL,
       prompt: query,
       options,
       toolConfig: { googleSearch: {} },
@@ -237,7 +305,9 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       {
         ...requestOptions,
         input,
-        agent: config.defaults?.researchAgent ?? DEFAULT_RESEARCH_AGENT,
+        agent:
+          getGeminiNativeConfig(config)?.researchAgent ??
+          DEFAULT_RESEARCH_AGENT,
         background: true,
       },
       buildGeminiRequestOptions(context.signal, context.idempotencyKey),
@@ -296,7 +366,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
 
     return new GoogleGenAI({
       apiKey,
-      apiVersion: config.defaults?.apiVersion,
+      apiVersion: getGeminiNativeConfig(config)?.apiVersion,
     });
   }
 }
@@ -698,6 +768,26 @@ function stripToolChoice(
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getGeminiNativeConfig(config: GeminiProviderConfig) {
+  return config.native ?? config.defaults;
+}
+
+function getGeminiExecutionPolicyDefaults(config: GeminiProviderConfig) {
+  if (config.policy) {
+    return config.policy;
+  }
+
+  return {
+    requestTimeoutMs: config.defaults?.requestTimeoutMs,
+    retryCount: config.defaults?.retryCount,
+    retryDelayMs: config.defaults?.retryDelayMs,
+    researchPollIntervalMs: config.defaults?.researchPollIntervalMs,
+    researchTimeoutMs: config.defaults?.researchTimeoutMs,
+    researchMaxConsecutivePollErrors:
+      config.defaults?.researchMaxConsecutivePollErrors,
+  };
 }
 
 function readNonEmptyString(value: unknown): string | undefined {
