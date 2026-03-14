@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
+import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   CodexProviderConfig,
   ProviderContext,
@@ -94,11 +95,11 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       return null;
     }
 
-    return {
+    return createSingleOperationPlan({
+      config,
       capability: request.capability,
       providerId: this.id,
       providerLabel: this.label,
-      mode: "single" as const,
       execute: (context: ProviderContext) =>
         this.search(
           request.query,
@@ -107,7 +108,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
           config,
           context,
         ),
-    };
+    });
   }
 
   async search(

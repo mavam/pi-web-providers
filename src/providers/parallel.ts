@@ -1,6 +1,7 @@
 import Parallel from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   ParallelProviderConfig,
   ProviderContext,
@@ -55,14 +56,11 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ParallelProviderConfig) {
     switch (request.capability) {
       case "search":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits: {
-            policyDefaults: config.policy,
-          },
           execute: (context: ProviderContext) =>
             this.search(
               request.query,
@@ -71,19 +69,16 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
               config,
               context,
             ),
-        };
+        });
       case "contents":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits: {
-            policyDefaults: config.policy,
-          },
           execute: (context: ProviderContext) =>
             this.contents(request.urls, request.options, config, context),
-        };
+        });
       default:
         return null;
     }

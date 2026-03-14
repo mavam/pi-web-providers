@@ -1,6 +1,7 @@
 import Perplexity from "@perplexity-ai/perplexity_ai";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   PerplexityProviderConfig,
   ProviderContext,
@@ -63,14 +64,11 @@ export class PerplexityProvider
   ) {
     switch (request.capability) {
       case "search":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits: {
-            policyDefaults: config.policy,
-          },
           execute: (context: ProviderContext) =>
             this.search(
               request.query,
@@ -79,31 +77,25 @@ export class PerplexityProvider
               config,
               context,
             ),
-        };
+        });
       case "answer":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits: {
-            policyDefaults: config.policy,
-          },
           execute: (context: ProviderContext) =>
             this.answer(request.query, request.options, config, context),
-        };
+        });
       case "research":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits: {
-            policyDefaults: config.policy,
-          },
           execute: (context: ProviderContext) =>
             this.research(request.input, request.options, config, context),
-        };
+        });
       default:
         return null;
     }

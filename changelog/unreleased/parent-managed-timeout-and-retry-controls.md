@@ -7,8 +7,9 @@ authors:
 created: 2026-03-13T16:14:46.000000Z
 ---
 
-All web tools now support per-call timeout, retry, and backoff settings through
-the `options` object:
+Web tools now support parent-managed retry and backoff settings through the
+`options` object, plus per-call timeouts where the selected provider lifecycle
+can safely enforce them:
 
 - `requestTimeoutMs` — per-request timeout
 - `retryCount` — number of retries on transient errors (429, 5xx, network
@@ -23,6 +24,12 @@ The `web_research` tool adds controls for long-running investigations:
 - `maxConsecutivePollErrors` — consecutive poll failures to tolerate before
   aborting
 - `resumeId` — resume a previously timed-out research job by its ID
+
+Perplexity research remains synchronous, so it only supports
+`requestTimeoutMs`, `retryCount`, and `retryDelayMs`. Exa and Valyu research
+support retries, polling, deadlines, and resume IDs, but reject
+`requestTimeoutMs` because their current SDK lifecycles do not safely support
+per-request local timeouts.
 
 When a research job times out, the error message includes the job ID so you can
 pick up where it left off:

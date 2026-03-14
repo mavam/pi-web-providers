@@ -1,5 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { resolveConfigValue } from "../config.js";
+import {
+  createResearchJobPlan,
+  createSingleOperationPlan,
+} from "../provider-plans.js";
 import type {
   GeminiProviderConfig,
   JsonObject,
@@ -73,18 +77,17 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   }
 
   buildPlan(request: ProviderOperationRequest, config: GeminiProviderConfig) {
-    const traits = {
-      policyDefaults: getGeminiExecutionPolicyDefaults(config),
+    const planConfig = {
+      policy: getGeminiExecutionPolicyDefaults(config),
     };
 
     switch (request.capability) {
       case "search":
-        return {
+        return createSingleOperationPlan({
+          config: planConfig,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.search(
               request.query,
@@ -93,43 +96,42 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
               config,
               context,
             ),
-        };
+        });
       case "contents":
-        return {
+        return createSingleOperationPlan({
+          config: planConfig,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.contents(request.urls, request.options, config, context),
-        };
+        });
       case "answer":
-        return {
+        return createSingleOperationPlan({
+          config: planConfig,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.answer(request.query, request.options, config, context),
-        };
+        });
       case "research":
-        return {
+        return createResearchJobPlan({
+          config: planConfig,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "job" as const,
           traits: {
-            ...traits,
-            supportsIdempotentStartRetries: true,
-            supportsPollCancellation: true,
+            researchLifecycle: {
+              supportsStartRetries: true,
+              supportsRequestTimeouts: true,
+            },
           },
           start: (context: ProviderContext) =>
             this.startResearch(request.input, request.options, config, context),
           poll: (id: string, context: ProviderContext) =>
             this.pollResearch(id, request.options, config, context),
-        };
+        });
       default:
         return null;
     }

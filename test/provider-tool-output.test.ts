@@ -152,6 +152,126 @@ describe("provider tool output", () => {
     );
   });
 
+  it("rejects requestTimeoutMs for research providers that cannot safely enforce it", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          requestTimeoutMs: 1000,
+        },
+        input: "Investigate the topic",
+        planOverride: {
+          capability: "research",
+          providerId: "exa",
+          providerLabel: "Exa",
+          mode: "job",
+          start: async () => ({ id: "job-1" }),
+          poll: async () => ({
+            status: "completed",
+            output: {
+              provider: "exa",
+              text: "done",
+            },
+          }),
+        },
+      }),
+    ).rejects.toThrow(
+      "Exa research does not support requestTimeoutMs. Use retryCount/retryDelayMs/pollIntervalMs/timeoutMs/maxConsecutivePollErrors/resumeId instead.",
+    );
+  });
+
+  it("rejects malformed local execution control fields", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          requestTimeoutMs: "1000" as never,
+        },
+        urls: ["https://example.com"],
+        planOverride: {
+          capability: "contents",
+          providerId: "exa",
+          providerLabel: "Exa",
+          mode: "single",
+          execute: async () => ({
+            provider: "exa",
+            text: "contents",
+          }),
+        },
+      }),
+    ).rejects.toThrow("options.requestTimeoutMs must be a positive integer.");
+  });
+
+  it("rejects research-only execution controls on non-research tools", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          timeoutMs: 1000,
+          resumeId: "job-1",
+        },
+        urls: ["https://example.com"],
+        planOverride: {
+          capability: "contents",
+          providerId: "exa",
+          providerLabel: "Exa",
+          mode: "single",
+          execute: async () => ({
+            provider: "exa",
+            text: "contents",
+          }),
+        },
+      }),
+    ).rejects.toThrow(
+      "Exa contents does not support timeoutMs, resumeId. These controls only apply to web_research. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+    );
+  });
+
   it("rejects removed resumeInteractionId compatibility for research", async () => {
     const config: WebProvidersConfig = {
       version: 1,

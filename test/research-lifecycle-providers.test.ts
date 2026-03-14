@@ -96,7 +96,7 @@ describe("research lifecycle providers", () => {
     expect(result.content[0]?.text).toBe("Exa research result");
   });
 
-  it("does not locally time out non-idempotent Exa research starts", async () => {
+  it("filters unsupported request timeout defaults from non-idempotent Exa research starts", async () => {
     vi.useFakeTimers();
 
     exaResearchCreateMock.mockImplementationOnce(
@@ -122,6 +122,9 @@ describe("research lifecycle providers", () => {
           exa: {
             enabled: true,
             apiKey: "literal-key",
+            policy: {
+              requestTimeoutMs: 1,
+            },
           },
         },
       } satisfies WebProvidersConfig,
@@ -129,7 +132,7 @@ describe("research lifecycle providers", () => {
       ctx: { cwd: process.cwd() },
       signal: undefined,
       onUpdate: undefined,
-      options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
+      options: { pollIntervalMs: 1 },
       input: "Investigate Exa lifecycle polling",
     });
 
@@ -145,7 +148,7 @@ describe("research lifecycle providers", () => {
     expect(result.content[0]?.text).toBe("Exa research result");
   });
 
-  it("does not locally time out uncancellable Exa poll requests", async () => {
+  it("filters unsupported request timeout defaults from uncancellable Exa polls", async () => {
     vi.useFakeTimers();
 
     exaResearchCreateMock.mockResolvedValue({ researchId: "exa-job-1" });
@@ -173,6 +176,9 @@ describe("research lifecycle providers", () => {
           exa: {
             enabled: true,
             apiKey: "literal-key",
+            policy: {
+              requestTimeoutMs: 1,
+            },
           },
         },
       } satisfies WebProvidersConfig,
@@ -180,7 +186,7 @@ describe("research lifecycle providers", () => {
       ctx: { cwd: process.cwd() },
       signal: undefined,
       onUpdate: undefined,
-      options: { requestTimeoutMs: 1, pollIntervalMs: 1 },
+      options: { pollIntervalMs: 1 },
       input: "Investigate Exa lifecycle polling",
     });
 

@@ -264,10 +264,14 @@ export type ProviderOperationRequest =
   | AnswerOperationRequest
   | ResearchOperationRequest;
 
+export interface ProviderResearchLifecycleTraits {
+  supportsStartRetries?: boolean;
+  supportsRequestTimeouts?: boolean;
+}
+
 export interface ProviderPlanTraits {
   policyDefaults?: ExecutionPolicyDefaults;
-  supportsIdempotentStartRetries?: boolean;
-  supportsPollCancellation?: boolean;
+  researchLifecycle?: ProviderResearchLifecycleTraits;
 }
 
 export interface SingleProviderOperationPlan<TResult> {

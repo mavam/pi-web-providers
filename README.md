@@ -119,13 +119,15 @@ override provider-native config, but managed tool inputs and tool wiring stay
 fixed.
 
 The extension also accepts a few local control fields for robustness:
-`requestTimeoutMs`, `retryCount`, and `retryDelayMs` on all tools, plus
-`pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId` on
-`web_research` for lifecycle-based research providers. Perplexity research runs
-synchronously, so it only supports `requestTimeoutMs`, `retryCount`, and
+`requestTimeoutMs`, `retryCount`, and `retryDelayMs` on request/response tools,
+plus `pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
+on `web_research` for lifecycle-based research providers. Perplexity research
+runs synchronously, so it only supports `requestTimeoutMs`, `retryCount`, and
 `retryDelayMs`; lifecycle fields are rejected instead of being silently ignored.
-These fields are handled by the extension and are not forwarded into the
-provider SDK call.
+Exa and Valyu research support retries, polling, deadlines, and resume IDs, but
+reject `requestTimeoutMs` because their current SDK lifecycles do not safely
+support per-request local timeouts. These fields are handled by the extension
+and are not forwarded into the provider SDK call.
 
 ## 🔌 Providers
 

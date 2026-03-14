@@ -1,6 +1,10 @@
 import { Valyu } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import {
+  createResearchJobPlan,
+  createSingleOperationPlan,
+} from "../provider-plans.js";
 import type {
   ProviderContext,
   ProviderOperationRequest,
@@ -52,18 +56,13 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
   }
 
   buildPlan(request: ProviderOperationRequest, config: ValyuProviderConfig) {
-    const traits = {
-      policyDefaults: config.policy,
-    };
-
     switch (request.capability) {
       case "search":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.search(
               request.query,
@@ -72,39 +71,42 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
               config,
               context,
             ),
-        };
+        });
       case "contents":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.contents(request.urls, request.options, config, context),
-        };
+        });
       case "answer":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
-          traits,
           execute: (context: ProviderContext) =>
             this.answer(request.query, request.options, config, context),
-        };
+        });
       case "research":
-        return {
+        return createResearchJobPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "job" as const,
-          traits,
+          traits: {
+            researchLifecycle: {
+              supportsStartRetries: false,
+              supportsRequestTimeouts: false,
+            },
+          },
           start: (context: ProviderContext) =>
             this.startResearch(request.input, request.options, config, context),
           poll: (id: string, context: ProviderContext) =>
             this.pollResearch(id, request.options, config, context),
-        };
+        });
       default:
         return null;
     }

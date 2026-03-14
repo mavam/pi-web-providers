@@ -33,6 +33,16 @@ class NonResumableResearchError extends Error {
   override name = "NonResumableResearchError";
 }
 
+export interface LocalExecutionOptions {
+  requestTimeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  pollIntervalMs?: number;
+  timeoutMs?: number;
+  maxConsecutivePollErrors?: number;
+  resumeId?: string;
+}
+
 export function stripLocalExecutionOptions(
   options: Record<string, unknown> | JsonObject | undefined,
 ): JsonObject | undefined {
@@ -48,28 +58,47 @@ export function stripLocalExecutionOptions(
     timeoutMs: _timeoutMs,
     maxConsecutivePollErrors: _maxConsecutivePollErrors,
     resumeId: _resumeId,
+    resumeInteractionId: _resumeInteractionId,
     ...rest
   } = options;
 
   return Object.keys(rest).length > 0 ? (rest as JsonObject) : undefined;
 }
 
+export function parseLocalExecutionOptions(
+  options: Record<string, unknown> | JsonObject | undefined,
+): LocalExecutionOptions {
+  return {
+    requestTimeoutMs: parseOptionalPositiveIntegerOption(
+      options,
+      "requestTimeoutMs",
+    ),
+    retryCount: parseOptionalNonNegativeIntegerOption(options, "retryCount"),
+    retryDelayMs: parseOptionalPositiveIntegerOption(options, "retryDelayMs"),
+    pollIntervalMs: parseOptionalPositiveIntegerOption(
+      options,
+      "pollIntervalMs",
+    ),
+    timeoutMs: parseOptionalPositiveIntegerOption(options, "timeoutMs"),
+    maxConsecutivePollErrors: parseOptionalPositiveIntegerOption(
+      options,
+      "maxConsecutivePollErrors",
+    ),
+    resumeId: parseOptionalNonEmptyStringOption(options, "resumeId"),
+  };
+}
+
 export function extractExecutionPolicyDefaults(
   options: Record<string, unknown> | JsonObject | undefined,
 ): ExecutionPolicyDefaults | undefined {
-  if (!options) {
-    return undefined;
-  }
-
+  const localOptions = parseLocalExecutionOptions(options);
   const defaults: ExecutionPolicyDefaults = {
-    requestTimeoutMs: readPositiveInteger(options.requestTimeoutMs),
-    retryCount: readNonNegativeInteger(options.retryCount),
-    retryDelayMs: readPositiveInteger(options.retryDelayMs),
-    researchPollIntervalMs: readPositiveInteger(options.pollIntervalMs),
-    researchTimeoutMs: readPositiveInteger(options.timeoutMs),
-    researchMaxConsecutivePollErrors: readPositiveInteger(
-      options.maxConsecutivePollErrors,
-    ),
+    requestTimeoutMs: localOptions.requestTimeoutMs,
+    retryCount: localOptions.retryCount,
+    retryDelayMs: localOptions.retryDelayMs,
+    researchPollIntervalMs: localOptions.pollIntervalMs,
+    researchTimeoutMs: localOptions.timeoutMs,
+    researchMaxConsecutivePollErrors: localOptions.maxConsecutivePollErrors,
   };
 
   return Object.values(defaults).some((value) => value !== undefined)
@@ -81,16 +110,13 @@ export function resolveRequestExecutionPolicy(
   options: JsonObject | undefined,
   defaults: ExecutionPolicyDefaults | undefined,
 ): RequestExecutionPolicy {
+  const localOptions = parseLocalExecutionOptions(options);
+
   return {
     requestTimeoutMs:
-      readPositiveInteger(options?.requestTimeoutMs) ??
-      defaults?.requestTimeoutMs,
-    retryCount:
-      readNonNegativeInteger(options?.retryCount) ?? defaults?.retryCount ?? 0,
-    retryDelayMs:
-      readPositiveInteger(options?.retryDelayMs) ??
-      defaults?.retryDelayMs ??
-      2000,
+      localOptions.requestTimeoutMs ?? defaults?.requestTimeoutMs,
+    retryCount: localOptions.retryCount ?? defaults?.retryCount ?? 0,
+    retryDelayMs: localOptions.retryDelayMs ?? defaults?.retryDelayMs ?? 2000,
   };
 }
 
@@ -98,21 +124,21 @@ export function resolveResearchExecutionPolicy(
   options: JsonObject | undefined,
   defaults: ExecutionPolicyDefaults | undefined,
 ): ResearchExecutionPolicy {
+  const localOptions = parseLocalExecutionOptions(options);
   const request = resolveRequestExecutionPolicy(options, defaults);
 
   return {
     ...request,
     pollIntervalMs:
-      readPositiveInteger(options?.pollIntervalMs) ??
+      localOptions.pollIntervalMs ??
       defaults?.researchPollIntervalMs ??
       DEFAULT_RESEARCH_POLL_INTERVAL_MS,
-    timeoutMs:
-      readPositiveInteger(options?.timeoutMs) ?? defaults?.researchTimeoutMs,
+    timeoutMs: localOptions.timeoutMs ?? defaults?.researchTimeoutMs,
     maxConsecutivePollErrors:
-      readPositiveInteger(options?.maxConsecutivePollErrors) ??
+      localOptions.maxConsecutivePollErrors ??
       defaults?.researchMaxConsecutivePollErrors ??
       3,
-    resumeId: readNonEmptyString(options?.resumeId),
+    resumeId: localOptions.resumeId,
   };
 }
 
@@ -612,20 +638,57 @@ function buildResumeError(error: string | unknown, jobId: string): Error {
   );
 }
 
-function readPositiveInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 1
-    ? Math.trunc(value)
-    : undefined;
+function parseOptionalPositiveIntegerOption(
+  options: Record<string, unknown> | JsonObject | undefined,
+  key: keyof Pick<
+    LocalExecutionOptions,
+    | "requestTimeoutMs"
+    | "retryDelayMs"
+    | "pollIntervalMs"
+    | "timeoutMs"
+    | "maxConsecutivePollErrors"
+  >,
+): number | undefined {
+  const value = options?.[key];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(`options.${key} must be a positive integer.`);
+  }
+
+  return value;
 }
 
-function readNonNegativeInteger(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0
-    ? Math.trunc(value)
-    : undefined;
+function parseOptionalNonNegativeIntegerOption(
+  options: Record<string, unknown> | JsonObject | undefined,
+  key: "retryCount",
+): number | undefined {
+  const value = options?.[key];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`options.${key} must be a non-negative integer.`);
+  }
+
+  return value;
 }
 
-function readNonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim().length > 0
-    ? value
-    : undefined;
+function parseOptionalNonEmptyStringOption(
+  options: Record<string, unknown> | JsonObject | undefined,
+  key: "resumeId",
+): string | undefined {
+  const value = options?.[key];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`options.${key} must be a non-empty string.`);
+  }
+
+  return value;
 }

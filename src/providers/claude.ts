@@ -7,6 +7,7 @@ import {
   type SDKMessage,
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   ClaudeProviderConfig,
   ProviderContext,
@@ -119,11 +120,11 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ClaudeProviderConfig) {
     switch (request.capability) {
       case "search":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
           execute: (context: ProviderContext) =>
             this.search(
               request.query,
@@ -132,16 +133,16 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
               config,
               context,
             ),
-        };
+        });
       case "answer":
-        return {
+        return createSingleOperationPlan({
+          config,
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
-          mode: "single" as const,
           execute: (context: ProviderContext) =>
             this.answer(request.query, request.options, config, context),
-        };
+        });
       default:
         return null;
     }
