@@ -88,8 +88,26 @@ interface EnsureContentsArgs {
   onProgress?: (message: string) => void;
 }
 
+/** Result of ensuring a URL's contents are stored, with cache-hit metadata. */
+interface StoredContentsResult {
+  value: StoredContentsValue;
+  fromCache: boolean;
+}
+
 const contentStore = new FileContentStore();
-const inFlightContents = new Map<string, Promise<StoredContentsValue>>();
+const inFlightContents = new Map<string, Promise<StoredContentsResult>>();
+
+/**
+ * Remove expired entries from the content store.  Call this at session start
+ * or periodically to prevent unbounded cache growth.
+ */
+export async function cleanupContentStore(): Promise<void> {
+  try {
+    await contentStore.cleanup();
+  } catch {
+    // Best-effort: don't let cleanup failures disrupt the session.
+  }
+}
 
 export async function startContentsPrefetch({
   config,
@@ -162,12 +180,7 @@ export async function startContentsPrefetch({
       const failedCount = results.filter(
         (result) => result.status === "rejected",
       ).length;
-      const status =
-        failedCount === results.length
-          ? "failed"
-          : failedCount > 0
-            ? "ready"
-            : "ready";
+      const status = failedCount === results.length ? "failed" : "ready";
       await contentStore.put<JsonValue>({
         key: buildPrefetchJobStoreKey(prefetchId),
         kind: PREFETCH_JOB_KIND,
@@ -271,6 +284,126 @@ export async function getPrefetchStatus(
   };
 }
 
+/**
+ * Returns true when at least one of the given URLs has a valid (non-expired)
+ * entry in the content store. This is used to decide whether it's worth
+ * routing a `web_contents` call through the store rather than fetching
+ * directly from the provider.
+ */
+export async function hasAnyCachedContents({
+  urls,
+  providerId,
+  options,
+}: {
+  urls: string[];
+  providerId: ProviderId;
+  options: JsonObject | undefined;
+}): Promise<boolean> {
+  const now = Date.now();
+  for (const url of urls) {
+    const key = buildContentsStoreKey(url, providerId, options);
+
+    // Fast path: if there's an in-flight fetch for this URL the store is
+    // already handling it.
+    if (inFlightContents.has(key)) {
+      return true;
+    }
+
+    const entry = await contentStore.get(key);
+    if (
+      entry?.status === "ready" &&
+      isStoredContentsValue(entry.value) &&
+      !isExpired(entry, now)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Try to serve *all* requested URLs from the cache without needing a live
+ * provider.  Returns the assembled output when every URL is a cache hit, or
+ * `undefined` when at least one URL is missing.  This lets `web_contents`
+ * succeed even if the provider that originally fetched the pages is later
+ * disabled or unavailable.
+ *
+ * When `explicitProvider` is given, only that provider's cache entries are
+ * checked.  Otherwise all known providers are probed per URL.
+ */
+export async function tryServeContentsFromStore({
+  urls,
+  explicitProvider,
+  config: _config,
+  cwd: _cwd,
+  options,
+  signal: _signal,
+}: {
+  urls: string[];
+  explicitProvider: ProviderId | undefined;
+  config: WebProvidersConfig;
+  cwd: string;
+  options: JsonObject | undefined;
+  signal?: AbortSignal;
+}): Promise<ProviderToolOutput | undefined> {
+  if (urls.length === 0) {
+    return undefined;
+  }
+
+  const now = Date.now();
+  const providerCandidates: readonly ProviderId[] = explicitProvider
+    ? [explicitProvider]
+    : PROVIDER_IDS;
+
+  const hits: StoredContentsValue[] = [];
+
+  for (const url of urls) {
+    const hit = await findCachedEntry(url, providerCandidates, options, now);
+    if (!hit) {
+      // At least one URL is not cached — bail out.
+      return undefined;
+    }
+    hits.push(hit);
+  }
+
+  const provider = hits[0]?.provider ?? (explicitProvider as ProviderId);
+  const textBlocks = hits.map((h) => h.text.trim()).filter(Boolean);
+
+  return {
+    provider,
+    text: textBlocks.join("\n\n").trim() || "No contents found.",
+    summary: `${hits.length} of ${urls.length} URL(s) served from cache`,
+    itemCount: hits.length,
+  };
+}
+
+async function findCachedEntry(
+  url: string,
+  providerCandidates: readonly ProviderId[],
+  options: JsonObject | undefined,
+  now: number,
+): Promise<StoredContentsValue | undefined> {
+  for (const pid of providerCandidates) {
+    const key = buildContentsStoreKey(url, pid, options);
+
+    // Check in-flight promises first — if a prefetch is still running we
+    // can't serve synchronously, so treat it as a miss.
+    if (inFlightContents.has(key)) {
+      return undefined;
+    }
+
+    const entry = await contentStore.get<JsonValue>(key);
+    if (
+      entry?.status === "ready" &&
+      isStoredContentsValue(entry.value) &&
+      !isExpired(entry, now)
+    ) {
+      return entry.value;
+    }
+  }
+  return undefined;
+}
+
 export async function resolveContentsFromStore({
   urls,
   providerId,
@@ -302,9 +435,9 @@ export async function resolveContentsFromStore({
     ),
   );
 
-  const values = settled
+  const results = settled
     .filter(
-      (result): result is PromiseFulfilledResult<StoredContentsValue> =>
+      (result): result is PromiseFulfilledResult<StoredContentsResult> =>
         result.status === "fulfilled",
     )
     .map((result) => result.value);
@@ -324,7 +457,7 @@ export async function resolveContentsFromStore({
       Boolean(result),
     );
 
-  if (values.length === 0 && failures.length > 0) {
+  if (results.length === 0 && failures.length > 0) {
     throw new Error(
       failures.length === 1
         ? (failures[0]?.error ?? "web_contents failed.")
@@ -337,9 +470,9 @@ export async function resolveContentsFromStore({
     );
   }
 
-  const cachedCount = values.filter((entry) => entry.fetchedAt === 0).length;
-  const provider = values[0]?.provider ?? providerId;
-  const textBlocks = values.map((entry) => entry.text.trim()).filter(Boolean);
+  const cachedCount = results.filter((r) => r.fromCache).length;
+  const provider = results[0]?.value.provider ?? providerId;
+  const textBlocks = results.map((r) => r.value.text.trim()).filter(Boolean);
 
   for (const failure of failures) {
     textBlocks.push(`Error: ${failure.url}\n   ${failure.error}`);
@@ -351,9 +484,9 @@ export async function resolveContentsFromStore({
       text: textBlocks.join("\n\n").trim() || "No contents found.",
       summary:
         cachedCount > 0
-          ? `${values.length} of ${urls.length} URL(s) fetched via ${provider} (${cachedCount} cached)`
-          : `${values.length} of ${urls.length} URL(s) fetched via ${provider}`,
-      itemCount: values.length,
+          ? `${results.length} of ${urls.length} URL(s) fetched via ${provider} (${cachedCount} cached)`
+          : `${results.length} of ${urls.length} URL(s) fetched via ${provider}`,
+      itemCount: results.length,
     },
     cachedCount,
   };
@@ -446,7 +579,7 @@ async function ensureContentsStored({
   ttlMs = DEFAULT_CONTENT_TTL_MS,
   signal,
   onProgress,
-}: EnsureContentsArgs): Promise<StoredContentsValue> {
+}: EnsureContentsArgs): Promise<StoredContentsResult> {
   const key = buildContentsStoreKey(url, providerId, options);
   const existingInFlight = inFlightContents.get(key);
   if (existingInFlight) {
@@ -462,10 +595,7 @@ async function ensureContentsStored({
       isStoredContentsValue(existing.value) &&
       !isExpired(existing, now)
     ) {
-      return {
-        ...existing.value,
-        fetchedAt: 0,
-      };
+      return { value: existing.value, fromCache: true };
     }
 
     const provider = PROVIDER_MAP[providerId];
@@ -514,21 +644,22 @@ async function ensureContentsStored({
         );
       }
 
+      const now = Date.now();
       const stored: StoredContentsValue = {
         url: canonicalizeUrl(url),
         provider: result.provider,
         text: result.text,
         summary: result.summary,
         itemCount: result.itemCount,
-        fetchedAt: Date.now(),
+        fetchedAt: now,
       };
       await contentStore.put<JsonValue>({
         key,
         kind: CONTENT_ENTRY_KIND,
         status: "ready",
         createdAt,
-        updatedAt: stored.fetchedAt,
-        expiresAt: stored.fetchedAt + ttlMs,
+        updatedAt: now,
+        expiresAt: now + ttlMs,
         value: stored as unknown as JsonValue,
         metadata: {
           url: canonicalizeUrl(url),
@@ -536,7 +667,7 @@ async function ensureContentsStored({
           optionsHash: hashOptions(options),
         },
       });
-      return stored;
+      return { value: stored, fromCache: false };
     } catch (error) {
       await contentStore.put<JsonValue>({
         key,
@@ -587,12 +718,18 @@ function resolveContentsProvider(
   searchProviderId: ProviderId | undefined,
 ) {
   if (explicitProvider) {
-    return resolveProviderForCapability(
-      config,
-      explicitProvider,
-      cwd,
-      "contents",
-    );
+    try {
+      return resolveProviderForCapability(
+        config,
+        explicitProvider,
+        cwd,
+        "contents",
+      );
+    } catch {
+      // Explicit prefetch provider is unavailable — fall through so prefetch
+      // is silently skipped rather than sinking a successful search.
+      return undefined;
+    }
   }
 
   if (searchProviderId) {

@@ -657,6 +657,8 @@ async function createSearchInteraction(
   }
 }
 
+// TODO: Remove this suppression when @google/genai provides a way to silence
+// the experimental-interactions warning natively.
 const GEMINI_INTERACTIONS_WARNING =
   /GoogleGenAI\.interactions: Interactions usage is experimental and may change in future versions\.?/;
 let geminiWarningSuppressionDepth = 0;

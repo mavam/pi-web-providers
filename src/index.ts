@@ -32,12 +32,15 @@ import {
   stripLocalExecutionOptions,
 } from "./execution-policy.js";
 import {
+  cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
+  hasAnyCachedContents,
   parseSearchContentsPrefetchOptions,
   resolveContentsFromStore,
   startContentsPrefetch,
   stripSearchContentsPrefetchOptions,
+  tryServeContentsFromStore,
 } from "./prefetch-manager.js";
 import {
   getProviderConfigManifest,
@@ -113,6 +116,8 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
+    // Best-effort eviction of expired content-store entries on startup.
+    void cleanupContentStore();
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
@@ -1049,17 +1054,27 @@ async function executeProviderOperation({
       }),
     );
 
+  // Route through the content store only when at least one URL already has a
+  // cached (prefetched) entry.  This avoids adding implicit file-based caching
+  // overhead to regular web_contents calls that haven't been prefetched.
   if (capability === "contents" && planOverride === undefined) {
-    const resolved = await resolveContentsFromStore({
+    const useStore = await hasAnyCachedContents({
       urls: urls ?? [],
       providerId: provider.id,
-      config,
-      cwd: ctx.cwd,
       options,
-      signal: signal ?? undefined,
-      onProgress,
     });
-    return resolved.output;
+    if (useStore) {
+      const resolved = await resolveContentsFromStore({
+        urls: urls ?? [],
+        providerId: provider.id,
+        config,
+        cwd: ctx.cwd,
+        options,
+        signal: signal ?? undefined,
+        onProgress,
+      });
+      return resolved.output;
+    }
   }
 
   const result = await executeOperationPlan(plan, options, {
@@ -1105,6 +1120,36 @@ async function executeProviderTool({
   input?: string;
   planOverride?: ProviderOperationPlan<ProviderToolOutput>;
 }) {
+  // For contents: try to serve entirely from the local store before resolving
+  // a provider.  This lets pure cache hits succeed even when the provider that
+  // originally fetched the pages is later disabled or unavailable.
+  if (
+    capability === "contents" &&
+    planOverride === undefined &&
+    (urls?.length ?? 0) > 0
+  ) {
+    const cached = await tryServeContentsFromStore({
+      urls: urls ?? [],
+      explicitProvider,
+      config,
+      cwd: ctx.cwd,
+      options,
+      signal: signal ?? undefined,
+    });
+    if (cached) {
+      const text = await truncateAndSave(cached.text, capability);
+      return {
+        content: [{ type: "text" as const, text }],
+        details: {
+          tool: "web_contents",
+          provider: cached.provider,
+          summary: cached.summary,
+          itemCount: cached.itemCount,
+        } as ProviderToolDetails,
+      };
+    }
+  }
+
   const provider = resolveProviderForCapability(
     config,
     explicitProvider,

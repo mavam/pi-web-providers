@@ -113,6 +113,13 @@ describe("search contents prefetch", () => {
       numResults: 2,
     });
 
+    // The prefetch is fire-and-forget: at this point the in-flight promises
+    // exist but haven't completed yet, so no getContents calls have fired.
+    expect(exaGetContentsMock.mock.calls.length).toBe(0);
+
+    // The first explicit web_contents call piggbacks on the in-flight
+    // prefetch promises (via ensureContentsStored dedup), which triggers
+    // exactly 2 getContents calls — one per URL.
     const contentsResult = await __test__.executeProviderTool({
       capability: "contents",
       config,
@@ -130,6 +137,24 @@ describe("search contents prefetch", () => {
     );
     expect(contentsResult.content[0]?.text).toContain(
       "Fetched body for https://exa.ai/pricing",
+    );
+
+    // A second web_contents call should reuse the now-cached entries and
+    // make zero additional provider fetches.
+    const cachedResult = await __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+    });
+
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2); // unchanged
+    expect(cachedResult.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/sdk",
     );
 
     const status = await getPrefetchStatus(prefetchId);
