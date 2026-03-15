@@ -353,7 +353,7 @@ export async function executeResearchWithLifecycle({
           !(error instanceof RequestTimeoutError) &&
           !isRetryableError(error)
         ) {
-          throw buildResumeError(error, jobId);
+          throw normalizeError(error);
         }
 
         consecutivePollErrors += 1;
@@ -641,6 +641,10 @@ function buildUnknownResearchStartError(error: string | unknown): Error {
   return new Error(
     `${message} The provider may still create a background job, but no job id was returned so this run cannot be resumed automatically.`,
   );
+}
+
+function normalizeError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(formatErrorMessage(error));
 }
 
 function parseOptionalPositiveIntegerOption(

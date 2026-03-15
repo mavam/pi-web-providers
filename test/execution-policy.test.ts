@@ -358,6 +358,30 @@ describe("execution policy", () => {
     ).rejects.toThrow("Gemini research failed.");
   });
 
+  it("does not attach resume advice to invalid resume ids", async () => {
+    await expect(
+      executeResearchWithLifecycle({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        context: createContext([]),
+        policy: {
+          requestTimeoutMs: undefined,
+          retryCount: 0,
+          retryDelayMs: 1,
+          pollIntervalMs: 1,
+          timeoutMs: 60000,
+          maxConsecutivePollErrors: 3,
+          resumeId: "missing-job",
+        },
+        start: vi.fn(),
+        poll: vi.fn().mockRejectedValue(new Error("404 not found")),
+      }).catch((error) => {
+        expect((error as Error).message).not.toContain("options.resumeId");
+        throw error;
+      }),
+    ).rejects.toThrow("404 not found");
+  });
+
   it("turns total research timeouts into resumable errors even while sleeping between polls", async () => {
     vi.useFakeTimers();
 
