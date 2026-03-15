@@ -269,8 +269,31 @@ export interface ProviderResearchLifecycleTraits {
   supportsRequestTimeouts?: boolean;
 }
 
+export const EXECUTION_CONTROL_KEYS = [
+  "requestTimeoutMs",
+  "retryCount",
+  "retryDelayMs",
+  "pollIntervalMs",
+  "timeoutMs",
+  "maxConsecutivePollErrors",
+  "resumeId",
+] as const;
+
+export type ExecutionControlKey = (typeof EXECUTION_CONTROL_KEYS)[number];
+
+export interface ExecutionSupport {
+  requestTimeoutMs?: boolean;
+  retryCount?: boolean;
+  retryDelayMs?: boolean;
+  pollIntervalMs?: boolean;
+  timeoutMs?: boolean;
+  maxConsecutivePollErrors?: boolean;
+  resumeId?: boolean;
+}
+
 export interface ProviderPlanTraits {
   policyDefaults?: ExecutionPolicyDefaults;
+  executionSupport?: ExecutionSupport;
   researchLifecycle?: ProviderResearchLifecycleTraits;
 }
 

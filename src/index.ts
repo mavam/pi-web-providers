@@ -40,7 +40,10 @@ import {
   resolveProviderForCapability,
   supportsProviderCapability,
 } from "./provider-resolution.js";
-import { executeOperationPlan } from "./provider-runtime.js";
+import {
+  executeOperationPlan,
+  resolvePlanExecutionSupport,
+} from "./provider-runtime.js";
 import {
   isProviderToolEnabled,
   PROVIDER_TOOL_META,
@@ -66,7 +69,7 @@ import type {
   WebProvidersConfig,
   WebSearchDetails,
 } from "./types.js";
-import { PROVIDER_IDS } from "./types.js";
+import { EXECUTION_CONTROL_KEYS, PROVIDER_IDS } from "./types.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
@@ -151,7 +154,9 @@ function registerWebSearchTool(
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
-      options: jsonOptionsSchema("Provider-specific search options."),
+      options: jsonOptionsSchema(
+        describeOptionsField("search", visibleProviderIds),
+      ),
       provider: providerEnum(
         visibleProviderIds,
         "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
@@ -265,7 +270,7 @@ function registerWebContentsTool(
         minItems: 1,
         description: "One or more URLs to extract",
       }),
-      options: jsonOptionsSchema("Provider-specific extraction options."),
+      options: jsonOptionsSchema(describeOptionsField("contents", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports web contents.",
@@ -346,7 +351,7 @@ function registerWebAnswerTool(
     description: "Answer a question using web-grounded evidence.",
     parameters: Type.Object({
       query: Type.String({ description: "Question to answer" }),
-      options: jsonOptionsSchema("Provider-specific answer options."),
+      options: jsonOptionsSchema(describeOptionsField("answer", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports web answers.",
@@ -400,7 +405,7 @@ function registerWebResearchTool(
       "Investigate a topic across web sources and produce a longer report.",
     parameters: Type.Object({
       input: Type.String({ description: "Research brief or question" }),
-      options: jsonOptionsSchema("Provider-specific research options."),
+      options: jsonOptionsSchema(describeOptionsField("research", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports research.",
@@ -585,6 +590,88 @@ function jsonOptionsSchema(description: string) {
       },
     ),
   );
+}
+
+function describeOptionsField(
+  capability: ProviderCapability,
+  providerIds: readonly ProviderId[],
+): string {
+  const labels: Record<ProviderCapability, string> = {
+    search: "Provider-specific search options.",
+    contents: "Provider-specific extraction options.",
+    answer: "Provider-specific answer options.",
+    research: "Provider-specific research options.",
+  };
+  const supportedControls = getSupportedExecutionControlsForCapability(
+    capability,
+    providerIds,
+  );
+
+  if (supportedControls.length === 0) {
+    return labels[capability];
+  }
+
+  const qualifier =
+    capability === "research"
+      ? " Depending on provider, local execution controls may include: "
+      : " Local execution controls: ";
+
+  return `${labels[capability]}${qualifier}${supportedControls.join(", ")}.`;
+}
+
+function getSupportedExecutionControlsForCapability(
+  capability: ProviderCapability,
+  providerIds: readonly ProviderId[],
+): string[] {
+  const supportedControls = new Set<string>();
+
+  for (const providerId of providerIds) {
+    const provider = PROVIDER_MAP[providerId];
+    const plan = provider.buildPlan(
+      createExecutionSupportProbeRequest(capability),
+      provider.createTemplate() as never,
+    );
+    if (!plan) {
+      continue;
+    }
+
+    const executionSupport = resolvePlanExecutionSupport(plan);
+    for (const key of EXECUTION_CONTROL_KEYS) {
+      if (executionSupport[key] === true) {
+        supportedControls.add(key);
+      }
+    }
+  }
+
+  return EXECUTION_CONTROL_KEYS.filter((key) => supportedControls.has(key));
+}
+
+function createExecutionSupportProbeRequest(
+  capability: ProviderCapability,
+): ProviderOperationRequest {
+  switch (capability) {
+    case "search":
+      return {
+        capability,
+        query: "Describe execution controls",
+        maxResults: 1,
+      };
+    case "contents":
+      return {
+        capability,
+        urls: ["https://example.com"],
+      };
+    case "answer":
+      return {
+        capability,
+        query: "Describe execution controls",
+      };
+    case "research":
+      return {
+        capability,
+        input: "Describe execution controls",
+      };
+  }
 }
 
 async function executeProviderTool({
@@ -1578,6 +1665,7 @@ export const __test__ = {
   executeProviderTool,
   extractTextContent,
   getAvailableManagedToolNames,
+  describeOptionsField,
   getAvailableProviderIdsForCapability,
   getSyncedActiveTools,
   renderCallHeader,

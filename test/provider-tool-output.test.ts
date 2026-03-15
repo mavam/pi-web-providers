@@ -152,7 +152,7 @@ describe("provider tool output", () => {
     );
   });
 
-  it("does not inherit short request timeouts for streaming foreground plans", async () => {
+  it("inherits request timeouts for streaming foreground plans that declare support", async () => {
     vi.useFakeTimers();
 
     try {
@@ -181,6 +181,15 @@ describe("provider tool output", () => {
           providerLabel: "Perplexity",
           deliveryMode: "streaming-foreground",
           traits: {
+            executionSupport: {
+              requestTimeoutMs: true,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: false,
+              timeoutMs: false,
+              maxConsecutivePollErrors: false,
+              resumeId: false,
+            },
             policyDefaults: {
               requestTimeoutMs: 1,
               retryCount: 0,
@@ -198,11 +207,12 @@ describe("provider tool output", () => {
             }),
         },
       });
+      const rejection = expect(resultPromise).rejects.toThrow(
+        "Perplexity research request timed out after 1ms.",
+      );
 
-      await vi.advanceTimersByTimeAsync(5);
-      await expect(resultPromise).resolves.toMatchObject({
-        content: [{ type: "text", text: "Research complete" }],
-      });
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
     } finally {
       vi.useRealTimers();
     }
@@ -325,6 +335,21 @@ describe("provider tool output", () => {
       }),
     ).rejects.toThrow(
       "Exa contents does not support timeoutMs, resumeId. These controls only apply to web_research. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+    );
+  });
+
+  it("describes supported local execution controls in tool option help", () => {
+    expect(__test__.describeOptionsField("contents", ["exa"])).toBe(
+      "Provider-specific extraction options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs.",
+    );
+    expect(
+      __test__.describeOptionsField("research", [
+        "perplexity",
+        "exa",
+        "gemini",
+      ]),
+    ).toBe(
+      "Provider-specific research options. Depending on provider, local execution controls may include: requestTimeoutMs, retryCount, retryDelayMs, pollIntervalMs, timeoutMs, maxConsecutivePollErrors, resumeId.",
     );
   });
 

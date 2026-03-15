@@ -115,6 +115,15 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
           providerId: this.id,
           providerLabel: this.label,
           traits: {
+            executionSupport: {
+              requestTimeoutMs: true,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: true,
+              timeoutMs: true,
+              maxConsecutivePollErrors: true,
+              resumeId: true,
+            },
             researchLifecycle: {
               supportsStartRetries: true,
               supportsRequestTimeouts: true,

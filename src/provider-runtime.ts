@@ -7,14 +7,17 @@ import {
   resolveResearchExecutionPolicy,
   runWithExecutionPolicy,
 } from "./execution-policy.js";
-import type {
-  ExecutionPolicyDefaults,
-  JsonObject,
-  ProviderContext,
-  ProviderOperationPlan,
-  ProviderToolOutput,
-  SearchResponse,
-  SingleProviderOperationPlan,
+import {
+  EXECUTION_CONTROL_KEYS,
+  type ExecutionControlKey,
+  type ExecutionPolicyDefaults,
+  type ExecutionSupport,
+  type JsonObject,
+  type ProviderContext,
+  type ProviderOperationPlan,
+  type ProviderToolOutput,
+  type SearchResponse,
+  type SingleProviderOperationPlan,
 } from "./types.js";
 
 export async function executeOperationPlan<
@@ -69,44 +72,60 @@ export async function executeOperationPlan<
   })) as TResult;
 }
 
+export function resolvePlanExecutionSupport<
+  TResult extends SearchResponse | ProviderToolOutput,
+>(plan: ProviderOperationPlan<TResult>): Required<ExecutionSupport> {
+  const explicit = plan.traits?.executionSupport ?? {};
+
+  return {
+    requestTimeoutMs:
+      explicit.requestTimeoutMs ??
+      inferExecutionSupport(plan, "requestTimeoutMs"),
+    retryCount:
+      explicit.retryCount ?? inferExecutionSupport(plan, "retryCount"),
+    retryDelayMs:
+      explicit.retryDelayMs ?? inferExecutionSupport(plan, "retryDelayMs"),
+    pollIntervalMs:
+      explicit.pollIntervalMs ?? inferExecutionSupport(plan, "pollIntervalMs"),
+    timeoutMs: explicit.timeoutMs ?? inferExecutionSupport(plan, "timeoutMs"),
+    maxConsecutivePollErrors:
+      explicit.maxConsecutivePollErrors ??
+      inferExecutionSupport(plan, "maxConsecutivePollErrors"),
+    resumeId: explicit.resumeId ?? inferExecutionSupport(plan, "resumeId"),
+  };
+}
+
 function resolveForegroundExecutionPolicy<
   TResult extends SearchResponse | ProviderToolOutput,
 >(plan: SingleProviderOperationPlan<TResult>, options: JsonObject | undefined) {
-  // Silent foreground plans inherit the full request policy. Streaming
-  // foreground plans intentionally drop the default request timeout so that a
-  // provider can keep streaming progress without being cut off by a short
-  // request/response timeout that was tuned for silent foreground tools.
   const localOptions = parseLocalExecutionOptions(options);
+  const executionSupport = resolvePlanExecutionSupport(plan);
+  const unsupportedControls = getUnsupportedExecutionControls(
+    localOptions,
+    executionSupport,
+  );
 
-  const researchOnlyOptions = [
-    ["pollIntervalMs", localOptions.pollIntervalMs],
-    ["timeoutMs", localOptions.timeoutMs],
-    ["maxConsecutivePollErrors", localOptions.maxConsecutivePollErrors],
-    ["resumeId", localOptions.resumeId],
-    ["resumeInteractionId", options?.resumeInteractionId],
-  ].flatMap(([key, value]) => (value === undefined ? [] : [key]));
-
-  if (plan.capability === "research") {
-    if (options?.resumeInteractionId !== undefined) {
-      throw new Error(
-        "resumeInteractionId is not supported. Use resumeId instead.",
-      );
-    }
-
-    if (researchOnlyOptions.length > 0) {
-      throw new Error(
-        `${plan.providerLabel} research runs in ${formatForegroundMode(plan.deliveryMode)} mode and does not support ${researchOnlyOptions.join(", ")}. Use requestTimeoutMs/retryCount/retryDelayMs instead.`,
-      );
-    }
-  } else if (researchOnlyOptions.length > 0) {
+  if (options?.resumeInteractionId !== undefined) {
     throw new Error(
-      `${plan.providerLabel} ${plan.capability} does not support ${researchOnlyOptions.join(", ")}. These controls only apply to web_research. Use requestTimeoutMs/retryCount/retryDelayMs instead.`,
+      "resumeInteractionId is not supported. Use resumeId instead.",
+    );
+  }
+
+  if (unsupportedControls.length > 0) {
+    if (plan.capability === "research") {
+      throw new Error(
+        `${plan.providerLabel} research runs in ${formatForegroundMode(plan.deliveryMode)} mode and does not support ${unsupportedControls.join(", ")}. Use ${formatSupportedControls(executionSupport, plan.capability)} instead.`,
+      );
+    }
+
+    throw new Error(
+      `${plan.providerLabel} ${plan.capability} does not support ${unsupportedControls.join(", ")}. These controls only apply to web_research. Use ${formatSupportedControls(executionSupport, plan.capability)} instead.`,
     );
   }
 
   return resolveRequestExecutionPolicy(
     options,
-    getSupportedForegroundPolicyDefaults(plan),
+    filterPolicyDefaults(plan.traits?.policyDefaults, executionSupport),
   );
 }
 
@@ -117,6 +136,7 @@ function resolveBackgroundResearchExecutionPolicy<
   options: JsonObject | undefined,
 ): ResearchExecutionPolicy {
   const localOptions = parseLocalExecutionOptions(options);
+  const executionSupport = resolvePlanExecutionSupport(plan);
 
   if (options?.resumeInteractionId !== undefined) {
     throw new Error(
@@ -124,19 +144,98 @@ function resolveBackgroundResearchExecutionPolicy<
     );
   }
 
-  if (
-    localOptions.requestTimeoutMs !== undefined &&
-    plan.traits?.researchLifecycle?.supportsRequestTimeouts !== true
-  ) {
+  const unsupportedControls = getUnsupportedExecutionControls(
+    localOptions,
+    executionSupport,
+  );
+  if (unsupportedControls.length > 0) {
     throw new Error(
-      `${plan.providerLabel} research does not support requestTimeoutMs. Use retryCount/retryDelayMs/pollIntervalMs/timeoutMs/maxConsecutivePollErrors/resumeId instead.`,
+      `${plan.providerLabel} research does not support ${unsupportedControls.join(", ")}. Use ${formatSupportedControls(executionSupport, plan.capability)} instead.`,
     );
   }
 
   return resolveResearchExecutionPolicy(
     options,
-    getSupportedBackgroundResearchPolicyDefaults(plan),
+    filterPolicyDefaults(plan.traits?.policyDefaults, executionSupport),
   );
+}
+
+function inferExecutionSupport<
+  TResult extends SearchResponse | ProviderToolOutput,
+>(plan: ProviderOperationPlan<TResult>, key: ExecutionControlKey): boolean {
+  switch (key) {
+    case "requestTimeoutMs":
+      if (plan.deliveryMode !== "background-research") {
+        return true;
+      }
+      return plan.traits?.researchLifecycle?.supportsRequestTimeouts === true;
+    case "retryCount":
+    case "retryDelayMs":
+      return true;
+    case "pollIntervalMs":
+    case "timeoutMs":
+    case "maxConsecutivePollErrors":
+    case "resumeId":
+      return (
+        plan.capability === "research" &&
+        plan.deliveryMode === "background-research"
+      );
+  }
+}
+
+function getUnsupportedExecutionControls(
+  localOptions: ReturnType<typeof parseLocalExecutionOptions>,
+  executionSupport: Required<ExecutionSupport>,
+): ExecutionControlKey[] {
+  return EXECUTION_CONTROL_KEYS.filter((key) => {
+    const value = localOptions[key];
+    return value !== undefined && executionSupport[key] !== true;
+  });
+}
+
+function filterPolicyDefaults(
+  defaults: ExecutionPolicyDefaults | undefined,
+  executionSupport: Required<ExecutionSupport>,
+): ExecutionPolicyDefaults | undefined {
+  if (!defaults) {
+    return undefined;
+  }
+
+  const filtered: ExecutionPolicyDefaults = {
+    requestTimeoutMs: executionSupport.requestTimeoutMs
+      ? defaults.requestTimeoutMs
+      : undefined,
+    retryCount: executionSupport.retryCount ? defaults.retryCount : undefined,
+    retryDelayMs: executionSupport.retryDelayMs
+      ? defaults.retryDelayMs
+      : undefined,
+    researchPollIntervalMs: executionSupport.pollIntervalMs
+      ? defaults.researchPollIntervalMs
+      : undefined,
+    researchTimeoutMs: executionSupport.timeoutMs
+      ? defaults.researchTimeoutMs
+      : undefined,
+    researchMaxConsecutivePollErrors: executionSupport.maxConsecutivePollErrors
+      ? defaults.researchMaxConsecutivePollErrors
+      : undefined,
+  };
+
+  return Object.values(filtered).some((value) => value !== undefined)
+    ? filtered
+    : undefined;
+}
+
+function formatSupportedControls(
+  executionSupport: Required<ExecutionSupport>,
+  capability: SingleProviderOperationPlan<unknown>["capability"],
+): string {
+  const supportedControls = EXECUTION_CONTROL_KEYS.filter(
+    (key) => executionSupport[key] === true,
+  ).filter((key) => capability === "research" || key !== "resumeId");
+
+  return supportedControls.length > 0
+    ? supportedControls.join("/")
+    : "no local execution controls";
 }
 
 function formatForegroundMode(
@@ -145,40 +244,4 @@ function formatForegroundMode(
   return deliveryMode === "streaming-foreground"
     ? "streaming foreground"
     : "silent foreground";
-}
-
-function getSupportedForegroundPolicyDefaults<TResult>(
-  plan: SingleProviderOperationPlan<TResult>,
-): ExecutionPolicyDefaults | undefined {
-  const defaults = plan.traits?.policyDefaults;
-  if (!defaults) {
-    return undefined;
-  }
-
-  if (plan.deliveryMode === "silent-foreground") {
-    return defaults;
-  }
-
-  const { requestTimeoutMs: _requestTimeoutMs, ...rest } = defaults;
-  return Object.values(rest).some((value) => value !== undefined)
-    ? rest
-    : undefined;
-}
-
-function getSupportedBackgroundResearchPolicyDefaults<
-  TResult extends SearchResponse | ProviderToolOutput,
->(plan: ProviderOperationPlan<TResult>): ExecutionPolicyDefaults | undefined {
-  const defaults = plan.traits?.policyDefaults;
-  if (!defaults) {
-    return undefined;
-  }
-
-  if (plan.traits?.researchLifecycle?.supportsRequestTimeouts === true) {
-    return defaults;
-  }
-
-  const { requestTimeoutMs: _requestTimeoutMs, ...rest } = defaults;
-  return Object.values(rest).some((value) => value !== undefined)
-    ? rest
-    : undefined;
 }

@@ -101,6 +101,15 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
           providerId: this.id,
           providerLabel: this.label,
           traits: {
+            executionSupport: {
+              requestTimeoutMs: false,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: true,
+              timeoutMs: true,
+              maxConsecutivePollErrors: true,
+              resumeId: true,
+            },
             researchLifecycle: {
               supportsStartRetries: false,
               supportsRequestTimeouts: false,

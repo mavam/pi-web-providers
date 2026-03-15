@@ -110,6 +110,17 @@ export class PerplexityProvider
           capability: request.capability,
           providerId: this.id,
           providerLabel: this.label,
+          traits: {
+            executionSupport: {
+              requestTimeoutMs: true,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: false,
+              timeoutMs: false,
+              maxConsecutivePollErrors: false,
+              resumeId: false,
+            },
+          },
           execute: (context: ProviderContext) =>
             this.research(request.input, request.options, config, context),
         });
