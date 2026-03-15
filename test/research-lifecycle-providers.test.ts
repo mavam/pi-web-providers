@@ -148,6 +148,46 @@ describe("research lifecycle providers", () => {
     expect(result.content[0]?.text).toBe("Exa research result");
   });
 
+  it("applies the overall research timeout while Exa job creation is still pending", async () => {
+    vi.useFakeTimers();
+
+    exaResearchCreateMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => {
+            resolve({ researchId: "exa-job-1" });
+          }, 5);
+        }),
+    );
+
+    const promise = __test__.executeProviderTool({
+      capability: "research",
+      config: {
+        version: 1,
+        providers: {
+          exa: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      } satisfies WebProvidersConfig,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: { timeoutMs: 1 },
+      input: "Investigate Exa lifecycle polling",
+    });
+    const rejection = expect(promise).rejects.toThrow(
+      "Exa research exceeded 1ms. The provider may still create a background job, but no job id was returned so this run cannot be resumed automatically.",
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    await rejection;
+    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
+    expect(exaResearchGetMock).not.toHaveBeenCalled();
+  });
+
   it("filters unsupported request timeout defaults from uncancellable Exa polls", async () => {
     vi.useFakeTimers();
 

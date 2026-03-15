@@ -17,7 +17,9 @@ can safely enforce them:
 - `retryDelayMs` — base delay between retries (doubles on each attempt, capped
   at 30 s)
 
-The `web_research` tool adds controls for long-running investigations:
+The `web_research` tool adds controls for long-running investigations. The
+overall `timeoutMs` starts when the research request begins, including
+background job creation:
 
 - `pollIntervalMs` — how often to check for completion
 - `timeoutMs` — overall deadline for the research job
@@ -27,9 +29,11 @@ The `web_research` tool adds controls for long-running investigations:
 
 Perplexity research remains synchronous, so it only supports
 `requestTimeoutMs`, `retryCount`, and `retryDelayMs`. Exa and Valyu research
-support retries, polling, deadlines, and resume IDs, but reject
-`requestTimeoutMs` because their current SDK lifecycles do not safely support
-per-request local timeouts.
+support polling, overall deadlines, and resume IDs after job creation, but
+reject `requestTimeoutMs` because their current SDK lifecycles do not safely
+support per-request local timeouts. Their research start requests also avoid
+automatic start retries, because retrying a non-idempotent background-job
+creation call could create duplicate jobs.
 
 When a research job times out, the error message includes the job ID so you can
 pick up where it left off:

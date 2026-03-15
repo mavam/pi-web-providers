@@ -38,8 +38,8 @@ tool prompt aligned with the tools that the agent can actually call.
 - **Per-provider tool toggles** — disable individual capabilities you don't need
   without switching providers
 - **Parent-managed timeout and retry controls** — the extension can enforce
-  request timeouts and retries across all tools, plus polling intervals and
-  resumable background job IDs for lifecycle-based research providers
+  request timeouts across request/response tools, plus research polling,
+  deadlines, and resumable background job IDs for lifecycle-based providers
 - **Truncated output with temp-file spillover** for large results
 
 ## 📦 Install
@@ -121,13 +121,19 @@ fixed.
 The extension also accepts a few local control fields for robustness:
 `requestTimeoutMs`, `retryCount`, and `retryDelayMs` on request/response tools,
 plus `pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
-on `web_research` for lifecycle-based research providers. Perplexity research
-runs synchronously, so it only supports `requestTimeoutMs`, `retryCount`, and
-`retryDelayMs`; lifecycle fields are rejected instead of being silently ignored.
-Exa and Valyu research support retries, polling, deadlines, and resume IDs, but
-reject `requestTimeoutMs` because their current SDK lifecycles do not safely
-support per-request local timeouts. These fields are handled by the extension
-and are not forwarded into the provider SDK call.
+on `web_research` for lifecycle-based research providers. The overall research
+`timeoutMs` starts when the research request begins, including background job
+creation. Perplexity research runs synchronously, so it only supports
+`requestTimeoutMs`, `retryCount`, and `retryDelayMs`; lifecycle fields are
+rejected instead of being silently ignored. Exa and Valyu research support
+polling, overall deadlines, and resume IDs after job creation, but reject
+`requestTimeoutMs` because their current SDK lifecycles do not safely support
+per-request local timeouts. Their research start requests also do not use
+automatic start retries, because retrying a non-idempotent background-job
+creation call could create duplicate jobs. If an overall research timeout fires
+before a job ID is returned, the extension fails fast but cannot offer a
+`resumeId`. These fields are handled by the extension and are not forwarded
+into the provider SDK call.
 
 ## 🔌 Providers
 

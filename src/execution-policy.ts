@@ -206,7 +206,6 @@ export async function executeResearchWithLifecycle({
   startRetryOnTimeout = false,
   startRequestTimeoutMs,
   pollRequestTimeoutMs,
-  deferDeadlineUntilStarted = false,
   start,
   poll,
 }: {
@@ -220,7 +219,6 @@ export async function executeResearchWithLifecycle({
   startRetryOnTimeout?: boolean;
   startRequestTimeoutMs?: number | null;
   pollRequestTimeoutMs?: number | null;
-  deferDeadlineUntilStarted?: boolean;
   start: (context: ProviderContext) => Promise<ProviderResearchJob>;
   poll: (
     id: string,
@@ -265,9 +263,7 @@ export async function executeResearchWithLifecycle({
   };
 
   let jobId = policy.resumeId;
-  if (jobId || !deferDeadlineUntilStarted) {
-    activateLifecycleDeadline();
-  }
+  activateLifecycleDeadline();
 
   try {
     if (jobId) {
@@ -295,9 +291,6 @@ export async function executeResearchWithLifecycle({
         lifecycleContext,
       );
       jobId = job.id;
-      if (deferDeadlineUntilStarted) {
-        activateLifecycleDeadline();
-      }
       lifecycleContext.onProgress?.(
         `${providerLabel} research started: ${jobId}`,
       );
@@ -379,8 +372,13 @@ export async function executeResearchWithLifecycle({
       await sleep(policy.pollIntervalMs, lifecycleContext.signal);
     }
   } catch (error) {
-    if (jobId && isAbortErrorFromSignal(lifecycleContext.signal, error)) {
-      throw buildResumeError(error, jobId);
+    if (isAbortErrorFromSignal(lifecycleContext.signal, error)) {
+      if (jobId) {
+        throw buildResumeError(error, jobId);
+      }
+      if (error instanceof RequestTimeoutError) {
+        throw buildUnknownResearchStartError(error);
+      }
     }
     throw error;
   } finally {
@@ -635,6 +633,13 @@ function buildResumeError(error: string | unknown, jobId: string): Error {
   const message = typeof error === "string" ? error : formatErrorMessage(error);
   return new Error(
     `${message} Resume the background job with options.resumeId=${JSON.stringify(jobId)}.`,
+  );
+}
+
+function buildUnknownResearchStartError(error: string | unknown): Error {
+  const message = typeof error === "string" ? error : formatErrorMessage(error);
+  return new Error(
+    `${message} The provider may still create a background job, but no job id was returned so this run cannot be resumed automatically.`,
   );
 }
 

@@ -266,7 +266,7 @@ describe("execution policy", () => {
     }
   });
 
-  it("starts the overall research deadline after non-idempotent job creation", async () => {
+  it("applies the overall research deadline while a non-idempotent job is still starting", async () => {
     vi.useFakeTimers();
 
     try {
@@ -278,11 +278,8 @@ describe("execution policy", () => {
             }, 20);
           }),
       );
-      const poll = vi
-        .fn()
-        .mockResolvedValueOnce({ status: "in_progress" as const });
+      const poll = vi.fn();
 
-      let settled = false;
       const promise = executeResearchWithLifecycle({
         providerLabel: "Exa",
         providerId: "exa",
@@ -295,24 +292,18 @@ describe("execution policy", () => {
           timeoutMs: 10,
           maxConsecutivePollErrors: 3,
         },
-        deferDeadlineUntilStarted: true,
         start,
         poll,
-      }).finally(() => {
-        settled = true;
       });
 
-      await vi.advanceTimersByTimeAsync(15);
-      expect(settled).toBe(false);
-
       const rejection = expect(promise).rejects.toThrow(
-        'Exa research exceeded 10ms. Resume the background job with options.resumeId="research-123".',
+        "Exa research exceeded 10ms. The provider may still create a background job, but no job id was returned so this run cannot be resumed automatically.",
       );
-      await vi.advanceTimersByTimeAsync(15);
+      await vi.advanceTimersByTimeAsync(10);
       await rejection;
 
       expect(start).toHaveBeenCalledTimes(1);
-      expect(poll).toHaveBeenCalledTimes(1);
+      expect(poll).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

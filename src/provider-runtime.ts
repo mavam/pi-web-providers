@@ -60,7 +60,6 @@ export async function executeOperationPlan<
     pollRequestTimeoutMs: supportsRequestTimeouts
       ? researchPolicy.requestTimeoutMs
       : undefined,
-    deferDeadlineUntilStarted: !supportsSafeStartRetries,
     start: plan.start,
     poll: plan.poll,
   })) as TResult;
