@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createDefaultConfig,
@@ -11,6 +12,8 @@ import {
   serializeConfig,
 } from "../src/config.js";
 import { PROVIDER_MAP } from "../src/providers/index.js";
+
+const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const cleanupDirs: string[] = [];
 
@@ -282,6 +285,13 @@ describe("config parsing", () => {
     expect(PROVIDER_MAP.valyu.createTemplate().policy).toEqual(
       config.providers?.valyu?.policy,
     );
+  });
+
+  it("keeps example-config.json in sync with createDefaultConfig()", async () => {
+    const examplePath = join(PROJECT_ROOT, "example-config.json");
+    const exampleJson = JSON.parse(await readFile(examplePath, "utf-8"));
+    const defaultConfig = createDefaultConfig();
+    expect(exampleJson).toEqual(defaultConfig);
   });
 
   it("caches command-backed config values within the process", async () => {
