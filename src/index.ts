@@ -33,7 +33,6 @@ import {
 } from "./execution-policy.js";
 import {
   canResolveContentsFromStore,
-  cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
   parseSearchContentsPrefetchOptions,
@@ -116,8 +115,6 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
 
   pi.on("session_start", async (_event, ctx) => {
     await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
-    // Best-effort eviction of expired content-store entries on startup.
-    void cleanupContentStore();
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {

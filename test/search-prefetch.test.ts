@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { exaCtorMock, exaSearchMock, exaGetContentsMock } = vi.hoisted(() => ({
@@ -23,30 +20,20 @@ vi.mock("exa-js", () => ({
   }),
 }));
 
-const originalHome = process.env.HOME;
-const cleanupDirs: string[] = [];
-
-beforeEach(() => {
-  const home = mkdtempSync(join(tmpdir(), "pi-web-providers-prefetch-home-"));
-  cleanupDirs.push(home);
-  process.env.HOME = home;
-});
-
-afterEach(() => {
+beforeEach(async () => {
   exaCtorMock.mockClear();
   exaSearchMock.mockReset();
   exaGetContentsMock.mockReset();
-  if (originalHome === undefined) {
-    delete process.env.HOME;
-  } else {
-    process.env.HOME = originalHome;
-  }
-  while (cleanupDirs.length > 0) {
-    const dir = cleanupDirs.pop();
-    if (dir) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  }
+  const { resetContentStore } = await import("../src/prefetch-manager.js");
+  resetContentStore();
+});
+
+afterEach(async () => {
+  exaCtorMock.mockClear();
+  exaSearchMock.mockReset();
+  exaGetContentsMock.mockReset();
+  const { resetContentStore } = await import("../src/prefetch-manager.js");
+  resetContentStore();
 });
 
 describe("search contents prefetch", () => {
@@ -113,14 +100,10 @@ describe("search contents prefetch", () => {
       numResults: 2,
     });
 
-    // The prefetch is fire-and-forget: at this point the in-flight batch
-    // promise exists but hasn't completed yet, so no getContents calls have
-    // fired.
-    expect(exaGetContentsMock.mock.calls.length).toBe(0);
-
     // The first explicit web_contents call piggybacks on the in-flight batch
-    // prefetch promise, so the provider still receives a single batched
-    // contents request for both URLs.
+    // prefetch promise (or reuses the cached result if the prefetch already
+    // completed), so the provider receives at most a single batched contents
+    // request for both URLs.
     const contentsResult = await __test__.executeProviderTool({
       capability: "contents",
       config,

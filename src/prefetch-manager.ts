@@ -3,8 +3,8 @@ import {
   type ContentStore,
   type ContentStoreEntry,
   createStoreKey,
-  FileContentStore,
   hashKey,
+  MemoryContentStore,
 } from "./content-store.js";
 import { stripLocalExecutionOptions } from "./execution-policy.js";
 import {
@@ -110,7 +110,7 @@ interface StoredContentsResult {
   fromCache: boolean;
 }
 
-const contentStore = new FileContentStore();
+const contentStore = new MemoryContentStore();
 const inFlightContents = new Map<string, Promise<StoredContentsResult>>();
 const inFlightBatchContents = new Map<
   string,
@@ -703,6 +703,16 @@ export function formatPrefetchStatusText(
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Reset all in-memory cache state. Intended for use in tests to isolate
+ * test cases from each other.
+ */
+export function resetContentStore(): void {
+  contentStore.clear();
+  inFlightContents.clear();
+  inFlightBatchContents.clear();
 }
 
 export const __prefetchTest__ = {

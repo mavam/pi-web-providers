@@ -1,5 +1,5 @@
 ---
-title: Async search prefetch and local content store
+title: Async search prefetch and in-memory content cache
 type: feature
 authors:
   - mavam
@@ -7,7 +7,7 @@ authors:
 created: 2026-03-15T20:54:55.904964Z
 ---
 
-`web_search` now supports background page prefetching through `options.prefetch`, so you can warm a local content cache while the search results are returned.
+`web_search` now supports background page prefetching through `options.prefetch`, so you can warm an in-memory content cache while the search results are returned.
 
 ```json
 {
@@ -21,4 +21,4 @@ created: 2026-03-15T20:54:55.904964Z
 }
 ```
 
-Later `web_contents` calls can reuse those prefetched pages instead of refetching matching URLs, which speeds up search-to-read workflows and avoids redundant network requests.
+Later `web_contents` calls can reuse those prefetched pages instead of refetching matching URLs, which speeds up search-to-read workflows and avoids redundant network requests. The cache lives in memory for the duration of the session and is not persisted to disk.
