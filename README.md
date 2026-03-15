@@ -37,6 +37,9 @@ tool prompt aligned with the tools that the agent can actually call.
   explicitly enabled and the local CLI is installed and authenticated
 - **Per-provider tool toggles** — disable individual capabilities you don't need
   without switching providers
+- **Parent-managed timeout and retry controls** — the extension can enforce
+  request timeouts across request/response tools, plus research polling,
+  deadlines, and resumable background job IDs for lifecycle-based providers
 - **Truncated output with temp-file spillover** for large results
 
 ## 📦 Install
@@ -72,11 +75,11 @@ corresponding tool is never exposed to the agent.
 
 Find likely sources on the public web and return titles, URLs, and snippets.
 
-| Parameter    | Type    | Default  | Description                                                                   |
-| ------------ | ------- | -------- | ----------------------------------------------------------------------------- |
-| `query`      | string  | required | What to search for                                                            |
-| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                               |
-| `options`    | object  | —        | Provider-specific search options                                              |
+| Parameter    | Type    | Default  | Description                                                                                 |
+| ------------ | ------- | -------- | ------------------------------------------------------------------------------------------- |
+| `query`      | string  | required | What to search for                                                                          |
+| `maxResults` | integer | `5`      | Result count, clamped to `1–20`                                                             |
+| `options`    | object  | —        | Provider-specific search options                                                            |
 | `provider`   | string  | auto     | Optional override: `claude`, `codex`, `exa`, `gemini`, `perplexity`, `parallel`, or `valyu` |
 
 ### `web_contents`
@@ -112,28 +115,70 @@ Investigate a topic across web sources and produce a longer report.
 `options` are provider-native and provider-specific. Equivalent concepts can
 use different field names across SDKs, for example Perplexity uses `country`,
 Exa uses `userLocation`, and Valyu uses `countryCode`. Runtime `options`
-override provider defaults, but managed tool inputs and tool wiring stay fixed.
+override provider-native config, but managed tool inputs and tool wiring stay
+fixed.
+
+The extension also accepts a few local control fields for robustness:
+`requestTimeoutMs`, `retryCount`, and `retryDelayMs` on request/response tools,
+plus `pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
+on `web_research` for lifecycle-based research providers. The overall research
+`timeoutMs` starts when the research request begins, including background job
+creation. Perplexity research currently runs in streaming foreground mode, so
+it only supports `requestTimeoutMs`, `retryCount`, and `retryDelayMs`;
+lifecycle fields are rejected instead of being silently ignored. Exa and Valyu
+research support polling, overall deadlines, and resume IDs after job
+creation, but reject `requestTimeoutMs` because their current SDK lifecycles do
+not safely support per-request local timeouts. Their research start requests
+also do not use automatic start retries, because retrying a non-idempotent
+background-job creation call could create duplicate jobs. If an overall
+research timeout fires before a job ID is returned, the extension fails fast
+but cannot offer a `resumeId`. These fields are handled by the extension and
+are not forwarded into the provider SDK call.
+
+> [!NOTE]
+> Providers can deliver tool results in one of three modes, depending on what
+> they support.
+>
+> **Silent foreground.** The tool stays open with no intermediate output while
+> it runs, and the result is only usable after the tool finishes and returns
+> the final result.
+>
+> **Streaming foreground.** The tool stays open and shows progress updates or
+> partial output while the provider works, but the result is still only usable
+> after the tool finishes and returns the final result. Streaming changes what
+> you can see while waiting, not when the result is handed back.
+>
+> **Background research.** The tool can show research progress while the
+> provider keeps the run alive in the background, and the result becomes usable
+> when the current run reaches a final result. If the local run is interrupted
+> first, pi can resume the same research later with `resumeId` instead of
+> starting over.
+
+You still call `web_search`, `web_contents`, `web_answer`, and
+`web_research` the same way. What changes is how much feedback you get while a
+tool is running, and whether an interrupted research run can be resumed later.
 
 ## 🔌 Providers
 
 Every provider is a thin adapter around an official SDK. The table below
 summarises which capabilities each provider exposes:
 
-| Provider     | search | contents | answer | research | Auth                   |
-| ------------ | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude**   |   ✓    |          |   ✓    |          | Local Claude Code auth |
-| **Codex**    |   ✓    |          |        |          | Local Codex CLI auth   |
-| **Exa**      |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
-| **Gemini**   |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
-| **Perplexity** | ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
-| **Parallel** |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
-| **Valyu**    |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
+| Provider       | search | contents | answer | research | Auth                   |
+| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
+| **Claude**     |   ✓    |          |   ✓    |          | Local Claude Code auth |
+| **Codex**      |   ✓    |          |        |          | Local Codex CLI auth   |
+| **Exa**        |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
+| **Gemini**     |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Perplexity** |   ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
+| **Parallel**   |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
+| **Valyu**      |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
 
 ### Claude
 
 - SDK: `@anthropic-ai/claude-agent-sdk`
 - Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
   structured JSON adapter
+- Runs in **silent foreground** mode
 - Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
   `maxTurns`
 - Great for search plus grounded answers if you already use Claude Code locally
@@ -142,6 +187,7 @@ summarises which capabilities each provider exposes:
 
 - SDK: `@openai/codex-sdk`
 - Runs in read-only mode with web search enabled
+- Runs in **silent foreground** mode
 - Supports request-shaping `web_search.options` such as `model`,
   `modelReasoningEffort`, and `webSearchMode`
 - Best if you already use the local Codex CLI and auth flow
@@ -149,20 +195,34 @@ summarises which capabilities each provider exposes:
 ### Exa
 
 - SDK: `exa-js`
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
 - Neural, keyword, hybrid, and deep-research search modes
 - Inline text-content extraction on search results
 
 ### Gemini
 
 - SDK: `@google/genai`
-- Google Search grounding for answers and URL Context extraction for page contents
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
+- Google Search grounding for answers and URL Context extraction for page
+  contents
 - Deep-research agents via Google's Gemini API
+- Works with the extension's parent-managed timeout/retry controls for request
+  timeouts, retry/backoff behavior, research polling, and total research
+  deadlines
+- Can resume polling an existing background research interaction via
+  `options.resumeId`
 - Supports provider-native request options such as `model`, `config`,
   `generation_config`, and `agent_config` depending on the tool
 
 ### Perplexity
 
 - SDK: `@perplexity-ai/perplexity_ai`
+- `web_search` and `web_answer` run in **silent foreground** mode
+- `web_research` runs in **streaming foreground** mode: it can show partial
+  output while it runs, but it does not support `resumeId`, polling intervals,
+  or parent-managed research deadlines
 - Uses Perplexity Search for `web_search`
 - Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
 - Supports provider-specific `web_search.options` such as `country`,
@@ -171,6 +231,7 @@ summarises which capabilities each provider exposes:
 ### Parallel
 
 - SDK: `parallel-web`
+- Runs in **silent foreground** mode
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
 - Supports provider-native search and extraction options from the Parallel SDK
@@ -178,6 +239,8 @@ summarises which capabilities each provider exposes:
 ### Valyu
 
 - SDK: `valyu-js`
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
 - Web, proprietary, and news search types
 - Supports provider-native options such as `countryCode`, `responseLength`, and
   search/source filters
@@ -189,6 +252,8 @@ summarises which capabilities each provider exposes:
   for the selected provider and `enabled: false` for the others
 - Each provider can also enable or disable its individual tools through a `tools`
   block
+- Provider configuration is split into `native` settings that are forwarded to
+  the SDK and `policy` settings that are enforced by the extension runtime
 - Managed tools are registered from available provider capabilities, but the
   active tool set can still be narrower if you removed a tool from the session
 - If no provider is explicitly enabled for search, the extension falls back to
@@ -202,6 +267,8 @@ summarises which capabilities each provider exposes:
   - literal strings
   - environment variable names such as `EXA_API_KEY`
   - shell commands prefixed with `!`
+- Legacy `defaults` blocks are still accepted when reading config files, but the
+  extension now writes split `native` and `policy` blocks
 
 Example:
 
@@ -214,6 +281,11 @@ Example:
       "tools": {
         "search": true,
         "answer": true
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "codex": {
@@ -221,9 +293,14 @@ Example:
       "tools": {
         "search": true
       },
-      "defaults": {
+      "native": {
         "webSearchMode": "live",
         "networkAccessEnabled": true
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "exa": {
@@ -235,11 +312,19 @@ Example:
         "research": true
       },
       "apiKey": "EXA_API_KEY",
-      "defaults": {
+      "native": {
         "type": "auto",
         "contents": {
           "text": true
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 3
       }
     },
     "gemini": {
@@ -251,11 +336,19 @@ Example:
         "research": true
       },
       "apiKey": "GOOGLE_API_KEY",
-      "defaults": {
+      "native": {
         "searchModel": "gemini-2.5-flash",
         "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
         "researchAgent": "deep-research-pro-preview-12-2025"
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 10
       }
     },
     "perplexity": {
@@ -266,7 +359,7 @@ Example:
         "research": true
       },
       "apiKey": "PERPLEXITY_API_KEY",
-      "defaults": {
+      "native": {
         "search": {
           "country": "US"
         },
@@ -276,6 +369,11 @@ Example:
         "research": {
           "model": "sonar-deep-research"
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "parallel": {
@@ -285,7 +383,7 @@ Example:
         "contents": true
       },
       "apiKey": "PARALLEL_API_KEY",
-      "defaults": {
+      "native": {
         "search": {
           "mode": "agentic"
         },
@@ -293,6 +391,11 @@ Example:
           "excerpts": true,
           "full_content": false
         }
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "valyu": {
@@ -304,9 +407,17 @@ Example:
         "research": true
       },
       "apiKey": "VALYU_API_KEY",
-      "defaults": {
+      "native": {
         "searchType": "all",
         "responseLength": "short"
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000,
+        "researchPollIntervalMs": 3000,
+        "researchTimeoutMs": 21600000,
+        "researchMaxConsecutivePollErrors": 3
       }
     }
   }

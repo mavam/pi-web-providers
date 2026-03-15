@@ -23,6 +23,36 @@ afterEach(() => {
 });
 
 describe("CodexProvider", () => {
+  it("attaches config policy defaults to Codex operation plans", () => {
+    const provider = new CodexProvider();
+    const plan = provider.buildPlan(
+      {
+        capability: "search",
+        query: "latest docs",
+        maxResults: 5,
+      },
+      {
+        enabled: true,
+        policy: {
+          requestTimeoutMs: 1500,
+          retryCount: 2,
+          retryDelayMs: 250,
+        },
+      },
+    );
+
+    expect(plan).toMatchObject({
+      deliveryMode: "silent-foreground",
+      traits: {
+        policyDefaults: {
+          requestTimeoutMs: 1500,
+          retryCount: 2,
+          retryDelayMs: 250,
+        },
+      },
+    });
+  });
+
   it("forwards only user-facing search options and keeps managed thread settings fixed", async () => {
     startThreadMock.mockReturnValue({
       runStreamed: runStreamedMock.mockResolvedValue({

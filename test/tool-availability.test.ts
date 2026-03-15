@@ -263,6 +263,13 @@ describe("managed tool availability", () => {
         "answer",
       ),
     ).toEqual(["perplexity"]);
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "research",
+      ),
+    ).toEqual(["perplexity"]);
   });
 });
 

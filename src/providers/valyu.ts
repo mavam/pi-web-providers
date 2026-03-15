@@ -1,19 +1,29 @@
 import { Valyu } from "valyu-js";
+import { resolveConfigValue } from "../config.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultLifecyclePolicy } from "../execution-policy-defaults.js";
+import {
+  createBackgroundResearchPlan,
+  createSilentForegroundPlan,
+} from "../provider-plans.js";
 import type {
   ProviderContext,
+  ProviderOperationRequest,
+  ProviderResearchJob,
+  ProviderResearchPollResult,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
   ValyuProviderConfig,
   WebProvider,
 } from "../types.js";
-import { resolveConfigValue } from "../config.js";
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
-  readonly id = "valyu";
+  readonly id: "valyu" = "valyu";
   readonly label = "Valyu";
   readonly docsUrl = "https://docs.valyu.ai/sdk/typescript-sdk";
+  readonly capabilities = ["search", "contents", "answer", "research"] as const;
 
   createTemplate(): ValyuProviderConfig {
     return {
@@ -25,10 +35,11 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
         research: true,
       },
       apiKey: "VALYU_API_KEY",
-      defaults: {
+      native: {
         searchType: "all",
         responseLength: "short",
       },
+      policy: createDefaultLifecyclePolicy(),
     };
   }
 
@@ -46,6 +57,72 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(request: ProviderOperationRequest, config: ValyuProviderConfig) {
+    switch (request.capability) {
+      case "search":
+        return createSilentForegroundPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        });
+      case "contents":
+        return createSilentForegroundPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          execute: (context: ProviderContext) =>
+            this.contents(request.urls, request.options, config, context),
+        });
+      case "answer":
+        return createSilentForegroundPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          execute: (context: ProviderContext) =>
+            this.answer(request.query, request.options, config, context),
+        });
+      case "research":
+        return createBackgroundResearchPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          traits: {
+            executionSupport: {
+              requestTimeoutMs: false,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: true,
+              timeoutMs: true,
+              maxConsecutivePollErrors: true,
+              resumeId: true,
+            },
+            researchLifecycle: {
+              supportsStartRetries: false,
+              supportsRequestTimeouts: false,
+            },
+          },
+          start: (context: ProviderContext) =>
+            this.startResearch(request.input, request.options, config, context),
+          poll: (id: string, context: ProviderContext) =>
+            this.pollResearch(id, request.options, config, context),
+        });
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -59,8 +136,9 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     }
 
     const client = new Valyu(apiKey, config.baseUrl);
+    const native = config.native ?? config.defaults;
     const options = {
-      ...asJsonObject(config.defaults),
+      ...(stripLocalExecutionOptions(asJsonObject(native)) ?? {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
@@ -198,12 +276,12 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     };
   }
 
-  async research(
+  async startResearch(
     input: string,
     options: Record<string, unknown> | undefined,
     config: ValyuProviderConfig,
     context: ProviderContext,
-  ): Promise<ProviderToolOutput> {
+  ): Promise<ProviderResearchJob> {
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {
       throw new Error("Valyu is missing an API key.");
@@ -220,43 +298,79 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
       throw new Error(task.error || "Valyu deep research creation failed.");
     }
 
-    const result = await client.deepresearch.wait(task.deepresearch_id, {
-      onProgress: (status) => {
-        const progress = status.progress;
-        if (progress) {
-          context.onProgress?.(
-            `Valyu deep research: ${progress.current_step}/${progress.total_steps}`,
-          );
-        }
-      },
-    });
+    return { id: task.deepresearch_id };
+  }
+
+  async pollResearch(
+    id: string,
+    _options: Record<string, unknown> | undefined,
+    config: ValyuProviderConfig,
+    context: ProviderContext,
+  ): Promise<ProviderResearchPollResult> {
+    const apiKey = resolveConfigValue(config.apiKey);
+    if (!apiKey) {
+      throw new Error("Valyu is missing an API key.");
+    }
+
+    const client = new Valyu(apiKey, config.baseUrl);
+    const result = await client.deepresearch.status(id);
 
     if (!result.success) {
       throw new Error(result.error || "Valyu deep research failed.");
     }
 
-    const lines: string[] = [];
-    lines.push(
-      typeof result.output === "string"
-        ? result.output
-        : formatJson(result.output),
-    );
-
-    const sources = result.sources ?? [];
-    if (sources.length > 0) {
-      lines.push("");
-      lines.push("Sources:");
-      for (const [index, source] of sources.entries()) {
-        lines.push(`${index + 1}. ${source.title}`);
-        lines.push(`   ${source.url}`);
-      }
+    const progress = result.progress;
+    if (progress) {
+      context.onProgress?.(
+        `Valyu deep research: ${progress.current_step}/${progress.total_steps}`,
+      );
     }
 
-    return {
-      provider: this.id,
-      text: lines.join("\n").trimEnd(),
-      summary: `Research via Valyu with ${sources.length} source(s)`,
-      itemCount: sources.length,
-    };
+    if (result.status === "completed") {
+      const lines: string[] = [];
+      lines.push(
+        typeof result.output === "string"
+          ? result.output
+          : result.output
+            ? formatJson(result.output)
+            : "Valyu deep research completed without textual output.",
+      );
+
+      const sources = result.sources ?? [];
+      if (sources.length > 0) {
+        lines.push("");
+        lines.push("Sources:");
+        for (const [index, source] of sources.entries()) {
+          lines.push(`${index + 1}. ${source.title}`);
+          lines.push(`   ${source.url}`);
+        }
+      }
+
+      return {
+        status: "completed",
+        output: {
+          provider: this.id,
+          text: lines.join("\n").trimEnd(),
+          summary: `Research via Valyu with ${sources.length} source(s)`,
+          itemCount: sources.length,
+        },
+      };
+    }
+
+    if (result.status === "failed") {
+      return {
+        status: "failed",
+        error: result.error || "Valyu deep research failed.",
+      };
+    }
+
+    if (result.status === "cancelled") {
+      return {
+        status: "cancelled",
+        error: result.error || "Valyu deep research was canceled.",
+      };
+    }
+
+    return { status: "in_progress" };
   }
 }

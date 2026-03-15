@@ -38,14 +38,17 @@ describe("GeminiProvider search", () => {
       createContext(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      model: "gemini-2.5-flash",
-      input: "example query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        tool_choice: "any",
+    expect(create).toHaveBeenCalledWith(
+      {
+        model: "gemini-2.5-flash",
+        input: "example query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          tool_choice: "any",
+        },
       },
-    });
+      undefined,
+    );
     expect(response.results).toEqual([
       {
         title: "Alpha",
@@ -140,19 +143,27 @@ describe("GeminiProvider search", () => {
     );
 
     expect(create).toHaveBeenCalledTimes(2);
-    expect(create).toHaveBeenNthCalledWith(1, {
-      model: "gemini-2.5-flash",
-      input: "fallback query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        tool_choice: "any",
+    expect(create).toHaveBeenNthCalledWith(
+      1,
+      {
+        model: "gemini-2.5-flash",
+        input: "fallback query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          tool_choice: "any",
+        },
       },
-    });
-    expect(create).toHaveBeenNthCalledWith(2, {
-      model: "gemini-2.5-flash",
-      input: "fallback query",
-      tools: [{ type: "google_search" }],
-    });
+      undefined,
+    );
+    expect(create).toHaveBeenNthCalledWith(
+      2,
+      {
+        model: "gemini-2.5-flash",
+        input: "fallback query",
+        tools: [{ type: "google_search" }],
+      },
+      undefined,
+    );
     expect(response.results).toEqual([
       {
         title: "Fallback",
@@ -236,15 +247,18 @@ describe("GeminiProvider search", () => {
       createContext(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      model: "gemini-2.5-pro",
-      input: "configured query",
-      tools: [{ type: "google_search" }],
-      generation_config: {
-        temperature: 0.1,
-        tool_choice: "any",
+    expect(create).toHaveBeenCalledWith(
+      {
+        model: "gemini-2.5-pro",
+        input: "configured query",
+        tools: [{ type: "google_search" }],
+        generation_config: {
+          temperature: 0.1,
+          tool_choice: "any",
+        },
       },
-    });
+      undefined,
+    );
   });
 });
 
@@ -568,79 +582,16 @@ describe("GeminiProvider contents", () => {
 });
 
 describe("GeminiProvider research", () => {
-  it("emits elapsed-time heartbeats while research stays in progress", async () => {
-    vi.useFakeTimers();
-
-    try {
-      const get = vi
-        .fn()
-        .mockResolvedValueOnce({
-          status: "in_progress",
-        })
-        .mockResolvedValueOnce({
-          status: "in_progress",
-        })
-        .mockResolvedValueOnce({
-          status: "in_progress",
-        })
-        .mockResolvedValueOnce({
-          status: "in_progress",
-        })
-        .mockResolvedValueOnce({
-          status: "completed",
-          outputs: [{ type: "text", text: "Research result" }],
-        });
-
-      const provider = createProvider({
-        interactions: {
-          create: vi.fn().mockResolvedValue({ id: "research-1" }),
-          get,
-        },
-      });
-      const messages: string[] = [];
-
-      const promise = provider.research(
-        "Investigate Tenzir use cases",
-        { pollIntervalMs: 5000 },
-        createConfig(),
-        {
-          ...createContext(),
-          onProgress: (message) => messages.push(message),
-        },
-      );
-
-      await vi.advanceTimersByTimeAsync(20000);
-      const response = await promise;
-
-      expect(response.text).toBe("Research result");
-      expect(messages).toContain("Starting Gemini deep research");
-      expect(messages).toContain("Gemini research started: research-1");
-      expect(messages).toContain(
-        "Gemini research status: in_progress (0s elapsed)",
-      );
-      expect(messages).toContain(
-        "Gemini research status: completed (20s elapsed)",
-      );
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("forwards Gemini research request options and strips pollIntervalMs", async () => {
+  it("starts Gemini deep research and forwards provider-native request options", async () => {
     const create = vi.fn().mockResolvedValue({ id: "research-1" });
-    const get = vi.fn().mockResolvedValue({
-      status: "completed",
-      outputs: [{ type: "text", text: "Research result" }],
-    });
 
     const provider = createProvider({
       interactions: {
         create,
-        get,
       },
     });
 
-    await provider.research(
+    const job = await provider.startResearch!(
       "Investigate Tenzir use cases",
       {
         agent_config: {
@@ -652,30 +603,104 @@ describe("GeminiProvider research", () => {
         },
         response_modalities: ["TEXT"],
         system_instruction: "Focus on official sources.",
-        pollIntervalMs: 5000,
+        tools: [{ urlContext: {} }],
         agent: "override-agent",
         background: false,
         input: "override",
-        tools: [{ urlContext: {} }],
       },
+      createConfig(),
+      { ...createContext(), idempotencyKey: "stable-key" },
+    );
+
+    expect(job).toEqual({ id: "research-1" });
+    expect(create).toHaveBeenCalledWith(
+      {
+        agent_config: {
+          response_length: "short",
+        },
+        store: true,
+        response_format: {
+          type: "json_schema",
+        },
+        response_modalities: ["TEXT"],
+        system_instruction: "Focus on official sources.",
+        tools: [{ urlContext: {} }],
+        input: "Investigate Tenzir use cases",
+        agent: "deep-research-pro-preview-12-2025",
+        background: true,
+      },
+      { idempotencyKey: "stable-key" },
+    );
+  });
+
+  it("returns in-progress Gemini research status from polling", async () => {
+    const get = vi.fn().mockResolvedValue({ status: "in_progress" });
+
+    const provider = createProvider({
+      interactions: {
+        get,
+      },
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      undefined,
       createConfig(),
       createContext(),
     );
 
-    expect(create).toHaveBeenCalledWith({
-      agent_config: {
-        response_length: "short",
+    expect(get).toHaveBeenCalledWith("research-1", undefined, undefined);
+    expect(result).toEqual({ status: "in_progress" });
+  });
+
+  it("formats completed Gemini research output from polling", async () => {
+    const get = vi.fn().mockResolvedValue({
+      status: "completed",
+      outputs: [{ type: "text", text: "Research result" }],
+    });
+
+    const provider = createProvider({
+      interactions: {
+        get,
       },
-      store: true,
-      response_format: {
-        type: "json_schema",
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      undefined,
+      createConfig(),
+      createContext(),
+    );
+
+    expect(result).toEqual({
+      status: "completed",
+      output: {
+        provider: "gemini",
+        text: "Research result",
+        summary: "Research via Gemini",
       },
-      response_modalities: ["TEXT"],
-      system_instruction: "Focus on official sources.",
-      tools: [{ urlContext: {} }],
-      input: "Investigate Tenzir use cases",
-      agent: "deep-research-pro-preview-12-2025",
-      background: true,
+    });
+  });
+
+  it("maps failed Gemini research polling to a terminal status", async () => {
+    const get = vi.fn().mockResolvedValue({ status: "failed" });
+
+    const provider = createProvider({
+      interactions: {
+        get,
+      },
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      undefined,
+      createConfig(),
+      createContext(),
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      error: "Gemini research failed.",
     });
   });
 });

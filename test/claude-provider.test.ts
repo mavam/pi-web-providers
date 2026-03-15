@@ -91,6 +91,36 @@ describe("ClaudeProvider", () => {
     expect(execFileSyncMock).toHaveBeenCalledTimes(1);
   });
 
+  it("attaches config policy defaults to Claude operation plans", () => {
+    const provider = new ClaudeProvider();
+    const plan = provider.buildPlan(
+      {
+        capability: "search",
+        query: "latest Claude docs",
+        maxResults: 5,
+      },
+      {
+        enabled: true,
+        policy: {
+          requestTimeoutMs: 1500,
+          retryCount: 2,
+          retryDelayMs: 250,
+        },
+      },
+    );
+
+    expect(plan).toMatchObject({
+      deliveryMode: "silent-foreground",
+      traits: {
+        policyDefaults: {
+          requestTimeoutMs: 1500,
+          retryCount: 2,
+          retryDelayMs: 250,
+        },
+      },
+    });
+  });
+
   it("disables Claude session persistence for provider queries", async () => {
     queryMock.mockImplementation(() => ({
       async *[Symbol.asyncIterator]() {

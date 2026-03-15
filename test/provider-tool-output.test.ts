@@ -34,15 +34,23 @@ describe("provider tool output", () => {
       ctx: { cwd: process.cwd() },
       signal: undefined,
       onUpdate: undefined,
-      invoke: async () => ({
-        provider: "exa",
-        text: Array.from(
-          { length: 2500 },
-          (_, index) => `line ${index + 1}: ${"x".repeat(40)}`,
-        ).join("\n"),
-        summary: "Large contents via Exa",
-        itemCount: 2500,
-      }),
+      options: undefined,
+      urls: ["https://example.com"],
+      planOverride: {
+        capability: "contents",
+        providerId: "exa",
+        providerLabel: "Exa",
+        deliveryMode: "silent-foreground",
+        execute: async () => ({
+          provider: "exa",
+          text: Array.from(
+            { length: 2500 },
+            (_, index) => `line ${index + 1}: ${"x".repeat(40)}`,
+          ).join("\n"),
+          summary: "Large contents via Exa",
+          itemCount: 2500,
+        }),
+      },
     });
 
     const text = result.content[0]?.text ?? "";
@@ -55,14 +63,14 @@ describe("provider tool output", () => {
     }
   });
 
-  it("emits heartbeat updates for long-running research tools", async () => {
+  it("emits heartbeat updates for long-running foreground research tools", async () => {
     vi.useFakeTimers();
 
     try {
       const config: WebProvidersConfig = {
         version: 1,
         providers: {
-          gemini: {
+          perplexity: {
             enabled: true,
             apiKey: "literal-key",
           },
@@ -73,7 +81,7 @@ describe("provider tool output", () => {
       const resultPromise = __test__.executeProviderTool({
         capability: "research",
         config,
-        explicitProvider: "gemini",
+        explicitProvider: "perplexity",
         ctx: { cwd: process.cwd() },
         signal: undefined,
         onUpdate: (update) => {
@@ -82,14 +90,22 @@ describe("provider tool output", () => {
             updates.push(text);
           }
         },
-        invoke: async (_provider, _providerConfig, context) => {
-          context.onProgress?.("Starting research");
-          await new Promise((resolve) => setTimeout(resolve, 20000));
-          return {
-            provider: "gemini",
-            text: "Research complete",
-            summary: "Research via Gemini",
-          };
+        options: undefined,
+        input: "Investigate the topic",
+        planOverride: {
+          capability: "research",
+          providerId: "perplexity",
+          providerLabel: "Perplexity",
+          deliveryMode: "streaming-foreground",
+          execute: async (context) => {
+            context.onProgress?.("Starting research");
+            await new Promise((resolve) => setTimeout(resolve, 20000));
+            return {
+              provider: "perplexity",
+              text: "Research complete",
+              summary: "Research via Perplexity",
+            };
+          },
         },
       });
 
@@ -99,10 +115,270 @@ describe("provider tool output", () => {
       expect(result.content[0]?.text).toBe("Research complete");
       expect(updates).toContain("Starting research");
       expect(updates).toContain(
-        "web_research still running via gemini (15s elapsed)",
+        "web_research still running via perplexity (15s elapsed)",
       );
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("rejects lifecycle-only options for streaming foreground Perplexity research", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        perplexity: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "perplexity",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          resumeId: "job-1",
+          timeoutMs: 60000,
+        },
+        input: "Investigate the topic",
+      }),
+    ).rejects.toThrow(
+      "Perplexity research runs in streaming foreground mode and does not support timeoutMs, resumeId. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+    );
+  });
+
+  it("inherits request timeouts for streaming foreground plans that declare support", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const config: WebProvidersConfig = {
+        version: 1,
+        providers: {
+          perplexity: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      };
+
+      const resultPromise = __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "perplexity",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        input: "Investigate the topic",
+        planOverride: {
+          capability: "research",
+          providerId: "perplexity",
+          providerLabel: "Perplexity",
+          deliveryMode: "streaming-foreground",
+          traits: {
+            executionSupport: {
+              requestTimeoutMs: true,
+              retryCount: true,
+              retryDelayMs: true,
+              pollIntervalMs: false,
+              timeoutMs: false,
+              maxConsecutivePollErrors: false,
+              resumeId: false,
+            },
+            policyDefaults: {
+              requestTimeoutMs: 1,
+              retryCount: 0,
+              retryDelayMs: 1,
+            },
+          },
+          execute: async () =>
+            await new Promise((resolve) => {
+              setTimeout(() => {
+                resolve({
+                  provider: "perplexity" as const,
+                  text: "Research complete",
+                });
+              }, 5);
+            }),
+        },
+      });
+      const rejection = expect(resultPromise).rejects.toThrow(
+        "Perplexity research request timed out after 1ms.",
+      );
+
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rejects requestTimeoutMs for research providers that cannot safely enforce it", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          requestTimeoutMs: 1000,
+        },
+        input: "Investigate the topic",
+        planOverride: {
+          capability: "research",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "background-research",
+          start: async () => ({ id: "job-1" }),
+          poll: async () => ({
+            status: "completed",
+            output: {
+              provider: "exa",
+              text: "done",
+            },
+          }),
+        },
+      }),
+    ).rejects.toThrow(
+      "Exa research does not support requestTimeoutMs. Use retryCount/retryDelayMs/pollIntervalMs/timeoutMs/maxConsecutivePollErrors/resumeId instead.",
+    );
+  });
+
+  it("rejects malformed local execution control fields", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          requestTimeoutMs: "1000" as never,
+        },
+        urls: ["https://example.com"],
+        planOverride: {
+          capability: "contents",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            text: "contents",
+          }),
+        },
+      }),
+    ).rejects.toThrow("options.requestTimeoutMs must be a positive integer.");
+  });
+
+  it("rejects research-only execution controls on non-research tools", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          timeoutMs: 1000,
+          resumeId: "job-1",
+        },
+        urls: ["https://example.com"],
+        planOverride: {
+          capability: "contents",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            text: "contents",
+          }),
+        },
+      }),
+    ).rejects.toThrow(
+      "Exa contents does not support timeoutMs, resumeId. These controls only apply to web_research. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+    );
+  });
+
+  it("describes supported local execution controls in tool option help", () => {
+    expect(__test__.describeOptionsField("contents", ["exa"])).toBe(
+      "Provider-specific extraction options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs.",
+    );
+    expect(
+      __test__.describeOptionsField("research", [
+        "perplexity",
+        "exa",
+        "gemini",
+      ]),
+    ).toBe(
+      "Provider-specific research options. Depending on provider, local execution controls may include: requestTimeoutMs, retryCount, retryDelayMs, pollIntervalMs, timeoutMs, maxConsecutivePollErrors, resumeId.",
+    );
+  });
+
+  it("rejects removed resumeInteractionId compatibility for research", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "gemini",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          resumeInteractionId: "job-1",
+        },
+        input: "Investigate the topic",
+      }),
+    ).rejects.toThrow(
+      "resumeInteractionId is not supported. Use resumeId instead.",
+    );
   });
 });

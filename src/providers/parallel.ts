@@ -1,19 +1,24 @@
 import Parallel from "parallel-web";
+import { resolveConfigValue } from "../config.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
+import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   ParallelProviderConfig,
   ProviderContext,
+  ProviderOperationRequest,
   ProviderStatus,
   ProviderToolOutput,
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { resolveConfigValue } from "../config.js";
 import { asJsonObject, trimSnippet } from "./shared.js";
 
 export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
-  readonly id = "parallel";
+  readonly id: "parallel" = "parallel";
   readonly label = "Parallel";
   readonly docsUrl = "https://github.com/parallel-web/parallel-sdk-typescript";
+  readonly capabilities = ["search", "contents"] as const;
 
   createTemplate(): ParallelProviderConfig {
     return {
@@ -23,7 +28,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
         contents: true,
       },
       apiKey: "PARALLEL_API_KEY",
-      defaults: {
+      native: {
         search: {
           mode: "agentic",
         },
@@ -32,6 +37,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
           full_content: false,
         },
       },
+      policy: createDefaultRequestPolicy(),
     };
   }
 
@@ -49,6 +55,37 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     return { available: true, summary: "enabled" };
   }
 
+  buildPlan(request: ProviderOperationRequest, config: ParallelProviderConfig) {
+    switch (request.capability) {
+      case "search":
+        return createSilentForegroundPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          execute: (context: ProviderContext) =>
+            this.search(
+              request.query,
+              request.maxResults,
+              request.options,
+              config,
+              context,
+            ),
+        });
+      case "contents":
+        return createSilentForegroundPlan({
+          config,
+          capability: request.capability,
+          providerId: this.id,
+          providerLabel: this.label,
+          execute: (context: ProviderContext) =>
+            this.contents(request.urls, request.options, config, context),
+        });
+      default:
+        return null;
+    }
+  }
+
   async search(
     query: string,
     maxResults: number,
@@ -57,15 +94,20 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     context: ProviderContext,
   ): Promise<SearchResponse> {
     const client = this.createClient(config);
-    const defaults = asJsonObject(config.defaults?.search);
+    const native = config.native ?? config.defaults;
+    const defaults =
+      stripLocalExecutionOptions(asJsonObject(native?.search)) ?? {};
 
     context.onProgress?.(`Searching Parallel for: ${query}`);
-    const response = await client.beta.search({
-      ...defaults,
-      ...(options ?? {}),
-      objective: query,
-      max_results: maxResults,
-    });
+    const response = await client.beta.search(
+      {
+        ...defaults,
+        ...(options ?? {}),
+        objective: query,
+        max_results: maxResults,
+      },
+      buildRequestOptions(context),
+    );
 
     return {
       provider: this.id,
@@ -84,16 +126,21 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     context: ProviderContext,
   ): Promise<ProviderToolOutput> {
     const client = this.createClient(config);
-    const defaults = asJsonObject(config.defaults?.extract);
+    const native = config.native ?? config.defaults;
+    const defaults =
+      stripLocalExecutionOptions(asJsonObject(native?.extract)) ?? {};
 
     context.onProgress?.(
       `Fetching contents from Parallel for ${urls.length} URL(s)`,
     );
-    const response = await client.beta.extract({
-      ...defaults,
-      ...(options ?? {}),
-      urls,
-    });
+    const response = await client.beta.extract(
+      {
+        ...defaults,
+        ...(options ?? {}),
+        urls,
+      },
+      buildRequestOptions(context),
+    );
 
     const lines: string[] = [];
     for (const [index, result] of response.results.entries()) {
@@ -137,4 +184,10 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
       baseURL: resolveConfigValue(config.baseUrl),
     });
   }
+}
+
+function buildRequestOptions(
+  context: ProviderContext,
+): { signal: AbortSignal } | undefined {
+  return context.signal ? { signal: context.signal } : undefined;
 }

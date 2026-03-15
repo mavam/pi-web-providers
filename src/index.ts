@@ -27,10 +27,23 @@ import {
 import { Type } from "@sinclair/typebox";
 import { loadConfig, writeConfigFile } from "./config.js";
 import {
+  formatElapsed,
+  stripLocalExecutionOptions,
+} from "./execution-policy.js";
+import {
+  getProviderConfigManifest,
+  type ProviderSettingDescriptor,
+} from "./provider-config-manifests.js";
+import {
   getEffectiveProviderConfig,
   resolveProviderChoice,
   resolveProviderForCapability,
+  supportsProviderCapability,
 } from "./provider-resolution.js";
+import {
+  executeOperationPlan,
+  resolvePlanExecutionSupport,
+} from "./provider-runtime.js";
 import {
   isProviderToolEnabled,
   PROVIDER_TOOL_META,
@@ -46,8 +59,9 @@ import type {
   GeminiProviderConfig,
   JsonObject,
   ParallelProviderConfig,
-  PerplexityProviderConfig,
   ProviderId,
+  ProviderOperationPlan,
+  ProviderOperationRequest,
   ProviderToolDetails,
   ProviderToolOutput,
   SearchResponse,
@@ -55,7 +69,7 @@ import type {
   WebProvidersConfig,
   WebSearchDetails,
 } from "./types.js";
-import { PROVIDER_IDS } from "./types.js";
+import { EXECUTION_CONTROL_KEYS, PROVIDER_IDS } from "./types.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
@@ -140,7 +154,9 @@ function registerWebSearchTool(
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
-      options: jsonOptionsSchema("Provider-specific search options."),
+      options: jsonOptionsSchema(
+        describeOptionsField("search", visibleProviderIds),
+      ),
       provider: providerEnum(
         visibleProviderIds,
         "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
@@ -157,21 +173,39 @@ function registerWebSearchTool(
         throw new Error(`Provider '${provider.id}' is not configured.`);
       }
 
-      const response = await provider.search!(
-        params.query,
-        maxResults,
-        normalizeOptions(params.options),
-        providerConfig as never,
+      const progress = createToolProgressReporter(
+        "search",
+        provider.id,
+        onUpdate,
+      );
+      const options = normalizeOptions(params.options);
+      const plan = buildProviderPlan(
+        provider,
+        providerConfig as ProviderConfigUnion,
         {
-          cwd: ctx.cwd,
-          signal: signal ?? undefined,
-          onProgress: (message) =>
-            onUpdate?.({
-              content: [{ type: "text", text: message }],
-              details: {},
-            }),
+          capability: "search",
+          query: params.query,
+          maxResults,
+          options: stripLocalExecutionOptions(options),
         },
       );
+
+      let response: SearchResponse;
+      try {
+        const result = await executeOperationPlan(plan, options, {
+          cwd: ctx.cwd,
+          signal: signal ?? undefined,
+          onProgress: progress.report,
+        });
+        if (!isSearchResponse(result)) {
+          throw new Error(
+            `${provider.label} search returned an invalid result.`,
+          );
+        }
+        response = result;
+      } finally {
+        progress.stop();
+      }
 
       const rendered = await truncateAndSave(
         formatSearchResponse(response),
@@ -236,7 +270,7 @@ function registerWebContentsTool(
         minItems: 1,
         description: "One or more URLs to extract",
       }),
-      options: jsonOptionsSchema("Provider-specific extraction options."),
+      options: jsonOptionsSchema(describeOptionsField("contents", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports web contents.",
@@ -251,13 +285,8 @@ function registerWebContentsTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
-          provider.contents!(
-            params.urls,
-            normalizeOptions(params.options),
-            providerConfig as never,
-            context,
-          ),
+        options: normalizeOptions(params.options),
+        urls: params.urls,
       });
     },
     renderCall(args, theme) {
@@ -322,7 +351,7 @@ function registerWebAnswerTool(
     description: "Answer a question using web-grounded evidence.",
     parameters: Type.Object({
       query: Type.String({ description: "Question to answer" }),
-      options: jsonOptionsSchema("Provider-specific answer options."),
+      options: jsonOptionsSchema(describeOptionsField("answer", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports web answers.",
@@ -337,13 +366,8 @@ function registerWebAnswerTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
-          provider.answer!(
-            params.query,
-            normalizeOptions(params.options),
-            providerConfig as never,
-            context,
-          ),
+        options: normalizeOptions(params.options),
+        query: params.query,
       });
     },
     renderCall(args, theme) {
@@ -381,7 +405,7 @@ function registerWebResearchTool(
       "Investigate a topic across web sources and produce a longer report.",
     parameters: Type.Object({
       input: Type.String({ description: "Research brief or question" }),
-      options: jsonOptionsSchema("Provider-specific research options."),
+      options: jsonOptionsSchema(describeOptionsField("research", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports research.",
@@ -396,13 +420,8 @@ function registerWebResearchTool(
         ctx,
         signal,
         onUpdate,
-        invoke: (provider, providerConfig, context) =>
-          provider.research!(
-            params.input,
-            normalizeOptions(params.options),
-            providerConfig as never,
-            context,
-          ),
+        options: normalizeOptions(params.options),
+        input: params.input,
       });
     },
     renderCall(args, theme) {
@@ -544,8 +563,8 @@ async function syncManagedToolAvailability(
 function getProviderIdsForCapability(
   capability: ProviderCapability,
 ): ProviderId[] {
-  return PROVIDERS.filter(
-    (provider) => typeof provider[capability] === "function",
+  return PROVIDERS.filter((provider) =>
+    supportsProviderCapability(provider, capability),
   ).map((provider) => provider.id);
 }
 
@@ -573,6 +592,88 @@ function jsonOptionsSchema(description: string) {
   );
 }
 
+function describeOptionsField(
+  capability: ProviderCapability,
+  providerIds: readonly ProviderId[],
+): string {
+  const labels: Record<ProviderCapability, string> = {
+    search: "Provider-specific search options.",
+    contents: "Provider-specific extraction options.",
+    answer: "Provider-specific answer options.",
+    research: "Provider-specific research options.",
+  };
+  const supportedControls = getSupportedExecutionControlsForCapability(
+    capability,
+    providerIds,
+  );
+
+  if (supportedControls.length === 0) {
+    return labels[capability];
+  }
+
+  const qualifier =
+    capability === "research"
+      ? " Depending on provider, local execution controls may include: "
+      : " Local execution controls: ";
+
+  return `${labels[capability]}${qualifier}${supportedControls.join(", ")}.`;
+}
+
+function getSupportedExecutionControlsForCapability(
+  capability: ProviderCapability,
+  providerIds: readonly ProviderId[],
+): string[] {
+  const supportedControls = new Set<string>();
+
+  for (const providerId of providerIds) {
+    const provider = PROVIDER_MAP[providerId];
+    const plan = provider.buildPlan(
+      createExecutionSupportProbeRequest(capability),
+      provider.createTemplate() as never,
+    );
+    if (!plan) {
+      continue;
+    }
+
+    const executionSupport = resolvePlanExecutionSupport(plan);
+    for (const key of EXECUTION_CONTROL_KEYS) {
+      if (executionSupport[key] === true) {
+        supportedControls.add(key);
+      }
+    }
+  }
+
+  return EXECUTION_CONTROL_KEYS.filter((key) => supportedControls.has(key));
+}
+
+function createExecutionSupportProbeRequest(
+  capability: ProviderCapability,
+): ProviderOperationRequest {
+  switch (capability) {
+    case "search":
+      return {
+        capability,
+        query: "Describe execution controls",
+        maxResults: 1,
+      };
+    case "contents":
+      return {
+        capability,
+        urls: ["https://example.com"],
+      };
+    case "answer":
+      return {
+        capability,
+        query: "Describe execution controls",
+      };
+    case "research":
+      return {
+        capability,
+        input: "Describe execution controls",
+      };
+  }
+}
+
 async function executeProviderTool({
   capability,
   config,
@@ -580,7 +681,11 @@ async function executeProviderTool({
   ctx,
   signal,
   onUpdate,
-  invoke,
+  options,
+  urls,
+  query,
+  input,
+  planOverride,
 }: {
   capability: Exclude<ProviderCapability, "search">;
   config: WebProvidersConfig;
@@ -593,15 +698,11 @@ async function executeProviderTool({
         details: {};
       }) => void)
     | undefined;
-  invoke: (
-    provider: (typeof PROVIDERS)[number],
-    providerConfig: ProviderConfigUnion,
-    context: {
-      cwd: string;
-      signal?: AbortSignal;
-      onProgress?: (message: string) => void;
-    },
-  ) => Promise<ProviderToolOutput>;
+  options: JsonObject | undefined;
+  urls?: string[];
+  query?: string;
+  input?: string;
+  planOverride?: ProviderOperationPlan<ProviderToolOutput>;
 }) {
   const provider = resolveProviderForCapability(
     config,
@@ -619,14 +720,33 @@ async function executeProviderTool({
     provider.id,
     onUpdate,
   );
+  const providerContext = {
+    cwd: ctx.cwd,
+    signal: signal ?? undefined,
+    onProgress: progress.report,
+  };
+  const plan =
+    planOverride ??
+    buildProviderPlan(
+      provider,
+      providerConfig as ProviderConfigUnion,
+      buildOperationRequest(capability, {
+        urls,
+        query,
+        input,
+        options: stripLocalExecutionOptions(options),
+      }),
+    );
 
   let response: ProviderToolOutput;
   try {
-    response = await invoke(provider, providerConfig as ProviderConfigUnion, {
-      cwd: ctx.cwd,
-      signal: signal ?? undefined,
-      onProgress: progress.report,
-    });
+    const result = await executeOperationPlan(plan, options, providerContext);
+    if (isSearchResponse(result)) {
+      throw new Error(
+        `${provider.label} ${capability} returned an invalid result.`,
+      );
+    }
+    response = result;
   } finally {
     progress.stop();
   }
@@ -643,6 +763,58 @@ async function executeProviderTool({
     content: [{ type: "text" as const, text }],
     details,
   };
+}
+
+function buildOperationRequest(
+  capability: Exclude<ProviderCapability, "search">,
+  args: {
+    options: JsonObject | undefined;
+    urls?: string[];
+    query?: string;
+    input?: string;
+  },
+): ProviderOperationRequest {
+  if (capability === "contents") {
+    return {
+      capability,
+      urls: args.urls ?? [],
+      options: args.options,
+    };
+  }
+
+  if (capability === "answer") {
+    return {
+      capability,
+      query: args.query ?? "",
+      options: args.options,
+    };
+  }
+
+  return {
+    capability,
+    input: args.input ?? "",
+    options: args.options,
+  };
+}
+
+function buildProviderPlan(
+  provider: (typeof PROVIDERS)[number],
+  providerConfig: ProviderConfigUnion,
+  request: ProviderOperationRequest,
+) {
+  const plan = provider.buildPlan(request, providerConfig as never);
+  if (!plan) {
+    throw new Error(
+      `Provider '${provider.id}' could not build a plan for '${request.capability}'.`,
+    );
+  }
+  return plan;
+}
+
+function isSearchResponse(
+  value: SearchResponse | ProviderToolOutput,
+): value is SearchResponse {
+  return "results" in value;
 }
 
 function normalizeOptions(value: unknown): JsonObject | undefined {
@@ -772,37 +944,6 @@ function renderProviderToolResult(
   return new Text(summaryText, 0, 0);
 }
 
-interface ProviderMenuOption {
-  key:
-    | "apiKey"
-    | "baseUrl"
-    | "model"
-    | "claudePathToExecutable"
-    | "claudeEffort"
-    | "claudeMaxTurns"
-    | "modelReasoningEffort"
-    | "webSearchMode"
-    | "networkAccessEnabled"
-    | "webSearchEnabled"
-    | "additionalDirectories"
-    | "exaSearchType"
-    | "exaTextContents"
-    | "geminiApiVersion"
-    | "geminiSearchModel"
-    | "geminiContentsModel"
-    | "geminiAnswerModel"
-    | "geminiResearchAgent"
-    | "parallelSearchMode"
-    | "parallelExtractExcerpts"
-    | "parallelExtractFullContent"
-    | "valyuSearchType"
-    | "valyuResponseLength";
-  label: string;
-  help: string;
-  kind: "text" | "values";
-  values?: string[];
-}
-
 interface ProviderToolMenuOption {
   key: ProviderToolId;
   label: string;
@@ -828,231 +969,11 @@ function buildProviderToolMenuOptions(
   }));
 }
 
-function buildProviderMenuOptions(
+function getProviderSettings(
   providerId: ProviderId,
-): ProviderMenuOption[] {
-  const options: ProviderMenuOption[] = [];
-
-  const pushText = (
-    key:
-      | "apiKey"
-      | "baseUrl"
-      | "model"
-      | "claudePathToExecutable"
-      | "claudeMaxTurns"
-      | "additionalDirectories"
-      | "geminiSearchModel"
-      | "geminiContentsModel"
-      | "geminiAnswerModel"
-      | "geminiResearchAgent",
-    label: string,
-    help: string,
-  ) => {
-    options.push({
-      key,
-      label,
-      help,
-      kind: "text",
-    });
-  };
-
-  const pushValues = (
-    key:
-      | "claudeEffort"
-      | "modelReasoningEffort"
-      | "webSearchMode"
-      | "networkAccessEnabled"
-      | "webSearchEnabled"
-      | "exaSearchType"
-      | "exaTextContents"
-      | "geminiApiVersion"
-      | "parallelSearchMode"
-      | "parallelExtractExcerpts"
-      | "parallelExtractFullContent"
-      | "valyuSearchType"
-      | "valyuResponseLength",
-    label: string,
-    help: string,
-    values: string[],
-  ) => {
-    options.push({
-      key,
-      label,
-      help,
-      kind: "values",
-      values,
-    });
-  };
-
-  if (providerId === "claude") {
-    pushText(
-      "model",
-      "Model",
-      "Optional Claude model override. Leave empty to use the local default.",
-    );
-    pushValues(
-      "claudeEffort",
-      "Effort",
-      "How much effort Claude should use. 'default' uses the SDK default.",
-      ["default", "low", "medium", "high", "max"],
-    );
-    pushText(
-      "claudeMaxTurns",
-      "Max turns",
-      "Optional maximum number of Claude turns. Leave empty to use the SDK default.",
-    );
-    pushText(
-      "claudePathToExecutable",
-      "Executable path",
-      "Optional path to the Claude Code executable. Leave empty to use the bundled/default executable.",
-    );
-    return options;
-  }
-
-  if (providerId === "codex") {
-    pushText(
-      "model",
-      "Model",
-      "Optional Codex model override. Leave empty to use the local default.",
-    );
-    pushValues(
-      "modelReasoningEffort",
-      "Reasoning effort",
-      "Reasoning depth for Codex. 'default' uses the SDK default.",
-      ["default", "minimal", "low", "medium", "high", "xhigh"],
-    );
-    pushValues(
-      "webSearchMode",
-      "Web search mode",
-      "How Codex should source web results. 'default' currently behaves like 'live'.",
-      ["default", "disabled", "cached", "live"],
-    );
-    pushValues(
-      "networkAccessEnabled",
-      "Network access",
-      "Allow Codex network access during search runs. 'default' currently behaves like 'true'.",
-      ["default", "true", "false"],
-    );
-    pushValues(
-      "webSearchEnabled",
-      "Web search",
-      "Enable Codex web search. 'default' currently behaves like 'true'.",
-      ["default", "true", "false"],
-    );
-    pushText(
-      "additionalDirectories",
-      "Additional dirs",
-      "Optional comma-separated directories that Codex may read in addition to the current working directory.",
-    );
-    return options;
-  }
-
-  pushText(
-    "apiKey",
-    "API key",
-    "Provider API key. You can use a literal value, an env var name like EXA_API_KEY, or !command.",
-  );
-  if (providerId !== "gemini") {
-    pushText("baseUrl", "Base URL", "Optional API base URL override.");
-  }
-
-  if (providerId === "exa") {
-    pushValues(
-      "exaSearchType",
-      "Search type",
-      "Exa search mode. 'default' uses the SDK default.",
-      [
-        "default",
-        "keyword",
-        "neural",
-        "auto",
-        "hybrid",
-        "fast",
-        "instant",
-        "deep",
-        "deep-reasoning",
-        "deep-max",
-      ],
-    );
-    pushValues(
-      "exaTextContents",
-      "Text contents",
-      "Whether Exa should include text contents in search results. 'default' uses the SDK default.",
-      ["default", "true", "false"],
-    );
-    return options;
-  }
-
-  if (providerId === "gemini") {
-    pushValues(
-      "geminiApiVersion",
-      "API version",
-      "Gemini API version. 'default' uses the SDK default beta endpoints.",
-      ["default", "v1alpha", "v1beta", "v1"],
-    );
-    pushText(
-      "geminiSearchModel",
-      "Search model",
-      "Model used for Gemini search interactions.",
-    );
-    pushText(
-      "geminiContentsModel",
-      "Contents model",
-      "Model used for Gemini URL content extraction via URL Context.",
-    );
-    pushText(
-      "geminiAnswerModel",
-      "Answer model",
-      "Model used for grounded Gemini answers.",
-    );
-    pushText(
-      "geminiResearchAgent",
-      "Research agent",
-      "Agent used for Gemini deep research runs.",
-    );
-    return options;
-  }
-
-  if (providerId === "perplexity") {
-    return options;
-  }
-
-  if (providerId === "parallel") {
-    pushValues(
-      "parallelSearchMode",
-      "Search mode",
-      "Parallel search mode. 'default' uses the SDK default.",
-      ["default", "agentic", "one-shot"],
-    );
-    pushValues(
-      "parallelExtractExcerpts",
-      "Extract excerpts",
-      "Include excerpts in Parallel extraction results. 'default' uses the SDK default.",
-      ["default", "on", "off"],
-    );
-    pushValues(
-      "parallelExtractFullContent",
-      "Extract full content",
-      "Include full page content in Parallel extraction results. 'default' uses the SDK default.",
-      ["default", "on", "off"],
-    );
-    return options;
-  }
-
-  pushValues(
-    "valyuSearchType",
-    "Search type",
-    "Valyu search type. 'default' uses the SDK default.",
-    ["default", "all", "web", "proprietary", "news"],
-  );
-  pushValues(
-    "valyuResponseLength",
-    "Response length",
-    "Valyu response length. 'default' uses the SDK default.",
-    ["default", "short", "medium", "large", "max"],
-  );
-
-  return options;
+): readonly ProviderSettingDescriptor<ProviderConfigUnion>[] {
+  return getProviderConfigManifest(providerId)
+    .settings as readonly ProviderSettingDescriptor<ProviderConfigUnion>[];
 }
 
 class WebProvidersSettingsView implements Component {
@@ -1096,7 +1017,12 @@ class WebProvidersSettingsView implements Component {
 
     const configItems = this.buildConfigSectionItems();
     lines.push(
-      ...this.renderSection(width, "Provider config", "config", configItems),
+      ...this.renderSection(
+        width,
+        "Provider config & policy",
+        "config",
+        configItems,
+      ),
     );
 
     const selected = this.getSelectedEntry();
@@ -1193,82 +1119,34 @@ class WebProvidersSettingsView implements Component {
 
   private buildConfigSectionItems(): SettingsEntry[] {
     const providerConfig = this.currentProviderConfig();
-    return buildProviderMenuOptions(this.activeProvider).map((option) =>
-      this.buildProviderItem(option, providerConfig),
+    return getProviderSettings(this.activeProvider).map((setting) =>
+      this.buildProviderItem(setting, providerConfig),
     );
   }
 
   private buildProviderItem(
-    option: ProviderMenuOption,
+    setting: ProviderSettingDescriptor<ProviderConfigUnion>,
     providerConfig: ProviderConfigUnion | undefined,
   ): SettingsEntry {
-    if (option.kind === "values") {
+    if (setting.kind === "values") {
       return {
-        id: option.key,
-        label: option.label,
-        currentValue: getProviderChoiceValue(
-          this.activeProvider,
-          providerConfig,
-          option.key as
-            | "claudeEffort"
-            | "modelReasoningEffort"
-            | "webSearchMode"
-            | "networkAccessEnabled"
-            | "webSearchEnabled"
-            | "exaSearchType"
-            | "exaTextContents"
-            | "geminiApiVersion"
-            | "parallelSearchMode"
-            | "parallelExtractExcerpts"
-            | "parallelExtractFullContent"
-            | "valyuSearchType"
-            | "valyuResponseLength",
-        ),
-        values: option.values,
-        description: option.help,
+        id: setting.id,
+        label: setting.label,
+        currentValue: setting.getValue(providerConfig),
+        values: setting.values,
+        description: setting.help,
         kind: "cycle",
       };
     }
 
-    if (option.kind === "text") {
-      const key = option.key as ProviderMenuOption["key"];
-      const currentValue =
-        this.activeProvider === "claude" &&
-        (key === "model" ||
-          key === "claudePathToExecutable" ||
-          key === "claudeMaxTurns")
-          ? getClaudeTextSettingValue(
-              providerConfig as ClaudeProviderConfig | undefined,
-              key,
-            )
-          : key === "model" || key === "additionalDirectories"
-            ? getCodexTextSettingValue(
-                providerConfig as CodexProviderConfig | undefined,
-                key,
-              )
-            : key === "geminiSearchModel" ||
-                key === "geminiContentsModel" ||
-                key === "geminiAnswerModel" ||
-                key === "geminiResearchAgent"
-              ? getGeminiTextSettingValue(
-                  providerConfig as GeminiProviderConfig | undefined,
-                  key,
-                )
-              : getProviderStringValue(
-                  providerConfig,
-                  key as "apiKey" | "baseUrl",
-                );
-      const secret = key === "apiKey";
-      return {
-        id: key,
-        label: option.label,
-        currentValue: summarizeStringValue(currentValue, secret),
-        description: option.help,
-        kind: "text",
-      };
-    }
-
-    throw new Error(`Unsupported provider menu option: ${option.key}`);
+    const currentValue = setting.getValue(providerConfig);
+    return {
+      id: setting.id,
+      label: setting.label,
+      currentValue: summarizeStringValue(currentValue, setting.secret === true),
+      description: setting.help,
+      kind: "text",
+    };
   }
 
   private currentProviderConfig(): ProviderConfigUnion | undefined {
@@ -1416,38 +1294,13 @@ class WebProvidersSettingsView implements Component {
 
   private getEntryRawValue(id: string): string | undefined {
     const providerConfig = this.currentProviderConfig();
-    if (id === "apiKey" || id === "baseUrl") {
-      return getProviderStringValue(providerConfig, id);
+    const setting = getProviderSettings(this.activeProvider).find(
+      (candidate) => candidate.id === id,
+    );
+    if (!setting || setting.kind !== "text") {
+      return undefined;
     }
-    if (
-      this.activeProvider === "claude" &&
-      (id === "model" ||
-        id === "claudePathToExecutable" ||
-        id === "claudeMaxTurns")
-    ) {
-      return getClaudeTextSettingValue(
-        providerConfig as ClaudeProviderConfig | undefined,
-        id,
-      );
-    }
-    if (id === "model" || id === "additionalDirectories") {
-      return getCodexTextSettingValue(
-        providerConfig as CodexProviderConfig | undefined,
-        id,
-      );
-    }
-    if (
-      id === "geminiSearchModel" ||
-      id === "geminiContentsModel" ||
-      id === "geminiAnswerModel" ||
-      id === "geminiResearchAgent"
-    ) {
-      return getGeminiTextSettingValue(
-        providerConfig as GeminiProviderConfig | undefined,
-        id,
-      );
-    }
-    return undefined;
+    return setting.getValue(providerConfig);
   }
 
   private async handleChange(id: string, value: string): Promise<void> {
@@ -1474,80 +1327,26 @@ class WebProvidersSettingsView implements Component {
         config.providers?.[this.activeProvider] as
           | ProviderConfigUnion
           | undefined,
-      ) as Record<string, JsonObject | string | boolean | undefined>;
+      );
 
       if (id.startsWith("tool:")) {
         const toolId = id.slice("tool:".length) as ProviderToolId;
-        const typedProviderConfig =
-          providerConfig as unknown as ProviderConfigUnion;
-        const tools = (typedProviderConfig.tools ?? {}) as Partial<
+        const tools = (providerConfig.tools ?? {}) as Partial<
           Record<ProviderToolId, boolean>
         >;
         tools[toolId] = value === "on";
-        typedProviderConfig.tools = tools as typeof typedProviderConfig.tools;
-        config.providers[this.activeProvider] = typedProviderConfig as never;
+        providerConfig.tools = tools as typeof providerConfig.tools;
+        config.providers[this.activeProvider] = providerConfig as never;
         return;
       }
 
-      if (id === "apiKey" || id === "baseUrl") {
-        assignOptionalString(providerConfig, id, value);
-      } else if (
-        this.activeProvider === "claude" &&
-        applyClaudeSettingChange(
-          providerConfig as unknown as ClaudeProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else if (
-        this.activeProvider === "codex" &&
-        applyCodexSettingChange(
-          providerConfig as unknown as CodexProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else if (
-        this.activeProvider === "exa" &&
-        applyExaSettingChange(
-          providerConfig as unknown as ExaProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else if (
-        this.activeProvider === "gemini" &&
-        applyGeminiSettingChange(
-          providerConfig as unknown as GeminiProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else if (
-        this.activeProvider === "parallel" &&
-        applyParallelSettingChange(
-          providerConfig as unknown as ParallelProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else if (
-        this.activeProvider === "valyu" &&
-        applyValyuSettingChange(
-          providerConfig as unknown as ValyuProviderConfig,
-          id,
-          value,
-        )
-      ) {
-        // handled above
-      } else {
+      const setting = getProviderSettings(this.activeProvider).find(
+        (candidate) => candidate.id === id,
+      );
+      if (!setting) {
         throw new Error(`Unknown setting '${id}'.`);
       }
+      setting.setValue(providerConfig, value);
       config.providers[this.activeProvider] = providerConfig as never;
     });
   }
@@ -1686,503 +1485,6 @@ function summarizeStringValue(
   return truncateInline(value, 40);
 }
 
-function getProviderStringValue(
-  config: ProviderConfigUnion | undefined,
-  key: "apiKey" | "baseUrl",
-): string | undefined {
-  if (!config) return undefined;
-  const value = (config as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : undefined;
-}
-
-function getProviderChoiceValue(
-  providerId: ProviderId,
-  config: ProviderConfigUnion | undefined,
-  key:
-    | "claudeEffort"
-    | "modelReasoningEffort"
-    | "webSearchMode"
-    | "networkAccessEnabled"
-    | "webSearchEnabled"
-    | "exaSearchType"
-    | "exaTextContents"
-    | "geminiApiVersion"
-    | "parallelSearchMode"
-    | "parallelExtractExcerpts"
-    | "parallelExtractFullContent"
-    | "valyuSearchType"
-    | "valyuResponseLength",
-): string {
-  if (providerId === "claude") {
-    const defaults = (config as ClaudeProviderConfig | undefined)?.defaults;
-    if (key === "claudeEffort") {
-      return typeof defaults?.effort === "string" ? defaults.effort : "default";
-    }
-  }
-
-  if (providerId === "codex") {
-    const defaults = (config as CodexProviderConfig | undefined)?.defaults;
-    if (key === "networkAccessEnabled" || key === "webSearchEnabled") {
-      const value = defaults?.[key];
-      return typeof value === "boolean" ? String(value) : "default";
-    }
-    if (key === "modelReasoningEffort" || key === "webSearchMode") {
-      const value = defaults?.[key];
-      return typeof value === "string" ? value : "default";
-    }
-  }
-
-  if (providerId === "exa") {
-    const defaults = (config as ExaProviderConfig | undefined)?.defaults as
-      | Record<string, unknown>
-      | undefined;
-    if (key === "exaSearchType") {
-      return typeof defaults?.type === "string" ? defaults.type : "default";
-    }
-    if (key === "exaTextContents") {
-      const contents = isJsonObject(defaults?.contents)
-        ? defaults.contents
-        : undefined;
-      return typeof contents?.text === "boolean"
-        ? String(contents.text)
-        : "default";
-    }
-  }
-
-  if (providerId === "valyu") {
-    const defaults = (config as ValyuProviderConfig | undefined)?.defaults as
-      | Record<string, unknown>
-      | undefined;
-    if (key === "valyuSearchType") {
-      return typeof defaults?.searchType === "string"
-        ? defaults.searchType
-        : "default";
-    }
-    if (key === "valyuResponseLength") {
-      return typeof defaults?.responseLength === "string"
-        ? defaults.responseLength
-        : "default";
-    }
-  }
-
-  if (providerId === "gemini") {
-    const defaults = (config as GeminiProviderConfig | undefined)?.defaults;
-    if (key === "geminiApiVersion") {
-      return typeof defaults?.apiVersion === "string"
-        ? defaults.apiVersion
-        : "default";
-    }
-  }
-
-  if (providerId === "parallel") {
-    const defaults = (config as ParallelProviderConfig | undefined)?.defaults;
-    const search = isJsonObject(defaults?.search) ? defaults.search : undefined;
-    const extract = isJsonObject(defaults?.extract)
-      ? defaults.extract
-      : undefined;
-    if (key === "parallelSearchMode") {
-      return typeof search?.mode === "string" ? search.mode : "default";
-    }
-    if (key === "parallelExtractExcerpts") {
-      if (extract?.excerpts === undefined) return "default";
-      return extract.excerpts ? "on" : "off";
-    }
-    if (key === "parallelExtractFullContent") {
-      if (extract?.full_content === undefined) return "default";
-      return extract.full_content ? "on" : "off";
-    }
-  }
-
-  throw new Error(`Unsupported choice setting '${key}' for '${providerId}'.`);
-}
-
-function getClaudeTextSettingValue(
-  config: ClaudeProviderConfig | undefined,
-  key: "model" | "claudePathToExecutable" | "claudeMaxTurns",
-): string | undefined {
-  if (key === "claudePathToExecutable") {
-    return config?.pathToClaudeCodeExecutable;
-  }
-
-  const defaults = config?.defaults;
-  if (!defaults) return undefined;
-  if (key === "claudeMaxTurns") {
-    return typeof defaults.maxTurns === "number"
-      ? String(defaults.maxTurns)
-      : undefined;
-  }
-  return defaults.model;
-}
-
-function getCodexTextSettingValue(
-  config: CodexProviderConfig | undefined,
-  key: "model" | "additionalDirectories",
-): string | undefined {
-  const defaults = config?.defaults;
-  if (!defaults) return undefined;
-  if (key === "additionalDirectories") {
-    return defaults.additionalDirectories?.join(", ");
-  }
-  return defaults.model;
-}
-
-function getGeminiTextSettingValue(
-  config: GeminiProviderConfig | undefined,
-  key:
-    | "geminiSearchModel"
-    | "geminiContentsModel"
-    | "geminiAnswerModel"
-    | "geminiResearchAgent",
-): string | undefined {
-  const defaults = config?.defaults;
-  if (!defaults) return undefined;
-  if (key === "geminiSearchModel") return defaults.searchModel;
-  if (key === "geminiContentsModel") return defaults.contentsModel;
-  if (key === "geminiAnswerModel") return defaults.answerModel;
-  return defaults.researchAgent;
-}
-
-function assignOptionalString(
-  target: Record<string, JsonObject | string | boolean | undefined>,
-  key: string,
-  value: string,
-): void {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    delete target[key];
-  } else {
-    target[key] = trimmed;
-  }
-}
-
-function applyClaudeSettingChange(
-  target: ClaudeProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults ??= {};
-
-  switch (key) {
-    case "model":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "model",
-        value,
-      );
-      cleanupClaudeDefaults(target);
-      return true;
-    case "claudePathToExecutable":
-      assignOptionalString(
-        target as Record<string, JsonObject | string | boolean | undefined>,
-        "pathToClaudeCodeExecutable",
-        value,
-      );
-      cleanupClaudeDefaults(target);
-      return true;
-    case "claudeMaxTurns": {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        delete target.defaults.maxTurns;
-      } else {
-        const parsed = Number(trimmed);
-        if (!Number.isInteger(parsed) || parsed < 1) {
-          throw new Error("Claude max turns must be a positive integer.");
-        }
-        target.defaults.maxTurns = parsed;
-      }
-      cleanupClaudeDefaults(target);
-      return true;
-    }
-    case "claudeEffort":
-      if (value === "default") {
-        delete target.defaults.effort;
-      } else {
-        target.defaults.effort = value as never;
-      }
-      cleanupClaudeDefaults(target);
-      return true;
-    default:
-      return false;
-  }
-}
-
-function applyCodexSettingChange(
-  target: CodexProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults ??= {};
-
-  switch (key) {
-    case "model":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "model",
-        value,
-      );
-      cleanupCodexDefaults(target);
-      return true;
-    case "additionalDirectories": {
-      const trimmed = value.trim();
-      if (!trimmed) {
-        delete target.defaults.additionalDirectories;
-      } else {
-        target.defaults.additionalDirectories = trimmed
-          .split(",")
-          .map((entry) => entry.trim())
-          .filter((entry) => entry.length > 0);
-      }
-      cleanupCodexDefaults(target);
-      return true;
-    }
-    case "modelReasoningEffort":
-    case "webSearchMode":
-      if (value === "default") {
-        delete target.defaults[key];
-      } else {
-        target.defaults[key] = value as never;
-      }
-      cleanupCodexDefaults(target);
-      return true;
-    case "networkAccessEnabled":
-    case "webSearchEnabled":
-      if (value === "default") {
-        delete target.defaults[key];
-      } else {
-        target.defaults[key] = value === "true";
-      }
-      cleanupCodexDefaults(target);
-      return true;
-    default:
-      return false;
-  }
-}
-
-function applyExaSettingChange(
-  target: ExaProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults = isJsonObject(target.defaults) ? { ...target.defaults } : {};
-
-  switch (key) {
-    case "exaSearchType":
-      if (value === "default") {
-        delete target.defaults.type;
-      } else {
-        target.defaults.type = value;
-      }
-      cleanupGenericDefaults(target);
-      return true;
-    case "exaTextContents": {
-      const contents = isJsonObject(target.defaults.contents)
-        ? { ...target.defaults.contents }
-        : {};
-      if (value === "default") {
-        delete contents.text;
-      } else {
-        contents.text = value === "true";
-      }
-      if (Object.keys(contents).length === 0) {
-        delete target.defaults.contents;
-      } else {
-        target.defaults.contents = contents;
-      }
-      cleanupGenericDefaults(target);
-      return true;
-    }
-    default:
-      return false;
-  }
-}
-
-function applyValyuSettingChange(
-  target: ValyuProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults = isJsonObject(target.defaults) ? { ...target.defaults } : {};
-
-  switch (key) {
-    case "valyuSearchType":
-      if (value === "default") {
-        delete target.defaults.searchType;
-      } else {
-        target.defaults.searchType = value;
-      }
-      cleanupGenericDefaults(target);
-      return true;
-    case "valyuResponseLength":
-      if (value === "default") {
-        delete target.defaults.responseLength;
-      } else {
-        target.defaults.responseLength = value;
-      }
-      cleanupGenericDefaults(target);
-      return true;
-    default:
-      return false;
-  }
-}
-
-function applyGeminiSettingChange(
-  target: GeminiProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults ??= {};
-
-  switch (key) {
-    case "geminiApiVersion":
-      if (value === "default") {
-        delete target.defaults.apiVersion;
-      } else {
-        target.defaults.apiVersion = value;
-      }
-      cleanupGeminiDefaults(target);
-      return true;
-    case "geminiSearchModel":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "searchModel",
-        value,
-      );
-      cleanupGeminiDefaults(target);
-      return true;
-    case "geminiContentsModel":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "contentsModel",
-        value,
-      );
-      cleanupGeminiDefaults(target);
-      return true;
-    case "geminiAnswerModel":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "answerModel",
-        value,
-      );
-      cleanupGeminiDefaults(target);
-      return true;
-    case "geminiResearchAgent":
-      assignOptionalString(
-        target.defaults as Record<
-          string,
-          JsonObject | string | boolean | undefined
-        >,
-        "researchAgent",
-        value,
-      );
-      cleanupGeminiDefaults(target);
-      return true;
-    default:
-      return false;
-  }
-}
-
-function applyParallelSettingChange(
-  target: ParallelProviderConfig,
-  key: string,
-  value: string,
-): boolean {
-  target.defaults ??= {};
-  target.defaults.search = isJsonObject(target.defaults.search)
-    ? { ...target.defaults.search }
-    : {};
-  target.defaults.extract = isJsonObject(target.defaults.extract)
-    ? { ...target.defaults.extract }
-    : {};
-
-  switch (key) {
-    case "parallelSearchMode":
-      if (value === "default") {
-        delete target.defaults.search.mode;
-      } else {
-        target.defaults.search.mode = value;
-      }
-      cleanupParallelDefaults(target);
-      return true;
-    case "parallelExtractExcerpts":
-      if (value === "default") {
-        delete target.defaults.extract.excerpts;
-      } else {
-        target.defaults.extract.excerpts = value === "on";
-      }
-      cleanupParallelDefaults(target);
-      return true;
-    case "parallelExtractFullContent":
-      if (value === "default") {
-        delete target.defaults.extract.full_content;
-      } else {
-        target.defaults.extract.full_content = value === "on";
-      }
-      cleanupParallelDefaults(target);
-      return true;
-    default:
-      return false;
-  }
-}
-
-function cleanupClaudeDefaults(target: ClaudeProviderConfig): void {
-  if (target.defaults && Object.keys(target.defaults).length === 0) {
-    delete target.defaults;
-  }
-}
-
-function cleanupCodexDefaults(target: CodexProviderConfig): void {
-  if (target.defaults && Object.keys(target.defaults).length === 0) {
-    delete target.defaults;
-  }
-}
-
-function cleanupGenericDefaults(
-  target: ExaProviderConfig | ValyuProviderConfig,
-): void {
-  if (target.defaults && Object.keys(target.defaults).length === 0) {
-    delete target.defaults;
-  }
-}
-
-function cleanupGeminiDefaults(target: GeminiProviderConfig): void {
-  if (target.defaults && Object.keys(target.defaults).length === 0) {
-    delete target.defaults;
-  }
-}
-
-function cleanupParallelDefaults(target: ParallelProviderConfig): void {
-  if (
-    target.defaults?.search &&
-    Object.keys(target.defaults.search).length === 0
-  ) {
-    delete target.defaults.search;
-  }
-  if (
-    target.defaults?.extract &&
-    Object.keys(target.defaults.extract).length === 0
-  ) {
-    delete target.defaults.extract;
-  }
-  if (target.defaults && Object.keys(target.defaults).length === 0) {
-    delete target.defaults;
-  }
-}
-
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -2300,18 +1602,6 @@ function formatQuotedPreview(text: string, maxLength = 80): string {
   return `"${truncateInline(cleanSingleLine(text), maxLength)}"`;
 }
 
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-
-  if (minutes > 0) {
-    return `${minutes}m ${seconds}s`;
-  }
-
-  return `${totalSeconds}s`;
-}
-
 function formatSearchResponse(response: SearchResponse): string {
   if (response.results.length === 0) {
     return "No results found.";
@@ -2375,6 +1665,7 @@ export const __test__ = {
   executeProviderTool,
   extractTextContent,
   getAvailableManagedToolNames,
+  describeOptionsField,
   getAvailableProviderIdsForCapability,
   getSyncedActiveTools,
   renderCallHeader,

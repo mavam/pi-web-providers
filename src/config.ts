@@ -3,33 +3,24 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import {
-  PROVIDER_TOOLS,
-  type ProviderToolId,
-  supportsProviderTool,
-} from "./provider-tools.js";
+  createDefaultLifecyclePolicy,
+  createDefaultRequestPolicy,
+  DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+} from "./execution-policy-defaults.js";
+import { type ProviderToolId, supportsProviderTool } from "./provider-tools.js";
 import type {
   ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
+  ExecutionPolicyDefaults,
   GeminiProviderConfig,
   JsonObject,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
   ProviderId,
   ValyuProviderConfig,
   WebProvidersConfig,
 } from "./types.js";
-
-const LEGACY_TOOL_ALIASES: Partial<
-  Record<ProviderId, Partial<Record<string, ProviderToolId | null>>>
-> = {
-  exa: {
-    websetsPreview: null,
-  },
-  valyu: {
-    deepResearch: "research",
-  },
-};
 
 const CONFIG_FILE_NAME = "web-providers.json";
 const VERSION = 1 as const;
@@ -52,17 +43,19 @@ export function createDefaultConfig(): WebProvidersConfig {
           search: true,
           answer: true,
         },
+        policy: createDefaultRequestPolicy(),
       },
       codex: {
         enabled: true,
         tools: {
           search: true,
         },
-        defaults: {
+        native: {
           networkAccessEnabled: true,
           webSearchEnabled: true,
           webSearchMode: "live",
         },
+        policy: createDefaultRequestPolicy(),
       },
       exa: {
         enabled: false,
@@ -73,12 +66,13 @@ export function createDefaultConfig(): WebProvidersConfig {
           research: true,
         },
         apiKey: "EXA_API_KEY",
-        defaults: {
+        native: {
           type: "auto",
           contents: {
             text: true,
           },
         },
+        policy: createDefaultLifecyclePolicy(),
       },
       gemini: {
         enabled: false,
@@ -89,12 +83,16 @@ export function createDefaultConfig(): WebProvidersConfig {
           research: true,
         },
         apiKey: "GOOGLE_API_KEY",
-        defaults: {
+        native: {
           searchModel: "gemini-2.5-flash",
           contentsModel: "gemini-2.5-flash",
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
         },
+        policy: createDefaultLifecyclePolicy({
+          researchMaxConsecutivePollErrors:
+            DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+        }),
       },
       perplexity: {
         enabled: false,
@@ -104,7 +102,7 @@ export function createDefaultConfig(): WebProvidersConfig {
           research: true,
         },
         apiKey: "PERPLEXITY_API_KEY",
-        defaults: {
+        native: {
           answer: {
             model: "sonar",
           },
@@ -112,6 +110,7 @@ export function createDefaultConfig(): WebProvidersConfig {
             model: "sonar-deep-research",
           },
         },
+        policy: createDefaultRequestPolicy(),
       },
       parallel: {
         enabled: false,
@@ -120,7 +119,7 @@ export function createDefaultConfig(): WebProvidersConfig {
           contents: true,
         },
         apiKey: "PARALLEL_API_KEY",
-        defaults: {
+        native: {
           search: {
             mode: "agentic",
           },
@@ -129,6 +128,7 @@ export function createDefaultConfig(): WebProvidersConfig {
             full_content: false,
           },
         },
+        policy: createDefaultRequestPolicy(),
       },
       valyu: {
         enabled: false,
@@ -139,10 +139,11 @@ export function createDefaultConfig(): WebProvidersConfig {
           research: true,
         },
         apiKey: "VALYU_API_KEY",
-        defaults: {
+        native: {
           searchType: "all",
           responseLength: "short",
         },
+        policy: createDefaultLifecyclePolicy(),
       },
     },
   };
@@ -374,10 +375,12 @@ function normalizeClaudeProvider(
   source: string,
 ): ClaudeProviderConfig {
   const provider = parseProviderObject(raw, source, "claude");
-  const defaults = parseOptionalJsonObject(
-    provider.defaults,
+  const native = parseOptionalJsonObject(
+    getProviderNativeSource(provider),
     source,
-    "providers.claude.defaults",
+    provider.native !== undefined
+      ? "providers.claude.native"
+      : "providers.claude.defaults",
   );
 
   return {
@@ -397,27 +400,34 @@ function normalizeClaudeProvider(
       source,
       "providers.claude.pathToClaudeCodeExecutable",
     ),
-    defaults:
-      defaults === undefined
+    native:
+      native === undefined
         ? undefined
         : {
             model: parseOptionalString(
-              defaults.model,
+              native.model,
               source,
-              "providers.claude.defaults.model",
+              "providers.claude.native.model",
             ),
             effort: parseOptionalLiteral(
-              defaults.effort,
+              native.effort,
               source,
-              "providers.claude.defaults.effort",
+              "providers.claude.native.effort",
               ["low", "medium", "high", "max"] as const,
             ),
             maxTurns: parseOptionalInteger(
-              defaults.maxTurns,
+              native.maxTurns,
               source,
-              "providers.claude.defaults.maxTurns",
+              "providers.claude.native.maxTurns",
             ),
           },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.claude.policy"
+        : "providers.claude.defaults",
+    ),
   };
 }
 
@@ -426,10 +436,12 @@ function normalizeCodexProvider(
   source: string,
 ): CodexProviderConfig {
   const provider = parseProviderObject(raw, source, "codex");
-  const defaults = parseOptionalJsonObject(
-    provider.defaults,
+  const native = parseOptionalJsonObject(
+    getProviderNativeSource(provider),
     source,
-    "providers.codex.defaults",
+    provider.native !== undefined
+      ? "providers.codex.native"
+      : "providers.codex.defaults",
   );
   return {
     enabled: parseOptionalBoolean(
@@ -464,43 +476,50 @@ function normalizeCodexProvider(
       source,
       "providers.codex.config",
     ),
-    defaults:
-      defaults === undefined
+    native:
+      native === undefined
         ? undefined
         : {
             model: parseOptionalString(
-              defaults.model,
+              native.model,
               source,
-              "providers.codex.defaults.model",
+              "providers.codex.native.model",
             ),
             modelReasoningEffort: parseOptionalLiteral(
-              defaults.modelReasoningEffort,
+              native.modelReasoningEffort,
               source,
-              "providers.codex.defaults.modelReasoningEffort",
+              "providers.codex.native.modelReasoningEffort",
               ["minimal", "low", "medium", "high", "xhigh"] as const,
             ),
             networkAccessEnabled: parseOptionalBoolean(
-              defaults.networkAccessEnabled,
+              native.networkAccessEnabled,
               source,
-              "providers.codex.defaults.networkAccessEnabled",
+              "providers.codex.native.networkAccessEnabled",
             ),
             webSearchMode: parseOptionalLiteral(
-              defaults.webSearchMode,
+              native.webSearchMode,
               source,
-              "providers.codex.defaults.webSearchMode",
+              "providers.codex.native.webSearchMode",
               ["disabled", "cached", "live"] as const,
             ),
             webSearchEnabled: parseOptionalBoolean(
-              defaults.webSearchEnabled,
+              native.webSearchEnabled,
               source,
-              "providers.codex.defaults.webSearchEnabled",
+              "providers.codex.native.webSearchEnabled",
             ),
             additionalDirectories: parseOptionalStringArray(
-              defaults.additionalDirectories,
+              native.additionalDirectories,
               source,
-              "providers.codex.defaults.additionalDirectories",
+              "providers.codex.native.additionalDirectories",
             ),
           },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.codex.policy"
+        : "providers.codex.defaults",
+    ),
   };
 }
 
@@ -528,10 +547,19 @@ function normalizeExaProvider(raw: unknown, source: string): ExaProviderConfig {
       source,
       "providers.exa.baseUrl",
     ),
-    defaults: parseOptionalJsonObject(
-      provider.defaults,
+    native: parseOptionalJsonObject(
+      stripPolicyFields(getProviderNativeSource(provider)),
       source,
-      "providers.exa.defaults",
+      provider.native !== undefined
+        ? "providers.exa.native"
+        : "providers.exa.defaults",
+    ),
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.exa.policy"
+        : "providers.exa.defaults",
     ),
   };
 }
@@ -563,10 +591,19 @@ function normalizeValyuProvider(
       source,
       "providers.valyu.baseUrl",
     ),
-    defaults: parseOptionalJsonObject(
-      provider.defaults,
+    native: parseOptionalJsonObject(
+      stripPolicyFields(getProviderNativeSource(provider)),
       source,
-      "providers.valyu.defaults",
+      provider.native !== undefined
+        ? "providers.valyu.native"
+        : "providers.valyu.defaults",
+    ),
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.valyu.policy"
+        : "providers.valyu.defaults",
     ),
   };
 }
@@ -576,10 +613,12 @@ function normalizeGeminiProvider(
   source: string,
 ): GeminiProviderConfig {
   const provider = parseProviderObject(raw, source, "gemini");
-  const defaults = parseOptionalJsonObject(
-    provider.defaults,
+  const native = parseOptionalJsonObject(
+    stripPolicyFields(getProviderNativeSource(provider)),
     source,
-    "providers.gemini.defaults",
+    provider.native !== undefined
+      ? "providers.gemini.native"
+      : "providers.gemini.defaults",
   );
 
   return {
@@ -599,36 +638,43 @@ function normalizeGeminiProvider(
       source,
       "providers.gemini.apiKey",
     ),
-    defaults:
-      defaults === undefined
+    native:
+      native === undefined
         ? undefined
         : {
             apiVersion: parseOptionalString(
-              defaults.apiVersion,
+              native.apiVersion,
               source,
-              "providers.gemini.defaults.apiVersion",
+              "providers.gemini.native.apiVersion",
             ),
             searchModel: parseOptionalString(
-              defaults.searchModel,
+              native.searchModel,
               source,
-              "providers.gemini.defaults.searchModel",
+              "providers.gemini.native.searchModel",
             ),
             contentsModel: parseOptionalString(
-              defaults.contentsModel,
+              native.contentsModel,
               source,
-              "providers.gemini.defaults.contentsModel",
+              "providers.gemini.native.contentsModel",
             ),
             answerModel: parseOptionalString(
-              defaults.answerModel,
+              native.answerModel,
               source,
-              "providers.gemini.defaults.answerModel",
+              "providers.gemini.native.answerModel",
             ),
             researchAgent: parseOptionalString(
-              defaults.researchAgent,
+              native.researchAgent,
               source,
-              "providers.gemini.defaults.researchAgent",
+              "providers.gemini.native.researchAgent",
             ),
           },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.gemini.policy"
+        : "providers.gemini.defaults",
+    ),
   };
 }
 
@@ -637,10 +683,12 @@ function normalizePerplexityProvider(
   source: string,
 ): PerplexityProviderConfig {
   const provider = parseProviderObject(raw, source, "perplexity");
-  const defaults = parseOptionalJsonObject(
-    provider.defaults,
+  const native = parseOptionalJsonObject(
+    stripPolicyFields(getProviderNativeSource(provider)),
     source,
-    "providers.perplexity.defaults",
+    provider.native !== undefined
+      ? "providers.perplexity.native"
+      : "providers.perplexity.defaults",
   );
 
   return {
@@ -665,26 +713,33 @@ function normalizePerplexityProvider(
       source,
       "providers.perplexity.baseUrl",
     ),
-    defaults:
-      defaults === undefined
+    native:
+      native === undefined
         ? undefined
         : {
             search: parseOptionalJsonObject(
-              defaults.search,
+              native.search,
               source,
-              "providers.perplexity.defaults.search",
+              "providers.perplexity.native.search",
             ),
             answer: parseOptionalJsonObject(
-              defaults.answer,
+              native.answer,
               source,
-              "providers.perplexity.defaults.answer",
+              "providers.perplexity.native.answer",
             ),
             research: parseOptionalJsonObject(
-              defaults.research,
+              native.research,
               source,
-              "providers.perplexity.defaults.research",
+              "providers.perplexity.native.research",
             ),
           },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.perplexity.policy"
+        : "providers.perplexity.defaults",
+    ),
   };
 }
 
@@ -693,10 +748,12 @@ function normalizeParallelProvider(
   source: string,
 ): ParallelProviderConfig {
   const provider = parseProviderObject(raw, source, "parallel");
-  const defaults = parseOptionalJsonObject(
-    provider.defaults,
+  const native = parseOptionalJsonObject(
+    stripPolicyFields(getProviderNativeSource(provider)),
     source,
-    "providers.parallel.defaults",
+    provider.native !== undefined
+      ? "providers.parallel.native"
+      : "providers.parallel.defaults",
   );
 
   return {
@@ -721,22 +778,107 @@ function normalizeParallelProvider(
       source,
       "providers.parallel.baseUrl",
     ),
-    defaults:
-      defaults === undefined
+    native:
+      native === undefined
         ? undefined
         : {
             search: parseOptionalJsonObject(
-              defaults.search,
+              native.search,
               source,
-              "providers.parallel.defaults.search",
+              "providers.parallel.native.search",
             ),
             extract: parseOptionalJsonObject(
-              defaults.extract,
+              native.extract,
               source,
-              "providers.parallel.defaults.extract",
+              "providers.parallel.native.extract",
             ),
           },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.parallel.policy"
+        : "providers.parallel.defaults",
+    ),
   };
+}
+
+function getProviderNativeSource(provider: JsonObject): unknown {
+  return provider.native ?? provider.defaults;
+}
+
+function getProviderPolicySource(provider: JsonObject): unknown {
+  return provider.policy ?? provider.defaults;
+}
+
+function stripPolicyFields(value: unknown): JsonObject | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+
+  const {
+    requestTimeoutMs: _requestTimeoutMs,
+    retryCount: _retryCount,
+    retryDelayMs: _retryDelayMs,
+    researchPollIntervalMs: _researchPollIntervalMs,
+    researchTimeoutMs: _researchTimeoutMs,
+    researchMaxConsecutivePollErrors: _researchMaxConsecutivePollErrors,
+    ...native
+  } = value;
+
+  return Object.keys(native).length > 0 ? native : undefined;
+}
+
+function parseOptionalExecutionPolicy(
+  value: unknown,
+  source: string,
+  field: string,
+): ExecutionPolicyDefaults | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const policy = parseOptionalJsonObject(value, source, field);
+  if (!policy) {
+    return undefined;
+  }
+
+  const parsed: ExecutionPolicyDefaults = {
+    requestTimeoutMs: parseOptionalInteger(
+      policy.requestTimeoutMs,
+      source,
+      `${field}.requestTimeoutMs`,
+    ),
+    retryCount: parseOptionalNonNegativeInteger(
+      policy.retryCount,
+      source,
+      `${field}.retryCount`,
+    ),
+    retryDelayMs: parseOptionalInteger(
+      policy.retryDelayMs,
+      source,
+      `${field}.retryDelayMs`,
+    ),
+    researchPollIntervalMs: parseOptionalInteger(
+      policy.researchPollIntervalMs,
+      source,
+      `${field}.researchPollIntervalMs`,
+    ),
+    researchTimeoutMs: parseOptionalInteger(
+      policy.researchTimeoutMs,
+      source,
+      `${field}.researchTimeoutMs`,
+    ),
+    researchMaxConsecutivePollErrors: parseOptionalInteger(
+      policy.researchMaxConsecutivePollErrors,
+      source,
+      `${field}.researchMaxConsecutivePollErrors`,
+    ),
+  };
+
+  return Object.values(parsed).some((entry) => entry !== undefined)
+    ? parsed
+    : undefined;
 }
 
 function parseProviderObject(
@@ -775,41 +917,17 @@ function parseOptionalProviderTools(
 
   const parsed: Partial<Record<ProviderToolId, boolean>> = {};
   for (const [key, entry] of Object.entries(value)) {
-    const normalizedKey = normalizeProviderToolKey(providerId, key);
-    if (normalizedKey === null) {
-      continue;
-    }
-    if (!supportsProviderTool(providerId, normalizedKey)) {
+    if (!supportsProviderTool(providerId, key as ProviderToolId)) {
       throw new Error(`Unknown tools for ${providerId} in ${source}: ${key}.`);
     }
-    parsed[normalizedKey] = parseBoolean(entry, source, `${field}.${key}`);
-  }
-
-  const unknownTools = Object.keys(value).filter((toolId) => {
-    const normalizedKey = normalizeProviderToolKey(providerId, toolId);
-    return (
-      normalizedKey !== null &&
-      !PROVIDER_TOOLS[providerId].includes(normalizedKey)
-    );
-  });
-  if (unknownTools.length > 0) {
-    throw new Error(
-      `Unknown tools for ${providerId} in ${source}: ${unknownTools.join(", ")}.`,
+    parsed[key as ProviderToolId] = parseBoolean(
+      entry,
+      source,
+      `${field}.${key}`,
     );
   }
 
   return parsed;
-}
-
-function normalizeProviderToolKey(
-  providerId: ProviderId,
-  key: string,
-): ProviderToolId | null {
-  const alias = LEGACY_TOOL_ALIASES[providerId]?.[key];
-  if (alias !== undefined) {
-    return alias;
-  }
-  return key as ProviderToolId;
 }
 
 function parseOptionalStringMap(
@@ -888,6 +1006,18 @@ function parseOptionalInteger(
   if (value === undefined) return undefined;
   if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
     throw new Error(`'${field}' in ${source} must be a positive integer.`);
+  }
+  return value;
+}
+
+function parseOptionalNonNegativeInteger(
+  value: unknown,
+  source: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`'${field}' in ${source} must be a non-negative integer.`);
   }
   return value;
 }
