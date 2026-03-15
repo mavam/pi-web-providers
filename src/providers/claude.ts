@@ -8,7 +8,7 @@ import {
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
 import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
-import { createSingleOperationPlan } from "../provider-plans.js";
+import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   ClaudeProviderConfig,
   ProviderContext,
@@ -122,7 +122,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ClaudeProviderConfig) {
     switch (request.capability) {
       case "search":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -137,7 +137,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
             ),
         });
       case "answer":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,

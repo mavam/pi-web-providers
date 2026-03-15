@@ -143,18 +143,41 @@ describe("PerplexityProvider", () => {
     expect(response.itemCount).toBe(1);
   });
 
-  it("defaults research calls to sonar-deep-research", async () => {
+  it("streams research calls with sonar-deep-research", async () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
+    const progress: string[] = [];
     chatCreateMock.mockResolvedValue({
-      choices: [
-        {
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "Research result" }],
-          },
-        },
-      ],
-      citations: ["https://example.com/research"],
+      async *[Symbol.asyncIterator]() {
+        yield {
+          choices: [
+            {
+              delta: {
+                role: "assistant",
+                content: "Research ",
+              },
+              message: {
+                role: "assistant",
+                content: null,
+              },
+            },
+          ],
+        };
+        yield {
+          choices: [
+            {
+              delta: {
+                role: "assistant",
+                content: "result",
+              },
+              message: {
+                role: "assistant",
+                content: [{ type: "text", text: "Research result" }],
+              },
+            },
+          ],
+          citations: ["https://example.com/research"],
+        };
+      },
     });
 
     const provider = new PerplexityProvider();
@@ -165,17 +188,22 @@ describe("PerplexityProvider", () => {
         enabled: true,
         apiKey: "PERPLEXITY_API_KEY",
       },
-      { cwd: process.cwd() },
+      {
+        cwd: process.cwd(),
+        onProgress: (message) => progress.push(message),
+      },
     );
 
     expect(chatCreateMock).toHaveBeenCalledWith(
       {
         messages: [{ role: "user", content: "Investigate the topic" }],
         model: "sonar-deep-research",
-        stream: false,
+        stream: true,
       },
       undefined,
     );
+    expect(progress).toContain("Research");
+    expect(progress).toContain("Research result");
     expect(response.text).toBe(
       "Research result\n\nSources:\n1. https://example.com/research\n   https://example.com/research",
     );

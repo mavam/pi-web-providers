@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
 import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
-import { createSingleOperationPlan } from "../provider-plans.js";
+import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   CodexProviderConfig,
   ProviderContext,
@@ -97,7 +97,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
       return null;
     }
 
-    return createSingleOperationPlan({
+    return createSilentForegroundPlan({
       config,
       capability: request.capability,
       providerId: this.id,

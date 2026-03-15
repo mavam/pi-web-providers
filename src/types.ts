@@ -274,20 +274,26 @@ export interface ProviderPlanTraits {
   researchLifecycle?: ProviderResearchLifecycleTraits;
 }
 
+// How a provider delivers a tool result back to pi.
+export type ProviderDeliveryMode =
+  | "silent-foreground"
+  | "streaming-foreground"
+  | "background-research";
+
 export interface SingleProviderOperationPlan<TResult> {
   capability: ProviderCapability;
   providerId: ProviderId;
   providerLabel: string;
-  mode: "single";
+  deliveryMode: "silent-foreground" | "streaming-foreground";
   traits?: ProviderPlanTraits;
   execute: (context: ProviderContext) => Promise<TResult>;
 }
 
-export interface JobProviderOperationPlan {
+export interface BackgroundResearchOperationPlan {
   capability: "research";
   providerId: ProviderId;
   providerLabel: string;
-  mode: "job";
+  deliveryMode: "background-research";
   traits?: ProviderPlanTraits;
   start: (context: ProviderContext) => Promise<ProviderResearchJob>;
   poll: (
@@ -298,7 +304,7 @@ export interface JobProviderOperationPlan {
 
 export type ProviderOperationPlan<
   TResult = SearchResponse | ProviderToolOutput,
-> = SingleProviderOperationPlan<TResult> | JobProviderOperationPlan;
+> = SingleProviderOperationPlan<TResult> | BackgroundResearchOperationPlan;
 
 export interface WebProvider<TConfig> {
   readonly id: ProviderId;

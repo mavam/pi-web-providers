@@ -3,8 +3,8 @@ import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { createDefaultLifecyclePolicy } from "../execution-policy-defaults.js";
 import {
-  createResearchJobPlan,
-  createSingleOperationPlan,
+  createBackgroundResearchPlan,
+  createSilentForegroundPlan,
 } from "../provider-plans.js";
 import type {
   ProviderContext,
@@ -60,7 +60,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ValyuProviderConfig) {
     switch (request.capability) {
       case "search":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -75,7 +75,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
             ),
         });
       case "contents":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -84,7 +84,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
             this.contents(request.urls, request.options, config, context),
         });
       case "answer":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -93,7 +93,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
             this.answer(request.query, request.options, config, context),
         });
       case "research":
-        return createResearchJobPlan({
+        return createBackgroundResearchPlan({
           config,
           capability: request.capability,
           providerId: this.id,

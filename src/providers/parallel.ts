@@ -2,7 +2,7 @@ import Parallel from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
-import { createSingleOperationPlan } from "../provider-plans.js";
+import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   ParallelProviderConfig,
   ProviderContext,
@@ -58,7 +58,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ParallelProviderConfig) {
     switch (request.capability) {
       case "search":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -73,7 +73,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
             ),
         });
       case "contents":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,

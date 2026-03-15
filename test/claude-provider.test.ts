@@ -110,7 +110,7 @@ describe("ClaudeProvider", () => {
     );
 
     expect(plan).toMatchObject({
-      mode: "single",
+      deliveryMode: "silent-foreground",
       traits: {
         policyDefaults: {
           requestTimeoutMs: 1500,

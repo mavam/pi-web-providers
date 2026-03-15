@@ -3,8 +3,8 @@ import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { createDefaultLifecyclePolicy } from "../execution-policy-defaults.js";
 import {
-  createResearchJobPlan,
-  createSingleOperationPlan,
+  createBackgroundResearchPlan,
+  createSilentForegroundPlan,
 } from "../provider-plans.js";
 import type {
   ExaProviderConfig,
@@ -62,7 +62,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
   buildPlan(request: ProviderOperationRequest, config: ExaProviderConfig) {
     switch (request.capability) {
       case "search":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -77,7 +77,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
             ),
         });
       case "contents":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -86,7 +86,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
             this.contents(request.urls, request.options, config, context),
         });
       case "answer":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config,
           capability: request.capability,
           providerId: this.id,
@@ -95,7 +95,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
             this.answer(request.query, request.options, config, context),
         });
       case "research":
-        return createResearchJobPlan({
+        return createBackgroundResearchPlan({
           config,
           capability: request.capability,
           providerId: this.id,

@@ -5,8 +5,8 @@ import {
   DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
 } from "../execution-policy-defaults.js";
 import {
-  createResearchJobPlan,
-  createSingleOperationPlan,
+  createBackgroundResearchPlan,
+  createSilentForegroundPlan,
 } from "../provider-plans.js";
 import type {
   GeminiProviderConfig,
@@ -76,7 +76,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
 
     switch (request.capability) {
       case "search":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config: planConfig,
           capability: request.capability,
           providerId: this.id,
@@ -91,7 +91,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
             ),
         });
       case "contents":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config: planConfig,
           capability: request.capability,
           providerId: this.id,
@@ -100,7 +100,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
             this.contents(request.urls, request.options, config, context),
         });
       case "answer":
-        return createSingleOperationPlan({
+        return createSilentForegroundPlan({
           config: planConfig,
           capability: request.capability,
           providerId: this.id,
@@ -109,7 +109,7 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
             this.answer(request.query, request.options, config, context),
         });
       case "research":
-        return createResearchJobPlan({
+        return createBackgroundResearchPlan({
           config: planConfig,
           capability: request.capability,
           providerId: this.id,

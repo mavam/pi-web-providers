@@ -123,17 +123,40 @@ The extension also accepts a few local control fields for robustness:
 plus `pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, and `resumeId`
 on `web_research` for lifecycle-based research providers. The overall research
 `timeoutMs` starts when the research request begins, including background job
-creation. Perplexity research runs synchronously, so it only supports
-`requestTimeoutMs`, `retryCount`, and `retryDelayMs`; lifecycle fields are
-rejected instead of being silently ignored. Exa and Valyu research support
-polling, overall deadlines, and resume IDs after job creation, but reject
-`requestTimeoutMs` because their current SDK lifecycles do not safely support
-per-request local timeouts. Their research start requests also do not use
-automatic start retries, because retrying a non-idempotent background-job
-creation call could create duplicate jobs. If an overall research timeout fires
-before a job ID is returned, the extension fails fast but cannot offer a
-`resumeId`. These fields are handled by the extension and are not forwarded
-into the provider SDK call.
+creation. Perplexity research currently runs in streaming foreground mode, so
+it only supports `requestTimeoutMs`, `retryCount`, and `retryDelayMs`;
+lifecycle fields are rejected instead of being silently ignored. Exa and Valyu
+research support polling, overall deadlines, and resume IDs after job
+creation, but reject `requestTimeoutMs` because their current SDK lifecycles do
+not safely support per-request local timeouts. Their research start requests
+also do not use automatic start retries, because retrying a non-idempotent
+background-job creation call could create duplicate jobs. If an overall
+research timeout fires before a job ID is returned, the extension fails fast
+but cannot offer a `resumeId`. These fields are handled by the extension and
+are not forwarded into the provider SDK call.
+
+> [!NOTE]
+> Providers can deliver tool results in one of three modes, depending on what
+> they support.
+>
+> **Silent foreground.** The tool stays open with no intermediate output while
+> it runs, and the result is only usable after the tool finishes and returns
+> the final result.
+>
+> **Streaming foreground.** The tool stays open and shows progress updates or
+> partial output while the provider works, but the result is still only usable
+> after the tool finishes and returns the final result. Streaming changes what
+> you can see while waiting, not when the result is handed back.
+>
+> **Background research.** The tool can show research progress while the
+> provider keeps the run alive in the background, and the result becomes usable
+> when the current run reaches a final result. If the local run is interrupted
+> first, pi can resume the same research later with `resumeId` instead of
+> starting over.
+
+You still call `web_search`, `web_contents`, `web_answer`, and
+`web_research` the same way. What changes is how much feedback you get while a
+tool is running, and whether an interrupted research run can be resumed later.
 
 ## 🔌 Providers
 
@@ -155,6 +178,7 @@ summarises which capabilities each provider exposes:
 - SDK: `@anthropic-ai/claude-agent-sdk`
 - Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
   structured JSON adapter
+- Runs in **silent foreground** mode
 - Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
   `maxTurns`
 - Great for search plus grounded answers if you already use Claude Code locally
@@ -163,6 +187,7 @@ summarises which capabilities each provider exposes:
 
 - SDK: `@openai/codex-sdk`
 - Runs in read-only mode with web search enabled
+- Runs in **silent foreground** mode
 - Supports request-shaping `web_search.options` such as `model`,
   `modelReasoningEffort`, and `webSearchMode`
 - Best if you already use the local Codex CLI and auth flow
@@ -170,12 +195,16 @@ summarises which capabilities each provider exposes:
 ### Exa
 
 - SDK: `exa-js`
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
 - Neural, keyword, hybrid, and deep-research search modes
 - Inline text-content extraction on search results
 
 ### Gemini
 
 - SDK: `@google/genai`
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
 - Google Search grounding for answers and URL Context extraction for page
   contents
 - Deep-research agents via Google's Gemini API
@@ -190,17 +219,19 @@ summarises which capabilities each provider exposes:
 ### Perplexity
 
 - SDK: `@perplexity-ai/perplexity_ai`
+- `web_search` and `web_answer` run in **silent foreground** mode
+- `web_research` runs in **streaming foreground** mode: it can show partial
+  output while it runs, but it does not support `resumeId`, polling intervals,
+  or parent-managed research deadlines
 - Uses Perplexity Search for `web_search`
 - Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
-- `web_research` is synchronous with the current Perplexity SDK, so it may
-  block until completion and does not support `resumeId`, polling intervals, or
-  parent-managed research deadlines
 - Supports provider-specific `web_search.options` such as `country`,
   `search_mode`, `search_domain_filter`, and `search_recency_filter`
 
 ### Parallel
 
 - SDK: `parallel-web`
+- Runs in **silent foreground** mode
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
 - Supports provider-native search and extraction options from the Parallel SDK
@@ -208,6 +239,8 @@ summarises which capabilities each provider exposes:
 ### Valyu
 
 - SDK: `valyu-js`
+- Search, contents, and answer run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
 - Web, proprietary, and news search types
 - Supports provider-native options such as `countryCode`, `responseLength`, and
   search/source filters

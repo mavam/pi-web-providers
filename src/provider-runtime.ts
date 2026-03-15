@@ -14,6 +14,7 @@ import type {
   ProviderOperationPlan,
   ProviderToolOutput,
   SearchResponse,
+  SingleProviderOperationPlan,
 } from "./types.js";
 
 export async function executeOperationPlan<
@@ -23,8 +24,8 @@ export async function executeOperationPlan<
   options: JsonObject | undefined,
   context: ProviderContext,
 ): Promise<TResult> {
-  if (plan.mode === "single") {
-    const requestPolicy = resolveSingleExecutionPolicy(plan, options);
+  if (plan.deliveryMode !== "background-research") {
+    const requestPolicy = resolveForegroundExecutionPolicy(plan, options);
     return await runWithExecutionPolicy(
       `${plan.providerLabel} ${plan.capability} request`,
       plan.execute,
@@ -33,7 +34,10 @@ export async function executeOperationPlan<
     );
   }
 
-  const researchPolicy = resolveJobResearchExecutionPolicy(plan, options);
+  const researchPolicy = resolveBackgroundResearchExecutionPolicy(
+    plan,
+    options,
+  );
   const lifecycleTraits = plan.traits?.researchLifecycle;
   const supportsSafeStartRetries =
     lifecycleTraits?.supportsStartRetries === true;
@@ -65,9 +69,13 @@ export async function executeOperationPlan<
   })) as TResult;
 }
 
-function resolveSingleExecutionPolicy<
+function resolveForegroundExecutionPolicy<
   TResult extends SearchResponse | ProviderToolOutput,
->(plan: ProviderOperationPlan<TResult>, options: JsonObject | undefined) {
+>(plan: SingleProviderOperationPlan<TResult>, options: JsonObject | undefined) {
+  // Silent foreground plans inherit the full request policy. Streaming
+  // foreground plans intentionally drop the default request timeout so that a
+  // provider can keep streaming progress without being cut off by a short
+  // request/response timeout that was tuned for silent foreground tools.
   const localOptions = parseLocalExecutionOptions(options);
 
   const researchOnlyOptions = [
@@ -87,7 +95,7 @@ function resolveSingleExecutionPolicy<
 
     if (researchOnlyOptions.length > 0) {
       throw new Error(
-        `${plan.providerLabel} research runs synchronously and does not support ${researchOnlyOptions.join(", ")}. Use requestTimeoutMs/retryCount/retryDelayMs instead.`,
+        `${plan.providerLabel} research runs in ${formatForegroundMode(plan.deliveryMode)} mode and does not support ${researchOnlyOptions.join(", ")}. Use requestTimeoutMs/retryCount/retryDelayMs instead.`,
       );
     }
   } else if (researchOnlyOptions.length > 0) {
@@ -96,10 +104,13 @@ function resolveSingleExecutionPolicy<
     );
   }
 
-  return resolveRequestExecutionPolicy(options, plan.traits?.policyDefaults);
+  return resolveRequestExecutionPolicy(
+    options,
+    getSupportedForegroundPolicyDefaults(plan),
+  );
 }
 
-function resolveJobResearchExecutionPolicy<
+function resolveBackgroundResearchExecutionPolicy<
   TResult extends SearchResponse | ProviderToolOutput,
 >(
   plan: ProviderOperationPlan<TResult>,
@@ -124,11 +135,37 @@ function resolveJobResearchExecutionPolicy<
 
   return resolveResearchExecutionPolicy(
     options,
-    getSupportedResearchPolicyDefaults(plan),
+    getSupportedBackgroundResearchPolicyDefaults(plan),
   );
 }
 
-function getSupportedResearchPolicyDefaults<
+function formatForegroundMode(
+  deliveryMode: SingleProviderOperationPlan<unknown>["deliveryMode"],
+): "silent foreground" | "streaming foreground" {
+  return deliveryMode === "streaming-foreground"
+    ? "streaming foreground"
+    : "silent foreground";
+}
+
+function getSupportedForegroundPolicyDefaults<TResult>(
+  plan: SingleProviderOperationPlan<TResult>,
+): ExecutionPolicyDefaults | undefined {
+  const defaults = plan.traits?.policyDefaults;
+  if (!defaults) {
+    return undefined;
+  }
+
+  if (plan.deliveryMode === "silent-foreground") {
+    return defaults;
+  }
+
+  const { requestTimeoutMs: _requestTimeoutMs, ...rest } = defaults;
+  return Object.values(rest).some((value) => value !== undefined)
+    ? rest
+    : undefined;
+}
+
+function getSupportedBackgroundResearchPolicyDefaults<
   TResult extends SearchResponse | ProviderToolOutput,
 >(plan: ProviderOperationPlan<TResult>): ExecutionPolicyDefaults | undefined {
   const defaults = plan.traits?.policyDefaults;

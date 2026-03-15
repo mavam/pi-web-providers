@@ -40,7 +40,7 @@ describe("provider tool output", () => {
         capability: "contents",
         providerId: "exa",
         providerLabel: "Exa",
-        mode: "single",
+        deliveryMode: "silent-foreground",
         execute: async () => ({
           provider: "exa",
           text: Array.from(
@@ -63,7 +63,7 @@ describe("provider tool output", () => {
     }
   });
 
-  it("emits heartbeat updates for long-running blocking research tools", async () => {
+  it("emits heartbeat updates for long-running foreground research tools", async () => {
     vi.useFakeTimers();
 
     try {
@@ -96,7 +96,7 @@ describe("provider tool output", () => {
           capability: "research",
           providerId: "perplexity",
           providerLabel: "Perplexity",
-          mode: "single",
+          deliveryMode: "streaming-foreground",
           execute: async (context) => {
             context.onProgress?.("Starting research");
             await new Promise((resolve) => setTimeout(resolve, 20000));
@@ -122,7 +122,7 @@ describe("provider tool output", () => {
     }
   });
 
-  it("rejects lifecycle-only options for blocking Perplexity research", async () => {
+  it("rejects lifecycle-only options for streaming foreground Perplexity research", async () => {
     const config: WebProvidersConfig = {
       version: 1,
       providers: {
@@ -148,8 +148,64 @@ describe("provider tool output", () => {
         input: "Investigate the topic",
       }),
     ).rejects.toThrow(
-      "Perplexity research runs synchronously and does not support timeoutMs, resumeId. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
+      "Perplexity research runs in streaming foreground mode and does not support timeoutMs, resumeId. Use requestTimeoutMs/retryCount/retryDelayMs instead.",
     );
+  });
+
+  it("does not inherit short request timeouts for streaming foreground plans", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const config: WebProvidersConfig = {
+        version: 1,
+        providers: {
+          perplexity: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      };
+
+      const resultPromise = __test__.executeProviderTool({
+        capability: "research",
+        config,
+        explicitProvider: "perplexity",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        input: "Investigate the topic",
+        planOverride: {
+          capability: "research",
+          providerId: "perplexity",
+          providerLabel: "Perplexity",
+          deliveryMode: "streaming-foreground",
+          traits: {
+            policyDefaults: {
+              requestTimeoutMs: 1,
+              retryCount: 0,
+              retryDelayMs: 1,
+            },
+          },
+          execute: async () =>
+            await new Promise((resolve) => {
+              setTimeout(() => {
+                resolve({
+                  provider: "perplexity" as const,
+                  text: "Research complete",
+                });
+              }, 5);
+            }),
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(5);
+      await expect(resultPromise).resolves.toMatchObject({
+        content: [{ type: "text", text: "Research complete" }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects requestTimeoutMs for research providers that cannot safely enforce it", async () => {
@@ -179,7 +235,7 @@ describe("provider tool output", () => {
           capability: "research",
           providerId: "exa",
           providerLabel: "Exa",
-          mode: "job",
+          deliveryMode: "background-research",
           start: async () => ({ id: "job-1" }),
           poll: async () => ({
             status: "completed",
@@ -222,7 +278,7 @@ describe("provider tool output", () => {
           capability: "contents",
           providerId: "exa",
           providerLabel: "Exa",
-          mode: "single",
+          deliveryMode: "silent-foreground",
           execute: async () => ({
             provider: "exa",
             text: "contents",
@@ -260,7 +316,7 @@ describe("provider tool output", () => {
           capability: "contents",
           providerId: "exa",
           providerLabel: "Exa",
-          mode: "single",
+          deliveryMode: "silent-foreground",
           execute: async () => ({
             provider: "exa",
             text: "contents",
