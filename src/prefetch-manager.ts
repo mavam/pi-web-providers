@@ -20,8 +20,10 @@ import type {
   ProviderToolOutput,
   WebProvidersConfig,
 } from "./types.js";
+import { PROVIDER_IDS } from "./types.js";
 
 const CONTENT_ENTRY_KIND = "web-contents";
+const CONTENT_BATCH_ENTRY_KIND = "web-contents-batch";
 const PREFETCH_JOB_KIND = "web-prefetch-job";
 const CONTENT_CACHE_VERSION = 1;
 const DEFAULT_CONTENT_TTL_MS = 30 * 60 * 1000;
@@ -51,6 +53,20 @@ interface PrefetchJobValue {
   urls: string[];
   contentKeys: string[];
   createdAt: number;
+}
+
+interface StoredBatchContentsValue {
+  urls: string[];
+  provider: ProviderId;
+  text: string;
+  summary?: string;
+  itemCount?: number;
+  fetchedAt: number;
+}
+
+interface StoredBatchContentsResult {
+  value: StoredBatchContentsValue;
+  fromCache: boolean;
 }
 
 export interface PrefetchStartResult {
@@ -96,6 +112,10 @@ interface StoredContentsResult {
 
 const contentStore = new FileContentStore();
 const inFlightContents = new Map<string, Promise<StoredContentsResult>>();
+const inFlightBatchContents = new Map<
+  string,
+  Promise<StoredBatchContentsResult>
+>();
 
 /**
  * Remove expired entries from the content store.  Call this at session start
@@ -141,9 +161,12 @@ export async function startContentsPrefetch({
 
   const ttlMs = clampTtlMs(options.ttlMs);
   const contentOptions = options.contentsOptions;
-  const contentKeys = selectedUrls.map((url) =>
-    buildContentsStoreKey(url, provider.id, contentOptions),
+  const batchKey = buildBatchContentsStoreKey(
+    selectedUrls,
+    provider.id,
+    contentOptions,
   );
+  const contentKeys = selectedUrls.map(() => batchKey);
   const prefetchId = randomUUID();
   const createdAt = Date.now();
 
@@ -163,28 +186,20 @@ export async function startContentsPrefetch({
     },
   });
 
-  const task = Promise.allSettled(
-    selectedUrls.map((url) =>
-      ensureContentsStored({
-        url,
-        providerId: provider.id,
-        config,
-        cwd,
-        options: contentOptions,
-        ttlMs,
-        onProgress,
-      }),
-    ),
-  )
-    .then(async (results) => {
-      const failedCount = results.filter(
-        (result) => result.status === "rejected",
-      ).length;
-      const status = failedCount === results.length ? "failed" : "ready";
+  const task = ensureBatchContentsStored({
+    urls: selectedUrls,
+    providerId: provider.id,
+    config,
+    cwd,
+    options: contentOptions,
+    ttlMs,
+    onProgress,
+  })
+    .then(async () => {
       await contentStore.put<JsonValue>({
         key: buildPrefetchJobStoreKey(prefetchId),
         kind: PREFETCH_JOB_KIND,
-        status,
+        status: "ready",
         createdAt,
         updatedAt: Date.now(),
         expiresAt: createdAt + ttlMs,
@@ -197,11 +212,32 @@ export async function startContentsPrefetch({
         },
         metadata: {
           totalUrlCount: selectedUrls.length,
-          failedUrlCount: failedCount,
+          failedUrlCount: 0,
         },
       });
     })
-    .catch(() => undefined);
+    .catch(async (error) => {
+      await contentStore.put<JsonValue>({
+        key: buildPrefetchJobStoreKey(prefetchId),
+        kind: PREFETCH_JOB_KIND,
+        status: "failed",
+        createdAt,
+        updatedAt: Date.now(),
+        expiresAt: createdAt + ttlMs,
+        value: {
+          prefetchId,
+          provider: provider.id,
+          urls: selectedUrls,
+          contentKeys,
+          createdAt,
+        },
+        error: error instanceof Error ? error.message : String(error),
+        metadata: {
+          totalUrlCount: selectedUrls.length,
+          failedUrlCount: selectedUrls.length,
+        },
+      });
+    });
 
   void task;
 
@@ -235,13 +271,24 @@ export async function getPrefetchStatus(
       };
     }
 
-    if (entry.status === "ready" && isStoredContentsValue(entry.value)) {
-      return {
-        url,
-        status: "ready" as const,
-        text: entry.value.text,
-        provider: entry.value.provider,
-      };
+    if (entry.status === "ready") {
+      if (isStoredContentsValue(entry.value)) {
+        return {
+          url,
+          status: "ready" as const,
+          text: entry.value.text,
+          provider: entry.value.provider,
+        };
+      }
+
+      if (isStoredBatchContentsValue(entry.value)) {
+        return {
+          url,
+          status: "ready" as const,
+          text: entry.value.text,
+          provider: entry.value.provider,
+        };
+      }
     }
 
     if (entry.status === "failed") {
@@ -285,12 +332,17 @@ export async function getPrefetchStatus(
 }
 
 /**
- * Returns true when at least one of the given URLs has a valid (non-expired)
- * entry in the content store. This is used to decide whether it's worth
- * routing a `web_contents` call through the store rather than fetching
- * directly from the provider.
+ * Returns true when the entire `web_contents` request can be satisfied from
+ * the store without triggering new per-URL fetches. We allow two cases:
+ *   1. an exact multi-URL batch entry already exists (or is currently in
+ *      flight), or
+ *   2. every requested URL already has an individual cached/in-flight entry.
+ *
+ * Partial cache hits intentionally return false so the caller can fall back to
+ * the provider's native batched contents endpoint instead of fanning out into
+ * one request per missing URL.
  */
-export async function hasAnyCachedContents({
+export async function canResolveContentsFromStore({
   urls,
   providerId,
   options,
@@ -299,14 +351,20 @@ export async function hasAnyCachedContents({
   providerId: ProviderId;
   options: JsonObject | undefined;
 }): Promise<boolean> {
+  if (urls.length === 0) {
+    return false;
+  }
+
+  if (await hasStoredBatchContents({ urls, providerId, options })) {
+    return true;
+  }
+
   const now = Date.now();
   for (const url of urls) {
     const key = buildContentsStoreKey(url, providerId, options);
 
-    // Fast path: if there's an in-flight fetch for this URL the store is
-    // already handling it.
     if (inFlightContents.has(key)) {
-      return true;
+      continue;
     }
 
     const entry = await contentStore.get(key);
@@ -315,10 +373,12 @@ export async function hasAnyCachedContents({
       isStoredContentsValue(entry.value) &&
       !isExpired(entry, now)
     ) {
-      return true;
+      continue;
     }
+
+    return false;
   }
-  return false;
+  return true;
 }
 
 /**
@@ -331,6 +391,28 @@ export async function hasAnyCachedContents({
  * When `explicitProvider` is given, only that provider's cache entries are
  * checked.  Otherwise all known providers are probed per URL.
  */
+async function hasStoredBatchContents({
+  urls,
+  providerId,
+  options,
+}: {
+  urls: string[];
+  providerId: ProviderId;
+  options: JsonObject | undefined;
+}): Promise<boolean> {
+  const key = buildBatchContentsStoreKey(urls, providerId, options);
+  if (inFlightBatchContents.has(key)) {
+    return true;
+  }
+
+  const entry = await contentStore.get<JsonValue>(key);
+  return (
+    entry?.status === "ready" &&
+    isStoredBatchContentsValue(entry.value) &&
+    !isExpired(entry, Date.now())
+  );
+}
+
 export async function tryServeContentsFromStore({
   urls,
   explicitProvider,
@@ -355,6 +437,19 @@ export async function tryServeContentsFromStore({
     ? [explicitProvider]
     : PROVIDER_IDS;
 
+  for (const pid of providerCandidates) {
+    const batch = await findCachedBatchEntry(urls, pid, options, now);
+    if (batch) {
+      return {
+        provider: batch.provider,
+        text: batch.text,
+        summary:
+          batch.summary ?? `${batch.urls.length} URL(s) served from cache`,
+        itemCount: batch.itemCount ?? batch.urls.length,
+      };
+    }
+  }
+
   const hits: StoredContentsValue[] = [];
 
   for (const url of urls) {
@@ -375,6 +470,30 @@ export async function tryServeContentsFromStore({
     summary: `${hits.length} of ${urls.length} URL(s) served from cache`,
     itemCount: hits.length,
   };
+}
+
+async function findCachedBatchEntry(
+  urls: string[],
+  providerId: ProviderId,
+  options: JsonObject | undefined,
+  now: number,
+): Promise<StoredBatchContentsValue | undefined> {
+  const key = buildBatchContentsStoreKey(urls, providerId, options);
+
+  if (inFlightBatchContents.has(key)) {
+    return undefined;
+  }
+
+  const entry = await contentStore.get<JsonValue>(key);
+  if (
+    entry?.status === "ready" &&
+    isStoredBatchContentsValue(entry.value) &&
+    !isExpired(entry, now)
+  ) {
+    return entry.value;
+  }
+
+  return undefined;
 }
 
 async function findCachedEntry(
@@ -421,6 +540,29 @@ export async function resolveContentsFromStore({
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<{ output: ProviderToolOutput; cachedCount: number }> {
+  if (await hasStoredBatchContents({ urls, providerId, options })) {
+    const batch = await ensureBatchContentsStored({
+      urls,
+      providerId,
+      config,
+      cwd,
+      options,
+      signal,
+      onProgress,
+    });
+    return {
+      output: {
+        provider: batch.value.provider,
+        text: batch.value.text,
+        summary:
+          batch.value.summary ??
+          `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
+        itemCount: batch.value.itemCount ?? batch.value.urls.length,
+      },
+      cachedCount: batch.fromCache ? batch.value.urls.length : 0,
+    };
+  }
+
   const settled = await Promise.allSettled(
     urls.map((url) =>
       ensureContentsStored({
@@ -564,11 +706,149 @@ export function formatPrefetchStatusText(
 }
 
 export const __prefetchTest__ = {
+  buildBatchContentsStoreKey,
   buildContentsStoreKey,
   buildPrefetchJobStoreKey,
   selectPrefetchUrls,
   resolveContentsProvider,
 };
+
+async function ensureBatchContentsStored({
+  urls,
+  providerId,
+  config,
+  cwd,
+  options,
+  ttlMs = DEFAULT_CONTENT_TTL_MS,
+  signal,
+  onProgress,
+}: {
+  urls: string[];
+  providerId: ProviderId;
+  config: WebProvidersConfig;
+  cwd: string;
+  options: JsonObject | undefined;
+  ttlMs?: number;
+  signal?: AbortSignal;
+  onProgress?: (message: string) => void;
+}): Promise<StoredBatchContentsResult> {
+  const normalizedUrls = normalizeUrlSet(urls);
+  if (normalizedUrls.length === 0) {
+    throw new Error("At least one valid HTTP(S) URL is required.");
+  }
+
+  const key = buildBatchContentsStoreKey(normalizedUrls, providerId, options);
+  const existingInFlight = inFlightBatchContents.get(key);
+  if (existingInFlight) {
+    return await existingInFlight;
+  }
+
+  const task = (async () => {
+    const existing = await contentStore.get<JsonValue>(key);
+    const now = Date.now();
+
+    if (
+      existing?.status === "ready" &&
+      isStoredBatchContentsValue(existing.value) &&
+      !isExpired(existing, now)
+    ) {
+      return { value: existing.value, fromCache: true };
+    }
+
+    const provider = PROVIDER_MAP[providerId];
+    const providerConfig = getEffectiveProviderConfig(config, providerId);
+    if (!providerConfig) {
+      throw new Error(`Provider '${providerId}' is not configured.`);
+    }
+
+    const createdAt = now;
+    await contentStore.put<JsonValue>({
+      key,
+      kind: CONTENT_BATCH_ENTRY_KIND,
+      status: "pending",
+      createdAt,
+      updatedAt: createdAt,
+      expiresAt: createdAt + ttlMs,
+      metadata: {
+        urls: normalizedUrls as unknown as JsonValue,
+        provider: providerId,
+        optionsHash: hashOptions(options),
+      },
+    });
+
+    try {
+      const plan = provider.buildPlan(
+        {
+          capability: "contents",
+          urls: normalizedUrls,
+          options: stripLocalExecutionOptions(options),
+        },
+        providerConfig as never,
+      );
+      if (!plan) {
+        throw new Error(
+          `Provider '${providerId}' could not build a contents plan.`,
+        );
+      }
+      const result = await executeOperationPlan(plan, options, {
+        cwd,
+        signal,
+        onProgress,
+      });
+      if ("results" in result) {
+        throw new Error(
+          `${provider.label} contents returned an invalid result.`,
+        );
+      }
+
+      const fetchedAt = Date.now();
+      const stored: StoredBatchContentsValue = {
+        urls: normalizedUrls,
+        provider: result.provider,
+        text: result.text,
+        summary: result.summary,
+        itemCount: result.itemCount,
+        fetchedAt,
+      };
+      await contentStore.put<JsonValue>({
+        key,
+        kind: CONTENT_BATCH_ENTRY_KIND,
+        status: "ready",
+        createdAt,
+        updatedAt: fetchedAt,
+        expiresAt: fetchedAt + ttlMs,
+        value: stored as unknown as JsonValue,
+        metadata: {
+          urls: normalizedUrls as unknown as JsonValue,
+          provider: result.provider,
+          optionsHash: hashOptions(options),
+        },
+      });
+      return { value: stored, fromCache: false };
+    } catch (error) {
+      await contentStore.put<JsonValue>({
+        key,
+        kind: CONTENT_BATCH_ENTRY_KIND,
+        status: "failed",
+        createdAt,
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + ttlMs,
+        error: error instanceof Error ? error.message : String(error),
+        metadata: {
+          urls: normalizedUrls as unknown as JsonValue,
+          provider: providerId,
+          optionsHash: hashOptions(options),
+        },
+      });
+      throw error;
+    } finally {
+      inFlightBatchContents.delete(key);
+    }
+  })();
+
+  inFlightBatchContents.set(key, task);
+  return await task;
+}
 
 async function ensureContentsStored({
   url,
@@ -693,6 +973,20 @@ async function ensureContentsStored({
   return await task;
 }
 
+function buildBatchContentsStoreKey(
+  urls: string[],
+  providerId: ProviderId,
+  options: JsonObject | undefined,
+): string {
+  return createStoreKey([
+    CONTENT_BATCH_ENTRY_KIND,
+    `v${CONTENT_CACHE_VERSION}`,
+    providerId,
+    hashKey(stableStringify(normalizeUrlSet(urls))),
+    hashOptions(options),
+  ]);
+}
+
 function buildContentsStoreKey(
   url: string,
   providerId: ProviderId,
@@ -760,6 +1054,12 @@ function canonicalizeUrl(url: string): string {
   } catch {
     return url.trim();
   }
+}
+
+function normalizeUrlSet(urls: string[]): string[] {
+  return [...new Set(urls.map((url) => canonicalizeUrl(url)).filter(Boolean))]
+    .filter((url) => /^https?:\/\//i.test(url))
+    .sort();
 }
 
 function selectPrefetchUrls(
@@ -874,6 +1174,21 @@ function isProviderId(value: unknown): value is ProviderId {
     value === "perplexity" ||
     value === "parallel" ||
     value === "valyu"
+  );
+}
+
+function isStoredBatchContentsValue(
+  value: unknown,
+): value is StoredBatchContentsValue & JsonObject {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  return (
+    Array.isArray(value.urls) &&
+    value.urls.every((item) => typeof item === "string") &&
+    isProviderId(value.provider) &&
+    typeof value.text === "string" &&
+    typeof value.fetchedAt === "number"
   );
 }
 

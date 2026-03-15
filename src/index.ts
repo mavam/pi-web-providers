@@ -32,10 +32,10 @@ import {
   stripLocalExecutionOptions,
 } from "./execution-policy.js";
 import {
+  canResolveContentsFromStore,
   cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
-  hasAnyCachedContents,
   parseSearchContentsPrefetchOptions,
   resolveContentsFromStore,
   startContentsPrefetch,
@@ -1054,11 +1054,12 @@ async function executeProviderOperation({
       }),
     );
 
-  // Route through the content store only when at least one URL already has a
-  // cached (prefetched) entry.  This avoids adding implicit file-based caching
-  // overhead to regular web_contents calls that haven't been prefetched.
+  // Route through the content store only when the entire request can already
+  // be satisfied from an exact prefetched batch or from per-URL cached entries.
+  // Partial cache hits intentionally fall back to the provider's native batched
+  // contents endpoint to avoid fanning out into one request per missing URL.
   if (capability === "contents" && planOverride === undefined) {
-    const useStore = await hasAnyCachedContents({
+    const useStore = await canResolveContentsFromStore({
       urls: urls ?? [],
       providerId: provider.id,
       options,

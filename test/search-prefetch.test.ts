@@ -50,7 +50,7 @@ afterEach(() => {
 });
 
 describe("search contents prefetch", () => {
-  it("starts background contents prefetching and reuses the cached results in web_contents", async () => {
+  it("starts background contents prefetching, reuses the cached batch, and works without an explicit provider", async () => {
     const { __test__ } = await import("../src/index.js");
     const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
     const config = {
@@ -113,13 +113,14 @@ describe("search contents prefetch", () => {
       numResults: 2,
     });
 
-    // The prefetch is fire-and-forget: at this point the in-flight promises
-    // exist but haven't completed yet, so no getContents calls have fired.
+    // The prefetch is fire-and-forget: at this point the in-flight batch
+    // promise exists but hasn't completed yet, so no getContents calls have
+    // fired.
     expect(exaGetContentsMock.mock.calls.length).toBe(0);
 
-    // The first explicit web_contents call piggbacks on the in-flight
-    // prefetch promises (via ensureContentsStored dedup), which triggers
-    // exactly 2 getContents calls — one per URL.
+    // The first explicit web_contents call piggybacks on the in-flight batch
+    // prefetch promise, so the provider still receives a single batched
+    // contents request for both URLs.
     const contentsResult = await __test__.executeProviderTool({
       capability: "contents",
       config,
@@ -131,7 +132,11 @@ describe("search contents prefetch", () => {
       urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
     });
 
-    expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(1);
+    expect(exaGetContentsMock).toHaveBeenCalledWith(
+      ["https://exa.ai/pricing", "https://exa.ai/sdk"],
+      undefined,
+    );
     expect(contentsResult.content[0]?.text).toContain(
       "Fetched body for https://exa.ai/sdk",
     );
@@ -139,9 +144,68 @@ describe("search contents prefetch", () => {
       "Fetched body for https://exa.ai/pricing",
     );
 
-    // A second web_contents call should reuse the now-cached entries and
-    // make zero additional provider fetches.
+    // A second web_contents call should reuse the now-cached batch even when
+    // no explicit provider is supplied.
     const cachedResult = await __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: undefined,
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+    });
+
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(1); // unchanged
+    expect(cachedResult.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/sdk",
+    );
+
+    await vi.waitFor(async () => {
+      const status = await getPrefetchStatus(prefetchId);
+      expect(status).toMatchObject({
+        prefetchId,
+        provider: "exa",
+        readyUrlCount: 2,
+        totalUrlCount: 2,
+        status: "ready",
+      });
+    });
+  });
+
+  it("falls back to a single provider batch when only part of the request is cached", async () => {
+    const { __test__ } = await import("../src/index.js");
+    const config = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    exaGetContentsMock.mockImplementation(async (urls: string[]) => ({
+      results: urls.map((url) => ({
+        title: url === "https://exa.ai/sdk" ? "Exa SDK" : "Exa Pricing",
+        url,
+        text: `Fetched body for ${url}`,
+      })),
+    }));
+
+    await __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk"],
+    });
+
+    await __test__.executeProviderTool({
       capability: "contents",
       config,
       explicitProvider: "exa",
@@ -152,18 +216,14 @@ describe("search contents prefetch", () => {
       urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
     });
 
-    expect(exaGetContentsMock).toHaveBeenCalledTimes(2); // unchanged
-    expect(cachedResult.content[0]?.text).toContain(
-      "Fetched body for https://exa.ai/sdk",
-    );
-
-    const status = await getPrefetchStatus(prefetchId);
-    expect(status).toMatchObject({
-      prefetchId,
-      provider: "exa",
-      readyUrlCount: 2,
-      totalUrlCount: 2,
-      status: "ready",
-    });
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+    expect(exaGetContentsMock.mock.calls[0]).toEqual([
+      ["https://exa.ai/sdk"],
+      undefined,
+    ]);
+    expect(exaGetContentsMock.mock.calls[1]).toEqual([
+      ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+      undefined,
+    ]);
   });
 });
