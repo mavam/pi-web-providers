@@ -2,6 +2,11 @@ import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import {
+  createDefaultLifecyclePolicy,
+  createDefaultRequestPolicy,
+  DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+} from "./execution-policy-defaults.js";
 import { type ProviderToolId, supportsProviderTool } from "./provider-tools.js";
 import type {
   ClaudeProviderConfig,
@@ -38,6 +43,7 @@ export function createDefaultConfig(): WebProvidersConfig {
           search: true,
           answer: true,
         },
+        policy: createDefaultRequestPolicy(),
       },
       codex: {
         enabled: true,
@@ -49,6 +55,7 @@ export function createDefaultConfig(): WebProvidersConfig {
           webSearchEnabled: true,
           webSearchMode: "live",
         },
+        policy: createDefaultRequestPolicy(),
       },
       exa: {
         enabled: false,
@@ -65,6 +72,7 @@ export function createDefaultConfig(): WebProvidersConfig {
             text: true,
           },
         },
+        policy: createDefaultLifecyclePolicy(),
       },
       gemini: {
         enabled: false,
@@ -81,14 +89,10 @@ export function createDefaultConfig(): WebProvidersConfig {
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
         },
-        policy: {
-          requestTimeoutMs: 30000,
-          retryCount: 3,
-          retryDelayMs: 2000,
-          researchPollIntervalMs: 3000,
-          researchTimeoutMs: 21600000,
-          researchMaxConsecutivePollErrors: 10,
-        },
+        policy: createDefaultLifecyclePolicy({
+          researchMaxConsecutivePollErrors:
+            DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+        }),
       },
       perplexity: {
         enabled: false,
@@ -106,6 +110,7 @@ export function createDefaultConfig(): WebProvidersConfig {
             model: "sonar-deep-research",
           },
         },
+        policy: createDefaultRequestPolicy(),
       },
       parallel: {
         enabled: false,
@@ -123,6 +128,7 @@ export function createDefaultConfig(): WebProvidersConfig {
             full_content: false,
           },
         },
+        policy: createDefaultRequestPolicy(),
       },
       valyu: {
         enabled: false,
@@ -137,6 +143,7 @@ export function createDefaultConfig(): WebProvidersConfig {
           searchType: "all",
           responseLength: "short",
         },
+        policy: createDefaultLifecyclePolicy(),
       },
     },
   };

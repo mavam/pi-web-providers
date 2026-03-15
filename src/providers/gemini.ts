@@ -1,6 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
 import { resolveConfigValue } from "../config.js";
 import {
+  createDefaultLifecyclePolicy,
+  DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+} from "../execution-policy-defaults.js";
+import {
   createResearchJobPlan,
   createSingleOperationPlan,
 } from "../provider-plans.js";
@@ -21,12 +25,6 @@ const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_CONTENTS_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
-const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
-const DEFAULT_RETRY_COUNT = 3;
-const DEFAULT_RETRY_DELAY_MS = 2000;
-const DEFAULT_RESEARCH_POLL_INTERVAL_MS = 3000;
-const DEFAULT_RESEARCH_TIMEOUT_MS = 21600000;
-const DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS = 10;
 
 export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   readonly id: "gemini" = "gemini";
@@ -50,15 +48,10 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         answerModel: DEFAULT_ANSWER_MODEL,
         researchAgent: DEFAULT_RESEARCH_AGENT,
       },
-      policy: {
-        requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
-        retryCount: DEFAULT_RETRY_COUNT,
-        retryDelayMs: DEFAULT_RETRY_DELAY_MS,
-        researchPollIntervalMs: DEFAULT_RESEARCH_POLL_INTERVAL_MS,
-        researchTimeoutMs: DEFAULT_RESEARCH_TIMEOUT_MS,
+      policy: createDefaultLifecyclePolicy({
         researchMaxConsecutivePollErrors:
-          DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
-      },
+          DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+      }),
     };
   }
 

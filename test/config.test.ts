@@ -10,6 +10,7 @@ import {
   resolveConfigValue,
   serializeConfig,
 } from "../src/config.js";
+import { PROVIDER_MAP } from "../src/providers/index.js";
 
 const cleanupDirs: string[] = [];
 
@@ -206,6 +207,81 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini?.policy?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.policy?.retryCount).toBe(5);
     expect(loaded.providers?.gemini).not.toHaveProperty("defaults");
+  });
+
+  it("seeds managed execution policy defaults for every provider template", () => {
+    const config = createDefaultConfig();
+
+    expect(config.providers?.claude?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+    });
+    expect(config.providers?.codex?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+    });
+    expect(config.providers?.exa?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+      researchPollIntervalMs: 3000,
+      researchTimeoutMs: 21600000,
+      researchMaxConsecutivePollErrors: 3,
+    });
+    expect(config.providers?.gemini?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+      researchPollIntervalMs: 3000,
+      researchTimeoutMs: 21600000,
+      researchMaxConsecutivePollErrors: 10,
+    });
+    expect(config.providers?.perplexity?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+    });
+    expect(config.providers?.parallel?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+    });
+    expect(config.providers?.valyu?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+      researchPollIntervalMs: 3000,
+      researchTimeoutMs: 21600000,
+      researchMaxConsecutivePollErrors: 3,
+    });
+  });
+
+  it("keeps provider templates aligned with the default config policy blocks", () => {
+    const config = createDefaultConfig();
+
+    expect(PROVIDER_MAP.claude.createTemplate().policy).toEqual(
+      config.providers?.claude?.policy,
+    );
+    expect(PROVIDER_MAP.codex.createTemplate().policy).toEqual(
+      config.providers?.codex?.policy,
+    );
+    expect(PROVIDER_MAP.exa.createTemplate().policy).toEqual(
+      config.providers?.exa?.policy,
+    );
+    expect(PROVIDER_MAP.gemini.createTemplate().policy).toEqual(
+      config.providers?.gemini?.policy,
+    );
+    expect(PROVIDER_MAP.perplexity.createTemplate().policy).toEqual(
+      config.providers?.perplexity?.policy,
+    );
+    expect(PROVIDER_MAP.parallel.createTemplate().policy).toEqual(
+      config.providers?.parallel?.policy,
+    );
+    expect(PROVIDER_MAP.valyu.createTemplate().policy).toEqual(
+      config.providers?.valyu?.policy,
+    );
   });
 
   it("caches command-backed config values within the process", async () => {

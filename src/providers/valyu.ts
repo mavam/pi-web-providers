@@ -1,6 +1,7 @@
 import { Valyu } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultLifecyclePolicy } from "../execution-policy-defaults.js";
 import {
   createResearchJobPlan,
   createSingleOperationPlan,
@@ -38,6 +39,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
         searchType: "all",
         responseLength: "short",
       },
+      policy: createDefaultLifecyclePolicy(),
     };
   }
 

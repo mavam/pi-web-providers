@@ -1,6 +1,7 @@
 import { Exa } from "exa-js";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultLifecyclePolicy } from "../execution-policy-defaults.js";
 import {
   createResearchJobPlan,
   createSingleOperationPlan,
@@ -40,6 +41,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
           text: true,
         },
       },
+      policy: createDefaultLifecyclePolicy(),
     };
   }
 

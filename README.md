@@ -242,6 +242,11 @@ Example:
       "tools": {
         "search": true,
         "answer": true
+      },
+      "policy": {
+        "requestTimeoutMs": 30000,
+        "retryCount": 3,
+        "retryDelayMs": 2000
       }
     },
     "codex": {

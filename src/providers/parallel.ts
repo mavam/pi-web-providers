@@ -1,6 +1,7 @@
 import Parallel from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   ParallelProviderConfig,
@@ -36,6 +37,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
           full_content: false,
         },
       },
+      policy: createDefaultRequestPolicy(),
     };
   }
 

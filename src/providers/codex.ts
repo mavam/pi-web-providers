@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Codex, type ThreadEvent } from "@openai/codex-sdk";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
+import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   CodexProviderConfig,
@@ -60,6 +61,7 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
         webSearchEnabled: true,
         webSearchMode: "live",
       },
+      policy: createDefaultRequestPolicy(),
     };
   }
 

@@ -1,6 +1,7 @@
 import Perplexity from "@perplexity-ai/perplexity_ai";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSingleOperationPlan } from "../provider-plans.js";
 import type {
   PerplexityProviderConfig,
@@ -41,6 +42,7 @@ export class PerplexityProvider
           model: DEFAULT_RESEARCH_MODEL,
         },
       },
+      policy: createDefaultRequestPolicy(),
     };
   }
 
