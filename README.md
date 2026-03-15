@@ -23,8 +23,10 @@ your active provider are exposed to the agent.
   explicitly enabled and the local CLI is installed and authenticated
 - **Per-provider tool toggles** — disable individual capabilities without
   switching providers
-- **Multi-query search** — run several search queries in a single `web_search`
-  call and get grouped results back in one response
+- **Batched search and answers** — run several related queries in a single
+  `web_search` or `web_answer` call and get grouped results back in one response
+- **Async contents prefetch** — optionally start background `web_contents`
+  extraction from `web_search` results and reuse the cached pages later
 - **Timeout and retry controls** — configurable request timeouts, retries,
   research polling, deadlines, and resumable background jobs
 - **Truncated output with temp-file spillover** for large results
@@ -57,12 +59,17 @@ provider supports a given capability, the corresponding tool is never exposed.
 Find likely sources on the public web for up to 10 queries in a single call
 and return titles, URLs, and snippets grouped by query.
 
-| Parameter    | Type     | Default  | Description                                |
-| ------------ | -------- | -------- | ------------------------------------------ |
-| `queries`    | string[] | required | One or more search queries to run (max 10) |
-| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`  |
-| `options`    | object   | —        | Provider-specific search options           |
-| `provider`   | string   | auto     | Optional provider override                 |
+| Parameter    | Type     | Default  | Description                                                          |
+| ------------ | -------- | -------- | -------------------------------------------------------------------- |
+| `queries`    | string[] | required | One or more search queries to run (max 10)                           |
+| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                            |
+| `options`    | object   | —        | Provider-specific search options plus local `prefetch` orchestration |
+| `provider`   | string   | auto     | Optional provider override                                           |
+
+`web_search.options.prefetch` is local-only and not forwarded into the provider
+SDK. It accepts `enabled`, `maxUrls`, `provider`, `ttlMs`, and
+`contentsOptions`, and starts a background page-extraction workflow that writes
+results into the local content store.
 
 ### `web_contents`
 
@@ -74,15 +81,20 @@ Read and extract the main contents of one or more web pages.
 | `options`  | object   | —        | Provider-specific extraction options |
 | `provider` | string   | auto     | Optional provider override           |
 
+`web_contents` reuses any matching prefetched pages already present in the local
+content store and only fetches missing or stale URLs.
+
 ### `web_answer`
 
-Answer a question using web-grounded evidence.
+Answer one or more questions using web-grounded evidence.
 
-| Parameter  | Type   | Default  | Description                |
-| ---------- | ------ | -------- | -------------------------- |
-| `query`    | string | required | Question to answer         |
-| `options`  | object | —        | Provider-specific options  |
-| `provider` | string | auto     | Optional provider override |
+| Parameter  | Type     | Default  | Description                                          |
+| ---------- | -------- | -------- | ---------------------------------------------------- |
+| `queries`  | string[] | required | One or more questions to answer in one call (max 10) |
+| `options`  | object   | —        | Provider-specific options                            |
+| `provider` | string   | auto     | Optional provider override                           |
+
+Responses are grouped into per-question sections when more than one question is provided.
 
 ### `web_research`
 

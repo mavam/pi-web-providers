@@ -32,6 +32,14 @@ import {
   stripLocalExecutionOptions,
 } from "./execution-policy.js";
 import {
+  formatPrefetchStatusText,
+  getPrefetchStatus,
+  parseSearchContentsPrefetchOptions,
+  resolveContentsFromStore,
+  startContentsPrefetch,
+  stripSearchContentsPrefetchOptions,
+} from "./prefetch-manager.js";
+import {
   getProviderConfigManifest,
   type ProviderSettingDescriptor,
 } from "./provider-config-manifests.js";
@@ -201,7 +209,7 @@ function registerWebSearchTool(
       const isError = Boolean((result as { isError?: boolean }).isError);
 
       if (isPartial) {
-        return renderSimpleText(text ?? "Searching…", theme, "warning");
+        return undefined;
       }
 
       if (isError) {
@@ -301,6 +309,7 @@ function registerWebContentsTool(
         state.isPartial,
         "web_contents failed",
         theme,
+        { hidePartial: true },
       );
     },
   });
@@ -315,35 +324,42 @@ function registerWebAnswerTool(
   pi.registerTool({
     name: "web_answer",
     label: "Web Answer",
-    description: "Answer a question using web-grounded evidence.",
+    description: `Answer one or more questions using web-grounded evidence (up to ${MAX_SEARCH_QUERIES} per call).`,
     parameters: Type.Object({
-      query: Type.String({ description: "Question to answer" }),
+      queries: Type.Array(Type.String({ minLength: 1 }), {
+        minItems: 1,
+        maxItems: MAX_SEARCH_QUERIES,
+        description: `One or more questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
+      }),
       options: jsonOptionsSchema(describeOptionsField("answer", providerIds)),
       provider: providerEnum(
         providerIds,
         "Provider override. If omitted, uses the active configured provider that supports web answers.",
       ),
     }),
-    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
+    promptGuidelines: [
+      ...PROVIDER_OVERRIDE_GUIDELINES,
+      "Prefer batching related questions into one web_answer call instead of making multiple calls.",
+    ],
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
-      return executeProviderTool({
-        capability: "answer",
+      return executeAnswerTool({
         config: await loadConfig(),
         explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
         options: normalizeOptions(params.options),
-        query: params.query,
+        queries: params.queries,
       });
     },
     renderCall(args, theme) {
-      return renderToolCallHeader(
-        "web_answer",
-        formatQuotedPreview(String((args as { query?: string }).query ?? "")),
-        [
-          `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
-        ],
+      return renderQuestionCallHeader(
+        {
+          queries: Array.isArray((args as { queries?: unknown }).queries)
+            ? ((args as { queries?: string[] }).queries ?? [])
+            : [],
+          provider: (args as { provider?: ProviderId }).provider,
+        },
         theme,
       );
     },
@@ -354,6 +370,7 @@ function registerWebAnswerTool(
         state.isPartial,
         "web_answer failed",
         theme,
+        { hidePartial: true },
       );
     },
   });
@@ -574,16 +591,22 @@ function describeOptionsField(
     providerIds,
   );
 
-  if (supportedControls.length === 0) {
-    return labels[capability];
+  let description = labels[capability];
+
+  if (supportedControls.length > 0) {
+    const qualifier =
+      capability === "research"
+        ? " Depending on provider, local execution controls may include: "
+        : " Local execution controls: ";
+    description += `${qualifier}${supportedControls.join(", ")}.`;
   }
 
-  const qualifier =
-    capability === "research"
-      ? " Depending on provider, local execution controls may include: "
-      : " Local execution controls: ";
+  if (capability === "search") {
+    description +=
+      " Local orchestration options may include prefetch={ enabled, maxUrls, provider, ttlMs, contentsOptions }.";
+  }
 
-  return `${labels[capability]}${qualifier}${supportedControls.join(", ")}.`;
+  return description;
 }
 
 function getSupportedExecutionControlsForCapability(
@@ -673,6 +696,8 @@ async function executeSearchTool({
     throw new Error(`Provider '${provider.id}' is not configured.`);
   }
 
+  const prefetchOptions = parseSearchContentsPrefetchOptions(options);
+  const providerOptions = stripSearchContentsPrefetchOptions(options);
   const searchQueries = resolveSearchQueries(queries);
   if (
     planOverrides !== undefined &&
@@ -699,9 +724,9 @@ async function executeSearchTool({
           providerConfig: providerConfig as ProviderConfigUnion,
           query: searchQuery,
           maxResults: clampedMaxResults,
-          options,
+          options: providerOptions,
           providerContext,
-          onProgress: createSearchProgressReporter(
+          onProgress: createBatchProgressReporter(
             progress.report,
             searchQueries,
             index,
@@ -726,8 +751,19 @@ async function executeSearchTool({
     throw buildSearchBatchError(outcomes);
   }
 
+  const prefetch =
+    prefetchOptions?.enabled === true && planOverrides === undefined
+      ? await startContentsPrefetch({
+          config,
+          cwd: ctx.cwd,
+          urls: collectSearchResultUrls(outcomes),
+          searchProviderId: provider.id,
+          options: prefetchOptions,
+        })
+      : undefined;
+
   const rendered = await truncateAndSave(
-    formatSearchResponses(outcomes),
+    formatSearchResponses(outcomes, prefetch),
     "web-search",
   );
 
@@ -796,6 +832,249 @@ async function executeSingleSearchQuery({
   return result;
 }
 
+type AnswerQueryOutcome =
+  | { query: string; response: ProviderToolOutput; error?: undefined }
+  | { query: string; error: string; response?: undefined };
+
+async function executeAnswerTool({
+  config,
+  explicitProvider,
+  ctx,
+  signal,
+  onUpdate,
+  options,
+  queries,
+  planOverrides,
+}: {
+  config: WebProvidersConfig;
+  explicitProvider: ProviderId | undefined;
+  ctx: { cwd: string };
+  signal: AbortSignal | null | undefined;
+  onUpdate:
+    | ((update: {
+        content: Array<{ type: "text"; text: string }>;
+        details: {};
+      }) => void)
+    | undefined;
+  options: JsonObject | undefined;
+  queries: string[];
+  planOverrides?: ProviderOperationPlan<ProviderToolOutput>[];
+}) {
+  const provider = resolveProviderForCapability(
+    config,
+    explicitProvider,
+    ctx.cwd,
+    "answer",
+  );
+  const providerConfig = getEffectiveProviderConfig(config, provider.id);
+  if (!providerConfig) {
+    throw new Error(`Provider '${provider.id}' is not configured.`);
+  }
+
+  const answerQueries = resolveAnswerQueries(queries);
+  if (
+    planOverrides !== undefined &&
+    planOverrides.length !== answerQueries.length
+  ) {
+    throw new Error(
+      "planOverrides length must match the number of answer queries.",
+    );
+  }
+
+  const progress = createToolProgressReporter("answer", provider.id, onUpdate);
+  const providerContext = {
+    cwd: ctx.cwd,
+    signal: signal ?? undefined,
+  };
+
+  let outcomes: AnswerQueryOutcome[];
+  try {
+    const settled = await Promise.allSettled(
+      answerQueries.map((answerQuery, index) =>
+        executeProviderOperation({
+          capability: "answer",
+          config,
+          provider,
+          providerConfig: providerConfig as ProviderConfigUnion,
+          ctx,
+          signal,
+          options,
+          query: answerQuery,
+          onProgress: createBatchProgressReporter(
+            progress.report,
+            answerQueries,
+            index,
+          ),
+          planOverride: planOverrides?.[index],
+        }),
+      ),
+    );
+    outcomes = settled.map((result, index) =>
+      result.status === "fulfilled"
+        ? { query: answerQueries[index] ?? "", response: result.value }
+        : {
+            query: answerQueries[index] ?? "",
+            error: formatErrorMessage(result.reason),
+          },
+    );
+  } finally {
+    progress.stop();
+  }
+
+  if (outcomes.every((outcome) => outcome.error !== undefined)) {
+    throw buildAnswerBatchError(outcomes);
+  }
+
+  const text = await truncateAndSave(
+    formatAnswerResponses(outcomes),
+    "web-answer",
+  );
+  const details = buildWebAnswerDetails(provider.id, outcomes);
+
+  return {
+    content: [{ type: "text" as const, text }],
+    details,
+  };
+}
+
+function buildAnswerBatchError(outcomes: AnswerQueryOutcome[]): Error {
+  const failed = outcomes.filter((outcome) => outcome.error !== undefined);
+  if (failed.length === 1) {
+    return new Error(failed[0]?.error ?? "web_answer failed.");
+  }
+
+  const summary = failed
+    .map(
+      (outcome, index) =>
+        `${index + 1}. ${formatQuotedPreview(outcome.query, 40)} — ${outcome.error}`,
+    )
+    .join("; ");
+  return new Error(
+    `All ${failed.length} web_answer queries failed: ${summary}`,
+  );
+}
+
+function formatAnswerResponses(outcomes: AnswerQueryOutcome[]): string {
+  if (outcomes.length === 1) {
+    return formatSingleAnswerOutcome(outcomes[0]);
+  }
+
+  return outcomes
+    .map((outcome, index) => {
+      const section = outcome.response
+        ? outcome.response.text
+        : `Answer failed: ${outcome.error ?? "Unknown error."}`;
+      return `Question ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
+    })
+    .join("\n\n");
+}
+
+function formatSingleAnswerOutcome(
+  outcome: AnswerQueryOutcome | undefined,
+): string {
+  if (outcome?.response) {
+    return outcome.response.text;
+  }
+  return `Answer failed: ${outcome?.error ?? "Unknown error."}`;
+}
+
+function buildWebAnswerDetails(
+  provider: ProviderId,
+  outcomes: AnswerQueryOutcome[],
+): ProviderToolDetails {
+  const successfulOutcomes = outcomes.filter(
+    (
+      outcome,
+    ): outcome is Extract<
+      AnswerQueryOutcome,
+      { response: ProviderToolOutput }
+    > => outcome.response !== undefined,
+  );
+  const summary =
+    successfulOutcomes.length === 1 && outcomes.length === 1
+      ? successfulOutcomes[0]?.response.summary
+      : undefined;
+
+  return {
+    tool: "web_answer",
+    provider,
+    summary,
+    itemCount:
+      successfulOutcomes.length === 1
+        ? successfulOutcomes[0]?.response.itemCount
+        : undefined,
+    queryCount: outcomes.length,
+    failedQueryCount: outcomes.filter((outcome) => outcome.error !== undefined)
+      .length,
+  };
+}
+
+async function executeProviderOperation({
+  capability,
+  config,
+  provider,
+  providerConfig,
+  ctx,
+  signal,
+  options,
+  urls,
+  query,
+  input,
+  onProgress,
+  planOverride,
+}: {
+  capability: Exclude<ProviderCapability, "search">;
+  config: WebProvidersConfig;
+  provider: (typeof PROVIDERS)[number];
+  providerConfig: ProviderConfigUnion;
+  ctx: { cwd: string };
+  signal: AbortSignal | null | undefined;
+  options: JsonObject | undefined;
+  urls?: string[];
+  query?: string;
+  input?: string;
+  onProgress?: (message: string) => void;
+  planOverride?: ProviderOperationPlan<ProviderToolOutput>;
+}): Promise<ProviderToolOutput> {
+  const plan =
+    planOverride ??
+    buildProviderPlan(
+      provider,
+      providerConfig,
+      buildOperationRequest(capability, {
+        urls,
+        query,
+        input,
+        options: stripLocalExecutionOptions(options),
+      }),
+    );
+
+  if (capability === "contents" && planOverride === undefined) {
+    const resolved = await resolveContentsFromStore({
+      urls: urls ?? [],
+      providerId: provider.id,
+      config,
+      cwd: ctx.cwd,
+      options,
+      signal: signal ?? undefined,
+      onProgress,
+    });
+    return resolved.output;
+  }
+
+  const result = await executeOperationPlan(plan, options, {
+    cwd: ctx.cwd,
+    signal: signal ?? undefined,
+    onProgress,
+  });
+  if (isSearchResponse(result)) {
+    throw new Error(
+      `${provider.label} ${capability} returned an invalid result.`,
+    );
+  }
+  return result;
+}
+
 async function executeProviderTool({
   capability,
   config,
@@ -842,33 +1121,23 @@ async function executeProviderTool({
     provider.id,
     onUpdate,
   );
-  const providerContext = {
-    cwd: ctx.cwd,
-    signal: signal ?? undefined,
-    onProgress: progress.report,
-  };
-  const plan =
-    planOverride ??
-    buildProviderPlan(
-      provider,
-      providerConfig as ProviderConfigUnion,
-      buildOperationRequest(capability, {
-        urls,
-        query,
-        input,
-        options: stripLocalExecutionOptions(options),
-      }),
-    );
 
   let response: ProviderToolOutput;
   try {
-    const result = await executeOperationPlan(plan, options, providerContext);
-    if (isSearchResponse(result)) {
-      throw new Error(
-        `${provider.label} ${capability} returned an invalid result.`,
-      );
-    }
-    response = result;
+    response = await executeProviderOperation({
+      capability,
+      config,
+      provider,
+      providerConfig: providerConfig as ProviderConfigUnion,
+      ctx,
+      signal,
+      options,
+      urls,
+      query,
+      input,
+      onProgress: progress.report,
+      planOverride,
+    });
   } finally {
     progress.stop();
   }
@@ -1031,6 +1300,47 @@ function renderToolCallHeader(
   };
 }
 
+function renderQuestionCallHeader(
+  params: {
+    queries: string[];
+    provider?: ProviderId;
+  },
+  theme: Theme,
+): Component {
+  return {
+    invalidate() {},
+    render(width) {
+      const header = theme.fg("toolTitle", theme.bold("web_answer"));
+      const questions = getAnswerQueriesForDisplay(params.queries);
+      const lines: string[] = [];
+      const headerLine = truncateToWidth(header, width);
+      lines.push(
+        headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
+      );
+
+      for (const question of questions) {
+        const questionLine = truncateToWidth(
+          `  ${theme.fg("accent", truncateInline(cleanSingleLine(question), 120))}`,
+          width,
+        );
+        lines.push(
+          questionLine +
+            " ".repeat(Math.max(0, width - visibleWidth(questionLine))),
+        );
+      }
+
+      const detailLine = truncateToWidth(
+        `  ${theme.fg("muted", `provider=${params.provider ?? "auto"}`)}`,
+        width,
+      );
+      lines.push(
+        detailLine + " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
+      );
+      return lines;
+    },
+  };
+}
+
 function renderProviderToolResult(
   result: {
     content?: Array<{ type: string; text?: string }>;
@@ -1041,10 +1351,14 @@ function renderProviderToolResult(
   isPartial: boolean,
   failureText: string,
   theme: Theme,
-): Text {
+  options: { hidePartial?: boolean } = {},
+): Text | undefined {
   const text = extractTextContent(result.content);
 
   if (isPartial) {
+    if (options.hidePartial === true) {
+      return undefined;
+    }
     return renderSimpleText(text ?? "Working…", theme, "warning");
   }
 
@@ -1057,13 +1371,33 @@ function renderProviderToolResult(
   }
 
   const details = result.details as ProviderToolDetails | undefined;
-  const summary =
-    details?.summary ??
-    getFirstLine(text) ??
-    `${details?.tool ?? "tool"} output available`;
+  const summary = renderCollapsedProviderToolSummary(details, text);
   let summaryText = theme.fg("success", summary);
   summaryText += theme.fg("muted", ` (${getExpandHint()})`);
   return new Text(summaryText, 0, 0);
+}
+
+function renderCollapsedProviderToolSummary(
+  details: ProviderToolDetails | undefined,
+  text: string | undefined,
+): string {
+  if (
+    details?.tool === "web_answer" &&
+    typeof details.queryCount === "number" &&
+    details.queryCount > 1
+  ) {
+    const failureSuffix =
+      details.failedQueryCount && details.failedQueryCount > 0
+        ? `, ${details.failedQueryCount} failed`
+        : "";
+    return `${details.queryCount} questions via ${details.provider}${failureSuffix}`;
+  }
+
+  return (
+    details?.summary ??
+    getFirstLine(text) ??
+    `${details?.tool ?? "tool"} output available`
+  );
 }
 
 interface ProviderToolMenuOption {
@@ -1626,6 +1960,16 @@ function resolveSearchQueries(queries: string[]): string[] {
   );
 }
 
+function resolveAnswerQueries(queries: string[]): string[] {
+  if (queries.length === 0) {
+    throw new Error("queries must contain at least one item.");
+  }
+
+  return queries.map((value, index) =>
+    normalizeSearchQuery(value, `queries[${index}]`),
+  );
+}
+
 function normalizeSearchQuery(value: string, fieldName: string): string {
   const normalized = value.trim();
   if (normalized.length === 0) {
@@ -1644,7 +1988,11 @@ function getSearchQueriesForDisplay(queries?: string[]): string[] {
     .filter((value) => value.length > 0);
 }
 
-function createSearchProgressReporter(
+function getAnswerQueriesForDisplay(queries: string[]): string[] {
+  return getSearchQueriesForDisplay(queries);
+}
+
+function createBatchProgressReporter(
   report: ((message: string) => void) | undefined,
   queries: string[],
   index: number,
@@ -1657,10 +2005,7 @@ function createSearchProgressReporter(
     return report;
   }
 
-  const label = `${index + 1}/${queries.length} ${formatQuotedPreview(
-    queries[index] ?? "",
-    40,
-  )}`;
+  const label = `${index + 1}/${queries.length}`;
   return (message: string) => {
     report(`${message} (${label})`);
   };
@@ -1710,10 +2055,9 @@ function renderCallHeader(
     render(width) {
       let header = theme.fg("toolTitle", theme.bold("web_search"));
       const queries = getSearchQueriesForDisplay(params.queries);
+      const showExpandedQueries = queries.length > 1;
       if (queries.length === 1) {
         header += ` ${theme.fg("accent", formatQuotedPreview(queries[0]))} `;
-      } else if (queries.length > 1) {
-        header += ` ${theme.fg("accent", `${queries.length} queries`)}`;
       }
 
       const lines: string[] = [];
@@ -1721,6 +2065,19 @@ function renderCallHeader(
       lines.push(
         headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
       );
+
+      if (showExpandedQueries) {
+        for (const query of queries) {
+          const queryLine = truncateToWidth(
+            `  ${theme.fg("accent", truncateInline(cleanSingleLine(query), 120))}`,
+            width,
+          );
+          lines.push(
+            queryLine +
+              " ".repeat(Math.max(0, width - visibleWidth(queryLine))),
+          );
+        }
+      }
 
       const detailParts = [
         `provider=${params.provider ?? "auto"}`,
@@ -1803,23 +2160,42 @@ function formatQuotedPreview(text: string, maxLength = 80): string {
   return `"${truncateInline(cleanSingleLine(text), maxLength)}"`;
 }
 
-function formatSearchResponses(outcomes: SearchQueryOutcome[]): string {
-  if (outcomes.length === 1) {
-    const outcome = outcomes[0];
-    if (outcome?.response) {
-      return formatSearchResponse(outcome.response);
-    }
-    return `Search failed: ${outcome?.error ?? "Unknown error."}`;
+function formatSearchResponses(
+  outcomes: SearchQueryOutcome[],
+  prefetch?: { prefetchId: string; provider: ProviderId; urlCount: number },
+): string {
+  const body =
+    outcomes.length === 1
+      ? formatSingleSearchOutcome(outcomes[0])
+      : outcomes
+          .map((outcome, index) => {
+            const section = outcome.response
+              ? formatSearchResponse(outcome.response)
+              : `Search failed: ${outcome.error ?? "Unknown error."}`;
+            return `Query ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
+          })
+          .join("\n\n");
+
+  if (!prefetch) {
+    return body;
   }
 
-  return outcomes
-    .map((outcome, index) => {
-      const body = outcome.response
-        ? formatSearchResponse(outcome.response)
-        : `Search failed: ${outcome.error ?? "Unknown error."}`;
-      return `Query ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${body}`;
-    })
-    .join("\n\n");
+  return `${body}\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
+}
+
+function formatSingleSearchOutcome(
+  outcome: SearchQueryOutcome | undefined,
+): string {
+  if (outcome?.response) {
+    return formatSearchResponse(outcome.response);
+  }
+  return `Search failed: ${outcome?.error ?? "Unknown error."}`;
+}
+
+function collectSearchResultUrls(outcomes: SearchQueryOutcome[]): string[] {
+  return outcomes.flatMap(
+    (outcome) => outcome.response?.results.map((result) => result.url) ?? [],
+  );
 }
 
 function formatSearchResponse(response: SearchResponse): string {
@@ -1882,6 +2258,7 @@ function truncateInline(text: string, maxLength: number): string {
 }
 
 export const __test__ = {
+  executeAnswerTool,
   executeProviderTool,
   executeSearchTool,
   extractTextContent,
@@ -1890,5 +2267,6 @@ export const __test__ = {
   getAvailableProviderIdsForCapability,
   getSyncedActiveTools,
   renderCallHeader,
+  renderQuestionCallHeader,
   renderCollapsedSearchSummary,
 };

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, Theme } from "@mariozechner/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { execFileSyncMock } = vi.hoisted(() => ({
@@ -57,6 +57,7 @@ describe("managed tool availability", () => {
       name: string;
       description: string;
       parameters?: { properties?: Record<string, unknown> };
+      renderResult?: (...args: any[]) => unknown;
     }> = [];
 
     webProvidersExtension({
@@ -88,8 +89,10 @@ describe("managed tool availability", () => {
     );
     expect(webContents?.description).not.toContain("web_search");
     expect(webAnswer?.description).toBe(
-      "Answer a question using web-grounded evidence.",
+      "Answer one or more questions using web-grounded evidence (up to 10 per call).",
     );
+    expect(webAnswer?.parameters?.properties).not.toHaveProperty("query");
+    expect(webAnswer?.parameters?.properties).toHaveProperty("queries");
     expect(webResearch?.description).toBe(
       "Investigate a topic across web sources and produce a longer report.",
     );
@@ -245,6 +248,56 @@ describe("managed tool availability", () => {
     expect(Array.from(activeTools)).toEqual(["web_search"]);
   });
 
+  it("suppresses noisy partial foreground tool text in the pending tool box", () => {
+    process.env.EXA_API_KEY = "test-key";
+
+    const tools: Array<{
+      name: string;
+      description: string;
+      parameters?: { properties?: Record<string, unknown> };
+      renderResult?: (...args: any[]) => unknown;
+    }> = [];
+
+    webProvidersExtension({
+      registerTool(tool: {
+        name: string;
+        description: string;
+        renderResult?: (...args: any[]) => unknown;
+      }) {
+        tools.push(tool);
+      },
+      registerCommand() {},
+      on() {},
+      getActiveTools() {
+        return [];
+      },
+      setActiveTools() {},
+    } as unknown as ExtensionAPI);
+
+    const webSearch = tools.find((tool) => tool.name === "web_search");
+    const webContents = tools.find((tool) => tool.name === "web_contents");
+
+    const partialSearchRender = webSearch?.renderResult?.(
+      {
+        content: [{ type: "text", text: "Searching Exa for: exa sdk" }],
+      },
+      { expanded: false, isPartial: true },
+      createTheme(),
+    );
+    const partialContentsRender = webContents?.renderResult?.(
+      {
+        content: [
+          { type: "text", text: "Fetching contents from Exa for 2 URL(s)" },
+        ],
+      },
+      { expanded: false, isPartial: true },
+      createTheme(),
+    );
+
+    expect(partialSearchRender).toBeUndefined();
+    expect(partialContentsRender).toBeUndefined();
+  });
+
   it("surfaces Perplexity overrides when Perplexity is available", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
 
@@ -274,6 +327,13 @@ describe("managed tool availability", () => {
     ).toEqual(["perplexity"]);
   });
 });
+
+function createTheme(): Theme {
+  return {
+    fg: (_color: string, text: string) => text,
+    bold: (text: string) => text,
+  } as unknown as Theme;
+}
 
 function mockClaudeAvailable(): void {
   execFileSyncMock.mockImplementation((_command, args: string[]) => {

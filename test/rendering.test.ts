@@ -40,7 +40,7 @@ describe("web_search renderer", () => {
     );
   });
 
-  it("shows a compact multi-query call header", () => {
+  it("shows each query on its own line for multi-query search calls", () => {
     const rendered = renderComponentText(
       __test__.renderCallHeader(
         {
@@ -53,7 +53,11 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("web_search 3 queries");
+    expect(rendered).toContain("web_search");
+    expect(rendered).toContain("  exa sdk");
+    expect(rendered).toContain("  exa pricing");
+    expect(rendered).toContain("  exa api");
+    expect(rendered).not.toContain("3 queries");
     expect(rendered).toContain("provider=exa maxResults=4");
   });
 
@@ -116,6 +120,49 @@ describe("web_search renderer", () => {
 
     expect(summary).toContain("3 queries, 4 results via exa, 1 failed");
     expect(summary).toContain("to expand");
+  });
+});
+
+describe("web_answer renderer", () => {
+  it("renders a single question on its own line below the tool name", () => {
+    const rendered = renderComponentText(
+      __test__.renderQuestionCallHeader(
+        {
+          queries: ["What are common Tenzir use cases?"],
+          provider: "gemini",
+        },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain("web_answer");
+    expect(rendered).toContain("  What are common Tenzir use cases?");
+    expect(rendered).toContain("provider=gemini");
+    expect(rendered).not.toContain(
+      'web_answer "What are common Tenzir use cases?"',
+    );
+  });
+
+  it("renders multiple questions on separate lines", () => {
+    const rendered = renderComponentText(
+      __test__.renderQuestionCallHeader(
+        {
+          queries: [
+            "What are common Tenzir use cases?",
+            "How does Tenzir help with SIEM migration?",
+          ],
+          provider: "gemini",
+        },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain("web_answer");
+    expect(rendered).toContain("  What are common Tenzir use cases?");
+    expect(rendered).toContain("  How does Tenzir help with SIEM migration?");
+    expect(rendered).toContain("provider=gemini");
   });
 });
 

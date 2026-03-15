@@ -66,6 +66,8 @@ export interface ProviderToolDetails {
   provider: ProviderId;
   summary?: string;
   itemCount?: number;
+  queryCount?: number;
+  failedQueryCount?: number;
 }
 
 export interface ClaudeProviderNativeConfig {

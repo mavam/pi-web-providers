@@ -327,10 +327,12 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     context: ProviderContext,
   ): Promise<ProviderResearchPollResult> {
     const ai = this.createClient(config);
-    const interaction = await ai.interactions.get(
-      id,
-      undefined,
-      buildGeminiRequestOptions(context.signal),
+    const interaction = await runWithoutGeminiInteractionsWarning(() =>
+      ai.interactions.get(
+        id,
+        undefined,
+        buildGeminiRequestOptions(context.signal),
+      ),
     );
 
     if (interaction.status === "completed") {
@@ -632,9 +634,8 @@ async function createSearchInteraction(
   };
 
   try {
-    return await ai.interactions.create(
-      forcedRequest,
-      buildGeminiRequestOptions(signal),
+    return await runWithoutGeminiInteractionsWarning(() =>
+      ai.interactions.create(forcedRequest, buildGeminiRequestOptions(signal)),
     );
   } catch (error) {
     if (!isBuiltInToolChoiceError(error)) {
@@ -642,16 +643,103 @@ async function createSearchInteraction(
     }
 
     const fallbackGenerationConfig = stripToolChoice(request.generation_config);
-    return ai.interactions.create(
-      {
-        ...request,
-        ...(fallbackGenerationConfig
-          ? { generation_config: fallbackGenerationConfig }
-          : {}),
-      },
-      buildGeminiRequestOptions(signal),
+    return runWithoutGeminiInteractionsWarning(() =>
+      ai.interactions.create(
+        {
+          ...request,
+          ...(fallbackGenerationConfig
+            ? { generation_config: fallbackGenerationConfig }
+            : {}),
+        },
+        buildGeminiRequestOptions(signal),
+      ),
     );
   }
+}
+
+const GEMINI_INTERACTIONS_WARNING =
+  /GoogleGenAI\.interactions: Interactions usage is experimental and may change in future versions\.?/;
+let geminiWarningSuppressionDepth = 0;
+let originalGeminiConsoleWarn: typeof console.warn | undefined;
+let originalGeminiStderrWrite: typeof process.stderr.write | undefined;
+
+async function runWithoutGeminiInteractionsWarning<T>(
+  operation: () => Promise<T>,
+): Promise<T> {
+  installGeminiWarningSuppression();
+  try {
+    return await operation();
+  } finally {
+    uninstallGeminiWarningSuppression();
+  }
+}
+
+function installGeminiWarningSuppression(): void {
+  geminiWarningSuppressionDepth += 1;
+  if (geminiWarningSuppressionDepth !== 1) {
+    return;
+  }
+
+  originalGeminiConsoleWarn = console.warn.bind(console);
+  console.warn = (...args: unknown[]) => {
+    if (matchesGeminiInteractionsWarning(args)) {
+      return;
+    }
+    originalGeminiConsoleWarn?.(...args);
+  };
+
+  originalGeminiStderrWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: unknown, ...args: unknown[]) => {
+    if (matchesGeminiInteractionsWarning([chunk])) {
+      const callback = args.find(
+        (arg): arg is (error?: Error | null) => void =>
+          typeof arg === "function",
+      );
+      callback?.(null);
+      return true;
+    }
+    return (
+      originalGeminiStderrWrite?.(
+        chunk as never,
+        ...(args as Parameters<typeof process.stderr.write>[1][]),
+      ) ?? true
+    );
+  }) as typeof process.stderr.write;
+}
+
+function uninstallGeminiWarningSuppression(): void {
+  geminiWarningSuppressionDepth = Math.max(
+    0,
+    geminiWarningSuppressionDepth - 1,
+  );
+  if (geminiWarningSuppressionDepth !== 0) {
+    return;
+  }
+
+  if (originalGeminiConsoleWarn) {
+    console.warn = originalGeminiConsoleWarn;
+    originalGeminiConsoleWarn = undefined;
+  }
+  if (originalGeminiStderrWrite) {
+    process.stderr.write = originalGeminiStderrWrite;
+    originalGeminiStderrWrite = undefined;
+  }
+}
+
+function matchesGeminiInteractionsWarning(parts: unknown[]): boolean {
+  const text = parts
+    .map((part) => {
+      if (typeof part === "string") {
+        return part;
+      }
+      if (part instanceof Uint8Array) {
+        return Buffer.from(part).toString("utf8");
+      }
+      return "";
+    })
+    .join(" ");
+
+  return GEMINI_INTERACTIONS_WARNING.test(text);
 }
 
 function isBuiltInToolChoiceError(error: unknown): boolean {
