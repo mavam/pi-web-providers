@@ -23,6 +23,8 @@ your active provider are exposed to the agent.
   explicitly enabled and the local CLI is installed and authenticated
 - **Per-provider tool toggles** — disable individual capabilities without
   switching providers
+- **Multi-query search** — run several search queries in a single `web_search`
+  call and get grouped results back in one response
 - **Timeout and retry controls** — configurable request timeouts, retries,
   research polling, deadlines, and resumable background jobs
 - **Truncated output with temp-file spillover** for large results
@@ -52,14 +54,15 @@ provider supports a given capability, the corresponding tool is never exposed.
 
 ### `web_search`
 
-Find likely sources on the public web and return titles, URLs, and snippets.
+Find likely sources on the public web for up to 10 queries in a single call
+and return titles, URLs, and snippets grouped by query.
 
-| Parameter    | Type    | Default  | Description                      |
-| ------------ | ------- | -------- | -------------------------------- |
-| `query`      | string  | required | What to search for               |
-| `maxResults` | integer | `5`      | Result count, clamped to `1–20`  |
-| `options`    | object  | —        | Provider-specific search options |
-| `provider`   | string  | auto     | Optional provider override       |
+| Parameter    | Type     | Default  | Description                                |
+| ------------ | -------- | -------- | ------------------------------------------ |
+| `queries`    | string[] | required | One or more search queries to run (max 10) |
+| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`  |
+| `options`    | object   | —        | Provider-specific search options           |
+| `provider`   | string   | auto     | Optional provider override                 |
 
 ### `web_contents`
 

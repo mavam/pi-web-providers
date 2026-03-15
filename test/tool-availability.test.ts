@@ -80,6 +80,8 @@ describe("managed tool availability", () => {
       "Find likely sources on the public web",
     );
     expect(webSearch?.description).toContain("titles, URLs, and snippets");
+    expect(webSearch?.parameters?.properties).not.toHaveProperty("query");
+    expect(webSearch?.parameters?.properties).toHaveProperty("queries");
     expect(webSearch?.parameters?.properties).toHaveProperty("options");
     expect(webContents?.description).toBe(
       "Read and extract the main contents of one or more web pages.",

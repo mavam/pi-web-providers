@@ -55,7 +55,8 @@ export interface ProviderResearchPollResult {
 
 export interface WebSearchDetails {
   tool: "web_search";
-  query: string;
+  queryCount: number;
+  failedQueryCount: number;
   provider: ProviderId;
   resultCount: number;
 }

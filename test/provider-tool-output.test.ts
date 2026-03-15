@@ -16,6 +16,239 @@ afterEach(async () => {
 });
 
 describe("provider tool output", () => {
+  it("groups multi-query search output into per-query sections", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    const result = await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      maxResults: 3,
+      queries: ["exa sdk", "exa pricing"],
+      planOverrides: [
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [
+              {
+                title: "Exa SDK",
+                url: "https://exa.ai/sdk",
+                snippet: "SDK docs",
+              },
+            ],
+          }),
+        },
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [
+              {
+                title: "Exa Pricing",
+                url: "https://exa.ai/pricing",
+                snippet: "Pricing page",
+              },
+              {
+                title: "Exa API Plans",
+                url: "https://exa.ai/plans",
+                snippet: "Plans overview",
+              },
+            ],
+          }),
+        },
+      ],
+    });
+
+    expect(result.content[0]?.text).toContain('Query 1: "exa sdk"');
+    expect(result.content[0]?.text).toContain('Query 2: "exa pricing"');
+    expect(result.content[0]?.text).toContain("1. Exa SDK");
+    expect(result.content[0]?.text).toContain("2. Exa API Plans");
+    expect(result.details).toEqual({
+      tool: "web_search",
+      provider: "exa",
+      queryCount: 2,
+      failedQueryCount: 0,
+      resultCount: 3,
+    });
+  });
+
+  it("preserves successful search results when one query in a batch fails", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    const result = await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      maxResults: 3,
+      queries: ["exa sdk", "exa pricing"],
+      planOverrides: [
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [
+              {
+                title: "Exa SDK",
+                url: "https://exa.ai/sdk",
+                snippet: "SDK docs",
+              },
+            ],
+          }),
+        },
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => {
+            throw new Error("rate limited");
+          },
+        },
+      ],
+    });
+
+    expect(result.content[0]?.text).toContain('Query 1: "exa sdk"');
+    expect(result.content[0]?.text).toContain("1. Exa SDK");
+    expect(result.content[0]?.text).toContain('Query 2: "exa pricing"');
+    expect(result.content[0]?.text).toContain("Search failed: rate limited");
+    expect(result.details).toEqual({
+      tool: "web_search",
+      provider: "exa",
+      queryCount: 2,
+      failedQueryCount: 1,
+      resultCount: 1,
+    });
+  });
+
+  it("fails the batch when every query fails", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeSearchTool({
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        maxResults: 3,
+        queries: ["exa sdk", "exa pricing"],
+        planOverrides: [
+          {
+            capability: "search",
+            providerId: "exa",
+            providerLabel: "Exa",
+            deliveryMode: "silent-foreground",
+            execute: async () => {
+              throw new Error("timeout");
+            },
+          },
+          {
+            capability: "search",
+            providerId: "exa",
+            providerLabel: "Exa",
+            deliveryMode: "silent-foreground",
+            execute: async () => {
+              throw new Error("rate limited");
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'All 2 web_search queries failed: 1. "exa sdk" — timeout; 2. "exa pricing" — rate limited',
+    );
+  });
+
+  it("rejects a whitespace-only query in the array", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeSearchTool({
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        maxResults: 3,
+        queries: ["valid query", "   "],
+      }),
+    ).rejects.toThrow("queries[1] must be a non-empty string.");
+  });
+
+  it("rejects an empty queries array", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeSearchTool({
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        maxResults: 3,
+        queries: [],
+      }),
+    ).rejects.toThrow("queries must contain at least one item.");
+  });
+
   it("truncates oversized non-search output and saves the full response", async () => {
     const config: WebProvidersConfig = {
       version: 1,
