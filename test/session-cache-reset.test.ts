@@ -222,4 +222,144 @@ describe("session cache reset", () => {
 
     expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps deduplicating replacement in-flight requests after session start", async () => {
+    const { default: webProvidersExtension, __test__ } = await import(
+      "../src/index.js"
+    );
+
+    const handlers = new Map<string, Function>();
+    webProvidersExtension({
+      registerTool() {},
+      registerCommand() {},
+      on(event: string, handler: Function) {
+        handlers.set(event, handler);
+      },
+      getActiveTools() {
+        return [];
+      },
+      setActiveTools() {},
+    } as unknown as ExtensionAPI);
+
+    const config = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    let resolveFirstCall:
+      | ((value: {
+          results: Array<{ title: string; url: string; text: string }>;
+        }) => void)
+      | undefined;
+    let resolveSecondCall:
+      | ((value: {
+          results: Array<{ title: string; url: string; text: string }>;
+        }) => void)
+      | undefined;
+    const firstCall = new Promise<{
+      results: Array<{ title: string; url: string; text: string }>;
+    }>((resolve) => {
+      resolveFirstCall = resolve;
+    });
+    const secondCall = new Promise<{
+      results: Array<{ title: string; url: string; text: string }>;
+    }>((resolve) => {
+      resolveSecondCall = resolve;
+    });
+
+    exaGetContentsMock
+      .mockImplementationOnce(() => firstCall)
+      .mockImplementationOnce(() => secondCall);
+
+    const firstRequest = __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk"],
+    });
+
+    await vi.waitFor(() => {
+      expect(exaGetContentsMock).toHaveBeenCalledTimes(1);
+    });
+
+    const sessionStart = handlers.get("session_start");
+    expect(sessionStart).toBeTypeOf("function");
+    await sessionStart?.({}, { cwd: process.cwd() });
+
+    const secondRequest = __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk"],
+    });
+
+    await vi.waitFor(() => {
+      expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+    });
+
+    resolveFirstCall?.({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "Stale body from the previous session",
+        },
+      ],
+    });
+    await firstRequest;
+
+    const thirdRequest = __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk"],
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+
+    resolveSecondCall?.({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "Fresh body from the current session",
+        },
+      ],
+    });
+
+    await expect(secondRequest).resolves.toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: expect.stringContaining("Fresh body from the current session"),
+        },
+      ],
+    });
+    await expect(thirdRequest).resolves.toMatchObject({
+      content: [
+        {
+          type: "text",
+          text: expect.stringContaining("Fresh body from the current session"),
+        },
+      ],
+    });
+  });
 });

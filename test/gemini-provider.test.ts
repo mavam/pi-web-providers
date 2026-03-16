@@ -515,6 +515,74 @@ describe("GeminiProvider contents", () => {
     });
   });
 
+  it("marks successfully retrieved URLs as failed when Gemini returns only a partial structured response", async () => {
+    const generateContent = vi.fn().mockResolvedValue({
+      text: [
+        "[[[URL]]]",
+        "https://example.com/a",
+        "[[[TITLE]]]",
+        "Page A",
+        "[[[BODY]]]",
+        "Content from the first URL.",
+        "[[[END]]]",
+        "",
+        "https://example.com/b",
+        "Page B",
+        "Content from the second URL.",
+      ].join("\n"),
+      candidates: [
+        {
+          urlContextMetadata: {
+            urlMetadata: [
+              {
+                retrievedUrl: "https://example.com/a",
+                urlRetrievalStatus: "URL_RETRIEVAL_STATUS_SUCCESS",
+              },
+              {
+                retrievedUrl: "https://example.com/b",
+                urlRetrievalStatus: "URL_RETRIEVAL_STATUS_SUCCESS",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const provider = createProvider({ models: { generateContent } });
+    const response = await provider.contents(
+      ["https://example.com/a", "https://example.com/b"],
+      undefined,
+      createConfig(),
+      createContext(),
+    );
+
+    expect(response.text).toContain("1. Page A");
+    expect(response.text).toContain("Content from the first URL.");
+    expect(response.text).toContain("Content issues:");
+    expect(response.text).toContain(
+      "https://example.com/b: Gemini returned content for this URL in an unexpected format.",
+    );
+    expect(response.summary).toBe("1 of 2 URL(s) extracted via Gemini");
+    expect(response.itemCount).toBe(1);
+    expect(response.metadata).toEqual({
+      contentsEntries: [
+        {
+          url: "https://example.com/a",
+          title: "Page A",
+          body: "Content from the first URL.",
+          summary: "1 content result via Gemini",
+          status: "ready",
+        },
+        {
+          url: "https://example.com/b",
+          title: "https://example.com/b",
+          body: "Gemini returned content for this URL in an unexpected format.",
+          status: "failed",
+        },
+      ],
+    });
+  });
+
   it("uses custom contentsModel from config", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Extracted content.",

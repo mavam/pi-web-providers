@@ -230,33 +230,36 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       lines.push(text);
     }
 
-    const failures = metadata.filter(
+    const retrievalFailures = metadata.filter(
       (entry) =>
         entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS" &&
         entry.status !== undefined,
     );
-    if (failures.length > 0) {
+    if (retrievalFailures.length > 0) {
       if (lines.length > 0) {
         lines.push("");
       }
       lines.push("Retrieval issues:");
-      for (const failure of failures) {
+      for (const failure of retrievalFailures) {
         lines.push(`- ${failure.url}: ${failure.status}`);
       }
     }
 
-    const successCount =
-      metadata.length > 0
-        ? metadata.filter(
-            (entry) =>
-              entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
-              entry.status === undefined,
-          ).length
-        : successfulEntries.length > 0
-          ? successfulEntries.length
-          : text
-            ? 1
-            : 0;
+    const contentFailures = getGeminiContentFailures(
+      contentsEntries,
+      retrievalFailures,
+    );
+    if (contentFailures.length > 0) {
+      if (lines.length > 0) {
+        lines.push("");
+      }
+      lines.push("Content issues:");
+      for (const failure of contentFailures) {
+        lines.push(`- ${failure.url}: ${failure.body}`);
+      }
+    }
+
+    const successCount = successfulEntries.length;
 
     return {
       provider: this.id,
@@ -572,8 +575,8 @@ function buildGeminiContentsEntries(
         }))
       : buildFallbackGeminiContentsEntries(text, urls, metadata);
 
-  const failureEntries = metadata.flatMap<ProviderContentsMetadataEntry>(
-    (entry) =>
+  const retrievalFailureEntries =
+    metadata.flatMap<ProviderContentsMetadataEntry>((entry) =>
       entry.status !== undefined &&
       entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS" &&
       !hasGeminiContentsEntryForUrl(readyEntries, entry.url)
@@ -586,9 +589,23 @@ function buildGeminiContentsEntries(
             },
           ]
         : [],
+    );
+  const formatFailureEntries = metadata.flatMap<ProviderContentsMetadataEntry>(
+    (entry) =>
+      isGeminiMetadataSuccess(entry) &&
+      !hasGeminiContentsEntryForUrl(readyEntries, entry.url)
+        ? [
+            {
+              url: entry.url,
+              title: entry.url,
+              body: "Gemini returned content for this URL in an unexpected format.",
+              status: "failed",
+            },
+          ]
+        : [],
   );
 
-  return [...readyEntries, ...failureEntries];
+  return [...readyEntries, ...retrievalFailureEntries, ...formatFailureEntries];
 }
 
 function parseGeminiContentsBlocks(
@@ -673,7 +690,7 @@ function buildFallbackGeminiContentsEntries(
   const fallbackUrl =
     successfulMetadata.length === 1
       ? successfulMetadata[0]?.url
-      : urls.length === 1 && successfulMetadata.length === 0
+      : urls.length === 1 && metadata.length === 0
         ? urls[0]
         : undefined;
 
@@ -702,6 +719,29 @@ function extractGeminiContentsTitle(text: string): string | undefined {
   }
 
   return firstLine.replace(/^#+\s*/, "").trim() || undefined;
+}
+
+function isGeminiMetadataSuccess(entry: {
+  status: string | undefined;
+}): boolean {
+  return (
+    entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
+    entry.status === undefined
+  );
+}
+
+function getGeminiContentFailures(
+  entries: ProviderContentsMetadataEntry[],
+  retrievalFailures: Array<{ url: string; status: string | undefined }>,
+): ProviderContentsMetadataEntry[] {
+  const retrievalFailureUrls = new Set(
+    retrievalFailures.map((entry) => normalizeGeminiUrl(entry.url)),
+  );
+  return entries.filter(
+    (entry) =>
+      entry.status === "failed" &&
+      !retrievalFailureUrls.has(normalizeGeminiUrl(entry.url)),
+  );
 }
 
 function hasGeminiContentsEntryForUrl(

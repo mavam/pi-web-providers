@@ -118,11 +118,16 @@ interface StoredContentsResult {
   fromCache: boolean;
 }
 
+interface InFlightEntry<TValue> {
+  generation: number;
+  task: Promise<TValue>;
+}
+
 const contentStore = new MemoryContentStore();
-const inFlightContents = new Map<string, Promise<StoredContentsResult>>();
+const inFlightContents = new Map<string, InFlightEntry<StoredContentsResult>>();
 const inFlightBatchContents = new Map<
   string,
-  Promise<StoredBatchContentsResult>
+  InFlightEntry<StoredBatchContentsResult>
 >();
 let contentStoreGeneration = 0;
 
@@ -686,6 +691,18 @@ export const __prefetchTest__ = {
   resolveContentsProvider,
 };
 
+function deleteInFlightEntryIfCurrent<TValue>(
+  map: Map<string, InFlightEntry<TValue>>,
+  key: string,
+  generation: number,
+  task: Promise<TValue>,
+): void {
+  const current = map.get(key);
+  if (current?.generation === generation && current.task === task) {
+    map.delete(key);
+  }
+}
+
 async function ensureBatchContentsStored({
   urls,
   providerId,
@@ -715,10 +732,11 @@ async function ensureBatchContentsStored({
   const key = buildBatchContentsStoreKey(normalizedUrls, providerId, options);
   const existingInFlight = inFlightBatchContents.get(key);
   if (existingInFlight) {
-    return await existingInFlight;
+    return await existingInFlight.task;
   }
 
-  const task = (async () => {
+  let task!: Promise<StoredBatchContentsResult>;
+  task = (async () => {
     const existing = await contentStore.get<JsonValue>(key);
     const now = Date.now();
 
@@ -841,11 +859,16 @@ async function ensureBatchContentsStored({
       });
       throw error;
     } finally {
-      inFlightBatchContents.delete(key);
+      deleteInFlightEntryIfCurrent(
+        inFlightBatchContents,
+        key,
+        generation,
+        task,
+      );
     }
   })();
 
-  inFlightBatchContents.set(key, task);
+  inFlightBatchContents.set(key, { generation, task });
   return await task;
 }
 
@@ -863,10 +886,11 @@ async function ensureContentsStored({
   const key = buildContentsStoreKey(url, providerId, options);
   const existingInFlight = inFlightContents.get(key);
   if (existingInFlight) {
-    return await existingInFlight;
+    return await existingInFlight.task;
   }
 
-  const task = (async () => {
+  let task!: Promise<StoredContentsResult>;
+  task = (async () => {
     const existing = await contentStore.get<JsonValue>(key);
     const now = Date.now();
 
@@ -979,11 +1003,11 @@ async function ensureContentsStored({
       });
       throw error;
     } finally {
-      inFlightContents.delete(key);
+      deleteInFlightEntryIfCurrent(inFlightContents, key, generation, task);
     }
   })();
 
-  inFlightContents.set(key, task);
+  inFlightContents.set(key, { generation, task });
   return await task;
 }
 
