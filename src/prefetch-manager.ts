@@ -385,15 +385,16 @@ export async function getPrefetchStatus(
 }
 
 /**
- * Returns true when the entire `web_contents` request can be satisfied from
- * the store without triggering new per-URL fetches. We allow two cases:
+ * Returns true when `web_contents` should route through the local store first.
+ * We prefer store-backed resolution when either:
  *   1. an exact multi-URL batch entry already exists (or is currently in
  *      flight), or
- *   2. every requested URL already has an individual cached/in-flight entry.
+ *   2. at least one requested URL already has an individual cached/in-flight
+ *      entry that we can reuse while fetching only the missing URLs.
  *
- * Partial cache hits intentionally return false so the caller can fall back to
- * the provider's native batched contents endpoint instead of fanning out into
- * one request per missing URL.
+ * When nothing is cached yet, callers can fall back to the provider's native
+ * batched contents endpoint to avoid fanning out a cold multi-URL request into
+ * one request per URL.
  */
 export async function canResolveContentsFromStore({
   urls,
@@ -417,7 +418,7 @@ export async function canResolveContentsFromStore({
     const key = buildContentsStoreKey(url, providerId, options);
 
     if (inFlightContents.has(key)) {
-      continue;
+      return true;
     }
 
     const entry = await contentStore.get(key);
@@ -426,12 +427,11 @@ export async function canResolveContentsFromStore({
       isStoredContentsValue(entry.value) &&
       !isExpired(entry, now)
     ) {
-      continue;
+      return true;
     }
-
-    return false;
   }
-  return true;
+
+  return false;
 }
 
 /**
@@ -569,7 +569,7 @@ export async function resolveContentsFromStore({
         text: textBlocks.join("\n\n").trim() || "No contents found.",
         summary:
           cachedCount > 0
-            ? `${results.length} of ${urls.length} URL(s) fetched via ${provider} (${cachedCount} cached)`
+            ? `${results.length} of ${urls.length} URL(s) resolved via ${provider} (${cachedCount} cached)`
             : `${results.length} of ${urls.length} URL(s) fetched via ${provider}`,
         itemCount: results.length,
       },

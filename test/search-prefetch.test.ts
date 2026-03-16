@@ -173,7 +173,7 @@ describe("search contents prefetch", () => {
     });
   });
 
-  it("falls back to one native batched contents fetch when a multi-URL request is only partially cached", async () => {
+  it("reuses partial cache hits and fetches only the missing URLs", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       version: 1,
@@ -221,7 +221,7 @@ describe("search contents prefetch", () => {
       undefined,
     ]);
     expect(exaGetContentsMock.mock.calls[1]).toEqual([
-      ["https://exa.ai/pricing", "https://exa.ai/sdk"],
+      ["https://exa.ai/pricing"],
       undefined,
     ]);
     expect(result.content[0]?.text).toContain(

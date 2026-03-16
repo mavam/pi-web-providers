@@ -1055,9 +1055,10 @@ async function executeProviderOperation({
       }),
     );
 
-  // Route all contents requests through the local content store so successful
-  // live reads become reusable cache entries. Exact cache hits are served
-  // immediately, and partial cache hits only fetch the missing or stale URLs.
+  // Route contents requests through the local content store whenever we can
+  // reuse an exact batch hit or at least one per-URL cache entry. Exact cache
+  // hits are served immediately, and partial cache hits fetch only missing or
+  // stale URLs.
   if (capability === "contents" && planOverride === undefined) {
     const resolved = await resolveContentsFromStore({
       urls: urls ?? [],
