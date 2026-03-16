@@ -109,6 +109,7 @@ interface EnsureContentsArgs {
   ttlMs?: number;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  generation?: number;
 }
 
 /** Result of ensuring a URL's contents are stored, with cache-hit metadata. */
@@ -123,6 +124,7 @@ const inFlightBatchContents = new Map<
   string,
   Promise<StoredBatchContentsResult>
 >();
+let contentStoreGeneration = 0;
 
 /**
  * Remove expired entries from the content store.  Call this at session start
@@ -134,6 +136,21 @@ export async function cleanupContentStore(): Promise<void> {
   } catch {
     // Best-effort: don't let cleanup failures disrupt the session.
   }
+}
+
+async function putContentStoreEntry<TValue extends JsonValue = JsonValue>({
+  entry,
+  generation,
+}: {
+  entry: ContentStoreEntry<TValue>;
+  generation: number;
+}): Promise<boolean> {
+  if (generation !== contentStoreGeneration) {
+    return false;
+  }
+
+  await contentStore.put(entry);
+  return true;
 }
 
 export async function startContentsPrefetch({
@@ -173,20 +190,24 @@ export async function startContentsPrefetch({
   );
   const prefetchId = randomUUID();
   const createdAt = Date.now();
+  const generation = contentStoreGeneration;
 
-  await contentStore.put<JsonValue>({
-    key: buildPrefetchJobStoreKey(prefetchId),
-    kind: PREFETCH_JOB_KIND,
-    status: "pending",
-    createdAt,
-    updatedAt: createdAt,
-    expiresAt: createdAt + ttlMs,
-    value: {
-      prefetchId,
-      provider: provider.id,
-      urls: selectedUrls,
-      contentKeys,
+  await putContentStoreEntry<JsonValue>({
+    generation,
+    entry: {
+      key: buildPrefetchJobStoreKey(prefetchId),
+      kind: PREFETCH_JOB_KIND,
+      status: "pending",
       createdAt,
+      updatedAt: createdAt,
+      expiresAt: createdAt + ttlMs,
+      value: {
+        prefetchId,
+        provider: provider.id,
+        urls: selectedUrls,
+        contentKeys,
+        createdAt,
+      },
     },
   });
 
@@ -200,6 +221,7 @@ export async function startContentsPrefetch({
         options: contentOptions,
         ttlMs,
         onProgress,
+        generation,
       }),
     ),
   )
@@ -215,46 +237,52 @@ export async function startContentsPrefetch({
             ? formatUnknownError(failedResults[0].reason)
             : `${failedResults.length} URL(s) failed during prefetch.`;
 
-      await contentStore.put<JsonValue>({
-        key: buildPrefetchJobStoreKey(prefetchId),
-        kind: PREFETCH_JOB_KIND,
-        status: failedUrlCount === selectedUrls.length ? "failed" : "ready",
-        createdAt,
-        updatedAt: Date.now(),
-        expiresAt: createdAt + ttlMs,
-        value: {
-          prefetchId,
-          provider: provider.id,
-          urls: selectedUrls,
-          contentKeys,
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key: buildPrefetchJobStoreKey(prefetchId),
+          kind: PREFETCH_JOB_KIND,
+          status: failedUrlCount === selectedUrls.length ? "failed" : "ready",
           createdAt,
-        },
-        ...(error ? { error } : {}),
-        metadata: {
-          totalUrlCount: selectedUrls.length,
-          failedUrlCount,
+          updatedAt: Date.now(),
+          expiresAt: createdAt + ttlMs,
+          value: {
+            prefetchId,
+            provider: provider.id,
+            urls: selectedUrls,
+            contentKeys,
+            createdAt,
+          },
+          ...(error ? { error } : {}),
+          metadata: {
+            totalUrlCount: selectedUrls.length,
+            failedUrlCount,
+          },
         },
       });
     })
     .catch(async (error) => {
-      await contentStore.put<JsonValue>({
-        key: buildPrefetchJobStoreKey(prefetchId),
-        kind: PREFETCH_JOB_KIND,
-        status: "failed",
-        createdAt,
-        updatedAt: Date.now(),
-        expiresAt: createdAt + ttlMs,
-        value: {
-          prefetchId,
-          provider: provider.id,
-          urls: selectedUrls,
-          contentKeys,
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key: buildPrefetchJobStoreKey(prefetchId),
+          kind: PREFETCH_JOB_KIND,
+          status: "failed",
           createdAt,
-        },
-        error: formatUnknownError(error),
-        metadata: {
-          totalUrlCount: selectedUrls.length,
-          failedUrlCount: selectedUrls.length,
+          updatedAt: Date.now(),
+          expiresAt: createdAt + ttlMs,
+          value: {
+            prefetchId,
+            provider: provider.id,
+            urls: selectedUrls,
+            contentKeys,
+            createdAt,
+          },
+          error: formatUnknownError(error),
+          metadata: {
+            totalUrlCount: selectedUrls.length,
+            failedUrlCount: selectedUrls.length,
+          },
         },
       });
     });
@@ -644,6 +672,7 @@ export function formatPrefetchStatusText(
  * test cases from each other.
  */
 export function resetContentStore(): void {
+  contentStoreGeneration += 1;
   contentStore.clear();
   inFlightContents.clear();
   inFlightBatchContents.clear();
@@ -666,6 +695,7 @@ async function ensureBatchContentsStored({
   ttlMs = DEFAULT_CONTENT_TTL_MS,
   signal,
   onProgress,
+  generation = contentStoreGeneration,
 }: {
   urls: string[];
   providerId: ProviderId;
@@ -675,6 +705,7 @@ async function ensureBatchContentsStored({
   ttlMs?: number;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
+  generation?: number;
 }): Promise<StoredBatchContentsResult> {
   const normalizedUrls = normalizeUrlSet(urls);
   if (normalizedUrls.length === 0) {
@@ -706,17 +737,20 @@ async function ensureBatchContentsStored({
     }
 
     const createdAt = now;
-    await contentStore.put<JsonValue>({
-      key,
-      kind: CONTENT_BATCH_ENTRY_KIND,
-      status: "pending",
-      createdAt,
-      updatedAt: createdAt,
-      expiresAt: createdAt + ttlMs,
-      metadata: {
-        urls: normalizedUrls as unknown as JsonValue,
-        provider: providerId,
-        optionsHash: hashOptions(options),
+    await putContentStoreEntry<JsonValue>({
+      generation,
+      entry: {
+        key,
+        kind: CONTENT_BATCH_ENTRY_KIND,
+        status: "pending",
+        createdAt,
+        updatedAt: createdAt,
+        expiresAt: createdAt + ttlMs,
+        metadata: {
+          urls: normalizedUrls as unknown as JsonValue,
+          provider: providerId,
+          optionsHash: hashOptions(options),
+        },
       },
     });
 
@@ -760,18 +794,21 @@ async function ensureBatchContentsStored({
         itemCount: result.itemCount,
         fetchedAt,
       };
-      await contentStore.put<JsonValue>({
-        key,
-        kind: CONTENT_BATCH_ENTRY_KIND,
-        status: "ready",
-        createdAt,
-        updatedAt: fetchedAt,
-        expiresAt: fetchedAt + ttlMs,
-        value: stored as unknown as JsonValue,
-        metadata: {
-          urls: normalizedUrls as unknown as JsonValue,
-          provider: result.provider,
-          optionsHash: hashOptions(options),
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key,
+          kind: CONTENT_BATCH_ENTRY_KIND,
+          status: "ready",
+          createdAt,
+          updatedAt: fetchedAt,
+          expiresAt: fetchedAt + ttlMs,
+          value: stored as unknown as JsonValue,
+          metadata: {
+            urls: normalizedUrls as unknown as JsonValue,
+            provider: result.provider,
+            optionsHash: hashOptions(options),
+          },
         },
       });
       await storePerUrlContentsEntries({
@@ -781,21 +818,25 @@ async function ensureBatchContentsStored({
         createdAt,
         fetchedAt,
         ttlMs,
+        generation,
       });
       return { value: stored, fromCache: false };
     } catch (error) {
-      await contentStore.put<JsonValue>({
-        key,
-        kind: CONTENT_BATCH_ENTRY_KIND,
-        status: "failed",
-        createdAt,
-        updatedAt: Date.now(),
-        expiresAt: Date.now() + ttlMs,
-        error: error instanceof Error ? error.message : String(error),
-        metadata: {
-          urls: normalizedUrls as unknown as JsonValue,
-          provider: providerId,
-          optionsHash: hashOptions(options),
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key,
+          kind: CONTENT_BATCH_ENTRY_KIND,
+          status: "failed",
+          createdAt,
+          updatedAt: Date.now(),
+          expiresAt: Date.now() + ttlMs,
+          error: error instanceof Error ? error.message : String(error),
+          metadata: {
+            urls: normalizedUrls as unknown as JsonValue,
+            provider: providerId,
+            optionsHash: hashOptions(options),
+          },
         },
       });
       throw error;
@@ -817,6 +858,7 @@ async function ensureContentsStored({
   ttlMs = DEFAULT_CONTENT_TTL_MS,
   signal,
   onProgress,
+  generation = contentStoreGeneration,
 }: EnsureContentsArgs): Promise<StoredContentsResult> {
   const key = buildContentsStoreKey(url, providerId, options);
   const existingInFlight = inFlightContents.get(key);
@@ -843,17 +885,20 @@ async function ensureContentsStored({
     }
 
     const createdAt = now;
-    await contentStore.put<JsonValue>({
-      key,
-      kind: CONTENT_ENTRY_KIND,
-      status: "pending",
-      createdAt,
-      updatedAt: createdAt,
-      expiresAt: createdAt + ttlMs,
-      metadata: {
-        url: canonicalizeUrl(url),
-        provider: providerId,
-        optionsHash: hashOptions(options),
+    await putContentStoreEntry<JsonValue>({
+      generation,
+      entry: {
+        key,
+        kind: CONTENT_ENTRY_KIND,
+        status: "pending",
+        createdAt,
+        updatedAt: createdAt,
+        expiresAt: createdAt + ttlMs,
+        metadata: {
+          url: canonicalizeUrl(url),
+          provider: providerId,
+          optionsHash: hashOptions(options),
+        },
       },
     });
 
@@ -896,34 +941,40 @@ async function ensureContentsStored({
           : { body: result.text },
         fetchedAt: now,
       };
-      await contentStore.put<JsonValue>({
-        key,
-        kind: CONTENT_ENTRY_KIND,
-        status: "ready",
-        createdAt,
-        updatedAt: now,
-        expiresAt: now + ttlMs,
-        value: stored as unknown as JsonValue,
-        metadata: {
-          url: canonicalUrl,
-          provider: result.provider,
-          optionsHash: hashOptions(options),
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key,
+          kind: CONTENT_ENTRY_KIND,
+          status: "ready",
+          createdAt,
+          updatedAt: now,
+          expiresAt: now + ttlMs,
+          value: stored as unknown as JsonValue,
+          metadata: {
+            url: canonicalUrl,
+            provider: result.provider,
+            optionsHash: hashOptions(options),
+          },
         },
       });
       return { value: stored, fromCache: false };
     } catch (error) {
-      await contentStore.put<JsonValue>({
-        key,
-        kind: CONTENT_ENTRY_KIND,
-        status: "failed",
-        createdAt,
-        updatedAt: Date.now(),
-        expiresAt: Date.now() + ttlMs,
-        error: error instanceof Error ? error.message : String(error),
-        metadata: {
-          url: canonicalizeUrl(url),
-          provider: providerId,
-          optionsHash: hashOptions(options),
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key,
+          kind: CONTENT_ENTRY_KIND,
+          status: "failed",
+          createdAt,
+          updatedAt: Date.now(),
+          expiresAt: Date.now() + ttlMs,
+          error: error instanceof Error ? error.message : String(error),
+          metadata: {
+            url: canonicalizeUrl(url),
+            provider: providerId,
+            optionsHash: hashOptions(options),
+          },
         },
       });
       throw error;
@@ -943,6 +994,7 @@ async function storePerUrlContentsEntries({
   createdAt,
   fetchedAt,
   ttlMs,
+  generation,
 }: {
   entries: StoredContentsMetadataEntry[];
   provider: ProviderId;
@@ -950,6 +1002,7 @@ async function storePerUrlContentsEntries({
   createdAt: number;
   fetchedAt: number;
   ttlMs: number;
+  generation: number;
 }): Promise<void> {
   await Promise.all(
     entries.map(async (entry) => {
@@ -958,23 +1011,26 @@ async function storePerUrlContentsEntries({
         return;
       }
 
-      await contentStore.put<JsonValue>({
-        key: buildContentsStoreKey(canonicalUrl, provider, options),
-        kind: CONTENT_ENTRY_KIND,
-        status: "ready",
-        createdAt,
-        updatedAt: fetchedAt,
-        expiresAt: fetchedAt + ttlMs,
-        value: {
-          url: canonicalUrl,
-          provider,
-          item: toStoredContentItem(entry),
-          fetchedAt,
-        } as unknown as JsonValue,
-        metadata: {
-          url: canonicalUrl,
-          provider,
-          optionsHash: hashOptions(options),
+      await putContentStoreEntry<JsonValue>({
+        generation,
+        entry: {
+          key: buildContentsStoreKey(canonicalUrl, provider, options),
+          kind: CONTENT_ENTRY_KIND,
+          status: "ready",
+          createdAt,
+          updatedAt: fetchedAt,
+          expiresAt: fetchedAt + ttlMs,
+          value: {
+            url: canonicalUrl,
+            provider,
+            item: toStoredContentItem(entry),
+            fetchedAt,
+          } as unknown as JsonValue,
+          metadata: {
+            url: canonicalUrl,
+            provider,
+            optionsHash: hashOptions(options),
+          },
         },
       });
     }),
