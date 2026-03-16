@@ -40,7 +40,6 @@ import {
   resolveContentsFromStore,
   startContentsPrefetch,
   stripSearchContentsPrefetchOptions,
-  tryServeContentsFromStore,
 } from "./prefetch-manager.js";
 import {
   getProviderConfigManifest,
@@ -1116,36 +1115,6 @@ async function executeProviderTool({
   planOverride?: ProviderOperationPlan<ProviderToolOutput>;
 }) {
   await cleanupContentStore();
-
-  // For contents: try to serve entirely from the local store before resolving
-  // a provider.  This lets pure cache hits succeed even when the provider that
-  // originally fetched the pages is later disabled or unavailable.
-  if (
-    capability === "contents" &&
-    planOverride === undefined &&
-    (urls?.length ?? 0) > 0
-  ) {
-    const cached = await tryServeContentsFromStore({
-      urls: urls ?? [],
-      explicitProvider,
-      config,
-      cwd: ctx.cwd,
-      options,
-      signal: signal ?? undefined,
-    });
-    if (cached) {
-      const text = await truncateAndSave(cached.text, capability);
-      return {
-        content: [{ type: "text" as const, text }],
-        details: {
-          tool: "web_contents",
-          provider: cached.provider,
-          summary: cached.summary,
-          itemCount: cached.itemCount,
-        } as ProviderToolDetails,
-      };
-    }
-  }
 
   const provider = resolveProviderForCapability(
     config,

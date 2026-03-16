@@ -36,6 +36,14 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
+export interface ProviderContentsMetadataEntry {
+  url: string;
+  title?: string;
+  body: string;
+  summary?: string;
+  status?: "ready" | "failed";
+}
+
 export interface ProviderToolOutput {
   provider: ProviderId;
   text: string;

@@ -7,6 +7,8 @@ import {
   createSilentForegroundPlan,
 } from "../provider-plans.js";
 import type {
+  JsonValue,
+  ProviderContentsMetadataEntry,
   ProviderContext,
   ProviderOperationRequest,
   ProviderResearchJob,
@@ -195,13 +197,20 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
 
     const results = finalResponse.results ?? [];
     const lines: string[] = [];
-    const contentsEntries = results
-      .map((result, index) => {
+    const contentsEntries: ProviderContentsMetadataEntry[] =
+      results.flatMap<ProviderContentsMetadataEntry>((result, index) => {
         const entryLines = [`${index + 1}. ${result.url}`];
         if (result.status === "failed") {
           entryLines.push(`   Failed: ${result.error}`);
           lines.push(...entryLines, "");
-          return undefined;
+          return [
+            {
+              url: result.url,
+              title: result.url,
+              body: `Failed: ${result.error}`,
+              status: "failed",
+            },
+          ];
         }
 
         const snippet =
@@ -213,19 +222,22 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
                   typeof result.content === "number"
                 ? String(result.content)
                 : formatJson(result.content);
+        const body = trimSnippet(snippet);
         if (result.title) {
           entryLines.push(`   ${result.title}`);
         }
-        entryLines.push(`   ${trimSnippet(snippet)}`);
+        entryLines.push(`   ${body}`);
         lines.push(...entryLines, "");
-        return {
-          url: result.url,
-          text: entryLines.join("\n").trimEnd(),
-          summary: "1 content result via Valyu",
-          itemCount: 1,
-        };
-      })
-      .filter((entry) => entry !== undefined);
+        return [
+          {
+            url: result.url,
+            title: result.title,
+            body,
+            summary: "1 content result via Valyu",
+            status: "ready",
+          },
+        ];
+      });
 
     return {
       provider: this.id,
@@ -233,7 +245,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
       summary: `${results.length} content result(s) via Valyu`,
       itemCount: results.length,
       metadata: {
-        contentsEntries,
+        contentsEntries: contentsEntries as unknown as JsonValue,
       },
     };
   }

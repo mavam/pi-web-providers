@@ -8,6 +8,8 @@ import {
 } from "../provider-plans.js";
 import type {
   ExaProviderConfig,
+  JsonValue,
+  ProviderContentsMetadataEntry,
   ProviderContext,
   ProviderOperationRequest,
   ProviderResearchJob,
@@ -188,12 +190,11 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
 
     const results = response.results ?? [];
     const lines: string[] = [];
-    const contentsEntries = results
-      .map((result, index) => {
-        const entryLines = [
-          `${index + 1}. ${String(result.title ?? result.url ?? "Untitled")}`,
-          `   ${String(result.url ?? "")}`,
-        ];
+    const contentsEntries: ProviderContentsMetadataEntry[] = results.flatMap(
+      (result, index) => {
+        const title = String(result.title ?? result.url ?? "Untitled");
+        const url = String(result.url ?? "");
+        const entryLines = [`${index + 1}. ${title}`, `   ${url}`];
 
         const summary =
           typeof result.summary === "string"
@@ -214,18 +215,21 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
 
         lines.push(...entryLines, "");
 
-        if (typeof result.url !== "string" || result.url.length === 0) {
-          return undefined;
+        if (!url) {
+          return [];
         }
 
-        return {
-          url: result.url,
-          text: entryLines.join("\n").trimEnd(),
-          summary: "1 content result via Exa",
-          itemCount: 1,
-        };
-      })
-      .filter((entry) => entry !== undefined);
+        return [
+          {
+            url,
+            title,
+            body,
+            summary: "1 content result via Exa",
+            status: "ready",
+          },
+        ];
+      },
+    );
 
     return {
       provider: this.id,
@@ -233,7 +237,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
       summary: `${results.length} content result(s) via Exa`,
       itemCount: results.length,
       metadata: {
-        contentsEntries,
+        contentsEntries: contentsEntries as unknown as JsonValue,
       },
     };
   }

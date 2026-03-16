@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import {
-  type ContentStore,
   type ContentStoreEntry,
   createStoreKey,
   hashKey,
@@ -16,16 +15,16 @@ import { PROVIDER_MAP } from "./providers/index.js";
 import type {
   JsonObject,
   JsonValue,
+  ProviderContentsMetadataEntry,
   ProviderId,
   ProviderToolOutput,
   WebProvidersConfig,
 } from "./types.js";
-import { PROVIDER_IDS } from "./types.js";
 
 const CONTENT_ENTRY_KIND = "web-contents";
 const CONTENT_BATCH_ENTRY_KIND = "web-contents-batch";
 const PREFETCH_JOB_KIND = "web-prefetch-job";
-const CONTENT_CACHE_VERSION = 1;
+const CONTENT_CACHE_VERSION = 2;
 const DEFAULT_CONTENT_TTL_MS = 30 * 60 * 1000;
 const DEFAULT_PREFETCH_MAX_URLS = 3;
 const MAX_PREFETCH_URLS = 5;
@@ -38,12 +37,18 @@ export interface SearchContentsPrefetchOptions {
   contentsOptions?: JsonObject;
 }
 
+interface StoredContentItem {
+  url?: string;
+  title?: string;
+  body: string;
+  summary?: string;
+  status?: "ready" | "failed";
+}
+
 interface StoredContentsValue {
   url: string;
   provider: ProviderId;
-  text: string;
-  summary?: string;
-  itemCount?: number;
+  item: StoredContentItem;
   fetchedAt: number;
 }
 
@@ -58,7 +63,7 @@ interface PrefetchJobValue {
 interface StoredBatchContentsValue {
   urls: string[];
   provider: ProviderId;
-  text: string;
+  items: StoredContentItem[];
   summary?: string;
   itemCount?: number;
   fetchedAt: number;
@@ -69,12 +74,7 @@ interface StoredBatchContentsResult {
   fromCache: boolean;
 }
 
-interface StoredContentsMetadataEntry {
-  url: string;
-  text: string;
-  summary?: string;
-  itemCount?: number;
-}
+interface StoredContentsMetadataEntry extends ProviderContentsMetadataEntry {}
 
 export interface PrefetchStartResult {
   prefetchId: string;
@@ -296,7 +296,7 @@ export async function getPrefetchStatus(
         return {
           url,
           status: "ready" as const,
-          text: entry.value.text,
+          text: renderStoredContentItem(entry.value.item),
           provider: entry.value.provider,
         };
       }
@@ -305,7 +305,7 @@ export async function getPrefetchStatus(
         return {
           url,
           status: "ready" as const,
-          text: entry.value.text,
+          text: renderStoredContentItems(entry.value.items),
           provider: entry.value.provider,
         };
       }
@@ -402,14 +402,8 @@ export async function canResolveContentsFromStore({
 }
 
 /**
- * Try to serve *all* requested URLs from the cache without needing a live
- * provider.  Returns the assembled output when every URL is a cache hit, or
- * `undefined` when at least one URL is missing.  This lets `web_contents`
- * succeed even if the provider that originally fetched the pages is later
- * disabled or unavailable.
- *
- * When `explicitProvider` is given, only that provider's cache entries are
- * checked.  Otherwise all known providers are probed per URL.
+ * Returns true when an exact multi-URL batch entry already exists for the
+ * resolved provider (or is currently in flight).
  */
 async function hasStoredBatchContents({
   urls,
@@ -431,116 +425,6 @@ async function hasStoredBatchContents({
     isStoredBatchContentsValue(entry.value) &&
     !isExpired(entry, Date.now())
   );
-}
-
-export async function tryServeContentsFromStore({
-  urls,
-  explicitProvider,
-  config: _config,
-  cwd: _cwd,
-  options,
-  signal: _signal,
-}: {
-  urls: string[];
-  explicitProvider: ProviderId | undefined;
-  config: WebProvidersConfig;
-  cwd: string;
-  options: JsonObject | undefined;
-  signal?: AbortSignal;
-}): Promise<ProviderToolOutput | undefined> {
-  if (urls.length === 0) {
-    return undefined;
-  }
-
-  const now = Date.now();
-  const providerCandidates: readonly ProviderId[] = explicitProvider
-    ? [explicitProvider]
-    : PROVIDER_IDS;
-
-  for (const pid of providerCandidates) {
-    const batch = await findCachedBatchEntry(urls, pid, options, now);
-    if (batch) {
-      return {
-        provider: batch.provider,
-        text: batch.text,
-        summary:
-          batch.summary ?? `${batch.urls.length} URL(s) served from cache`,
-        itemCount: batch.itemCount ?? batch.urls.length,
-      };
-    }
-  }
-
-  const hits: StoredContentsValue[] = [];
-
-  for (const url of urls) {
-    const hit = await findCachedEntry(url, providerCandidates, options, now);
-    if (!hit) {
-      // At least one URL is not cached — bail out.
-      return undefined;
-    }
-    hits.push(hit);
-  }
-
-  const provider = hits[0]?.provider ?? (explicitProvider as ProviderId);
-  const textBlocks = hits.map((h) => h.text.trim()).filter(Boolean);
-
-  return {
-    provider,
-    text: textBlocks.join("\n\n").trim() || "No contents found.",
-    summary: `${hits.length} of ${urls.length} URL(s) served from cache`,
-    itemCount: hits.length,
-  };
-}
-
-async function findCachedBatchEntry(
-  urls: string[],
-  providerId: ProviderId,
-  options: JsonObject | undefined,
-  now: number,
-): Promise<StoredBatchContentsValue | undefined> {
-  const key = buildBatchContentsStoreKey(urls, providerId, options);
-
-  if (inFlightBatchContents.has(key)) {
-    return undefined;
-  }
-
-  const entry = await contentStore.get<JsonValue>(key);
-  if (
-    entry?.status === "ready" &&
-    isStoredBatchContentsValue(entry.value) &&
-    !isExpired(entry, now)
-  ) {
-    return entry.value;
-  }
-
-  return undefined;
-}
-
-async function findCachedEntry(
-  url: string,
-  providerCandidates: readonly ProviderId[],
-  options: JsonObject | undefined,
-  now: number,
-): Promise<StoredContentsValue | undefined> {
-  for (const pid of providerCandidates) {
-    const key = buildContentsStoreKey(url, pid, options);
-
-    // Check in-flight promises first — if a prefetch is still running we
-    // can't serve synchronously, so treat it as a miss.
-    if (inFlightContents.has(key)) {
-      return undefined;
-    }
-
-    const entry = await contentStore.get<JsonValue>(key);
-    if (
-      entry?.status === "ready" &&
-      isStoredContentsValue(entry.value) &&
-      !isExpired(entry, now)
-    ) {
-      return entry.value;
-    }
-  }
-  return undefined;
 }
 
 export async function resolveContentsFromStore({
@@ -574,7 +458,9 @@ export async function resolveContentsFromStore({
       return {
         output: {
           provider: batch.value.provider,
-          text: batch.value.text,
+          text: renderStoredContentItems(
+            orderStoredContentItemsForRequest(batch.value.items, urls),
+          ),
           summary:
             batch.value.summary ??
             `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
@@ -635,7 +521,10 @@ export async function resolveContentsFromStore({
 
     const cachedCount = results.filter((r) => r.fromCache).length;
     const provider = results[0]?.value.provider ?? providerId;
-    const textBlocks = results.map((r) => r.value.text.trim()).filter(Boolean);
+    const renderedItems = results.map((result) => result.value.item);
+    const textBlocks = [renderStoredContentItems(renderedItems)].filter(
+      Boolean,
+    );
 
     for (const failure of failures) {
       textBlocks.push(`Error: ${failure.url}\n   ${failure.error}`);
@@ -667,7 +556,9 @@ export async function resolveContentsFromStore({
   return {
     output: {
       provider: batch.value.provider,
-      text: batch.value.text,
+      text: renderStoredContentItems(
+        orderStoredContentItemsForRequest(batch.value.items, urls),
+      ),
       summary:
         batch.value.summary ??
         `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
@@ -855,10 +746,16 @@ async function ensureBatchContentsStored({
       }
 
       const fetchedAt = Date.now();
+      const structuredEntries = extractStoredContentsEntriesFromMetadata(
+        result.metadata,
+      );
       const stored: StoredBatchContentsValue = {
         urls: normalizedUrls,
         provider: result.provider,
-        text: result.text,
+        items:
+          structuredEntries.length > 0
+            ? structuredEntries.map((entry) => toStoredContentItem(entry))
+            : [{ body: result.text }],
         summary: result.summary,
         itemCount: result.itemCount,
         fetchedAt,
@@ -878,7 +775,7 @@ async function ensureBatchContentsStored({
         },
       });
       await storePerUrlContentsEntries({
-        entries: extractStoredContentsEntriesFromMetadata(result.metadata),
+        entries: structuredEntries,
         provider: result.provider,
         options,
         createdAt,
@@ -986,12 +883,17 @@ async function ensureContentsStored({
       }
 
       const now = Date.now();
+      const canonicalUrl = canonicalizeUrl(url);
+      const structuredEntry = findStoredContentsEntry(
+        extractStoredContentsEntriesFromMetadata(result.metadata),
+        canonicalUrl,
+      );
       const stored: StoredContentsValue = {
-        url: canonicalizeUrl(url),
+        url: canonicalUrl,
         provider: result.provider,
-        text: result.text,
-        summary: result.summary,
-        itemCount: result.itemCount,
+        item: structuredEntry
+          ? toStoredContentItem(structuredEntry)
+          : { body: result.text },
         fetchedAt: now,
       };
       await contentStore.put<JsonValue>({
@@ -1003,7 +905,7 @@ async function ensureContentsStored({
         expiresAt: now + ttlMs,
         value: stored as unknown as JsonValue,
         metadata: {
-          url: canonicalizeUrl(url),
+          url: canonicalUrl,
           provider: result.provider,
           optionsHash: hashOptions(options),
         },
@@ -1052,7 +954,7 @@ async function storePerUrlContentsEntries({
   await Promise.all(
     entries.map(async (entry) => {
       const canonicalUrl = canonicalizeUrl(entry.url);
-      if (!/^https?:\/\//i.test(canonicalUrl)) {
+      if (entry.status === "failed" || !/^https?:\/\//i.test(canonicalUrl)) {
         return;
       }
 
@@ -1066,9 +968,7 @@ async function storePerUrlContentsEntries({
         value: {
           url: canonicalUrl,
           provider,
-          text: entry.text,
-          summary: entry.summary,
-          itemCount: entry.itemCount,
+          item: toStoredContentItem(entry),
           fetchedAt,
         } as unknown as JsonValue,
         metadata: {
@@ -1100,9 +1000,33 @@ function isStoredContentsMetadataEntry(
   return (
     isJsonObject(value) &&
     typeof value.url === "string" &&
-    typeof value.text === "string" &&
+    (value.title === undefined || typeof value.title === "string") &&
+    typeof value.body === "string" &&
     (value.summary === undefined || typeof value.summary === "string") &&
-    (value.itemCount === undefined || typeof value.itemCount === "number")
+    (value.status === undefined ||
+      value.status === "ready" ||
+      value.status === "failed")
+  );
+}
+
+function toStoredContentItem(
+  entry: StoredContentsMetadataEntry,
+): StoredContentItem {
+  return {
+    url: entry.url,
+    title: entry.title,
+    body: entry.body,
+    summary: entry.summary,
+    status: entry.status,
+  };
+}
+
+function findStoredContentsEntry(
+  entries: StoredContentsMetadataEntry[],
+  url: string,
+): StoredContentsMetadataEntry | undefined {
+  return entries.find(
+    (entry) => entry.status !== "failed" && canonicalizeUrl(entry.url) === url,
   );
 }
 
@@ -1240,6 +1164,93 @@ function formatUnknownError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function renderStoredContentItems(items: StoredContentItem[]): string {
+  if (items.length === 0) {
+    return "No contents found.";
+  }
+
+  const blocks = items.map((item, index) =>
+    renderStoredContentItem(item, index),
+  );
+  return blocks.join("\n\n").trim() || "No contents found.";
+}
+
+function orderStoredContentItemsForRequest(
+  items: StoredContentItem[],
+  urls: string[],
+): StoredContentItem[] {
+  const itemsByUrl = new Map<string, StoredContentItem[]>();
+  const extras: StoredContentItem[] = [];
+
+  for (const item of items) {
+    if (!item.url) {
+      extras.push(item);
+      continue;
+    }
+
+    const key = canonicalizeUrl(item.url);
+    const bucket = itemsByUrl.get(key);
+    if (bucket) {
+      bucket.push(item);
+    } else {
+      itemsByUrl.set(key, [item]);
+    }
+  }
+
+  if (itemsByUrl.size === 0) {
+    return items;
+  }
+
+  const ordered: StoredContentItem[] = [];
+  for (const url of urls) {
+    const key = canonicalizeUrl(url);
+    const bucket = itemsByUrl.get(key);
+    const next = bucket?.shift();
+    if (next) {
+      ordered.push(next);
+    }
+    if (bucket && bucket.length === 0) {
+      itemsByUrl.delete(key);
+    }
+  }
+
+  for (const bucket of itemsByUrl.values()) {
+    ordered.push(...bucket);
+  }
+
+  ordered.push(...extras);
+  return ordered;
+}
+
+function renderStoredContentItem(
+  item: StoredContentItem,
+  index?: number,
+): string {
+  const hasStructuredHeader = Boolean(item.title || item.url);
+  if (!hasStructuredHeader) {
+    return item.body.trim();
+  }
+
+  const heading =
+    item.status === "failed"
+      ? `Error: ${item.url ?? item.title ?? "Untitled"}`
+      : (item.title ?? item.url ?? "Untitled");
+  const lines = [
+    `${index === undefined ? "" : `${index + 1}. `}${heading}`.trim(),
+  ];
+
+  if (item.status !== "failed" && item.url && item.url !== heading) {
+    lines.push(`   ${item.url}`);
+  }
+  if (item.body.trim()) {
+    for (const line of item.body.trim().split("\n")) {
+      lines.push(`   ${line}`);
+    }
+  }
+
+  return lines.join("\n").trimEnd();
+}
+
 function hashOptions(options: JsonObject | undefined): string {
   return hashKey(stableStringify(stripLocalExecutionOptions(options) ?? {}));
 }
@@ -1324,7 +1335,8 @@ function isStoredBatchContentsValue(
     Array.isArray(value.urls) &&
     value.urls.every((item) => typeof item === "string") &&
     isProviderId(value.provider) &&
-    typeof value.text === "string" &&
+    Array.isArray(value.items) &&
+    value.items.every((item) => isStoredContentItem(item)) &&
     typeof value.fetchedAt === "number"
   );
 }
@@ -1338,8 +1350,23 @@ function isStoredContentsValue(
   return (
     typeof value.url === "string" &&
     isProviderId(value.provider) &&
-    typeof value.text === "string" &&
+    isStoredContentItem(value.item) &&
     typeof value.fetchedAt === "number"
+  );
+}
+
+function isStoredContentItem(
+  value: unknown,
+): value is StoredContentItem & JsonObject {
+  return (
+    isJsonObject(value) &&
+    (value.url === undefined || typeof value.url === "string") &&
+    (value.title === undefined || typeof value.title === "string") &&
+    typeof value.body === "string" &&
+    (value.summary === undefined || typeof value.summary === "string") &&
+    (value.status === undefined ||
+      value.status === "ready" ||
+      value.status === "failed")
   );
 }
 

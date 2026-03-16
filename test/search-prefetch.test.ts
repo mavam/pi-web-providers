@@ -232,7 +232,7 @@ describe("search contents prefetch", () => {
     );
   });
 
-  it("reuses earlier live reads without refetching the same URLs", async () => {
+  it("reuses earlier live reads without refetching and re-renders them in the current request order", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       version: 1,
@@ -278,12 +278,14 @@ describe("search contents prefetch", () => {
     expect(exaGetContentsMock.mock.calls).toEqual([
       [["https://exa.ai/pricing", "https://exa.ai/sdk"], undefined],
     ]);
-    expect(cachedResult.content[0]?.text).toContain(
-      "Fetched body for https://exa.ai/sdk",
+    const cachedText = cachedResult.content[0]?.text ?? "";
+    expect(cachedText).toContain("1. Exa Pricing");
+    expect(cachedText).toContain("2. Exa SDK");
+    expect(cachedText.indexOf("1. Exa Pricing")).toBeLessThan(
+      cachedText.indexOf("2. Exa SDK"),
     );
-    expect(cachedResult.content[0]?.text).toContain(
-      "Fetched body for https://exa.ai/pricing",
-    );
+    expect(cachedText).toContain("Fetched body for https://exa.ai/sdk");
+    expect(cachedText).toContain("Fetched body for https://exa.ai/pricing");
   });
 
   it("cleans up expired cache entries automatically on the next tool call", async () => {
