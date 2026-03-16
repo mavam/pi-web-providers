@@ -143,17 +143,26 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     );
 
     const lines: string[] = [];
-    for (const [index, result] of response.results.entries()) {
-      lines.push(`${index + 1}. ${result.title ?? result.url}`);
-      lines.push(`   ${result.url}`);
+    const contentsEntries = response.results.map((result, index) => {
+      const entryLines = [
+        `${index + 1}. ${result.title ?? result.url}`,
+        `   ${result.url}`,
+      ];
 
       const text = result.excerpts?.join(" ") ?? result.full_content ?? "";
       const snippet = trimSnippet(text);
       if (snippet) {
-        lines.push(`   ${snippet}`);
+        entryLines.push(`   ${snippet}`);
       }
-      lines.push("");
-    }
+
+      lines.push(...entryLines, "");
+      return {
+        url: result.url,
+        text: entryLines.join("\n").trimEnd(),
+        summary: "1 content result via Parallel",
+        itemCount: 1,
+      };
+    });
 
     for (const error of response.errors) {
       lines.push(`Error: ${error.url}`);
@@ -170,6 +179,9 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
       text: lines.join("\n").trimEnd() || "No contents found.",
       summary: `${itemCount} content result(s) via Parallel`,
       itemCount,
+      metadata: {
+        contentsEntries,
+      },
     };
   }
 

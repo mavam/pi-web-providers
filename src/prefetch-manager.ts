@@ -69,6 +69,13 @@ interface StoredBatchContentsResult {
   fromCache: boolean;
 }
 
+interface StoredContentsMetadataEntry {
+  url: string;
+  text: string;
+  summary?: string;
+  itemCount?: number;
+}
+
 export interface PrefetchStartResult {
   prefetchId: string;
   provider: ProviderId;
@@ -553,97 +560,120 @@ export async function resolveContentsFromStore({
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<{ output: ProviderToolOutput; cachedCount: number }> {
-  if (await hasStoredBatchContents({ urls, providerId, options })) {
-    const batch = await ensureBatchContentsStored({
-      urls,
-      providerId,
-      config,
-      cwd,
-      options,
-      signal,
-      onProgress,
-    });
-    return {
-      output: {
-        provider: batch.value.provider,
-        text: batch.value.text,
-        summary:
-          batch.value.summary ??
-          `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
-        itemCount: batch.value.itemCount ?? batch.value.urls.length,
-      },
-      cachedCount: batch.fromCache ? batch.value.urls.length : 0,
-    };
-  }
-
-  const settled = await Promise.allSettled(
-    urls.map((url) =>
-      ensureContentsStored({
-        url,
+  if (await canResolveContentsFromStore({ urls, providerId, options })) {
+    if (await hasStoredBatchContents({ urls, providerId, options })) {
+      const batch = await ensureBatchContentsStored({
+        urls,
         providerId,
         config,
         cwd,
         options,
         signal,
         onProgress,
-      }),
-    ),
-  );
+      });
+      return {
+        output: {
+          provider: batch.value.provider,
+          text: batch.value.text,
+          summary:
+            batch.value.summary ??
+            `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
+          itemCount: batch.value.itemCount ?? batch.value.urls.length,
+        },
+        cachedCount: batch.fromCache ? batch.value.urls.length : 0,
+      };
+    }
 
-  const results = settled
-    .filter(
-      (result): result is PromiseFulfilledResult<StoredContentsResult> =>
-        result.status === "fulfilled",
-    )
-    .map((result) => result.value);
-  const failures = settled
-    .map((result, index) =>
-      result.status === "rejected"
-        ? {
-            url: urls[index] ?? "",
-            error:
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason),
-          }
-        : undefined,
-    )
-    .filter((result): result is { url: string; error: string } =>
-      Boolean(result),
+    const settled = await Promise.allSettled(
+      urls.map((url) =>
+        ensureContentsStored({
+          url,
+          providerId,
+          config,
+          cwd,
+          options,
+          signal,
+          onProgress,
+        }),
+      ),
     );
 
-  if (results.length === 0 && failures.length > 0) {
-    throw new Error(
-      failures.length === 1
-        ? (failures[0]?.error ?? "web_contents failed.")
-        : `web_contents failed for all ${failures.length} URL(s): ${failures
-            .map(
-              (failure, index) =>
-                `${index + 1}. ${failure.url} — ${failure.error}`,
-            )
-            .join("; ")}`,
-    );
+    const results = settled
+      .filter(
+        (result): result is PromiseFulfilledResult<StoredContentsResult> =>
+          result.status === "fulfilled",
+      )
+      .map((result) => result.value);
+    const failures = settled
+      .map((result, index) =>
+        result.status === "rejected"
+          ? {
+              url: urls[index] ?? "",
+              error:
+                result.reason instanceof Error
+                  ? result.reason.message
+                  : String(result.reason),
+            }
+          : undefined,
+      )
+      .filter((result): result is { url: string; error: string } =>
+        Boolean(result),
+      );
+
+    if (results.length === 0 && failures.length > 0) {
+      throw new Error(
+        failures.length === 1
+          ? (failures[0]?.error ?? "web_contents failed.")
+          : `web_contents failed for all ${failures.length} URL(s): ${failures
+              .map(
+                (failure, index) =>
+                  `${index + 1}. ${failure.url} — ${failure.error}`,
+              )
+              .join("; ")}`,
+      );
+    }
+
+    const cachedCount = results.filter((r) => r.fromCache).length;
+    const provider = results[0]?.value.provider ?? providerId;
+    const textBlocks = results.map((r) => r.value.text.trim()).filter(Boolean);
+
+    for (const failure of failures) {
+      textBlocks.push(`Error: ${failure.url}\n   ${failure.error}`);
+    }
+
+    return {
+      output: {
+        provider,
+        text: textBlocks.join("\n\n").trim() || "No contents found.",
+        summary:
+          cachedCount > 0
+            ? `${results.length} of ${urls.length} URL(s) fetched via ${provider} (${cachedCount} cached)`
+            : `${results.length} of ${urls.length} URL(s) fetched via ${provider}`,
+        itemCount: results.length,
+      },
+      cachedCount,
+    };
   }
 
-  const cachedCount = results.filter((r) => r.fromCache).length;
-  const provider = results[0]?.value.provider ?? providerId;
-  const textBlocks = results.map((r) => r.value.text.trim()).filter(Boolean);
-
-  for (const failure of failures) {
-    textBlocks.push(`Error: ${failure.url}\n   ${failure.error}`);
-  }
-
+  const batch = await ensureBatchContentsStored({
+    urls,
+    providerId,
+    config,
+    cwd,
+    options,
+    signal,
+    onProgress,
+  });
   return {
     output: {
-      provider,
-      text: textBlocks.join("\n\n").trim() || "No contents found.",
+      provider: batch.value.provider,
+      text: batch.value.text,
       summary:
-        cachedCount > 0
-          ? `${results.length} of ${urls.length} URL(s) fetched via ${provider} (${cachedCount} cached)`
-          : `${results.length} of ${urls.length} URL(s) fetched via ${provider}`,
-      itemCount: results.length,
+        batch.value.summary ??
+        `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
+      itemCount: batch.value.itemCount ?? batch.value.urls.length,
     },
-    cachedCount,
+    cachedCount: batch.fromCache ? batch.value.urls.length : 0,
   };
 }
 
@@ -847,6 +877,14 @@ async function ensureBatchContentsStored({
           optionsHash: hashOptions(options),
         },
       });
+      await storePerUrlContentsEntries({
+        entries: extractStoredContentsEntriesFromMetadata(result.metadata),
+        provider: result.provider,
+        options,
+        createdAt,
+        fetchedAt,
+        ttlMs,
+      });
       return { value: stored, fromCache: false };
     } catch (error) {
       await contentStore.put<JsonValue>({
@@ -994,6 +1032,78 @@ async function ensureContentsStored({
 
   inFlightContents.set(key, task);
   return await task;
+}
+
+async function storePerUrlContentsEntries({
+  entries,
+  provider,
+  options,
+  createdAt,
+  fetchedAt,
+  ttlMs,
+}: {
+  entries: StoredContentsMetadataEntry[];
+  provider: ProviderId;
+  options: JsonObject | undefined;
+  createdAt: number;
+  fetchedAt: number;
+  ttlMs: number;
+}): Promise<void> {
+  await Promise.all(
+    entries.map(async (entry) => {
+      const canonicalUrl = canonicalizeUrl(entry.url);
+      if (!/^https?:\/\//i.test(canonicalUrl)) {
+        return;
+      }
+
+      await contentStore.put<JsonValue>({
+        key: buildContentsStoreKey(canonicalUrl, provider, options),
+        kind: CONTENT_ENTRY_KIND,
+        status: "ready",
+        createdAt,
+        updatedAt: fetchedAt,
+        expiresAt: fetchedAt + ttlMs,
+        value: {
+          url: canonicalUrl,
+          provider,
+          text: entry.text,
+          summary: entry.summary,
+          itemCount: entry.itemCount,
+          fetchedAt,
+        } as unknown as JsonValue,
+        metadata: {
+          url: canonicalUrl,
+          provider,
+          optionsHash: hashOptions(options),
+        },
+      });
+    }),
+  );
+}
+
+function extractStoredContentsEntriesFromMetadata(
+  metadata: JsonObject | undefined,
+): StoredContentsMetadataEntry[] {
+  const rawEntries = metadata?.contentsEntries;
+  if (!Array.isArray(rawEntries)) {
+    return [];
+  }
+
+  return rawEntries.flatMap((entry) =>
+    isStoredContentsMetadataEntry(entry) ? [entry] : [],
+  );
+}
+
+function isStoredContentsMetadataEntry(
+  value: unknown,
+): value is StoredContentsMetadataEntry {
+  return (
+    isJsonObject(value) &&
+    typeof value.url === "string" &&
+    typeof value.text === "string" &&
+    (value.summary === undefined || typeof value.summary === "string") &&
+    (value.itemCount === undefined || typeof value.itemCount === "number")
+  );
 }
 
 function buildBatchContentsStoreKey(

@@ -195,11 +195,15 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
 
     const results = finalResponse.results ?? [];
     const lines: string[] = [];
-    for (const [index, result] of results.entries()) {
-      lines.push(`${index + 1}. ${result.url}`);
-      if (result.status === "failed") {
-        lines.push(`   Failed: ${result.error}`);
-      } else {
+    const contentsEntries = results
+      .map((result, index) => {
+        const entryLines = [`${index + 1}. ${result.url}`];
+        if (result.status === "failed") {
+          entryLines.push(`   Failed: ${result.error}`);
+          lines.push(...entryLines, "");
+          return undefined;
+        }
+
         const snippet =
           typeof result.summary === "string"
             ? result.summary
@@ -210,18 +214,27 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
                 ? String(result.content)
                 : formatJson(result.content);
         if (result.title) {
-          lines.push(`   ${result.title}`);
+          entryLines.push(`   ${result.title}`);
         }
-        lines.push(`   ${trimSnippet(snippet)}`);
-      }
-      lines.push("");
-    }
+        entryLines.push(`   ${trimSnippet(snippet)}`);
+        lines.push(...entryLines, "");
+        return {
+          url: result.url,
+          text: entryLines.join("\n").trimEnd(),
+          summary: "1 content result via Valyu",
+          itemCount: 1,
+        };
+      })
+      .filter((entry) => entry !== undefined);
 
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
       summary: `${results.length} content result(s) via Valyu`,
       itemCount: results.length,
+      metadata: {
+        contentsEntries,
+      },
     };
   }
 

@@ -186,37 +186,55 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     );
     const response = await client.getContents(urls, options as never);
 
+    const results = response.results ?? [];
     const lines: string[] = [];
-    for (const [index, result] of (response.results ?? []).entries()) {
-      lines.push(
-        `${index + 1}. ${String(result.title ?? result.url ?? "Untitled")}`,
-      );
-      lines.push(`   ${String(result.url ?? "")}`);
+    const contentsEntries = results
+      .map((result, index) => {
+        const entryLines = [
+          `${index + 1}. ${String(result.title ?? result.url ?? "Untitled")}`,
+          `   ${String(result.url ?? "")}`,
+        ];
 
-      const summary =
-        typeof result.summary === "string"
-          ? result.summary
-          : result.summary
-            ? formatJson(result.summary)
-            : undefined;
-      const text =
-        typeof result.text === "string"
-          ? result.text
-          : Array.isArray(result.highlights)
-            ? result.highlights.join(" ")
-            : "";
-      const body = trimSnippet(summary ?? text);
-      if (body) {
-        lines.push(`   ${body}`);
-      }
-      lines.push("");
-    }
+        const summary =
+          typeof result.summary === "string"
+            ? result.summary
+            : result.summary
+              ? formatJson(result.summary)
+              : undefined;
+        const text =
+          typeof result.text === "string"
+            ? result.text
+            : Array.isArray(result.highlights)
+              ? result.highlights.join(" ")
+              : "";
+        const body = trimSnippet(summary ?? text);
+        if (body) {
+          entryLines.push(`   ${body}`);
+        }
+
+        lines.push(...entryLines, "");
+
+        if (typeof result.url !== "string" || result.url.length === 0) {
+          return undefined;
+        }
+
+        return {
+          url: result.url,
+          text: entryLines.join("\n").trimEnd(),
+          summary: "1 content result via Exa",
+          itemCount: 1,
+        };
+      })
+      .filter((entry) => entry !== undefined);
 
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
-      summary: `${response.results?.length ?? 0} content result(s) via Exa`,
-      itemCount: response.results?.length ?? 0,
+      summary: `${results.length} content result(s) via Exa`,
+      itemCount: results.length,
+      metadata: {
+        contentsEntries,
+      },
     };
   }
 

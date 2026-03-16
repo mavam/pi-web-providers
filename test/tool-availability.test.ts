@@ -298,6 +298,70 @@ describe("managed tool availability", () => {
     expect(partialContentsRender).toBeUndefined();
   });
 
+  it("clears the contents cache when saved contents-capable provider settings change", () => {
+    const previous: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "EXA_API_KEY",
+          native: {
+            type: "auto",
+            contents: {
+              text: true,
+            },
+          },
+        },
+      },
+    };
+
+    const next: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "EXA_API_KEY",
+          native: {
+            type: "auto",
+            contents: {
+              text: false,
+            },
+          },
+        },
+      },
+    };
+
+    expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(true);
+  });
+
+  it("keeps the contents cache when only non-contents providers change", () => {
+    const previous: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        codex: {
+          enabled: true,
+          native: {
+            webSearchEnabled: true,
+          },
+        },
+      },
+    };
+
+    const next: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        codex: {
+          enabled: true,
+          native: {
+            webSearchEnabled: false,
+          },
+        },
+      },
+    };
+
+    expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(false);
+  });
+
   it("surfaces Perplexity overrides when Perplexity is available", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
 

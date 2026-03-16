@@ -41,6 +41,7 @@ export interface ProviderToolOutput {
   text: string;
   summary?: string;
   itemCount?: number;
+  metadata?: JsonObject;
 }
 
 export interface ProviderResearchJob {

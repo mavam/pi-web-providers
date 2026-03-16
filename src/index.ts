@@ -36,6 +36,7 @@ import {
   formatPrefetchStatusText,
   getPrefetchStatus,
   parseSearchContentsPrefetchOptions,
+  resetContentStore,
   resolveContentsFromStore,
   startContentsPrefetch,
   stripSearchContentsPrefetchOptions,
@@ -1855,6 +1856,9 @@ class WebProvidersSettingsView implements Component {
     try {
       mutate(nextConfig);
       await writeConfigFile(nextConfig);
+      if (didContentsCacheInputsChange(this.config, nextConfig)) {
+        resetContentStore();
+      }
       this.config = nextConfig;
       this.tui.requestRender();
     } catch (error) {
@@ -1967,6 +1971,51 @@ function getResolvedProviderChoice(
 async function getPreferredProvider(cwd: string): Promise<ProviderId> {
   const current = await loadConfig();
   return getResolvedProviderChoice(current, cwd) ?? "codex";
+}
+
+function didContentsCacheInputsChange(
+  previous: WebProvidersConfig,
+  next: WebProvidersConfig,
+): boolean {
+  return (
+    stableStringify(getContentsCacheInputs(previous)) !==
+    stableStringify(getContentsCacheInputs(next))
+  );
+}
+
+function getContentsCacheInputs(config: WebProvidersConfig): JsonObject {
+  const providers: Record<string, unknown> = {};
+
+  for (const provider of PROVIDERS) {
+    if (!supportsProviderCapability(provider, "contents")) {
+      continue;
+    }
+    providers[provider.id] =
+      config.providers?.[
+        provider.id as keyof NonNullable<WebProvidersConfig["providers"]>
+      ] ?? null;
+  }
+
+  return { providers: providers as JsonObject };
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+
+  return `{${Object.keys(value)
+    .sort()
+    .map(
+      (key) =>
+        `${JSON.stringify(key)}:${stableStringify(
+          (value as Record<string, unknown>)[key],
+        )}`,
+    )
+    .join(",")}}`;
 }
 
 function summarizeStringValue(
@@ -2299,6 +2348,7 @@ function truncateInline(text: string, maxLength: number): string {
 }
 
 export const __test__ = {
+  didContentsCacheInputsChange,
   executeAnswerTool,
   executeProviderTool,
   executeSearchTool,
