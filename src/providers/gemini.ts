@@ -11,6 +11,8 @@ import {
 import type {
   GeminiProviderConfig,
   JsonObject,
+  JsonValue,
+  ProviderContentsMetadataEntry,
   ProviderContext,
   ProviderOperationRequest,
   ProviderResearchJob,
@@ -201,9 +203,10 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
       defaultModel: native?.contentsModel ?? DEFAULT_CONTENTS_MODEL,
       prompt:
         `Extract the main textual content from each of the following URLs. ` +
-        `For each URL, return the page title followed by the cleaned body text. ` +
-        `Preserve the original structure (headings, paragraphs, lists) but remove ` +
-        `navigation, ads, and boilerplate.\n\n${urlList}`,
+        `For every successfully retrieved URL, return exactly one block in this format:\n` +
+        `[[[URL]]]\n<resolved URL>\n[[[TITLE]]]\n<title>\n[[[BODY]]]\n<cleaned body text>\n[[[END]]]\n\n` +
+        `Only include successfully retrieved URLs. Preserve headings, paragraphs, and lists in BODY, ` +
+        `but remove navigation, ads, and boilerplate. Do not add any text outside these blocks.\n\n${urlList}`,
       options,
       toolConfig: { urlContext: {} },
     });
@@ -215,38 +218,54 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
 
     const text = response.text?.trim() || "";
     const metadata = extractUrlContextMetadata(response.candidates);
+    const contentsEntries = buildGeminiContentsEntries(text, urls, metadata);
     const lines: string[] = [];
 
-    if (text) {
+    const successfulEntries = contentsEntries.filter(
+      (entry) => entry.status !== "failed",
+    );
+    if (successfulEntries.length > 0) {
+      lines.push(renderGeminiContentsEntries(successfulEntries));
+    } else if (text) {
       lines.push(text);
     }
 
-    if (metadata.length > 0) {
-      const failures = metadata.filter(
-        (entry) =>
-          entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS" &&
-          entry.status !== undefined,
-      );
-      if (failures.length > 0) {
+    const failures = metadata.filter(
+      (entry) =>
+        entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS" &&
+        entry.status !== undefined,
+    );
+    if (failures.length > 0) {
+      if (lines.length > 0) {
         lines.push("");
-        lines.push("Retrieval issues:");
-        for (const failure of failures) {
-          lines.push(`- ${failure.url}: ${failure.status}`);
-        }
+      }
+      lines.push("Retrieval issues:");
+      for (const failure of failures) {
+        lines.push(`- ${failure.url}: ${failure.status}`);
       }
     }
 
-    const successCount = metadata.filter(
-      (entry) =>
-        entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
-        entry.status === undefined,
-    ).length;
+    const successCount =
+      metadata.length > 0
+        ? metadata.filter(
+            (entry) =>
+              entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
+              entry.status === undefined,
+          ).length
+        : successfulEntries.length > 0
+          ? successfulEntries.length
+          : text
+            ? 1
+            : 0;
 
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents extracted.",
       summary: `${successCount} of ${urls.length} URL(s) extracted via Gemini`,
       itemCount: successCount,
+      metadata: {
+        contentsEntries: contentsEntries as unknown as JsonValue,
+      },
     };
   }
 
@@ -535,6 +554,191 @@ function extractUrlContextMetadata(
   }
 
   return results;
+}
+
+function buildGeminiContentsEntries(
+  text: string,
+  urls: string[],
+  metadata: Array<{ url: string; status: string | undefined }>,
+): ProviderContentsMetadataEntry[] {
+  const parsedEntries = parseGeminiContentsBlocks(text);
+  const orderedReadyEntries = orderGeminiContentsEntries(parsedEntries, urls);
+  const readyEntries =
+    orderedReadyEntries.length > 0
+      ? orderedReadyEntries.map((entry) => ({
+          ...entry,
+          summary: "1 content result via Gemini",
+          status: "ready" as const,
+        }))
+      : buildFallbackGeminiContentsEntries(text, urls, metadata);
+
+  const failureEntries = metadata.flatMap<ProviderContentsMetadataEntry>(
+    (entry) =>
+      entry.status !== undefined &&
+      entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS" &&
+      !hasGeminiContentsEntryForUrl(readyEntries, entry.url)
+        ? [
+            {
+              url: entry.url,
+              title: entry.url,
+              body: entry.status,
+              status: "failed",
+            },
+          ]
+        : [],
+  );
+
+  return [...readyEntries, ...failureEntries];
+}
+
+function parseGeminiContentsBlocks(
+  text: string,
+): Array<{ url: string; title?: string; body: string }> {
+  const normalized = text.replace(/\r\n/g, "\n");
+  const blocks: Array<{ url: string; title?: string; body: string }> = [];
+  const pattern =
+    /\[\[\[URL\]\]\]\s*\n([^\n]+)\n\[\[\[TITLE\]\]\]\s*\n([^\n]*)\n\[\[\[BODY\]\]\]\s*\n([\s\S]*?)\n\[\[\[END\]\]\]/g;
+
+  for (const match of normalized.matchAll(pattern)) {
+    const url = match[1]?.trim();
+    const title = match[2]?.trim();
+    const body = match[3]?.trim();
+    if (!url || !body) {
+      continue;
+    }
+
+    blocks.push({
+      url,
+      ...(title ? { title } : {}),
+      body,
+    });
+  }
+
+  return blocks;
+}
+
+function orderGeminiContentsEntries<T extends { url: string }>(
+  entries: T[],
+  urls: string[],
+): T[] {
+  if (entries.length <= 1) {
+    return entries;
+  }
+
+  const entriesByUrl = new Map<string, T[]>();
+  for (const entry of entries) {
+    const key = normalizeGeminiUrl(entry.url);
+    const bucket = entriesByUrl.get(key);
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      entriesByUrl.set(key, [entry]);
+    }
+  }
+
+  const ordered: T[] = [];
+  for (const url of urls) {
+    const key = normalizeGeminiUrl(url);
+    const bucket = entriesByUrl.get(key);
+    const next = bucket?.shift();
+    if (next) {
+      ordered.push(next);
+    }
+    if (bucket && bucket.length === 0) {
+      entriesByUrl.delete(key);
+    }
+  }
+
+  for (const bucket of entriesByUrl.values()) {
+    ordered.push(...bucket);
+  }
+
+  return ordered;
+}
+
+function buildFallbackGeminiContentsEntries(
+  text: string,
+  urls: string[],
+  metadata: Array<{ url: string; status: string | undefined }>,
+): ProviderContentsMetadataEntry[] {
+  if (!text) {
+    return [];
+  }
+
+  const successfulMetadata = metadata.filter(
+    (entry) =>
+      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
+      entry.status === undefined,
+  );
+  const fallbackUrl =
+    successfulMetadata.length === 1
+      ? successfulMetadata[0]?.url
+      : urls.length === 1 && successfulMetadata.length === 0
+        ? urls[0]
+        : undefined;
+
+  if (!fallbackUrl) {
+    return [];
+  }
+
+  return [
+    {
+      url: fallbackUrl,
+      title: extractGeminiContentsTitle(text),
+      body: text,
+      summary: "1 content result via Gemini",
+      status: "ready",
+    },
+  ];
+}
+
+function extractGeminiContentsTitle(text: string): string | undefined {
+  const firstLine = text
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!firstLine) {
+    return undefined;
+  }
+
+  return firstLine.replace(/^#+\s*/, "").trim() || undefined;
+}
+
+function hasGeminiContentsEntryForUrl(
+  entries: ProviderContentsMetadataEntry[],
+  url: string,
+): boolean {
+  const normalized = normalizeGeminiUrl(url);
+  return entries.some((entry) => normalizeGeminiUrl(entry.url) === normalized);
+}
+
+function normalizeGeminiUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return url.trim();
+  }
+}
+
+function renderGeminiContentsEntries(
+  entries: ProviderContentsMetadataEntry[],
+): string {
+  return entries
+    .map((entry, index) => {
+      const heading = entry.title ?? entry.url;
+      const lines = [`${index + 1}. ${heading}`];
+      if (entry.url && entry.url !== heading) {
+        lines.push(`   ${entry.url}`);
+      }
+      for (const line of entry.body.trim().split("\n")) {
+        lines.push(`   ${line}`);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n")
+    .trim();
 }
 
 function formatInteractionOutputs(outputs: unknown): string {

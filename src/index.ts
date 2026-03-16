@@ -114,7 +114,7 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
-    await cleanupContentStore();
+    resetContentStore();
     await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
   });
 
