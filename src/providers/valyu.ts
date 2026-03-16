@@ -7,6 +7,8 @@ import {
   createSilentForegroundPlan,
 } from "../provider-plans.js";
 import type {
+  JsonValue,
+  ProviderContentsMetadataEntry,
   ProviderContext,
   ProviderOperationRequest,
   ProviderResearchJob,
@@ -195,11 +197,22 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
 
     const results = finalResponse.results ?? [];
     const lines: string[] = [];
-    for (const [index, result] of results.entries()) {
-      lines.push(`${index + 1}. ${result.url}`);
-      if (result.status === "failed") {
-        lines.push(`   Failed: ${result.error}`);
-      } else {
+    const contentsEntries: ProviderContentsMetadataEntry[] =
+      results.flatMap<ProviderContentsMetadataEntry>((result, index) => {
+        const entryLines = [`${index + 1}. ${result.url}`];
+        if (result.status === "failed") {
+          entryLines.push(`   Failed: ${result.error}`);
+          lines.push(...entryLines, "");
+          return [
+            {
+              url: result.url,
+              title: result.url,
+              body: `Failed: ${result.error}`,
+              status: "failed",
+            },
+          ];
+        }
+
         const snippet =
           typeof result.summary === "string"
             ? result.summary
@@ -209,19 +222,31 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
                   typeof result.content === "number"
                 ? String(result.content)
                 : formatJson(result.content);
+        const body = trimSnippet(snippet);
         if (result.title) {
-          lines.push(`   ${result.title}`);
+          entryLines.push(`   ${result.title}`);
         }
-        lines.push(`   ${trimSnippet(snippet)}`);
-      }
-      lines.push("");
-    }
+        entryLines.push(`   ${body}`);
+        lines.push(...entryLines, "");
+        return [
+          {
+            url: result.url,
+            title: result.title,
+            body,
+            summary: "1 content result via Valyu",
+            status: "ready",
+          },
+        ];
+      });
 
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
       summary: `${results.length} content result(s) via Valyu`,
       itemCount: results.length,
+      metadata: {
+        contentsEntries: contentsEntries as unknown as JsonValue,
+      },
     };
   }
 

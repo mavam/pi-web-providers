@@ -36,11 +36,20 @@ export interface SearchResponse {
   results: SearchResult[];
 }
 
+export interface ProviderContentsMetadataEntry {
+  url: string;
+  title?: string;
+  body: string;
+  summary?: string;
+  status?: "ready" | "failed";
+}
+
 export interface ProviderToolOutput {
   provider: ProviderId;
   text: string;
   summary?: string;
   itemCount?: number;
+  metadata?: JsonObject;
 }
 
 export interface ProviderResearchJob {
@@ -66,6 +75,8 @@ export interface ProviderToolDetails {
   provider: ProviderId;
   summary?: string;
   itemCount?: number;
+  queryCount?: number;
+  failedQueryCount?: number;
 }
 
 export interface ClaudeProviderNativeConfig {

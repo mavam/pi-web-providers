@@ -4,7 +4,9 @@ import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
+  JsonValue,
   ParallelProviderConfig,
+  ProviderContentsMetadataEntry,
   ProviderContext,
   ProviderOperationRequest,
   ProviderStatus,
@@ -143,25 +145,44 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
     );
 
     const lines: string[] = [];
-    for (const [index, result] of response.results.entries()) {
-      lines.push(`${index + 1}. ${result.title ?? result.url}`);
-      lines.push(`   ${result.url}`);
+    const contentsEntries: ProviderContentsMetadataEntry[] =
+      response.results.map((result, index) => {
+        const title = result.title ?? result.url;
+        const entryLines = [`${index + 1}. ${title}`, `   ${result.url}`];
 
-      const text = result.excerpts?.join(" ") ?? result.full_content ?? "";
-      const snippet = trimSnippet(text);
-      if (snippet) {
-        lines.push(`   ${snippet}`);
-      }
-      lines.push("");
-    }
+        const text = result.excerpts?.join(" ") ?? result.full_content ?? "";
+        const body = trimSnippet(text);
+        if (body) {
+          entryLines.push(`   ${body}`);
+        }
+
+        lines.push(...entryLines, "");
+        return {
+          url: result.url,
+          title,
+          body,
+          summary: "1 content result via Parallel",
+          status: "ready",
+        };
+      });
 
     for (const error of response.errors) {
-      lines.push(`Error: ${error.url}`);
-      lines.push(`   ${error.error_type}`);
+      const detailLines = [error.error_type];
       if (error.content) {
-        lines.push(`   ${trimSnippet(error.content)}`);
+        detailLines.push(trimSnippet(error.content));
+      }
+
+      lines.push(`Error: ${error.url}`);
+      for (const line of detailLines) {
+        lines.push(`   ${line}`);
       }
       lines.push("");
+      contentsEntries.push({
+        url: error.url,
+        title: error.url,
+        body: detailLines.join("\n"),
+        status: "failed",
+      });
     }
 
     const itemCount = response.results.length;
@@ -170,6 +191,9 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
       text: lines.join("\n").trimEnd() || "No contents found.",
       summary: `${itemCount} content result(s) via Parallel`,
       itemCount,
+      metadata: {
+        contentsEntries: contentsEntries as unknown as JsonValue,
+      },
     };
   }
 

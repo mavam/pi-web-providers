@@ -249,6 +249,236 @@ describe("provider tool output", () => {
     ).rejects.toThrow("queries must contain at least one item.");
   });
 
+  it("groups multi-query answer output into per-question sections", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    const result = await __test__.executeAnswerTool({
+      config,
+      explicitProvider: "gemini",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      queries: [
+        "What are common Tenzir use cases?",
+        "How does Tenzir help with SIEM migration?",
+      ],
+      planOverrides: [
+        {
+          capability: "answer",
+          providerId: "gemini",
+          providerLabel: "Gemini",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "gemini",
+            text: "Tenzir is used for detection engineering and security data pipelines.",
+            summary: "Answer via Gemini with 2 source(s)",
+          }),
+        },
+        {
+          capability: "answer",
+          providerId: "gemini",
+          providerLabel: "Gemini",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "gemini",
+            text: "Tenzir can reduce SIEM costs during migration by reshaping and routing data.",
+            summary: "Answer via Gemini with 3 source(s)",
+          }),
+        },
+      ],
+    });
+
+    expect(result.content[0]?.text).toContain(
+      'Question 1: "What are common Tenzir use cases?"',
+    );
+    expect(result.content[0]?.text).toContain(
+      "Tenzir is used for detection engineering and security data pipelines.",
+    );
+    expect(result.content[0]?.text).toContain(
+      'Question 2: "How does Tenzir help with SIEM migration?"',
+    );
+    expect(result.content[0]?.text).toContain(
+      "Tenzir can reduce SIEM costs during migration by reshaping and routing data.",
+    );
+    expect(result.details).toEqual({
+      tool: "web_answer",
+      provider: "gemini",
+      summary: undefined,
+      itemCount: undefined,
+      queryCount: 2,
+      failedQueryCount: 0,
+    });
+  });
+
+  it("preserves successful answers when one query in a batch fails", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    const result = await __test__.executeAnswerTool({
+      config,
+      explicitProvider: "gemini",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      queries: [
+        "What are common Tenzir use cases?",
+        "How does Tenzir help with SIEM migration?",
+      ],
+      planOverrides: [
+        {
+          capability: "answer",
+          providerId: "gemini",
+          providerLabel: "Gemini",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "gemini",
+            text: "Tenzir is used for detection engineering and security data pipelines.",
+            summary: "Answer via Gemini with 2 source(s)",
+          }),
+        },
+        {
+          capability: "answer",
+          providerId: "gemini",
+          providerLabel: "Gemini",
+          deliveryMode: "silent-foreground",
+          execute: async () => {
+            throw new Error("rate limited");
+          },
+        },
+      ],
+    });
+
+    expect(result.content[0]?.text).toContain(
+      'Question 1: "What are common Tenzir use cases?"',
+    );
+    expect(result.content[0]?.text).toContain(
+      'Question 2: "How does Tenzir help with SIEM migration?"',
+    );
+    expect(result.content[0]?.text).toContain("Answer failed: rate limited");
+    expect(result.details).toEqual({
+      tool: "web_answer",
+      provider: "gemini",
+      summary: undefined,
+      itemCount: undefined,
+      queryCount: 2,
+      failedQueryCount: 1,
+    });
+  });
+
+  it("fails the answer batch when every query fails", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    await expect(
+      __test__.executeAnswerTool({
+        config,
+        explicitProvider: "gemini",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        queries: [
+          "What are common Tenzir use cases?",
+          "How does Tenzir help with SIEM migration?",
+        ],
+        planOverrides: [
+          {
+            capability: "answer",
+            providerId: "gemini",
+            providerLabel: "Gemini",
+            deliveryMode: "silent-foreground",
+            execute: async () => {
+              throw new Error("timeout");
+            },
+          },
+          {
+            capability: "answer",
+            providerId: "gemini",
+            providerLabel: "Gemini",
+            deliveryMode: "silent-foreground",
+            execute: async () => {
+              throw new Error("rate limited");
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(
+      'All 2 web_answer queries failed: 1. "What are common Tenzir use cases?" — timeout; 2. "How does Tenzir help with SIEM migratio…" — rate limited',
+    );
+  });
+
+  it("supports a single-question batch for web_answer", async () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    const result = await __test__.executeAnswerTool({
+      config,
+      explicitProvider: "gemini",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      queries: ["What are common Tenzir use cases?"],
+      planOverrides: [
+        {
+          capability: "answer",
+          providerId: "gemini",
+          providerLabel: "Gemini",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "gemini",
+            text: "Tenzir is used for detection engineering and SIEM migration.",
+            summary: "Answer via Gemini with 2 source(s)",
+            itemCount: 2,
+          }),
+        },
+      ],
+    });
+
+    expect(result.content[0]?.text).toBe(
+      "Tenzir is used for detection engineering and SIEM migration.",
+    );
+    expect(result.details).toEqual({
+      tool: "web_answer",
+      provider: "gemini",
+      summary: "Answer via Gemini with 2 source(s)",
+      itemCount: 2,
+      queryCount: 1,
+      failedQueryCount: 0,
+    });
+  });
+
   it("truncates oversized non-search output and saves the full response", async () => {
     const config: WebProvidersConfig = {
       version: 1,
@@ -574,6 +804,9 @@ describe("provider tool output", () => {
   it("describes supported local execution controls in tool option help", () => {
     expect(__test__.describeOptionsField("contents", ["exa"])).toBe(
       "Provider-specific extraction options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs.",
+    );
+    expect(__test__.describeOptionsField("search", ["exa"])).toBe(
+      "Provider-specific search options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs. Local orchestration options may include prefetch={ enabled, maxUrls, provider, ttlMs, contentsOptions }.",
     );
     expect(
       __test__.describeOptionsField("research", [
