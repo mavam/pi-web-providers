@@ -81,8 +81,9 @@ Read and extract the main contents of one or more web pages.
 | `options`  | object   | —        | Provider-specific extraction options |
 | `provider` | string   | auto     | Optional provider override           |
 
-`web_contents` reuses any matching prefetched pages already present in the local
-content store and only fetches missing or stale URLs.
+`web_contents` reuses any matching cached pages already present in the local
+content store—whether they came from prefetch or an earlier read—and only
+fetches missing or stale URLs.
 
 ### `web_answer`
 

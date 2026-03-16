@@ -32,7 +32,7 @@ import {
   stripLocalExecutionOptions,
 } from "./execution-policy.js";
 import {
-  canResolveContentsFromStore,
+  cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
   parseSearchContentsPrefetchOptions,
@@ -114,10 +114,12 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    await cleanupContentStore();
     await refreshManagedTools(pi, ctx.cwd, { addAvailable: true });
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
+    await cleanupContentStore();
     await refreshManagedTools(pi, ctx.cwd, { addAvailable: false });
   });
 }
@@ -692,6 +694,8 @@ async function executeSearchTool({
   queries: string[];
   planOverrides?: ProviderOperationPlan<SearchResponse>[];
 }) {
+  await cleanupContentStore();
+
   const provider = resolveProviderChoice(config, explicitProvider, ctx.cwd);
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
@@ -1051,29 +1055,20 @@ async function executeProviderOperation({
       }),
     );
 
-  // Route through the content store only when the entire request can already
-  // be satisfied from an exact cached batch entry or from reusable per-URL
-  // cached entries created by prefetch or earlier reads. Partial cache hits
-  // intentionally fall back to the provider's native batched contents endpoint
-  // to avoid fanning out into one request per missing URL.
+  // Route all contents requests through the local content store so successful
+  // live reads become reusable cache entries. Exact cache hits are served
+  // immediately, and partial cache hits only fetch the missing or stale URLs.
   if (capability === "contents" && planOverride === undefined) {
-    const useStore = await canResolveContentsFromStore({
+    const resolved = await resolveContentsFromStore({
       urls: urls ?? [],
       providerId: provider.id,
+      config,
+      cwd: ctx.cwd,
       options,
+      signal: signal ?? undefined,
+      onProgress,
     });
-    if (useStore) {
-      const resolved = await resolveContentsFromStore({
-        urls: urls ?? [],
-        providerId: provider.id,
-        config,
-        cwd: ctx.cwd,
-        options,
-        signal: signal ?? undefined,
-        onProgress,
-      });
-      return resolved.output;
-    }
+    return resolved.output;
   }
 
   const result = await executeOperationPlan(plan, options, {
@@ -1119,6 +1114,8 @@ async function executeProviderTool({
   input?: string;
   planOverride?: ProviderOperationPlan<ProviderToolOutput>;
 }) {
+  await cleanupContentStore();
+
   // For contents: try to serve entirely from the local store before resolving
   // a provider.  This lets pure cache hits succeed even when the provider that
   // originally fetched the pages is later disabled or unavailable.

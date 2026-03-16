@@ -173,7 +173,7 @@ describe("search contents prefetch", () => {
     });
   });
 
-  it("falls back to a single provider batch when only part of the request is cached", async () => {
+  it("fetches only missing URLs when part of the request is already cached", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       version: 1,
@@ -204,7 +204,7 @@ describe("search contents prefetch", () => {
       urls: ["https://exa.ai/sdk"],
     });
 
-    await __test__.executeProviderTool({
+    const result = await __test__.executeProviderTool({
       capability: "contents",
       config,
       explicitProvider: "exa",
@@ -221,8 +221,147 @@ describe("search contents prefetch", () => {
       undefined,
     ]);
     expect(exaGetContentsMock.mock.calls[1]).toEqual([
-      ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+      ["https://exa.ai/pricing"],
       undefined,
     ]);
+    expect(result.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/sdk",
+    );
+    expect(result.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/pricing",
+    );
+  });
+
+  it("reuses earlier live reads without refetching the same URLs", async () => {
+    const { __test__ } = await import("../src/index.js");
+    const config = {
+      version: 1,
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    exaGetContentsMock.mockImplementation(async (urls: string[]) => ({
+      results: urls.map((url) => ({
+        title: url === "https://exa.ai/sdk" ? "Exa SDK" : "Exa Pricing",
+        url,
+        text: `Fetched body for ${url}`,
+      })),
+    }));
+
+    await __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+    });
+
+    const cachedResult = await __test__.executeProviderTool({
+      capability: "contents",
+      config,
+      explicitProvider: undefined,
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      urls: ["https://exa.ai/pricing", "https://exa.ai/sdk"],
+    });
+
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+    expect(exaGetContentsMock.mock.calls).toEqual([
+      [["https://exa.ai/sdk"], undefined],
+      [["https://exa.ai/pricing"], undefined],
+    ]);
+    expect(cachedResult.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/sdk",
+    );
+    expect(cachedResult.content[0]?.text).toContain(
+      "Fetched body for https://exa.ai/pricing",
+    );
+  });
+
+  it("cleans up expired cache entries automatically on the next tool call", async () => {
+    vi.useFakeTimers();
+    try {
+      const { __test__ } = await import("../src/index.js");
+      const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
+      const config = {
+        version: 1,
+        providers: {
+          exa: {
+            enabled: true,
+            apiKey: "literal-key",
+          },
+        },
+      } as const;
+
+      exaSearchMock.mockResolvedValue({
+        results: [
+          {
+            title: "Exa SDK",
+            url: "https://exa.ai/sdk",
+            text: "SDK docs",
+          },
+        ],
+      });
+      exaGetContentsMock.mockImplementation(async (urls: string[]) => ({
+        results: urls.map((url) => ({
+          title: "Exa SDK",
+          url,
+          text: `Fetched body for ${url}`,
+        })),
+      }));
+
+      const searchResult = await __test__.executeSearchTool({
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: {
+          prefetch: {
+            enabled: true,
+            maxUrls: 1,
+            ttlMs: 1000,
+          },
+        },
+        maxResults: 1,
+        queries: ["exa docs"],
+      });
+
+      const prefetchId =
+        (searchResult.content[0]?.text ?? "").match(
+          /Prefetch id: ([\w-]+)/,
+        )?.[1] ?? "missing";
+      expect(prefetchId).not.toBe("missing");
+
+      await vi.waitFor(async () => {
+        expect((await getPrefetchStatus(prefetchId))?.status).toBe("ready");
+      });
+
+      vi.advanceTimersByTime(1001);
+
+      await __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        urls: ["https://exa.ai/pricing"],
+      });
+
+      expect(await getPrefetchStatus(prefetchId)).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
