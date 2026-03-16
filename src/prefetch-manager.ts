@@ -161,12 +161,9 @@ export async function startContentsPrefetch({
 
   const ttlMs = clampTtlMs(options.ttlMs);
   const contentOptions = options.contentsOptions;
-  const batchKey = buildBatchContentsStoreKey(
-    selectedUrls,
-    provider.id,
-    contentOptions,
+  const contentKeys = selectedUrls.map((url) =>
+    buildContentsStoreKey(url, provider.id, contentOptions),
   );
-  const contentKeys = selectedUrls.map(() => batchKey);
   const prefetchId = randomUUID();
   const createdAt = Date.now();
 
@@ -186,20 +183,35 @@ export async function startContentsPrefetch({
     },
   });
 
-  const task = ensureBatchContentsStored({
-    urls: selectedUrls,
-    providerId: provider.id,
-    config,
-    cwd,
-    options: contentOptions,
-    ttlMs,
-    onProgress,
-  })
-    .then(async () => {
+  const task = Promise.allSettled(
+    selectedUrls.map((url) =>
+      ensureContentsStored({
+        url,
+        providerId: provider.id,
+        config,
+        cwd,
+        options: contentOptions,
+        ttlMs,
+        onProgress,
+      }),
+    ),
+  )
+    .then(async (results) => {
+      const failedResults = results.filter(
+        (result) => result.status === "rejected",
+      );
+      const failedUrlCount = failedResults.length;
+      const error =
+        failedResults.length === 0
+          ? undefined
+          : failedResults.length === 1
+            ? formatUnknownError(failedResults[0].reason)
+            : `${failedResults.length} URL(s) failed during prefetch.`;
+
       await contentStore.put<JsonValue>({
         key: buildPrefetchJobStoreKey(prefetchId),
         kind: PREFETCH_JOB_KIND,
-        status: "ready",
+        status: failedUrlCount === selectedUrls.length ? "failed" : "ready",
         createdAt,
         updatedAt: Date.now(),
         expiresAt: createdAt + ttlMs,
@@ -210,9 +222,10 @@ export async function startContentsPrefetch({
           contentKeys,
           createdAt,
         },
+        ...(error ? { error } : {}),
         metadata: {
           totalUrlCount: selectedUrls.length,
-          failedUrlCount: 0,
+          failedUrlCount,
         },
       });
     })
@@ -231,7 +244,7 @@ export async function startContentsPrefetch({
           contentKeys,
           createdAt,
         },
-        error: error instanceof Error ? error.message : String(error),
+        error: formatUnknownError(error),
         metadata: {
           totalUrlCount: selectedUrls.length,
           failedUrlCount: selectedUrls.length,
@@ -1111,6 +1124,10 @@ function clampTtlMs(value: number | undefined): number {
 
 function isExpired(entry: ContentStoreEntry, now: number): boolean {
   return entry.expiresAt !== undefined && entry.expiresAt <= now;
+}
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function hashOptions(options: JsonObject | undefined): string {

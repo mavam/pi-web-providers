@@ -1052,9 +1052,10 @@ async function executeProviderOperation({
     );
 
   // Route through the content store only when the entire request can already
-  // be satisfied from an exact prefetched batch or from per-URL cached entries.
-  // Partial cache hits intentionally fall back to the provider's native batched
-  // contents endpoint to avoid fanning out into one request per missing URL.
+  // be satisfied from an exact cached batch entry or from reusable per-URL
+  // cached entries created by prefetch or earlier reads. Partial cache hits
+  // intentionally fall back to the provider's native batched contents endpoint
+  // to avoid fanning out into one request per missing URL.
   if (capability === "contents" && planOverride === undefined) {
     const useStore = await canResolveContentsFromStore({
       urls: urls ?? [],

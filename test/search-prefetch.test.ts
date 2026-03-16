@@ -37,7 +37,7 @@ afterEach(async () => {
 });
 
 describe("search contents prefetch", () => {
-  it("starts background contents prefetching, reuses the cached batch, and works without an explicit provider", async () => {
+  it("starts background contents prefetching, reuses prefetched per-URL entries, and works without an explicit provider", async () => {
     const { __test__ } = await import("../src/index.js");
     const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
     const config = {
@@ -100,10 +100,9 @@ describe("search contents prefetch", () => {
       numResults: 2,
     });
 
-    // The first explicit web_contents call piggybacks on the in-flight batch
-    // prefetch promise (or reuses the cached result if the prefetch already
-    // completed), so the provider receives at most a single batched contents
-    // request for both URLs.
+    // The first explicit web_contents call should piggyback on the in-flight
+    // per-URL prefetch work (or reuse the cached entries if prefetch already
+    // completed), so it does not trigger any additional provider calls.
     const contentsResult = await __test__.executeProviderTool({
       capability: "contents",
       config,
@@ -115,11 +114,11 @@ describe("search contents prefetch", () => {
       urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
     });
 
-    expect(exaGetContentsMock).toHaveBeenCalledTimes(1);
-    expect(exaGetContentsMock).toHaveBeenCalledWith(
-      ["https://exa.ai/pricing", "https://exa.ai/sdk"],
-      undefined,
-    );
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
+    expect(exaGetContentsMock.mock.calls).toEqual([
+      [["https://exa.ai/sdk"], undefined],
+      [["https://exa.ai/pricing"], undefined],
+    ]);
     expect(contentsResult.content[0]?.text).toContain(
       "Fetched body for https://exa.ai/sdk",
     );
@@ -127,8 +126,8 @@ describe("search contents prefetch", () => {
       "Fetched body for https://exa.ai/pricing",
     );
 
-    // A second web_contents call should reuse the now-cached batch even when
-    // no explicit provider is supplied.
+    // A second web_contents call should be able to reuse a prefetched subset
+    // even when no explicit provider is supplied.
     const cachedResult = await __test__.executeProviderTool({
       capability: "contents",
       config,
@@ -137,12 +136,15 @@ describe("search contents prefetch", () => {
       signal: undefined,
       onUpdate: undefined,
       options: undefined,
-      urls: ["https://exa.ai/sdk", "https://exa.ai/pricing"],
+      urls: ["https://exa.ai/sdk"],
     });
 
-    expect(exaGetContentsMock).toHaveBeenCalledTimes(1); // unchanged
+    expect(exaGetContentsMock).toHaveBeenCalledTimes(2); // unchanged
     expect(cachedResult.content[0]?.text).toContain(
       "Fetched body for https://exa.ai/sdk",
+    );
+    expect(cachedResult.content[0]?.text).not.toContain(
+      "Fetched body for https://exa.ai/pricing",
     );
 
     await vi.waitFor(async () => {
@@ -154,6 +156,20 @@ describe("search contents prefetch", () => {
         totalUrlCount: 2,
         status: "ready",
       });
+      expect(status?.urls).toEqual([
+        expect.objectContaining({
+          url: "https://exa.ai/sdk",
+          status: "ready",
+          text: expect.stringContaining("Fetched body for https://exa.ai/sdk"),
+        }),
+        expect.objectContaining({
+          url: "https://exa.ai/pricing",
+          status: "ready",
+          text: expect.stringContaining(
+            "Fetched body for https://exa.ai/pricing",
+          ),
+        }),
+      ]);
     });
   });
 
