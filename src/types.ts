@@ -16,6 +16,20 @@ export type ToolProviderMapping = Partial<
   Record<ProviderCapability, ProviderId | null>
 >;
 
+export interface SearchPrefetchSettings {
+  provider?: ProviderId | null;
+  maxUrls?: number;
+  ttlMs?: number;
+}
+
+export interface SearchToolSettings {
+  prefetch?: SearchPrefetchSettings;
+}
+
+export interface ToolSettingsConfig {
+  search?: SearchToolSettings;
+}
+
 export type JsonValue =
   | string
   | number
@@ -181,6 +195,7 @@ export interface ValyuProviderConfig extends LegacyProviderRoutingConfig {
 
 export interface WebProvidersConfig {
   tools?: ToolProviderMapping;
+  toolSettings?: ToolSettingsConfig;
   providers?: {
     claude?: ClaudeProviderConfig;
     codex?: CodexProviderConfig;

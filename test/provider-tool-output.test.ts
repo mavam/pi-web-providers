@@ -796,7 +796,7 @@ describe("provider tool output", () => {
       "Provider-specific extraction options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs.",
     );
     expect(__test__.describeOptionsField("search", ["exa"])).toBe(
-      "Provider-specific search options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs. Local orchestration options may include prefetch={ enabled, maxUrls, provider, ttlMs, contentsOptions }.",
+      "Provider-specific search options. Local execution controls: requestTimeoutMs, retryCount, retryDelayMs. Local orchestration options may include prefetch={ provider, maxUrls, ttlMs, contentsOptions }. Prefetch runs only when prefetch.provider is set.",
     );
     expect(
       __test__.describeOptionsField("research", [

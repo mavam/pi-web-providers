@@ -37,6 +37,7 @@ import {
   cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
+  mergeSearchContentsPrefetchOptions,
   parseSearchContentsPrefetchOptions,
   resetContentStore,
   resolveContentsFromStore,
@@ -77,6 +78,8 @@ import type {
   ProviderOperationRequest,
   ProviderToolDetails,
   ProviderToolOutput,
+  SearchPrefetchSettings,
+  SearchToolSettings,
   SearchResponse,
   ValyuProviderConfig,
   WebProvidersConfig,
@@ -520,7 +523,7 @@ function describeOptionsField(
 
   if (capability === "search") {
     description +=
-      " Local orchestration options may include prefetch={ enabled, maxUrls, provider, ttlMs, contentsOptions }.";
+      " Local orchestration options may include prefetch={ provider, maxUrls, ttlMs, contentsOptions }. Prefetch runs only when prefetch.provider is set.";
   }
 
   return description;
@@ -619,7 +622,10 @@ async function executeSearchTool({
     throw new Error(`Provider '${provider.id}' is not configured.`);
   }
 
-  const prefetchOptions = parseSearchContentsPrefetchOptions(options);
+  const prefetchOptions = mergeSearchContentsPrefetchOptions(
+    getSearchPrefetchDefaults(config),
+    parseSearchContentsPrefetchOptions(options),
+  );
   const providerOptions = stripSearchContentsPrefetchOptions(options);
   const searchQueries = resolveSearchQueries(queries);
   if (
@@ -675,12 +681,11 @@ async function executeSearchTool({
   }
 
   const prefetch =
-    prefetchOptions?.enabled === true && planOverrides === undefined
+    prefetchOptions !== undefined && planOverrides === undefined
       ? await startContentsPrefetch({
           config,
           cwd: ctx.cwd,
           urls: collectSearchResultUrls(outcomes),
-          searchProviderId: provider.id,
           options: prefetchOptions,
         })
       : undefined;
@@ -1414,6 +1419,29 @@ function getProviderSettings(
     .settings as readonly ProviderSettingDescriptor<ProviderConfigUnion>[];
 }
 
+function getEnabledCompatibleProvidersForTool(
+  config: WebProvidersConfig,
+  toolId: ProviderToolId,
+): ProviderId[] {
+  return getCompatibleProvidersForTool(toolId).filter(
+    (providerId) =>
+      (config.providers?.[providerId] as ProviderConfigUnion | undefined)
+        ?.enabled === true,
+  );
+}
+
+function getSearchToolSettings(
+  config: WebProvidersConfig,
+): SearchToolSettings | undefined {
+  return config.toolSettings?.search;
+}
+
+function getSearchPrefetchDefaults(
+  config: WebProvidersConfig,
+): SearchPrefetchSettings | undefined {
+  return getSearchToolSettings(config)?.prefetch;
+}
+
 class WebProvidersSettingsView implements Component {
   private config: WebProvidersConfig;
   private activeProvider: ProviderId;
@@ -1539,11 +1567,9 @@ class WebProvidersSettingsView implements Component {
   private buildToolSectionItems(): SettingsEntry[] {
     return (Object.keys(CAPABILITY_TOOL_NAMES) as ProviderToolId[]).map(
       (toolId) => {
-        const compatibleProviders = getCompatibleProvidersForTool(toolId);
-        const enabledCompatibleProviders = compatibleProviders.filter(
-          (providerId) =>
-            (this.config.providers?.[providerId] as ProviderConfigUnion | undefined)
-              ?.enabled === true,
+        const enabledCompatibleProviders = getEnabledCompatibleProvidersForTool(
+          this.config,
+          toolId,
         );
         const mappedProviderId = getMappedProviderIdForCapability(
           this.config,
@@ -1562,12 +1588,11 @@ class WebProvidersSettingsView implements Component {
           label: PROVIDER_TOOL_META[toolId].label,
           currentValue,
           description:
-            `${PROVIDER_TOOL_META[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
+            `Press Enter to configure web_${toolId}. ${PROVIDER_TOOL_META[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
             (compatibleLabels.length > 0
               ? ` Enabled compatible providers: ${compatibleLabels.join(", ")}.`
               : ""),
-          kind: "cycle",
-          values: ["off", ...compatibleLabels],
+          kind: "action",
         };
       },
     );
@@ -1724,6 +1749,24 @@ class WebProvidersSettingsView implements Component {
     const entry = this.getSelectedEntry();
     if (!entry) return;
 
+    if (entry.kind === "action" && entry.id.startsWith("tool:")) {
+      const toolId = entry.id.slice("tool:".length) as ProviderToolId;
+      this.submenu = new ToolSettingsSubmenu(
+        this.tui,
+        this.theme,
+        toolId,
+        () => this.config,
+        async (mutate) => {
+          await this.persist(mutate);
+        },
+        () => {
+          this.submenu = undefined;
+          this.tui.requestRender();
+        },
+      );
+      return;
+    }
+
     if (entry.kind === "action" && entry.id.startsWith("provider:")) {
       const providerId = entry.id.slice("provider:".length) as ProviderId;
       this.activeProvider = providerId;
@@ -1752,83 +1795,6 @@ class WebProvidersSettingsView implements Component {
       );
       return;
     }
-
-    if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
-      const currentIndex = entry.values.indexOf(entry.currentValue);
-      const nextValue = entry.values[(currentIndex + 1) % entry.values.length];
-      await this.handleChange(entry.id, nextValue);
-      return;
-    }
-
-    if (entry.kind === "text") {
-      const currentValue = this.getEntryRawValue(entry.id) ?? "";
-      this.submenu = new TextValueSubmenu(
-        this.tui,
-        this.theme,
-        entry.label,
-        currentValue,
-        entry.description,
-        (selectedValue) => {
-          this.submenu = undefined;
-          if (selectedValue !== undefined) {
-            void this.handleChange(entry.id, selectedValue);
-          }
-          this.tui.requestRender();
-        },
-      );
-      return;
-    }
-  }
-
-  private getEntryRawValue(id: string): string | undefined {
-    const providerConfig = this.currentProviderConfig();
-    const setting = getProviderSettings(this.activeProvider).find(
-      (candidate) => candidate.id === id,
-    );
-    if (!setting || setting.kind !== "text") {
-      return undefined;
-    }
-    return setting.getValue(providerConfig);
-  }
-
-  private async handleChange(id: string, value: string): Promise<void> {
-    await this.persist((config) => {
-      config.providers ??= {};
-
-      if (id.startsWith("tool:")) {
-        const toolId = id.slice("tool:".length) as ProviderToolId;
-        config.tools ??= {};
-        config.tools[toolId] =
-          value === "off"
-            ? null
-            : getCompatibleProvidersForTool(toolId)
-                .filter(
-                  (providerId) =>
-                    (config.providers?.[providerId] as
-                      | ProviderConfigUnion
-                      | undefined)?.enabled === true,
-                )
-                .find(
-                (providerId) => PROVIDER_MAP[providerId].label === value,
-              ) ?? null;
-        return;
-      }
-
-      const providerConfig = getEditableProviderConfig(
-        this.activeProvider,
-        config.providers?.[this.activeProvider] as
-          | ProviderConfigUnion
-          | undefined,
-      );
-      const setting = getProviderSettings(this.activeProvider).find(
-        (candidate) => candidate.id === id,
-      );
-      if (!setting) {
-        throw new Error(`Unknown setting '${id}'.`);
-      }
-      setting.setValue(providerConfig, value);
-      config.providers[this.activeProvider] = providerConfig as never;
-    });
   }
 
   private currentProviderConfigFor(
@@ -1852,6 +1818,275 @@ class WebProvidersSettingsView implements Component {
     } catch (error) {
       this.ctx.ui.notify((error as Error).message, "error");
     }
+  }
+}
+
+class ToolSettingsSubmenu implements Component {
+  private selection = 0;
+  private submenu: Component | undefined;
+
+  constructor(
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly toolId: ProviderToolId,
+    private readonly getConfig: () => WebProvidersConfig,
+    private readonly persist: (
+      mutate: (config: WebProvidersConfig) => void,
+    ) => Promise<void>,
+    private readonly done: () => void,
+  ) {}
+
+  render(width: number): string[] {
+    if (this.submenu) {
+      return this.submenu.render(width);
+    }
+
+    const entries = this.getEntries();
+    const lines = [
+      truncateToWidth(
+        this.theme.fg("accent", PROVIDER_TOOL_META[this.toolId].label),
+        width,
+      ),
+      "",
+      ...this.renderEntries(width, entries),
+    ];
+
+    const selected = entries[this.selection];
+    if (selected) {
+      lines.push("");
+      for (const line of wrapTextWithAnsi(
+        selected.description,
+        Math.max(10, width - 2),
+      )) {
+        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
+      }
+    }
+
+    lines.push("");
+    lines.push(
+      truncateToWidth(
+        this.theme.fg("dim", "↑↓ move · Enter edit/toggle · Esc back"),
+        width,
+      ),
+    );
+    return lines;
+  }
+
+  invalidate(): void {
+    this.submenu?.invalidate();
+  }
+
+  handleInput(data: string): void {
+    if (this.submenu) {
+      this.submenu.handleInput?.(data);
+      this.tui.requestRender();
+      return;
+    }
+
+    const kb = getEditorKeybindings();
+    const entries = this.getEntries();
+
+    if (kb.matches(data, "selectUp")) {
+      if (this.selection > 0) {
+        this.selection -= 1;
+      }
+    } else if (kb.matches(data, "selectDown")) {
+      if (this.selection < entries.length - 1) {
+        this.selection += 1;
+      }
+    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+      void this.activateCurrentEntry();
+    } else if (kb.matches(data, "selectCancel")) {
+      this.done();
+      return;
+    }
+
+    this.tui.requestRender();
+  }
+
+  private getEntries(): SettingsEntry[] {
+    const config = this.getConfig();
+    const mappedProviderId = getMappedProviderIdForCapability(config, this.toolId);
+    const enabledProviderIds = getEnabledCompatibleProvidersForTool(
+      config,
+      this.toolId,
+    );
+    const providerValues = [
+      "off",
+      ...enabledProviderIds.map((providerId) => PROVIDER_MAP[providerId].label),
+    ];
+    const currentProviderValue =
+      mappedProviderId && enabledProviderIds.includes(mappedProviderId)
+        ? PROVIDER_MAP[mappedProviderId].label
+        : "off";
+
+    const entries: SettingsEntry[] = [
+      {
+        id: "provider",
+        label: "Provider",
+        currentValue: currentProviderValue,
+        description: `Route web_${this.toolId} to one compatible enabled provider or turn it off.`,
+        kind: "cycle",
+        values: providerValues,
+      },
+    ];
+
+    if (this.toolId === "search") {
+      const prefetch = getSearchPrefetchDefaults(config);
+      const prefetchProviderIds = getEnabledCompatibleProvidersForTool(
+        config,
+        "contents",
+      );
+      const prefetchValues = [
+        "off",
+        ...prefetchProviderIds.map((providerId) => PROVIDER_MAP[providerId].label),
+      ];
+      const currentPrefetchProviderValue =
+        prefetch?.provider &&
+        prefetchProviderIds.includes(prefetch.provider)
+          ? PROVIDER_MAP[prefetch.provider].label
+          : "off";
+
+      entries.push(
+        {
+          id: "prefetchProvider",
+          label: "Prefetch",
+          currentValue: currentPrefetchProviderValue,
+          description:
+            "Optionally start background web_contents extraction after search using a contents-capable provider. Off means no prefetch.",
+          kind: "cycle",
+          values: prefetchValues,
+        },
+        {
+          id: "prefetchMaxUrls",
+          label: "Prefetch URLs",
+          currentValue:
+            prefetch?.maxUrls !== undefined ? String(prefetch.maxUrls) : "default",
+          description:
+            "Maximum number of search result URLs to prefetch. Leave blank to use the built-in default.",
+          kind: "text",
+        },
+        {
+          id: "prefetchTtlMs",
+          label: "Prefetch TTL",
+          currentValue:
+            prefetch?.ttlMs !== undefined ? String(prefetch.ttlMs) : "default",
+          description:
+            "How long prefetched contents stay reusable in the local cache, in milliseconds. Leave blank to use the built-in default.",
+          kind: "text",
+        },
+      );
+    }
+
+    return entries;
+  }
+
+  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
+    const labelWidth = Math.min(
+      24,
+      Math.max(...entries.map((entry) => entry.label.length), 0),
+    );
+    return entries.map((entry, index) => {
+      const selected = this.selection === index;
+      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
+      const paddedLabel = entry.label.padEnd(labelWidth, " ");
+      const label = selected
+        ? this.theme.fg("accent", paddedLabel)
+        : paddedLabel;
+      const value = selected
+        ? this.theme.fg("accent", entry.currentValue)
+        : this.theme.fg("muted", entry.currentValue);
+      return truncateToWidth(`${prefix}${label}  ${value}`, width);
+    });
+  }
+
+  private async activateCurrentEntry(): Promise<void> {
+    const entry = this.getEntries()[this.selection];
+    if (!entry) {
+      return;
+    }
+
+    if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
+      const currentIndex = entry.values.indexOf(entry.currentValue);
+      const nextValue = entry.values[(currentIndex + 1) % entry.values.length];
+      await this.handleChange(entry.id, nextValue);
+      return;
+    }
+
+    if (entry.kind === "text") {
+      const currentValue = this.getEntryRawValue(entry.id);
+      this.submenu = new TextValueSubmenu(
+        this.tui,
+        this.theme,
+        entry.label,
+        currentValue,
+        entry.description,
+        (selectedValue) => {
+          this.submenu = undefined;
+          if (selectedValue !== undefined) {
+            void this.handleChange(entry.id, selectedValue);
+          }
+          this.tui.requestRender();
+        },
+      );
+    }
+  }
+
+  private getEntryRawValue(id: string): string {
+    const prefetch = getSearchPrefetchDefaults(this.getConfig());
+    switch (id) {
+      case "prefetchMaxUrls":
+        return prefetch?.maxUrls !== undefined ? String(prefetch.maxUrls) : "";
+      case "prefetchTtlMs":
+        return prefetch?.ttlMs !== undefined ? String(prefetch.ttlMs) : "";
+      default:
+        return "";
+    }
+  }
+
+  private async handleChange(id: string, value: string): Promise<void> {
+    await this.persist((config) => {
+      switch (id) {
+        case "provider":
+          config.tools ??= {};
+          config.tools[this.toolId] =
+            value === "off"
+              ? null
+              : getEnabledCompatibleProvidersForTool(config, this.toolId).find(
+                    (providerId) => PROVIDER_MAP[providerId].label === value,
+                  ) ?? null;
+          return;
+        case "prefetchProvider": {
+          const providerId =
+            value === "off"
+              ? null
+              : getEnabledCompatibleProvidersForTool(config, "contents").find(
+                    (candidate) => PROVIDER_MAP[candidate].label === value,
+                  ) ?? null;
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.provider = providerId;
+          return;
+        }
+        case "prefetchMaxUrls":
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.maxUrls =
+            parseOptionalPositiveIntegerInput(
+              value,
+              "Prefetch URLs must be a positive integer.",
+            );
+          return;
+        case "prefetchTtlMs":
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.ttlMs =
+            parseOptionalPositiveIntegerInput(
+              value,
+              "Prefetch TTL must be a positive integer.",
+            );
+          return;
+        default:
+          throw new Error(`Unknown tool setting '${id}'.`);
+      }
+    });
   }
 }
 
@@ -2060,6 +2295,32 @@ class ProviderSettingsSubmenu implements Component {
       setting.setValue(providerConfig, value);
     });
   }
+}
+
+function ensureSearchToolSettings(
+  config: WebProvidersConfig,
+): SearchToolSettings {
+  config.toolSettings ??= {};
+  config.toolSettings.search ??= {};
+  return config.toolSettings.search;
+}
+
+function parseOptionalPositiveIntegerInput(
+  value: string,
+  errorMessage: string,
+): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(errorMessage);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(errorMessage);
+  }
+  return parsed;
 }
 
 class TextValueSubmenu implements Component {

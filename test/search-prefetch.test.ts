@@ -37,7 +37,7 @@ afterEach(async () => {
 });
 
 describe("search contents prefetch", () => {
-  it("starts background contents prefetching, reuses prefetched per-URL entries, and works without an explicit provider", async () => {
+  it("starts background contents prefetching and reuses prefetched per-URL entries when prefetch.provider is set", async () => {
     const { __test__ } = await import("../src/index.js");
     const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
     const config = {
@@ -81,8 +81,8 @@ describe("search contents prefetch", () => {
       onUpdate: undefined,
       options: {
         prefetch: {
-          enabled: true,
           maxUrls: 2,
+          provider: "exa",
         },
       },
       maxResults: 2,
@@ -128,7 +128,7 @@ describe("search contents prefetch", () => {
     );
 
     // A second web_contents call should be able to reuse a prefetched subset
-    // even when no explicit provider is supplied.
+    // through the configured contents provider.
     const cachedResult = await __test__.executeProviderTool({
       capability: "contents",
       config,
@@ -172,6 +172,158 @@ describe("search contents prefetch", () => {
         }),
       ]);
     });
+  });
+
+  it("does not start prefetching without an explicit prefetch.provider", async () => {
+    const { __test__ } = await import("../src/index.js");
+    const config = {
+      tools: {
+        contents: "exa",
+      },
+      providers: {
+        exa: {
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    exaSearchMock.mockResolvedValue({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "SDK docs",
+        },
+      ],
+    });
+
+    const searchResult = await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: {
+        prefetch: {
+          maxUrls: 1,
+        },
+      },
+      maxResults: 1,
+      queries: ["exa docs"],
+    });
+
+    expect(searchResult.content[0]?.text ?? "").not.toContain(
+      "Background contents prefetch started via",
+    );
+    expect(exaGetContentsMock).not.toHaveBeenCalled();
+  });
+
+  it("uses persisted search prefetch defaults when no per-call prefetch override is provided", async () => {
+    const { __test__ } = await import("../src/index.js");
+    const config = {
+      tools: {
+        contents: "exa",
+      },
+      toolSettings: {
+        search: {
+          prefetch: {
+            provider: "exa",
+            maxUrls: 1,
+          },
+        },
+      },
+      providers: {
+        exa: {
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    exaSearchMock.mockResolvedValue({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "SDK docs",
+        },
+      ],
+    });
+    exaGetContentsMock.mockResolvedValue({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "Fetched body for https://exa.ai/sdk",
+        },
+      ],
+    });
+
+    const searchResult = await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: undefined,
+      maxResults: 1,
+      queries: ["exa docs"],
+    });
+
+    expect(searchResult.content[0]?.text ?? "").toContain(
+      "Background contents prefetch started via exa for 1 URL(s). Prefetch id:",
+    );
+  });
+
+  it("allows per-call prefetch.provider=null to disable persisted search prefetch defaults", async () => {
+    const { __test__ } = await import("../src/index.js");
+    const config = {
+      tools: {
+        contents: "exa",
+      },
+      toolSettings: {
+        search: {
+          prefetch: {
+            provider: "exa",
+            maxUrls: 1,
+          },
+        },
+      },
+      providers: {
+        exa: {
+          apiKey: "literal-key",
+        },
+      },
+    } as const;
+
+    exaSearchMock.mockResolvedValue({
+      results: [
+        {
+          title: "Exa SDK",
+          url: "https://exa.ai/sdk",
+          text: "SDK docs",
+        },
+      ],
+    });
+
+    const searchResult = await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: undefined,
+      options: {
+        prefetch: {
+          provider: null,
+        },
+      },
+      maxResults: 1,
+      queries: ["exa docs"],
+    });
+
+    expect(searchResult.content[0]?.text ?? "").not.toContain(
+      "Background contents prefetch started via",
+    );
+    expect(exaGetContentsMock).not.toHaveBeenCalled();
   });
 
   it("reuses partial cache hits and fetches only the missing URLs", async () => {
@@ -332,8 +484,8 @@ describe("search contents prefetch", () => {
         onUpdate: undefined,
         options: {
           prefetch: {
-            enabled: true,
             maxUrls: 1,
+            provider: "exa",
             ttlMs: 1000,
           },
         },

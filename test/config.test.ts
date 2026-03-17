@@ -93,6 +93,44 @@ describe("config parsing", () => {
     ).toThrow(/providers\.valyu\.tools/);
   });
 
+  it("accepts search tool settings for persisted prefetch defaults", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        toolSettings: {
+          search: {
+            prefetch: {
+              provider: "exa",
+              maxUrls: 3,
+              ttlMs: 60000,
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.toolSettings?.search?.prefetch).toEqual({
+      provider: "exa",
+      maxUrls: 3,
+      ttlMs: 60000,
+    });
+  });
+
+  it("rejects unknown tool-specific settings", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          toolSettings: {
+            search: {
+              caching: true,
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/Unknown search tool settings/);
+  });
+
   it("loads the global config", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-web-providers-config-"));
     cleanupDirs.push(root);
@@ -156,6 +194,15 @@ describe("config parsing", () => {
 
     config.providers!.codex!.native!.webSearchMode = "cached";
     config.providers!.codex!.native!.additionalDirectories = ["notes"];
+    config.toolSettings = {
+      search: {
+        prefetch: {
+          provider: "exa",
+          maxUrls: 2,
+          ttlMs: 60000,
+        },
+      },
+    };
 
     await writeFile(getConfigPath(), serializeConfig(config), "utf-8");
 
@@ -185,6 +232,11 @@ describe("config parsing", () => {
       "sonar-deep-research",
     );
     expect(loaded.providers?.parallel?.native?.search?.mode).toBe("one-shot");
+    expect(loaded.toolSettings?.search?.prefetch).toEqual({
+      provider: "exa",
+      maxUrls: 2,
+      ttlMs: 60000,
+    });
   });
 
   it("maps legacy defaults into native and policy config blocks", () => {

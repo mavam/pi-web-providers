@@ -24,6 +24,8 @@ import type {
   PerplexityProviderConfig,
   ProviderCapability,
   ProviderId,
+  SearchPrefetchSettings,
+  SearchToolSettings,
   ToolProviderMapping,
   ValyuProviderConfig,
   WebProvidersConfig,
@@ -274,6 +276,10 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
 
   if (raw.tools !== undefined) {
     config.tools = parseToolProviderMapping(raw.tools, source, "tools");
+  }
+
+  if (raw.toolSettings !== undefined) {
+    config.toolSettings = parseToolSettingsConfig(raw.toolSettings, source);
   }
 
   if (raw.providers !== undefined) {
@@ -893,6 +899,105 @@ function parseToolProviderMappingEntry(
     field,
     PROVIDER_IDS,
   );
+  if (!supportsProviderTool(providerId, capability as ProviderToolId)) {
+    throw new Error(
+      `'${field}' in ${source} must name a provider that supports '${capability}'.`,
+    );
+  }
+  return providerId;
+}
+
+function parseToolSettingsConfig(
+  value: unknown,
+  source: string,
+): WebProvidersConfig["toolSettings"] {
+  if (!isPlainObject(value)) {
+    throw new Error(`'toolSettings' in ${source} must be a JSON object.`);
+  }
+
+  const parsed: NonNullable<WebProvidersConfig["toolSettings"]> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key !== "search") {
+      throw new Error(`Unknown tool settings in ${source}: ${key}.`);
+    }
+    parsed.search = parseSearchToolSettings(entry, source, "toolSettings.search");
+  }
+
+  return parsed;
+}
+
+function parseSearchToolSettings(
+  value: unknown,
+  source: string,
+  field: string,
+): SearchToolSettings {
+  if (!isPlainObject(value)) {
+    throw new Error(`'${field}' in ${source} must be a JSON object.`);
+  }
+
+  const parsed: SearchToolSettings = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key !== "prefetch") {
+      throw new Error(`Unknown search tool settings in ${source}: ${key}.`);
+    }
+    parsed.prefetch = parseSearchContentsPrefetchConfig(
+      entry,
+      source,
+      `${field}.prefetch`,
+    );
+  }
+
+  return parsed;
+}
+
+function parseSearchContentsPrefetchConfig(
+  value: unknown,
+  source: string,
+  field: string,
+): SearchPrefetchSettings {
+  if (!isPlainObject(value)) {
+    throw new Error(`'${field}' in ${source} must be a JSON object.`);
+  }
+
+  const parsed: SearchPrefetchSettings = {
+    provider: parseOptionalToolProviderId(
+      value.provider,
+      source,
+      `${field}.provider`,
+      "contents",
+    ),
+    maxUrls: parseOptionalInteger(value.maxUrls, source, `${field}.maxUrls`),
+    ttlMs: parseOptionalInteger(value.ttlMs, source, `${field}.ttlMs`),
+  };
+
+  const unknownFields = Object.keys(value).filter(
+    (key) =>
+      key !== "provider" &&
+      key !== "maxUrls" &&
+      key !== "ttlMs",
+  );
+  if (unknownFields.length > 0) {
+    throw new Error(
+      `Unknown prefetch settings in ${source}: ${unknownFields.join(", ")}.`,
+    );
+  }
+
+  return parsed;
+}
+
+function parseOptionalToolProviderId(
+  value: unknown,
+  source: string,
+  field: string,
+  capability: ProviderCapability,
+): ProviderId | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  const providerId = parseLiteral(value, source, field, PROVIDER_IDS);
   if (!supportsProviderTool(providerId, capability as ProviderToolId)) {
     throw new Error(
       `'${field}' in ${source} must name a provider that supports '${capability}'.`,

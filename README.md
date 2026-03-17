@@ -41,8 +41,8 @@ Run:
 ```
 
 This edits the global config file `~/.pi/agent/web-providers.json`. The flow is
-split into two parts: select a provider to edit its settings, then map each
-managed tool to one compatible provider or `off`.
+split into two parts: select a tool to configure its routing and tool-specific
+settings, or select a provider to edit its provider-native settings.
 
 ## 🔧 Tools
 
@@ -62,9 +62,10 @@ and return titles, URLs, and snippets grouped by query.
 | `options`    | object   | —        | Provider-specific search options plus local `prefetch` orchestration |
 
 `web_search.options.prefetch` is local-only and not forwarded into the provider
-SDK. It accepts `enabled`, `maxUrls`, `provider`, `ttlMs`, and
-`contentsOptions`, and starts a background page-extraction workflow that writes
-results into the local content store.
+SDK. It accepts `provider`, `maxUrls`, `ttlMs`, and `contentsOptions`, and
+starts a background page-extraction workflow only when `prefetch.provider` is
+set. `/web-providers` can also persist default search prefetch settings under
+`toolSettings.search.prefetch`.
 
 ### `web_contents`
 
@@ -233,6 +234,8 @@ summarises capabilities and authentication:
 
 - `/web-providers` stores provider settings under `providers` and per-tool
   routing under a top-level `tools` block
+- Tool-local settings live under `toolSettings`; today this is used for
+  `toolSettings.search.prefetch`
 - Each managed tool maps to one provider id or `null` for off
 - Provider config is split into `native` settings (forwarded to the SDK) and
   `policy` settings (enforced by the extension runtime); legacy `defaults`
