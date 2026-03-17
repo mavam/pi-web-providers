@@ -14,8 +14,6 @@ off entirely.
 
 - **Multiple providers** — Claude, Codex, Custom CLI, Exa, Gemini,
   Perplexity, Parallel, Valyu
-- **Bring-your-own wrappers** — route tools through any local command that reads
-  JSON on stdin and writes JSON on stdout
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch** — optionally start background `web_contents`
