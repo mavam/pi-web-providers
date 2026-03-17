@@ -1417,11 +1417,10 @@ function getProviderSettings(
 class WebProvidersSettingsView implements Component {
   private config: WebProvidersConfig;
   private activeProvider: ProviderId;
-  private activeSection: "provider" | "tools" | "config" = "tools";
+  private activeSection: "provider" | "tools" = "tools";
   private selection = {
     provider: 0,
     tools: 0,
-    config: 0,
   };
   private submenu: Component | undefined;
 
@@ -1455,17 +1454,6 @@ class WebProvidersSettingsView implements Component {
     lines.push(
       ...this.renderSection(width, "Providers", "provider", providerItems),
     );
-    lines.push("");
-
-    const configItems = this.buildConfigSectionItems();
-    lines.push(
-      ...this.renderSection(
-        width,
-        "General",
-        "config",
-        configItems,
-      ),
-    );
 
     const selected = this.getSelectedEntry();
     if (selected) {
@@ -1483,7 +1471,7 @@ class WebProvidersSettingsView implements Component {
       truncateToWidth(
         this.theme.fg(
           "dim",
-          "↑↓ move · Tab/Shift+Tab switch section · Enter select/edit/toggle · Esc close",
+          "↑↓ move · Tab/Shift+Tab switch section · Enter edit/open · Esc close",
         ),
         width,
       ),
@@ -1534,14 +1522,15 @@ class WebProvidersSettingsView implements Component {
         | ProviderConfigUnion
         | undefined;
       const status = provider.getStatus(providerConfig as never, this.ctx.cwd);
+      const enabled = providerConfig?.enabled === true;
       return {
         id: `provider:${provider.id}`,
         label: provider.label,
-        currentValue: "",
+        currentValue: enabled ? "on" : "off",
         description:
           provider.id === this.activeProvider
-            ? `Editing ${provider.label} settings below. Current status: ${status.summary}.`
-            : `Select ${provider.label} to edit its settings. Current status: ${status.summary}.`,
+            ? `Press Enter to configure ${provider.label}. Current status: ${status.summary}.`
+            : `Move here and press Enter to configure ${provider.label}. Current status: ${status.summary}.`,
         kind: "action",
       };
     });
@@ -1551,14 +1540,23 @@ class WebProvidersSettingsView implements Component {
     return (Object.keys(CAPABILITY_TOOL_NAMES) as ProviderToolId[]).map(
       (toolId) => {
         const compatibleProviders = getCompatibleProvidersForTool(toolId);
+        const enabledCompatibleProviders = compatibleProviders.filter(
+          (providerId) =>
+            (this.config.providers?.[providerId] as ProviderConfigUnion | undefined)
+              ?.enabled === true,
+        );
         const mappedProviderId = getMappedProviderIdForCapability(
           this.config,
           toolId,
         );
-        const currentValue = mappedProviderId
-          ? PROVIDER_MAP[mappedProviderId].label
-          : "off";
-        const compatibleLabels = compatibleProviders.map(
+        const currentValue =
+          mappedProviderId &&
+          enabledCompatibleProviders.includes(mappedProviderId)
+            ? PROVIDER_MAP[mappedProviderId].label
+            : mappedProviderId
+              ? `${PROVIDER_MAP[mappedProviderId].label} (disabled)`
+              : "off";
+        const compatibleLabels = enabledCompatibleProviders.map(
           (providerId) => PROVIDER_MAP[providerId].label,
         );
         return {
@@ -1568,19 +1566,12 @@ class WebProvidersSettingsView implements Component {
           description:
             `${PROVIDER_TOOL_META[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
             (compatibleLabels.length > 0
-              ? ` Compatible providers: ${compatibleLabels.join(", ")}.`
+              ? ` Enabled compatible providers: ${compatibleLabels.join(", ")}.`
               : ""),
           kind: "cycle",
           values: ["off", ...compatibleLabels],
         };
       },
-    );
-  }
-
-  private buildConfigSectionItems(): SettingsEntry[] {
-    const providerConfig = this.currentProviderConfig();
-    return getProviderSettings(this.activeProvider).map((setting) =>
-      this.buildProviderItem(setting, providerConfig),
     );
   }
 
@@ -1616,11 +1607,10 @@ class WebProvidersSettingsView implements Component {
   }
 
   private getSectionEntries(
-    section: "provider" | "tools" | "config",
+    section: "provider" | "tools",
   ): SettingsEntry[] {
     if (section === "provider") return this.buildProviderSectionItems();
-    if (section === "tools") return this.buildToolSectionItems();
-    return this.buildConfigSectionItems();
+    return this.buildToolSectionItems();
   }
 
   private getActiveSectionEntries(): SettingsEntry[] {
@@ -1633,11 +1623,7 @@ class WebProvidersSettingsView implements Component {
   }
 
   private moveSection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools" | "config"> = [
-      "provider",
-      "tools",
-      "config",
-    ];
+    const sections: Array<"provider" | "tools"> = ["provider", "tools"];
     const index = sections.indexOf(this.activeSection);
     for (let offset = 1; offset <= sections.length; offset++) {
       const next =
@@ -1646,27 +1632,26 @@ class WebProvidersSettingsView implements Component {
         ];
       if (this.getSectionEntries(next).length > 0) {
         this.activeSection = next;
+        this.syncActiveProviderToSelection();
         return;
       }
     }
   }
 
   private moveSelection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools" | "config"> = [
-      "provider",
-      "tools",
-      "config",
-    ];
+    const sections: Array<"provider" | "tools"> = ["provider", "tools"];
     const currentEntries = this.getActiveSectionEntries();
     const currentIndex = this.selection[this.activeSection];
 
     if (direction === -1 && currentIndex > 0) {
       this.selection[this.activeSection] = currentIndex - 1;
+      this.syncActiveProviderToSelection();
       return;
     }
 
     if (direction === 1 && currentIndex < currentEntries.length - 1) {
       this.selection[this.activeSection] = currentIndex + 1;
+      this.syncActiveProviderToSelection();
       return;
     }
 
@@ -1683,14 +1668,26 @@ class WebProvidersSettingsView implements Component {
       this.activeSection = nextSection;
       this.selection[nextSection] =
         direction === 1 ? 0 : nextEntries.length - 1;
+      this.syncActiveProviderToSelection();
       return;
     }
+  }
+
+  private syncActiveProviderToSelection(): void {
+    if (this.activeSection !== "provider") {
+      return;
+    }
+    const provider = PROVIDERS[this.selection.provider];
+    if (!provider) {
+      return;
+    }
+    this.activeProvider = provider.id;
   }
 
   private renderSection(
     width: number,
     title: string,
-    section: "provider" | "tools" | "config",
+    section: "provider" | "tools",
     entries: SettingsEntry[],
   ): string[] {
     const lines = [
@@ -1729,8 +1726,32 @@ class WebProvidersSettingsView implements Component {
     const entry = this.getSelectedEntry();
     if (!entry) return;
 
-    if (entry.kind === "action") {
-      await this.handleChange(entry.id, entry.currentValue);
+    if (entry.kind === "action" && entry.id.startsWith("provider:")) {
+      const providerId = entry.id.slice("provider:".length) as ProviderId;
+      this.activeProvider = providerId;
+      this.submenu = new ProviderSettingsSubmenu(
+        this.tui,
+        this.theme,
+        providerId,
+        () => this.currentProviderConfigFor(providerId),
+        async (mutate) => {
+          await this.persist((config) => {
+            config.providers ??= {};
+            const providerConfig = getEditableProviderConfig(
+              providerId,
+              config.providers?.[providerId] as
+                | ProviderConfigUnion
+                | undefined,
+            );
+            mutate(providerConfig);
+            config.providers[providerId] = providerConfig as never;
+          });
+        },
+        () => {
+          this.submenu = undefined;
+          this.tui.requestRender();
+        },
+      );
       return;
     }
 
@@ -1773,31 +1794,28 @@ class WebProvidersSettingsView implements Component {
   }
 
   private async handleChange(id: string, value: string): Promise<void> {
-    if (id.startsWith("provider:")) {
-      const nextProvider = id.slice("provider:".length) as ProviderId;
-      if (nextProvider === this.activeProvider) {
-        return;
-      }
-      this.activeProvider = nextProvider;
-      this.selection.config = 0;
-      this.tui.requestRender();
-      return;
-    }
-
     await this.persist((config) => {
+      config.providers ??= {};
+
       if (id.startsWith("tool:")) {
         const toolId = id.slice("tool:".length) as ProviderToolId;
         config.tools ??= {};
         config.tools[toolId] =
           value === "off"
             ? null
-            : getCompatibleProvidersForTool(toolId).find(
+            : getCompatibleProvidersForTool(toolId)
+                .filter(
+                  (providerId) =>
+                    (config.providers?.[providerId] as
+                      | ProviderConfigUnion
+                      | undefined)?.enabled === true,
+                )
+                .find(
                 (providerId) => PROVIDER_MAP[providerId].label === value,
               ) ?? null;
         return;
       }
 
-      config.providers ??= {};
       const providerConfig = getEditableProviderConfig(
         this.activeProvider,
         config.providers?.[this.activeProvider] as
@@ -1815,6 +1833,12 @@ class WebProvidersSettingsView implements Component {
     });
   }
 
+  private currentProviderConfigFor(
+    providerId: ProviderId,
+  ): ProviderConfigUnion | undefined {
+    return this.config.providers?.[providerId] as ProviderConfigUnion | undefined;
+  }
+
   private async persist(
     mutate: (config: WebProvidersConfig) => void,
   ): Promise<void> {
@@ -1830,6 +1854,213 @@ class WebProvidersSettingsView implements Component {
     } catch (error) {
       this.ctx.ui.notify((error as Error).message, "error");
     }
+  }
+}
+
+class ProviderSettingsSubmenu implements Component {
+  private selection = 0;
+  private submenu: Component | undefined;
+
+  constructor(
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly providerId: ProviderId,
+    private readonly getProviderConfig: () => ProviderConfigUnion | undefined,
+    private readonly persist: (
+      mutate: (config: ProviderConfigUnion) => void,
+    ) => Promise<void>,
+    private readonly done: () => void,
+  ) {}
+
+  render(width: number): string[] {
+    if (this.submenu) {
+      return this.submenu.render(width);
+    }
+
+    const provider = PROVIDER_MAP[this.providerId];
+    const providerConfig = this.getProviderConfig();
+    const entries = this.getEntries();
+    const lines = [
+      truncateToWidth(this.theme.fg("accent", provider.label), width),
+      "",
+      ...this.renderEntries(width, entries),
+    ];
+
+    const selected = entries[this.selection];
+    if (selected) {
+      lines.push("");
+      for (const line of wrapTextWithAnsi(
+        selected.description,
+        Math.max(10, width - 2),
+      )) {
+        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
+      }
+    }
+
+    const status = provider.getStatus(providerConfig as never, "");
+    lines.push("");
+    lines.push(
+      truncateToWidth(this.theme.fg("dim", `Status: ${status.summary}`), width),
+    );
+    lines.push(
+      truncateToWidth(
+        this.theme.fg("dim", "↑↓ move · Enter edit/toggle · Esc back"),
+        width,
+      ),
+    );
+    return lines;
+  }
+
+  invalidate(): void {
+    this.submenu?.invalidate();
+  }
+
+  handleInput(data: string): void {
+    if (this.submenu) {
+      this.submenu.handleInput?.(data);
+      this.tui.requestRender();
+      return;
+    }
+
+    const kb = getEditorKeybindings();
+    const entries = this.getEntries();
+
+    if (kb.matches(data, "selectUp")) {
+      if (this.selection > 0) {
+        this.selection -= 1;
+      }
+    } else if (kb.matches(data, "selectDown")) {
+      if (this.selection < entries.length - 1) {
+        this.selection += 1;
+      }
+    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+      void this.activateCurrentEntry();
+    } else if (kb.matches(data, "selectCancel")) {
+      this.done();
+      return;
+    }
+
+    this.tui.requestRender();
+  }
+
+  private getEntries(): SettingsEntry[] {
+    const providerConfig = this.getProviderConfig();
+    return [
+      {
+        id: "providerEnabled",
+        label: "Enabled",
+        currentValue: providerConfig?.enabled === true ? "on" : "off",
+        description:
+          "Whether this provider is eligible for tool mappings and runtime use.",
+        kind: "cycle",
+        values: ["on", "off"],
+      },
+      ...getProviderSettings(this.providerId).map((setting) =>
+        this.buildProviderItem(setting, providerConfig),
+      ),
+    ];
+  }
+
+  private buildProviderItem(
+    setting: ProviderSettingDescriptor<ProviderConfigUnion>,
+    providerConfig: ProviderConfigUnion | undefined,
+  ): SettingsEntry {
+    if (setting.kind === "values") {
+      return {
+        id: setting.id,
+        label: setting.label,
+        currentValue: setting.getValue(providerConfig),
+        values: setting.values,
+        description: setting.help,
+        kind: "cycle",
+      };
+    }
+
+    const currentValue = setting.getValue(providerConfig);
+    return {
+      id: setting.id,
+      label: setting.label,
+      currentValue: summarizeStringValue(currentValue, setting.secret === true),
+      description: setting.help,
+      kind: "text",
+    };
+  }
+
+  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
+    const labelWidth = Math.min(
+      24,
+      Math.max(...entries.map((entry) => entry.label.length), 0),
+    );
+    return entries.map((entry, index) => {
+      const selected = this.selection === index;
+      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
+      const paddedLabel = entry.label.padEnd(labelWidth, " ");
+      const label = selected
+        ? this.theme.fg("accent", paddedLabel)
+        : paddedLabel;
+      const value = selected
+        ? this.theme.fg("accent", entry.currentValue)
+        : this.theme.fg("muted", entry.currentValue);
+      return truncateToWidth(`${prefix}${label}  ${value}`, width);
+    });
+  }
+
+  private async activateCurrentEntry(): Promise<void> {
+    const entry = this.getEntries()[this.selection];
+    if (!entry) return;
+
+    if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
+      const currentIndex = entry.values.indexOf(entry.currentValue);
+      const nextValue = entry.values[(currentIndex + 1) % entry.values.length];
+      await this.handleChange(entry.id, nextValue);
+      return;
+    }
+
+    if (entry.kind === "text") {
+      const currentValue = this.getEntryRawValue(entry.id) ?? "";
+      this.submenu = new TextValueSubmenu(
+        this.tui,
+        this.theme,
+        entry.label,
+        currentValue,
+        entry.description,
+        (selectedValue) => {
+          this.submenu = undefined;
+          if (selectedValue !== undefined) {
+            void this.handleChange(entry.id, selectedValue);
+          }
+          this.tui.requestRender();
+        },
+      );
+    }
+  }
+
+  private getEntryRawValue(id: string): string | undefined {
+    const providerConfig = this.getProviderConfig();
+    const setting = getProviderSettings(this.providerId).find(
+      (candidate) => candidate.id === id,
+    );
+    if (!setting || setting.kind !== "text") {
+      return undefined;
+    }
+    return setting.getValue(providerConfig);
+  }
+
+  private async handleChange(id: string, value: string): Promise<void> {
+    await this.persist((providerConfig) => {
+      if (id === "providerEnabled") {
+        providerConfig.enabled = value === "on";
+        return;
+      }
+
+      const setting = getProviderSettings(this.providerId).find(
+        (candidate) => candidate.id === id,
+      );
+      if (!setting) {
+        throw new Error(`Unknown setting '${id}'.`);
+      }
+      setting.setValue(providerConfig, value);
+    });
   }
 }
 

@@ -35,6 +35,7 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
 
   createTemplate(): ExaProviderConfig {
     return {
+      enabled: false,
       apiKey: "EXA_API_KEY",
       native: {
         type: "auto",
@@ -49,6 +50,9 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
   getStatus(config: ExaProviderConfig | undefined): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
+    }
+    if (config.enabled === false) {
+      return { available: false, summary: "disabled" };
     }
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {

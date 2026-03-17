@@ -89,6 +89,7 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
 
   createTemplate(): ClaudeProviderConfig {
     return {
+      enabled: false,
       policy: createDefaultRequestPolicy(),
     };
   }
@@ -99,6 +100,9 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   ): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
+    }
+    if (config.enabled === false) {
+      return { available: false, summary: "disabled" };
     }
     const executablePath = resolveClaudeExecutablePath(config);
     if (executablePath && !existsSync(executablePath)) {

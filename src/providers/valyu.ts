@@ -35,6 +35,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
 
   createTemplate(): ValyuProviderConfig {
     return {
+      enabled: false,
       apiKey: "VALYU_API_KEY",
       native: {
         searchType: "all",
@@ -47,6 +48,9 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
   getStatus(config: ValyuProviderConfig | undefined): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
+    }
+    if (config.enabled === false) {
+      return { available: false, summary: "disabled" };
     }
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {

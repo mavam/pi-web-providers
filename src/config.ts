@@ -49,9 +49,11 @@ export function createDefaultConfig(): WebProvidersConfig {
     },
     providers: {
       claude: {
+        enabled: false,
         policy: createDefaultRequestPolicy(),
       },
       codex: {
+        enabled: true,
         native: {
           networkAccessEnabled: true,
           webSearchEnabled: true,
@@ -60,6 +62,7 @@ export function createDefaultConfig(): WebProvidersConfig {
         policy: createDefaultRequestPolicy(),
       },
       exa: {
+        enabled: false,
         apiKey: "EXA_API_KEY",
         native: {
           type: "auto",
@@ -70,6 +73,7 @@ export function createDefaultConfig(): WebProvidersConfig {
         policy: createDefaultLifecyclePolicy(),
       },
       gemini: {
+        enabled: false,
         apiKey: "GOOGLE_API_KEY",
         native: {
           searchModel: "gemini-2.5-flash",
@@ -82,6 +86,7 @@ export function createDefaultConfig(): WebProvidersConfig {
         }),
       },
       perplexity: {
+        enabled: false,
         apiKey: "PERPLEXITY_API_KEY",
         native: {
           answer: {
@@ -94,6 +99,7 @@ export function createDefaultConfig(): WebProvidersConfig {
         policy: createDefaultRequestPolicy(),
       },
       parallel: {
+        enabled: false,
         apiKey: "PARALLEL_API_KEY",
         native: {
           search: {
@@ -107,6 +113,7 @@ export function createDefaultConfig(): WebProvidersConfig {
         policy: createDefaultRequestPolicy(),
       },
       valyu: {
+        enabled: false,
         apiKey: "VALYU_API_KEY",
         native: {
           searchType: "all",
@@ -332,6 +339,15 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     }
   }
 
+  if (config.providers) {
+    for (const providerId of Object.keys(config.providers) as ProviderId[]) {
+      const provider = config.providers[providerId];
+      if (provider && provider.enabled === undefined) {
+        provider.enabled = inferProviderEnabled(config, providerId);
+      }
+    }
+  }
+
   if (
     raw.version !== undefined &&
     typeof raw.version !== "number" &&
@@ -348,7 +364,7 @@ function normalizeClaudeProvider(
   source: string,
 ): ClaudeProviderConfig {
   const provider = parseProviderObject(raw, source, "claude");
-  rejectLegacyProviderRoutingFields(provider, source, "claude");
+  rejectLegacyProviderToolFields(provider, source, "claude");
   const native = parseOptionalJsonObject(
     getProviderNativeSource(provider),
     source,
@@ -358,6 +374,11 @@ function normalizeClaudeProvider(
   );
 
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.claude.enabled",
+    ),
     pathToClaudeCodeExecutable: parseOptionalString(
       provider.pathToClaudeCodeExecutable,
       source,
@@ -399,7 +420,7 @@ function normalizeCodexProvider(
   source: string,
 ): CodexProviderConfig {
   const provider = parseProviderObject(raw, source, "codex");
-  rejectLegacyProviderRoutingFields(provider, source, "codex");
+  rejectLegacyProviderToolFields(provider, source, "codex");
   const native = parseOptionalJsonObject(
     getProviderNativeSource(provider),
     source,
@@ -408,6 +429,11 @@ function normalizeCodexProvider(
       : "providers.codex.defaults",
   );
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.codex.enabled",
+    ),
     codexPath: parseOptionalString(
       provider.codexPath,
       source,
@@ -478,8 +504,13 @@ function normalizeCodexProvider(
 
 function normalizeExaProvider(raw: unknown, source: string): ExaProviderConfig {
   const provider = parseProviderObject(raw, source, "exa");
-  rejectLegacyProviderRoutingFields(provider, source, "exa");
+  rejectLegacyProviderToolFields(provider, source, "exa");
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.exa.enabled",
+    ),
     apiKey: parseOptionalString(
       provider.apiKey,
       source,
@@ -512,8 +543,13 @@ function normalizeValyuProvider(
   source: string,
 ): ValyuProviderConfig {
   const provider = parseProviderObject(raw, source, "valyu");
-  rejectLegacyProviderRoutingFields(provider, source, "valyu");
+  rejectLegacyProviderToolFields(provider, source, "valyu");
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.valyu.enabled",
+    ),
     apiKey: parseOptionalString(
       provider.apiKey,
       source,
@@ -546,7 +582,7 @@ function normalizeGeminiProvider(
   source: string,
 ): GeminiProviderConfig {
   const provider = parseProviderObject(raw, source, "gemini");
-  rejectLegacyProviderRoutingFields(provider, source, "gemini");
+  rejectLegacyProviderToolFields(provider, source, "gemini");
   const native = parseOptionalJsonObject(
     stripPolicyFields(getProviderNativeSource(provider)),
     source,
@@ -556,6 +592,11 @@ function normalizeGeminiProvider(
   );
 
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.gemini.enabled",
+    ),
     apiKey: parseOptionalString(
       provider.apiKey,
       source,
@@ -601,7 +642,7 @@ function normalizePerplexityProvider(
   source: string,
 ): PerplexityProviderConfig {
   const provider = parseProviderObject(raw, source, "perplexity");
-  rejectLegacyProviderRoutingFields(provider, source, "perplexity");
+  rejectLegacyProviderToolFields(provider, source, "perplexity");
   const native = parseOptionalJsonObject(
     stripPolicyFields(getProviderNativeSource(provider)),
     source,
@@ -611,6 +652,11 @@ function normalizePerplexityProvider(
   );
 
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.perplexity.enabled",
+    ),
     apiKey: parseOptionalString(
       provider.apiKey,
       source,
@@ -656,7 +702,7 @@ function normalizeParallelProvider(
   source: string,
 ): ParallelProviderConfig {
   const provider = parseProviderObject(raw, source, "parallel");
-  rejectLegacyProviderRoutingFields(provider, source, "parallel");
+  rejectLegacyProviderToolFields(provider, source, "parallel");
   const native = parseOptionalJsonObject(
     stripPolicyFields(getProviderNativeSource(provider)),
     source,
@@ -666,6 +712,11 @@ function normalizeParallelProvider(
   );
 
   return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.parallel.enabled",
+    ),
     apiKey: parseOptionalString(
       provider.apiKey,
       source,
@@ -850,21 +901,25 @@ function parseToolProviderMappingEntry(
   return providerId;
 }
 
-function rejectLegacyProviderRoutingFields(
+function rejectLegacyProviderToolFields(
   provider: JsonObject,
   source: string,
   providerId: ProviderId,
 ): void {
-  if (provider.enabled !== undefined) {
-    throw new Error(
-      `'providers.${providerId}.enabled' in ${source} is no longer supported. Use top-level 'tools' mappings instead.`,
-    );
-  }
   if (provider.tools !== undefined) {
     throw new Error(
       `'providers.${providerId}.tools' in ${source} is no longer supported. Use top-level 'tools' mappings instead.`,
     );
   }
+}
+
+function inferProviderEnabled(
+  config: WebProvidersConfig,
+  providerId: ProviderId,
+): boolean {
+  return (Object.values(config.tools ?? {}) as Array<ProviderId | null | undefined>).some(
+    (mappedProviderId) => mappedProviderId === providerId,
+  );
 }
 
 function parseOptionalStringMap(

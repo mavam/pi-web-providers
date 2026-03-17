@@ -60,20 +60,19 @@ describe("config parsing", () => {
     ).toThrow(/Unknown tools in test-config.json: summarize/);
   });
 
-  it("rejects legacy provider enablement", () => {
-    expect(() =>
-      parseConfig(
-        JSON.stringify({
-          version: 2,
-          providers: {
-            codex: {
-              enabled: true,
-            },
+  it("accepts provider enablement", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          codex: {
+            enabled: true,
           },
-        }),
-        "test-config.json",
-      ),
-    ).toThrow(/providers\.codex\.enabled/);
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.codex?.enabled).toBe(true);
   });
 
   it("rejects legacy provider-local tool toggles", () => {

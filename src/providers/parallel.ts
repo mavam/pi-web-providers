@@ -29,6 +29,7 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
 
   createTemplate(): ParallelProviderConfig {
     return {
+      enabled: false,
       apiKey: "PARALLEL_API_KEY",
       native: {
         search: {
@@ -46,6 +47,9 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   getStatus(config: ParallelProviderConfig | undefined): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
+    }
+    if (config.enabled === false) {
+      return { available: false, summary: "disabled" };
     }
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {
