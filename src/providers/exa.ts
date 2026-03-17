@@ -294,7 +294,6 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
     }
 
     const client = new Exa(apiKey, config.baseUrl);
-    context.onProgress?.("Creating Exa research task");
     const task = await client.research.create({
       instructions: input,
       ...(options ?? {}),

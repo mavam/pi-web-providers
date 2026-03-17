@@ -95,7 +95,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 results via exa");
+    expect(summary).toContain("3 results via Exa");
     expect(summary).toContain("to expand");
     expect(summary).not.toContain("https://exa.ai/docs");
   });
@@ -116,7 +116,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("2 queries, 5 results via exa");
+    expect(summary).toContain("2 queries, 5 results via Exa");
     expect(summary).toContain("to expand");
   });
 
@@ -136,7 +136,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 queries, 4 results via exa, 1 failed");
+    expect(summary).toContain("3 queries, 4 results via Exa, 1 failed");
     expect(summary).toContain("to expand");
   });
 });
@@ -253,7 +253,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("2 pages via gemini");
+    expect(summary).toBe("2 pages via Gemini");
   });
 
   it("keeps the dedicated multi-question answer summary format", () => {
@@ -267,7 +267,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("3 questions via gemini, 1 failed");
+    expect(summary).toBe("3 questions via Gemini, 1 failed");
   });
 
   it("normalizes research summaries without duplicating the provider", () => {

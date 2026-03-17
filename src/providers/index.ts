@@ -3,8 +3,8 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
   ProviderId,
   ValyuProviderConfig,
   WebProvider,
@@ -13,8 +13,8 @@ import { ClaudeProvider } from "./claude.js";
 import { CodexProvider } from "./codex.js";
 import { ExaProvider } from "./exa.js";
 import { GeminiProvider } from "./gemini.js";
-import { PerplexityProvider } from "./perplexity.js";
 import { ParallelProvider } from "./parallel.js";
+import { PerplexityProvider } from "./perplexity.js";
 import { ValyuProvider } from "./valyu.js";
 
 export const PROVIDERS: ReadonlyArray<

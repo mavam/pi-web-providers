@@ -296,7 +296,7 @@ function handleProgressEvent(
     !seenQueries.has(event.item.query)
   ) {
     seenQueries.add(event.item.query);
-    onProgress(`Codex web search ${seenQueries.size}: ${event.item.query}`);
+    onProgress(`Searching Codex for: ${event.item.query}`);
   }
 }
 

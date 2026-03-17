@@ -429,13 +429,13 @@ function handleProgressMessage(
   }
 
   seenToolUseIds.add(message.tool_use_id);
-  onProgress(`Claude ${formatToolName(message.tool_name)}`);
+  onProgress(formatToolProgressMessage(message.tool_name));
 }
 
-function formatToolName(toolName: string): string {
-  if (toolName === "WebSearch") return "web search";
-  if (toolName === "WebFetch") return "web fetch";
-  return toolName;
+function formatToolProgressMessage(toolName: string): string {
+  if (toolName === "WebSearch") return "Searching via Claude";
+  if (toolName === "WebFetch") return "Fetching via Claude";
+  return `Claude: ${toolName}`;
 }
 
 function parseStructuredOutput<T>(result: SDKResultMessage): T {

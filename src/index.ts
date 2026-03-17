@@ -1175,8 +1175,9 @@ function createToolProgressReporter(
         return;
       }
 
+      const providerLabel = PROVIDER_MAP[providerId]?.label ?? providerId;
       const elapsed = formatElapsed(Date.now() - startedAt);
-      emit(`web_research still running via ${providerId} (${elapsed} elapsed)`);
+      emit(`Researching via ${providerLabel} (${elapsed} elapsed)`);
       lastUpdateAt = Date.now();
     }, RESEARCH_HEARTBEAT_MS);
   }
@@ -1369,11 +1370,13 @@ function renderCollapsedProviderToolSummary(
     typeof details.queryCount === "number" &&
     details.queryCount > 1
   ) {
+    const providerLabel =
+      PROVIDER_MAP[details.provider]?.label ?? details.provider;
     const failureSuffix =
       details.failedQueryCount && details.failedQueryCount > 0
         ? `, ${details.failedQueryCount} failed`
         : "";
-    return `${details.queryCount} questions via ${details.provider}${failureSuffix}`;
+    return `${details.queryCount} questions via ${providerLabel}${failureSuffix}`;
   }
 
   const baseSummary =
@@ -2868,21 +2871,24 @@ function renderCollapsedSearchSummary(
   _text: string | undefined,
   theme: Pick<Theme, "fg">,
 ): Text {
+  const providerLabel =
+    PROVIDER_MAP[details.provider]?.label ?? details.provider;
   const count = `${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`;
   const failureSuffix =
     details.failedQueryCount > 0 ? `, ${details.failedQueryCount} failed` : "";
   const base =
     details.queryCount > 1
-      ? `${details.queryCount} queries, ${count} via ${details.provider}${failureSuffix}`
-      : `${count} via ${details.provider}${failureSuffix}`;
+      ? `${details.queryCount} queries, ${count} via ${providerLabel}${failureSuffix}`
+      : `${count} via ${providerLabel}${failureSuffix}`;
   let summary = theme.fg("success", base);
   summary += theme.fg("muted", ` (${getExpandHint()})`);
   return new Text(summary, 0, 0);
 }
 
 function appendProviderSummary(summary: string, provider: ProviderId): string {
-  const providerSuffix = `via ${provider}`;
-  return summary.toLowerCase().includes(providerSuffix)
+  const providerLabel = PROVIDER_MAP[provider]?.label ?? provider;
+  const providerSuffix = `via ${providerLabel}`;
+  return summary.toLowerCase().includes(providerSuffix.toLowerCase())
     ? summary
     : `${summary} ${providerSuffix}`;
 }
