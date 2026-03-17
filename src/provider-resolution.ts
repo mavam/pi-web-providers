@@ -102,7 +102,7 @@ export function resolveProviderForCapability(
   }
 
   const providerConfig = getEffectiveProviderConfig(config, providerId);
-  const status = provider.getStatus(providerConfig as never, cwd);
+  const status = provider.getStatus(providerConfig as never, cwd, capability);
   if (!status.available) {
     throw new Error(
       `Provider '${providerId}' is not available: ${status.summary}.`,

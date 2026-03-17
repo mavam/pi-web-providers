@@ -14,6 +14,8 @@ import {
 import type {
   ClaudeProviderConfig,
   CodexProviderConfig,
+  CustomCliCommandConfig,
+  CustomCliProviderConfig,
   ExaProviderConfig,
   ExecutionPolicyDefaults,
   GeminiProviderConfig,
@@ -61,6 +63,9 @@ export function createDefaultConfig(): WebProvidersConfig {
           webSearchEnabled: true,
           webSearchMode: "live",
         },
+      },
+      "custom-cli": {
+        enabled: false,
       },
       exa: {
         enabled: false,
@@ -170,6 +175,7 @@ export function parseProviderConfig(
 ):
   | ClaudeProviderConfig
   | CodexProviderConfig
+  | CustomCliProviderConfig
   | ExaProviderConfig
   | GeminiProviderConfig
   | PerplexityProviderConfig
@@ -303,6 +309,12 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
         source,
       );
     }
+    if (raw.providers["custom-cli"] !== undefined) {
+      config.providers["custom-cli"] = normalizeCustomCliProvider(
+        raw.providers["custom-cli"],
+        source,
+      );
+    }
     if (raw.providers.exa !== undefined) {
       config.providers.exa = normalizeExaProvider(raw.providers.exa, source);
     }
@@ -335,6 +347,7 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
       (key) =>
         key !== "claude" &&
         key !== "codex" &&
+        key !== "custom-cli" &&
         key !== "exa" &&
         key !== "gemini" &&
         key !== "perplexity" &&
@@ -753,6 +766,61 @@ function normalizeParallelProvider(
   };
 }
 
+function normalizeCustomCliProvider(
+  raw: unknown,
+  source: string,
+): CustomCliProviderConfig {
+  const provider = parseProviderObject(raw, source, "custom-cli");
+  rejectLegacyProviderToolFields(provider, source, "custom-cli");
+  const native = parseOptionalJsonObject(
+    stripPolicyFields(getProviderNativeSource(provider)),
+    source,
+    provider.native !== undefined
+      ? "providers.custom-cli.native"
+      : "providers.custom-cli.defaults",
+  );
+
+  return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.custom-cli.enabled",
+    ),
+    native:
+      native === undefined
+        ? undefined
+        : {
+            search: parseOptionalCustomCliCommand(
+              native.search,
+              source,
+              "providers.custom-cli.native.search",
+            ),
+            contents: parseOptionalCustomCliCommand(
+              native.contents,
+              source,
+              "providers.custom-cli.native.contents",
+            ),
+            answer: parseOptionalCustomCliCommand(
+              native.answer,
+              source,
+              "providers.custom-cli.native.answer",
+            ),
+            research: parseOptionalCustomCliCommand(
+              native.research,
+              source,
+              "providers.custom-cli.native.research",
+            ),
+          },
+    policy: parseOptionalExecutionPolicy(
+      getProviderPolicySource(provider),
+      source,
+      provider.policy !== undefined
+        ? "providers.custom-cli.policy"
+        : "providers.custom-cli.defaults",
+    ),
+  };
+}
+
 function getProviderNativeSource(provider: JsonObject): unknown {
   return provider.native ?? provider.defaults;
 }
@@ -1068,6 +1136,28 @@ function inferProviderEnabled(
   return (
     Object.values(config.tools ?? {}) as Array<ProviderId | null | undefined>
   ).some((mappedProviderId) => mappedProviderId === providerId);
+}
+
+function parseOptionalCustomCliCommand(
+  value: unknown,
+  source: string,
+  field: string,
+): CustomCliCommandConfig | undefined {
+  const config = parseOptionalJsonObject(value, source, field);
+  if (!config) {
+    return undefined;
+  }
+
+  const argv = parseOptionalStringArray(config.argv, source, `${field}.argv`);
+  if (argv !== undefined && argv.length === 0) {
+    throw new Error(`'${field}.argv' in ${source} must not be empty.`);
+  }
+
+  return {
+    argv,
+    cwd: parseOptionalString(config.cwd, source, `${field}.cwd`),
+    env: parseOptionalStringMap(config.env, source, `${field}.env`),
+  };
 }
 
 function parseOptionalStringMap(

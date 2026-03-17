@@ -170,6 +170,28 @@ describe("managed tool availability", () => {
     ).toEqual([]);
   });
 
+  it("hides Custom CLI tools when the mapped capability has no command configured", () => {
+    const config = createConfig({
+      tools: {
+        search: "custom-cli",
+      },
+      providers: {
+        "custom-cli": {
+          enabled: true,
+          native: {
+            answer: {
+              argv: [process.execPath, "./answer-wrapper.mjs"],
+            },
+          },
+        },
+      },
+    });
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual([]);
+  });
+
   it("does not activate unavailable tools before agent start", () => {
     process.env.CODEX_API_KEY = "test-key";
     process.env.EXA_API_KEY = "test-key";

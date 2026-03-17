@@ -1,6 +1,7 @@
 import type {
   ClaudeProviderConfig,
   CodexProviderConfig,
+  CustomCliProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
   PerplexityProviderConfig,
@@ -11,6 +12,7 @@ import type {
 } from "../types.js";
 import { ClaudeProvider } from "./claude.js";
 import { CodexProvider } from "./codex.js";
+import { CustomCliProvider } from "./custom-cli.js";
 import { ExaProvider } from "./exa.js";
 import { GeminiProvider } from "./gemini.js";
 import { PerplexityProvider } from "./perplexity.js";
@@ -21,6 +23,7 @@ export const PROVIDERS: ReadonlyArray<
   WebProvider<
     | ClaudeProviderConfig
     | CodexProviderConfig
+    | CustomCliProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
     | PerplexityProviderConfig
@@ -30,6 +33,7 @@ export const PROVIDERS: ReadonlyArray<
 > = [
   new ClaudeProvider(),
   new CodexProvider(),
+  new CustomCliProvider(),
   new ExaProvider(),
   new GeminiProvider(),
   new PerplexityProvider(),
@@ -42,6 +46,7 @@ export const PROVIDER_MAP: Record<
   WebProvider<
     | ClaudeProviderConfig
     | CodexProviderConfig
+    | CustomCliProviderConfig
     | ExaProviderConfig
     | GeminiProviderConfig
     | PerplexityProviderConfig
@@ -51,9 +56,10 @@ export const PROVIDER_MAP: Record<
 > = {
   claude: PROVIDERS[0],
   codex: PROVIDERS[1],
-  exa: PROVIDERS[2],
-  gemini: PROVIDERS[3],
-  perplexity: PROVIDERS[4],
-  parallel: PROVIDERS[5],
-  valyu: PROVIDERS[6],
+  "custom-cli": PROVIDERS[2],
+  exa: PROVIDERS[3],
+  gemini: PROVIDERS[4],
+  perplexity: PROVIDERS[5],
+  parallel: PROVIDERS[6],
+  valyu: PROVIDERS[7],
 };

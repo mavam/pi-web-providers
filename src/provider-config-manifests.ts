@@ -3,6 +3,8 @@ import type {
   ClaudeProviderNativeConfig,
   CodexProviderConfig,
   CodexProviderNativeConfig,
+  CustomCliProviderConfig,
+  CustomCliProviderNativeConfig,
   ExaProviderConfig,
   ExecutionPolicyDefaults,
   GeminiProviderConfig,
@@ -214,6 +216,59 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
+    ],
+  },
+  "custom-cli": {
+    settings: [
+      jsonArraySetting<CustomCliProviderConfig>({
+        id: "customCliSearchArgv",
+        label: "Search argv",
+        help: `Optional JSON string array for the command to run for web_search, for example ["node","./scripts/codex-search.mjs"].`,
+        getValue: (config) =>
+          getCustomCliNative(config)?.search?.argv
+            ? JSON.stringify(getCustomCliNative(config)?.search?.argv)
+            : undefined,
+        setValue: (config, value) => {
+          setCustomCliArgv(config, "search", value);
+        },
+      }),
+      jsonArraySetting<CustomCliProviderConfig>({
+        id: "customCliContentsArgv",
+        label: "Contents argv",
+        help: "Optional JSON string array for the command to run for web_contents.",
+        getValue: (config) =>
+          getCustomCliNative(config)?.contents?.argv
+            ? JSON.stringify(getCustomCliNative(config)?.contents?.argv)
+            : undefined,
+        setValue: (config, value) => {
+          setCustomCliArgv(config, "contents", value);
+        },
+      }),
+      jsonArraySetting<CustomCliProviderConfig>({
+        id: "customCliAnswerArgv",
+        label: "Answer argv",
+        help: "Optional JSON string array for the command to run for web_answer.",
+        getValue: (config) =>
+          getCustomCliNative(config)?.answer?.argv
+            ? JSON.stringify(getCustomCliNative(config)?.answer?.argv)
+            : undefined,
+        setValue: (config, value) => {
+          setCustomCliArgv(config, "answer", value);
+        },
+      }),
+      jsonArraySetting<CustomCliProviderConfig>({
+        id: "customCliResearchArgv",
+        label: "Research argv",
+        help: "Optional JSON string array for the command to run for web_research.",
+        getValue: (config) =>
+          getCustomCliNative(config)?.research?.argv
+            ? JSON.stringify(getCustomCliNative(config)?.research?.argv)
+            : undefined,
+        setValue: (config, value) => {
+          setCustomCliArgv(config, "research", value);
+        },
+      }),
+      ...lifecyclePolicySettings<CustomCliProviderConfig>(),
     ],
   },
   exa: {
@@ -473,6 +528,15 @@ function valuesSetting<TConfig>(
 ): ProviderValuesSettingDescriptor<TConfig> {
   return {
     kind: "values",
+    ...setting,
+  };
+}
+
+function jsonArraySetting<TConfig>(
+  setting: Omit<ProviderTextSettingDescriptor<TConfig>, "kind">,
+): ProviderTextSettingDescriptor<TConfig> {
+  return {
+    kind: "text",
     ...setting,
   };
 }
@@ -739,6 +803,93 @@ function ensureGeminiNative(
     string,
     string | number | boolean | JsonObject | undefined
   >;
+}
+
+function getCustomCliNative(config: CustomCliProviderConfig | undefined) {
+  return config?.native ?? config?.defaults;
+}
+
+function ensureCustomCliNative(
+  config: CustomCliProviderConfig,
+): CustomCliProviderNativeConfig {
+  const native = getCustomCliNative(config);
+  config.native = {
+    ...(native?.search ? { search: { ...native.search } } : {}),
+    ...(native?.contents ? { contents: { ...native.contents } } : {}),
+    ...(native?.answer ? { answer: { ...native.answer } } : {}),
+    ...(native?.research ? { research: { ...native.research } } : {}),
+  };
+  delete config.defaults;
+  return config.native;
+}
+
+function setCustomCliArgv(
+  config: CustomCliProviderConfig,
+  capability: keyof CustomCliProviderNativeConfig,
+  value: string,
+): void {
+  const trimmed = value.trim();
+  const native = ensureCustomCliNative(config);
+  if (!trimmed) {
+    delete native[capability];
+    cleanupCustomCliNative(config);
+    return;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch (error) {
+    throw new Error(
+      `Custom CLI ${capability} argv must be a JSON string array: ${(error as Error).message}`,
+    );
+  }
+
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some(
+      (entry) => typeof entry !== "string" || entry.trim().length === 0,
+    )
+  ) {
+    throw new Error(
+      `Custom CLI ${capability} argv must be a non-empty JSON string array.`,
+    );
+  }
+
+  native[capability] = {
+    ...(native[capability] ?? {}),
+    argv: parsed,
+  };
+  cleanupCustomCliNative(config);
+}
+
+function cleanupCustomCliNative(config: CustomCliProviderConfig): void {
+  const native = config.native;
+  if (!native) {
+    return;
+  }
+
+  for (const capability of [
+    "search",
+    "contents",
+    "answer",
+    "research",
+  ] as const) {
+    const entry = native[capability];
+    if (!entry) {
+      continue;
+    }
+
+    if (
+      entry.argv === undefined &&
+      entry.cwd === undefined &&
+      (entry.env === undefined || Object.keys(entry.env).length === 0)
+    ) {
+      delete native[capability];
+    }
+  }
+
+  cleanupEmpty(config, "native");
 }
 
 function getParallelNative(config: ParallelProviderConfig | undefined) {

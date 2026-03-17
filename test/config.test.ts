@@ -138,6 +138,45 @@ describe("config parsing", () => {
     });
   });
 
+  it("parses custom CLI command config", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          "custom-cli": {
+            enabled: true,
+            native: {
+              search: {
+                argv: ["node", "./scripts/search-wrapper.mjs"],
+                cwd: ".",
+                env: {
+                  DEMO_TOKEN: "EXAMPLE_TOKEN",
+                },
+              },
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.["custom-cli"]).toEqual({
+      enabled: true,
+      native: {
+        search: {
+          argv: ["node", "./scripts/search-wrapper.mjs"],
+          cwd: ".",
+          env: {
+            DEMO_TOKEN: "EXAMPLE_TOKEN",
+          },
+        },
+        contents: undefined,
+        answer: undefined,
+        research: undefined,
+      },
+      policy: undefined,
+    });
+  });
+
   it("rejects unknown tool-specific settings", () => {
     expect(() =>
       parseConfig(

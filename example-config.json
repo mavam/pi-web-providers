@@ -25,6 +25,9 @@
         "webSearchMode": "live"
       }
     },
+    "custom-cli": {
+      "enabled": false
+    },
     "exa": {
       "enabled": false,
       "apiKey": "EXA_API_KEY",

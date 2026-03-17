@@ -148,6 +148,30 @@ describe("provider resolution", () => {
     expect(provider.id).toBe("parallel");
   });
 
+  it("rejects Custom CLI when the mapped capability has no command configured", () => {
+    const config = createConfig({
+      tools: {
+        search: "custom-cli",
+      },
+      providers: {
+        "custom-cli": {
+          enabled: true,
+          native: {
+            answer: {
+              argv: [process.execPath, "./answer-wrapper.mjs"],
+            },
+          },
+        },
+      },
+    });
+
+    expect(() =>
+      resolveProviderForCapability(config, process.cwd(), "search"),
+    ).toThrow(
+      /Provider 'custom-cli' is not available: no command configured for search/,
+    );
+  });
+
   it("treats Perplexity research as a direct explicit-provider selection", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
 

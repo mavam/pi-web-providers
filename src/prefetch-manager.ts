@@ -1165,7 +1165,7 @@ function resolveContentsProvider(
   }
 
   const providerConfig = getEffectiveProviderConfig(config, explicitProvider);
-  const status = provider.getStatus(providerConfig as never, cwd);
+  const status = provider.getStatus(providerConfig as never, cwd, "contents");
   if (status.available) {
     return provider;
   }

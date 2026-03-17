@@ -12,8 +12,10 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers** — Claude, Codex, Exa, Gemini, Perplexity, Parallel,
-  Valyu
+- **Multiple providers** — Claude, Codex, Custom CLI, Exa, Gemini,
+  Perplexity, Parallel, Valyu
+- **Bring-your-own wrappers** — route tools through any local command that reads
+  JSON on stdin and writes JSON on stdout
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch** — optionally start background `web_contents`
@@ -48,6 +50,10 @@ Each tool can be routed to any compatible provider:
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`        |
+
+Advanced option: `custom-cli` is a configurable adapter provider that can route
+any managed tool through a local wrapper command using a JSON stdin/stdout
+contract.
 
 See [`example-config.json`](example-config.json) for a full default
 configuration.
@@ -174,6 +180,19 @@ shell commands prefixed with `!`.
 </details>
 
 <details>
+<summary><strong>Custom CLI</strong></summary>
+
+- Runs a caller-configured local command per capability
+- Commands read one JSON request from `stdin` and must write one JSON result to
+  `stdout`
+- `stderr` is treated as progress output and streamed into the tool call while
+  the command runs
+- Good for wrapping local agent CLIs, shell scripts, or small adapter programs
+  without adding a first-class provider to this extension
+
+</details>
+
+<details>
 <summary><strong>Exa</strong></summary>
 
 - SDK: `exa-js`
@@ -233,6 +252,57 @@ shell commands prefixed with `!`.
 - Configurable response length for answers and research
 
 </details>
+
+### Custom CLI provider
+
+`custom-cli` lets you bring your own wrapper command for any managed tool. Each
+capability can point at a different local command under
+`providers["custom-cli"].native`:
+
+```json
+{
+  "tools": {
+    "search": "custom-cli",
+    "contents": "custom-cli",
+    "answer": "custom-cli",
+    "research": null
+  },
+  "providers": {
+    "custom-cli": {
+      "enabled": true,
+      "native": {
+        "search": {
+          "argv": ["node", "./wrappers/codex-search.mjs"]
+        },
+        "contents": {
+          "argv": ["node", "./wrappers/gemini-contents.mjs"]
+        },
+        "answer": {
+          "argv": ["node", "./wrappers/claude-answer.mjs"]
+        }
+      }
+    }
+  }
+}
+```
+
+That example uses three different wrappers behind the same provider mapping:
+Codex for `web_search`, Gemini for `web_contents`, and Claude for
+`web_answer`.
+
+Wrapper contract:
+
+- `stdin`: one JSON request object with `capability` plus the per-call managed
+  inputs (`query`, `urls`, `input`, `maxResults`, `options`, `cwd`)
+- `stdout`: one JSON response object
+  - `search`: `{ "results": [{ "title", "url", "snippet" }] }`
+  - `contents` / `answer` / `research`: `{ "text": "...", "summary"?: "...", "itemCount"?: 1, "metadata"?: {} }`
+- `stderr`: optional progress lines
+- exit code `0`: success
+- non-zero exit code: failure
+
+See [`examples/custom-cli/README.md`](examples/custom-cli/README.md) for a
+longer example showing Codex, Claude, and Gemini wrappers.
 
 ### Generic settings
 

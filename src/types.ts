@@ -3,6 +3,7 @@ import type { ModelReasoningEffort, WebSearchMode } from "@openai/codex-sdk";
 export const PROVIDER_IDS = [
   "claude",
   "codex",
+  "custom-cli",
   "exa",
   "gemini",
   "perplexity",
@@ -129,6 +130,19 @@ export interface ParallelProviderNativeConfig {
   extract?: JsonObject;
 }
 
+export interface CustomCliCommandConfig {
+  argv?: string[];
+  cwd?: string;
+  env?: Record<string, string>;
+}
+
+export interface CustomCliProviderNativeConfig {
+  search?: CustomCliCommandConfig;
+  contents?: CustomCliCommandConfig;
+  answer?: CustomCliCommandConfig;
+  research?: CustomCliCommandConfig;
+}
+
 // Legacy routing fields are tolerated in TypeScript shapes for internal tests,
 // but config parsing rejects them in persisted config files.
 export interface LegacyProviderRoutingConfig {
@@ -185,6 +199,12 @@ export interface ParallelProviderConfig extends LegacyProviderRoutingConfig {
   defaults?: ParallelProviderNativeConfig;
 }
 
+export interface CustomCliProviderConfig extends LegacyProviderRoutingConfig {
+  native?: CustomCliProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+  defaults?: CustomCliProviderNativeConfig;
+}
+
 export interface ValyuProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
@@ -209,6 +229,7 @@ export interface WebProvidersConfig {
   providers?: {
     claude?: ClaudeProviderConfig;
     codex?: CodexProviderConfig;
+    "custom-cli"?: CustomCliProviderConfig;
     exa?: ExaProviderConfig;
     gemini?: GeminiProviderConfig;
     perplexity?: PerplexityProviderConfig;
@@ -341,7 +362,11 @@ export interface WebProvider<TConfig> {
   readonly capabilities: readonly ProviderCapability[];
 
   createTemplate(): TConfig;
-  getStatus(config: TConfig | undefined, cwd: string): ProviderStatus;
+  getStatus(
+    config: TConfig | undefined,
+    cwd: string,
+    capability?: ProviderCapability,
+  ): ProviderStatus;
   buildPlan(
     request: ProviderOperationRequest,
     config: TConfig,
