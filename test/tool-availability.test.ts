@@ -188,6 +188,29 @@ describe("managed tool availability", () => {
     ).toEqual([]);
   });
 
+  it("does not expose web_contents for Gemini", () => {
+    const config: WebProvidersConfig = {
+      version: 1,
+      providers: {
+        gemini: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual(["web_search", "web_answer", "web_research"]);
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "contents",
+      ),
+    ).toEqual([]);
+  });
+
   it("respects provider tool capability toggles", () => {
     process.env.EXA_API_KEY = "test-key";
 
@@ -248,7 +271,7 @@ describe("managed tool availability", () => {
     expect(Array.from(activeTools)).toEqual(["web_search"]);
   });
 
-  it("suppresses noisy partial foreground tool text in the pending tool box", () => {
+  it("shows partial foreground tool text in the pending tool box", () => {
     process.env.EXA_API_KEY = "test-key";
 
     const tools: Array<{
@@ -294,8 +317,8 @@ describe("managed tool availability", () => {
       createTheme(),
     );
 
-    expect(partialSearchRender).toBeUndefined();
-    expect(partialContentsRender).toBeUndefined();
+    expect(partialSearchRender).toBeDefined();
+    expect(partialContentsRender).toBeDefined();
   });
 
   it("clears the contents cache when saved contents-capable provider settings change", () => {

@@ -79,8 +79,12 @@ describe("provider tool output", () => {
 
     expect(result.content[0]?.text).toContain('Query 1: "exa sdk"');
     expect(result.content[0]?.text).toContain('Query 2: "exa pricing"');
-    expect(result.content[0]?.text).toContain("1. Exa SDK");
-    expect(result.content[0]?.text).toContain("2. Exa API Plans");
+    expect(result.content[0]?.text).toContain(
+      "1. [Exa SDK](<https://exa.ai/sdk>)",
+    );
+    expect(result.content[0]?.text).toContain(
+      "2. [Exa API Plans](<https://exa.ai/plans>)",
+    );
     expect(result.details).toEqual({
       tool: "web_search",
       provider: "exa",
@@ -140,7 +144,9 @@ describe("provider tool output", () => {
     });
 
     expect(result.content[0]?.text).toContain('Query 1: "exa sdk"');
-    expect(result.content[0]?.text).toContain("1. Exa SDK");
+    expect(result.content[0]?.text).toContain(
+      "1. [Exa SDK](<https://exa.ai/sdk>)",
+    );
     expect(result.content[0]?.text).toContain('Query 2: "exa pricing"');
     expect(result.content[0]?.text).toContain("Search failed: rate limited");
     expect(result.details).toEqual({
@@ -467,7 +473,7 @@ describe("provider tool output", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      "Tenzir is used for detection engineering and SIEM migration.",
+      '## "What are common Tenzir use cases?"\n\nTenzir is used for detection engineering and SIEM migration.',
     );
     expect(result.details).toEqual({
       tool: "web_answer",

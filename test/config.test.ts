@@ -122,7 +122,6 @@ describe("config parsing", () => {
       native: {
         apiVersion: "v1alpha",
         searchModel: "gemini-2.5-flash",
-        contentsModel: "gemini-2.5-pro",
       },
       policy: {
         requestTimeoutMs: 45000,
@@ -167,9 +166,6 @@ describe("config parsing", () => {
     ]);
     expect(loaded.providers?.exa?.enabled).toBe(true);
     expect(loaded.providers?.gemini?.native?.apiVersion).toBe("v1alpha");
-    expect(loaded.providers?.gemini?.native?.contentsModel).toBe(
-      "gemini-2.5-pro",
-    );
     expect(loaded.providers?.gemini?.policy?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.policy?.retryCount).toBe(5);
     expect(loaded.providers?.gemini?.policy?.retryDelayMs).toBe(4000);

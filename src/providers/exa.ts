@@ -19,7 +19,13 @@ import type {
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  formatJson,
+  normalizeContentText,
+  pushIndentedBlock,
+  trimSnippet,
+} from "./shared.js";
 
 export class ExaProvider implements WebProvider<ExaProviderConfig> {
   readonly id: "exa" = "exa";
@@ -202,16 +208,16 @@ export class ExaProvider implements WebProvider<ExaProviderConfig> {
             : result.summary
               ? formatJson(result.summary)
               : undefined;
-        const text =
+        const fullText =
           typeof result.text === "string"
             ? result.text
-            : Array.isArray(result.highlights)
-              ? result.highlights.join(" ")
-              : "";
-        const body = trimSnippet(summary ?? text);
-        if (body) {
-          entryLines.push(`   ${body}`);
-        }
+            : summary
+              ? summary
+              : Array.isArray(result.highlights)
+                ? result.highlights.join("\n\n")
+                : "";
+        const body = normalizeContentText(fullText);
+        pushIndentedBlock(entryLines, body);
 
         lines.push(...entryLines, "");
 

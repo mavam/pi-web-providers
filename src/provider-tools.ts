@@ -3,8 +3,8 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
   ProviderId,
   ValyuProviderConfig,
 } from "./types.js";
@@ -22,7 +22,7 @@ export const PROVIDER_TOOLS: Record<ProviderId, readonly ProviderToolId[]> = {
   claude: ["search", "answer"],
   codex: ["search"],
   exa: ["search", "contents", "answer", "research"],
-  gemini: ["search", "contents", "answer", "research"],
+  gemini: ["search", "answer", "research"],
   perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],

@@ -7,6 +7,7 @@ import {
   type ExtensionAPI,
   type ExtensionCommandContext,
   formatSize,
+  getMarkdownTheme,
   keyHint,
   type Theme,
   truncateHead,
@@ -17,6 +18,7 @@ import {
   type EditorTheme,
   getEditorKeybindings,
   Key,
+  Markdown,
   matchesKey,
   Text,
   type TUI,
@@ -208,28 +210,13 @@ function registerWebSearchTool(
       );
     },
 
-    renderResult(result, { expanded, isPartial }, theme) {
-      const text = extractTextContent(result.content);
-      const isError = Boolean((result as { isError?: boolean }).isError);
-
-      if (isPartial) {
-        return undefined;
-      }
-
-      if (isError) {
-        return renderBlockText(text ?? "web_search failed", theme, "error");
-      }
-
-      const details = result.details as WebSearchDetails | undefined;
-      if (!details) {
-        return renderBlockText(text ?? "", theme, "toolOutput");
-      }
-
-      if (expanded) {
-        return renderBlockText(text ?? "", theme, "toolOutput");
-      }
-
-      return renderCollapsedSearchSummary(details, text, theme);
+    renderResult(result, state, theme) {
+      return renderSearchToolResult(
+        result,
+        state.expanded,
+        state.isPartial,
+        theme,
+      );
     },
   });
 }
@@ -269,42 +256,13 @@ function registerWebContentsTool(
       });
     },
     renderCall(args, theme) {
-      const urls: string[] = Array.isArray((args as { urls?: string[] }).urls)
-        ? ((args as { urls?: string[] }).urls ?? [])
-        : [];
-      const provider = String(
-        (args as { provider?: string }).provider ?? "auto",
+      return renderListCallHeader(
+        "web_contents",
+        Array.isArray((args as { urls?: string[] }).urls)
+          ? ((args as { urls?: string[] }).urls ?? [])
+          : [],
+        theme,
       );
-      return {
-        invalidate() {},
-        render(width: number) {
-          const lines: string[] = [];
-          const header = theme.fg("toolTitle", theme.bold("web_contents"));
-          const headerLine = truncateToWidth(header.trimEnd(), width);
-          lines.push(
-            headerLine +
-              " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-          );
-          for (const url of urls) {
-            const urlLine = truncateToWidth(
-              `  ${theme.fg("accent", url)}`,
-              width,
-            );
-            lines.push(
-              urlLine + " ".repeat(Math.max(0, width - visibleWidth(urlLine))),
-            );
-          }
-          const detailLine = truncateToWidth(
-            `  ${theme.fg("muted", `provider=${provider}`)}`,
-            width,
-          );
-          lines.push(
-            detailLine +
-              " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-          );
-          return lines;
-        },
-      };
     },
     renderResult(result, state, theme) {
       return renderProviderToolResult(
@@ -313,7 +271,6 @@ function registerWebContentsTool(
         state.isPartial,
         "web_contents failed",
         theme,
-        { hidePartial: true },
       );
     },
   });
@@ -374,7 +331,7 @@ function registerWebAnswerTool(
         state.isPartial,
         "web_answer failed",
         theme,
-        { hidePartial: true },
+        { markdownWhenExpanded: true },
       );
     },
   });
@@ -413,12 +370,11 @@ function registerWebResearchTool(
       });
     },
     renderCall(args, theme) {
-      return renderToolCallHeader(
-        "web_research",
-        formatQuotedPreview(String((args as { input?: string }).input ?? "")),
-        [
-          `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
-        ],
+      return renderResearchCallHeader(
+        {
+          input: String((args as { input?: string }).input ?? ""),
+          provider: (args as { provider?: ProviderId }).provider,
+        },
         theme,
       );
     },
@@ -961,27 +917,26 @@ function buildAnswerBatchError(outcomes: AnswerQueryOutcome[]): Error {
 }
 
 function formatAnswerResponses(outcomes: AnswerQueryOutcome[]): string {
-  if (outcomes.length === 1) {
-    return formatSingleAnswerOutcome(outcomes[0]);
-  }
-
   return outcomes
-    .map((outcome, index) => {
-      const section = outcome.response
-        ? outcome.response.text
-        : `Answer failed: ${outcome.error ?? "Unknown error."}`;
-      return `Question ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
-    })
+    .map((outcome, index) =>
+      formatAnswerOutcomeSection(outcome, index, outcomes.length),
+    )
     .join("\n\n");
 }
 
-function formatSingleAnswerOutcome(
-  outcome: AnswerQueryOutcome | undefined,
+function formatAnswerOutcomeSection(
+  outcome: AnswerQueryOutcome,
+  index: number,
+  total: number,
 ): string {
-  if (outcome?.response) {
-    return outcome.response.text;
-  }
-  return `Answer failed: ${outcome?.error ?? "Unknown error."}`;
+  const heading =
+    total > 1
+      ? `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`
+      : `## ${formatAnswerHeading(outcome.query)}`;
+  const body = outcome.response
+    ? outcome.response.text
+    : `Answer failed: ${outcome.error ?? "Unknown error."}`;
+  return `${heading}\n\n${body}`;
 }
 
 function buildWebAnswerDetails(
@@ -1276,18 +1231,35 @@ function createToolProgressReporter(
   };
 }
 
-function renderToolCallHeader(
+function renderListCallHeader(
   toolName: string,
-  primary: string,
-  details: string[],
+  items: string[],
   theme: Theme,
+  options: {
+    singleItemFormatter?: (item: string) => string;
+    multiItemFormatter?: (item: string) => string;
+    suffix?: string;
+    forceMultiline?: boolean;
+  } = {},
 ): Component {
   return {
     invalidate() {},
     render(width) {
+      const normalizedItems = items
+        .map((item) => cleanSingleLine(item))
+        .filter((item) => item.length > 0);
+      const showItemsInline =
+        normalizedItems.length === 1 && options.forceMultiline !== true;
+
       let header = theme.fg("toolTitle", theme.bold(toolName));
-      if (primary.trim().length > 0) {
-        header += ` ${theme.fg("accent", primary)}`;
+      if (showItemsInline) {
+        const singleItem =
+          options.singleItemFormatter?.(normalizedItems[0]) ??
+          normalizedItems[0];
+        header += ` ${theme.fg("accent", singleItem)}`;
+      }
+      if (options.suffix) {
+        header += theme.fg("muted", options.suffix);
       }
 
       const lines: string[] = [];
@@ -1296,20 +1268,40 @@ function renderToolCallHeader(
         headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
       );
 
-      if (details.length > 0) {
-        const detailLine = truncateToWidth(
-          `  ${theme.fg("muted", details.join(" "))}`,
-          width,
-        );
-        lines.push(
-          detailLine +
-            " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-        );
+      if (normalizedItems.length > (showItemsInline ? 1 : 0)) {
+        for (const item of normalizedItems) {
+          const renderedItem =
+            options.multiItemFormatter?.(item) ?? truncateInline(item, 120);
+          const itemLine = truncateToWidth(
+            `  ${theme.fg("accent", renderedItem)}`,
+            width,
+          );
+          lines.push(
+            itemLine + " ".repeat(Math.max(0, width - visibleWidth(itemLine))),
+          );
+        }
       }
 
       return lines;
     },
   };
+}
+
+function renderToolCallHeader(
+  toolName: string,
+  primary: string,
+  details: string[],
+  theme: Theme,
+): Component {
+  return renderListCallHeader(
+    toolName,
+    primary.trim().length > 0 ? [primary] : [],
+    theme,
+    {
+      singleItemFormatter: (item) => item,
+      suffix: details.length > 0 ? ` ${details.join(" ")}` : undefined,
+    },
+  );
 }
 
 function renderQuestionCallHeader(
@@ -1319,38 +1311,55 @@ function renderQuestionCallHeader(
   },
   theme: Theme,
 ): Component {
-  return {
-    invalidate() {},
-    render(width) {
-      const header = theme.fg("toolTitle", theme.bold("web_answer"));
-      const questions = getAnswerQueriesForDisplay(params.queries);
-      const lines: string[] = [];
-      const headerLine = truncateToWidth(header, width);
-      lines.push(
-        headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-      );
-
-      for (const question of questions) {
-        const questionLine = truncateToWidth(
-          `  ${theme.fg("accent", truncateInline(cleanSingleLine(question), 120))}`,
-          width,
-        );
-        lines.push(
-          questionLine +
-            " ".repeat(Math.max(0, width - visibleWidth(questionLine))),
-        );
-      }
-
-      const detailLine = truncateToWidth(
-        `  ${theme.fg("muted", `provider=${params.provider ?? "auto"}`)}`,
-        width,
-      );
-      lines.push(
-        detailLine + " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-      );
-      return lines;
+  return renderListCallHeader(
+    "web_answer",
+    getAnswerQueriesForDisplay(params.queries),
+    theme,
+    {
+      singleItemFormatter: (question) => formatQuotedPreview(question),
     },
-  };
+  );
+}
+
+function renderResearchCallHeader(
+  params: {
+    input: string;
+    provider?: ProviderId;
+  },
+  theme: Theme,
+): Component {
+  return renderListCallHeader("web_research", [params.input], theme, {
+    forceMultiline: true,
+  });
+}
+
+function renderSearchToolResult(
+  result: {
+    content?: Array<{ type: string; text?: string }>;
+    details?: unknown;
+    isError?: boolean;
+  },
+  expanded: boolean,
+  isPartial: boolean,
+  theme: Theme,
+): Component | undefined {
+  const text = extractTextContent(result.content);
+  const isError = Boolean((result as { isError?: boolean }).isError);
+
+  if (isPartial) {
+    return renderSimpleText(text ?? "Working…", theme, "warning");
+  }
+
+  if (isError) {
+    return renderBlockText(text ?? "web_search failed", theme, "error");
+  }
+
+  const details = result.details as WebSearchDetails | undefined;
+  if (!details || expanded) {
+    return renderMarkdownBlock(text ?? "");
+  }
+
+  return renderCollapsedSearchSummary(details, text, theme);
 }
 
 function renderProviderToolResult(
@@ -1363,14 +1372,13 @@ function renderProviderToolResult(
   isPartial: boolean,
   failureText: string,
   theme: Theme,
-  options: { hidePartial?: boolean } = {},
-): Text | undefined {
+  options: {
+    markdownWhenExpanded?: boolean;
+  } = {},
+): Component | undefined {
   const text = extractTextContent(result.content);
 
   if (isPartial) {
-    if (options.hidePartial === true) {
-      return undefined;
-    }
     return renderSimpleText(text ?? "Working…", theme, "warning");
   }
 
@@ -1379,7 +1387,9 @@ function renderProviderToolResult(
   }
 
   if (expanded) {
-    return renderBlockText(text ?? "", theme, "toolOutput");
+    return options.markdownWhenExpanded
+      ? renderMarkdownBlock(text ?? "")
+      : renderBlockText(text ?? "", theme, "toolOutput");
   }
 
   const details = result.details as ProviderToolDetails | undefined;
@@ -1405,11 +1415,34 @@ function renderCollapsedProviderToolSummary(
     return `${details.queryCount} questions via ${details.provider}${failureSuffix}`;
   }
 
-  return (
+  const baseSummary =
+    getCompactProviderToolSummary(details) ??
     details?.summary ??
     getFirstLine(text) ??
-    `${details?.tool ?? "tool"} output available`
-  );
+    `${details?.tool ?? "tool"} output available`;
+
+  if (!details?.provider) {
+    return baseSummary;
+  }
+
+  return appendProviderSummary(baseSummary, details.provider);
+}
+
+function getCompactProviderToolSummary(
+  details: ProviderToolDetails | undefined,
+): string | undefined {
+  if (!details) {
+    return undefined;
+  }
+
+  if (
+    details.tool === "web_contents" &&
+    typeof details.itemCount === "number"
+  ) {
+    return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
+  }
+
+  return undefined;
 }
 
 interface ProviderToolMenuOption {
@@ -2110,49 +2143,27 @@ function renderCallHeader(
   },
   theme: Theme,
 ): Component {
-  return {
-    invalidate() {},
-    render(width) {
-      let header = theme.fg("toolTitle", theme.bold("web_search"));
-      const queries = getSearchQueriesForDisplay(params.queries);
-      const showExpandedQueries = queries.length > 1;
-      if (queries.length === 1) {
-        header += ` ${theme.fg("accent", formatQuotedPreview(queries[0]))} `;
-      }
+  const maxResultsSuffix =
+    params.maxResults !== undefined && params.maxResults !== DEFAULT_MAX_RESULTS
+      ? ` (max ${params.maxResults})`
+      : undefined;
 
-      const lines: string[] = [];
-      const headerLine = truncateToWidth(header.trimEnd(), width);
-      lines.push(
-        headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-      );
-
-      if (showExpandedQueries) {
-        for (const query of queries) {
-          const queryLine = truncateToWidth(
-            `  ${theme.fg("accent", truncateInline(cleanSingleLine(query), 120))}`,
-            width,
-          );
-          lines.push(
-            queryLine +
-              " ".repeat(Math.max(0, width - visibleWidth(queryLine))),
-          );
-        }
-      }
-
-      const detailParts = [
-        `provider=${params.provider ?? "auto"}`,
-        `maxResults=${params.maxResults ?? DEFAULT_MAX_RESULTS}`,
-      ];
-      const details = truncateToWidth(
-        `  ${theme.fg("muted", detailParts.join(" "))}`,
-        width,
-      );
-      lines.push(
-        details + " ".repeat(Math.max(0, width - visibleWidth(details))),
-      );
-      return lines;
+  return renderListCallHeader(
+    "web_search",
+    getSearchQueriesForDisplay(params.queries),
+    theme,
+    {
+      singleItemFormatter: (query) => formatQuotedPreview(query),
+      suffix: maxResultsSuffix,
     },
-  };
+  );
+}
+
+function renderMarkdownBlock(text: string): Markdown | Text {
+  if (!text) {
+    return new Text("", 0, 0);
+  }
+  return new Markdown(`\n${text}`, 0, 0, getMarkdownTheme());
 }
 
 function renderBlockText(
@@ -2180,20 +2191,26 @@ function renderSimpleText(
 
 function renderCollapsedSearchSummary(
   details: WebSearchDetails,
-  text: string | undefined,
+  _text: string | undefined,
   theme: Pick<Theme, "fg">,
 ): Text {
   const count = `${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`;
-  const queryCount = details.queryCount;
   const failureSuffix =
     details.failedQueryCount > 0 ? `, ${details.failedQueryCount} failed` : "";
   const base =
-    queryCount > 1
-      ? `${queryCount} queries, ${count} via ${details.provider}${failureSuffix}`
-      : (getFirstLine(text) ?? `${count} via ${details.provider}`);
+    details.queryCount > 1
+      ? `${details.queryCount} queries, ${count} via ${details.provider}${failureSuffix}`
+      : `${count} via ${details.provider}${failureSuffix}`;
   let summary = theme.fg("success", base);
   summary += theme.fg("muted", ` (${getExpandHint()})`);
   return new Text(summary, 0, 0);
+}
+
+function appendProviderSummary(summary: string, provider: ProviderId): string {
+  const providerSuffix = `via ${provider}`;
+  return summary.toLowerCase().includes(providerSuffix)
+    ? summary
+    : `${summary} ${providerSuffix}`;
 }
 
 function getFirstLine(text: string | undefined): string | undefined {
@@ -2224,32 +2241,40 @@ function formatSearchResponses(
   outcomes: SearchQueryOutcome[],
   prefetch?: { prefetchId: string; provider: ProviderId; urlCount: number },
 ): string {
-  const body =
-    outcomes.length === 1
-      ? formatSingleSearchOutcome(outcomes[0])
-      : outcomes
-          .map((outcome, index) => {
-            const section = outcome.response
-              ? formatSearchResponse(outcome.response)
-              : `Search failed: ${outcome.error ?? "Unknown error."}`;
-            return `Query ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
-          })
-          .join("\n\n");
+  const body = outcomes
+    .map((outcome, index) =>
+      formatSearchOutcomeSection(outcome, index, outcomes.length),
+    )
+    .join("\n\n");
 
   if (!prefetch) {
     return body;
   }
 
-  return `${body}\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
+  return `${body}\n\n---\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
 }
 
-function formatSingleSearchOutcome(
-  outcome: SearchQueryOutcome | undefined,
+function formatSearchOutcomeSection(
+  outcome: SearchQueryOutcome,
+  index: number,
+  total: number,
 ): string {
-  if (outcome?.response) {
-    return formatSearchResponse(outcome.response);
-  }
-  return `Search failed: ${outcome?.error ?? "Unknown error."}`;
+  const heading =
+    total > 1
+      ? `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`
+      : `## ${formatSearchHeading(outcome.query)}`;
+  const body = outcome.response
+    ? formatSearchResponseMarkdown(outcome.response)
+    : `Search failed: ${outcome.error ?? "Unknown error."}`;
+  return `${heading}\n\n${body}`;
+}
+
+function formatSearchHeading(query: string): string {
+  return `"${escapeMarkdownText(cleanSingleLine(query))}"`;
+}
+
+function formatAnswerHeading(query: string): string {
+  return `"${escapeMarkdownText(cleanSingleLine(query))}"`;
 }
 
 function collectSearchResultUrls(outcomes: SearchQueryOutcome[]): string[] {
@@ -2258,21 +2283,41 @@ function collectSearchResultUrls(outcomes: SearchQueryOutcome[]): string[] {
   );
 }
 
-function formatSearchResponse(response: SearchResponse): string {
+function formatSearchResponseMarkdown(response: SearchResponse): string {
   if (response.results.length === 0) {
     return "No results found.";
   }
 
-  const lines: string[] = [];
-  for (const [index, result] of response.results.entries()) {
-    lines.push(`${index + 1}. ${result.title}`);
-    lines.push(`   ${result.url}`);
-    if (result.snippet) {
-      lines.push(`   ${result.snippet}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n").trimEnd();
+  return response.results
+    .map((result, index) => {
+      const lines = [
+        `${index + 1}. ${formatMarkdownLink(result.title, result.url)}`,
+      ];
+      if (result.snippet) {
+        lines.push(`   ${escapeMarkdownText(cleanSingleLine(result.snippet))}`);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+function formatMarkdownLink(label: string, url: string): string {
+  return `[${escapeMarkdownLinkLabel(label)}](<${url}>)`;
+}
+
+function escapeMarkdownLinkLabel(text: string): string {
+  return cleanSingleLine(text).replaceAll("\\", "\\\\").replaceAll("]", "\\]");
+}
+
+function escapeMarkdownText(text: string): string {
+  return text
+    .replaceAll("\\", "\\\\")
+    .replaceAll("*", "\\*")
+    .replaceAll("_", "\\_")
+    .replaceAll("`", "\\`")
+    .replaceAll("#", "\\#")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]");
 }
 
 async function truncateAndSave(text: string, prefix: string): Promise<string> {
@@ -2329,5 +2374,12 @@ export const __test__ = {
   getSyncedActiveTools,
   renderCallHeader,
   renderQuestionCallHeader,
+  renderResearchCallHeader,
+  renderToolCallHeader,
   renderCollapsedSearchSummary,
+  renderCollapsedProviderToolSummary,
+  renderSearchToolResult,
+  renderProviderToolResult,
+  formatSearchResponses,
+  formatAnswerResponses,
 };

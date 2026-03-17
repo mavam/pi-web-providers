@@ -19,7 +19,13 @@ import type {
   ValyuProviderConfig,
   WebProvider,
 } from "../types.js";
-import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  formatJson,
+  normalizeContentText,
+  pushIndentedBlock,
+  trimSnippet,
+} from "./shared.js";
 
 export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
   readonly id: "valyu" = "valyu";
@@ -201,32 +207,35 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
       results.flatMap<ProviderContentsMetadataEntry>((result, index) => {
         const entryLines = [`${index + 1}. ${result.url}`];
         if (result.status === "failed") {
-          entryLines.push(`   Failed: ${result.error}`);
+          const body = normalizeContentText(`Failed: ${result.error}`);
+          pushIndentedBlock(entryLines, body);
           lines.push(...entryLines, "");
           return [
             {
               url: result.url,
               title: result.url,
-              body: `Failed: ${result.error}`,
+              body,
               status: "failed",
             },
           ];
         }
 
-        const snippet =
-          typeof result.summary === "string"
-            ? result.summary
-            : result.summary
-              ? formatJson(result.summary)
-              : typeof result.content === "string" ||
-                  typeof result.content === "number"
-                ? String(result.content)
-                : formatJson(result.content);
-        const body = trimSnippet(snippet);
+        const contentText =
+          typeof result.content === "string" ||
+          typeof result.content === "number"
+            ? String(result.content)
+            : result.content
+              ? formatJson(result.content)
+              : typeof result.summary === "string"
+                ? result.summary
+                : result.summary
+                  ? formatJson(result.summary)
+                  : "";
+        const body = normalizeContentText(contentText);
         if (result.title) {
           entryLines.push(`   ${result.title}`);
         }
-        entryLines.push(`   ${body}`);
+        pushIndentedBlock(entryLines, body);
         lines.push(...entryLines, "");
         return [
           {

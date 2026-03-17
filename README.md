@@ -146,7 +146,7 @@ summarises capabilities and authentication:
 | **Claude**     |   ✓    |          |   ✓    |          | Local Claude Code auth |
 | **Codex**      |   ✓    |          |        |          | Local Codex CLI auth   |
 | **Exa**        |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
-| **Gemini**     |   ✓    |    ✓     |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
+| **Gemini**     |   ✓    |          |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
 | **Perplexity** |   ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
 | **Parallel**   |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
 | **Valyu**      |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
@@ -191,10 +191,9 @@ summarises capabilities and authentication:
 <summary><strong>Gemini</strong></summary>
 
 - SDK: `@google/genai`
-- Search, contents, and answer run in **silent foreground** mode
+- Search and answer run in **silent foreground** mode
 - Research runs in **background research** mode and supports `resumeId`
-- Google Search grounding for answers and URL Context extraction for page
-  contents
+- Google Search grounding for answers
 - Deep-research agents via Google's Gemini API
 - Supports provider-native request options such as `model`, `config`,
   `generation_config`, and `agent_config` depending on the tool

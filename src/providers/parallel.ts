@@ -14,7 +14,12 @@ import type {
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { asJsonObject, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  normalizeContentText,
+  pushIndentedBlock,
+  trimSnippet,
+} from "./shared.js";
 
 export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   readonly id: "parallel" = "parallel";
@@ -35,8 +40,8 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
           mode: "agentic",
         },
         extract: {
-          excerpts: true,
-          full_content: false,
+          excerpts: false,
+          full_content: true,
         },
       },
       policy: createDefaultRequestPolicy(),
@@ -150,11 +155,9 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
         const title = result.title ?? result.url;
         const entryLines = [`${index + 1}. ${title}`, `   ${result.url}`];
 
-        const text = result.excerpts?.join(" ") ?? result.full_content ?? "";
-        const body = trimSnippet(text);
-        if (body) {
-          entryLines.push(`   ${body}`);
-        }
+        const text = result.full_content ?? result.excerpts?.join("\n\n") ?? "";
+        const body = normalizeContentText(text);
+        pushIndentedBlock(entryLines, body);
 
         lines.push(...entryLines, "");
         return {

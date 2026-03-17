@@ -97,7 +97,6 @@ export interface CodexProviderNativeConfig {
 export interface GeminiProviderNativeConfig {
   apiVersion?: string;
   searchModel?: string;
-  contentsModel?: string;
   answerModel?: string;
   researchAgent?: string;
 }
@@ -159,7 +158,6 @@ export interface GeminiProviderConfig {
   enabled?: boolean;
   tools?: {
     search?: boolean;
-    contents?: boolean;
     answer?: boolean;
     research?: boolean;
   };

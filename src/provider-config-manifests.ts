@@ -315,20 +315,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
         },
       }),
       stringSetting<GeminiProviderConfig>({
-        id: "geminiContentsModel",
-        label: "Contents model",
-        help: "Model used for Gemini URL content extraction via URL Context.",
-        getValue: (config) => getGeminiNative(config)?.contentsModel,
-        setValue: (config, value) => {
-          assignOptionalString(
-            ensureGeminiNative(config),
-            "contentsModel",
-            value,
-          );
-          cleanupEmpty(config, "native");
-        },
-      }),
-      stringSetting<GeminiProviderConfig>({
         id: "geminiAnswerModel",
         label: "Answer model",
         help: "Model used for grounded Gemini answers.",

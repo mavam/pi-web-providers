@@ -32,21 +32,19 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   readonly id: "gemini" = "gemini";
   readonly label = "Gemini";
   readonly docsUrl = "https://github.com/googleapis/js-genai";
-  readonly capabilities = ["search", "contents", "answer", "research"] as const;
+  readonly capabilities = ["search", "answer", "research"] as const;
 
   createTemplate(): GeminiProviderConfig {
     return {
       enabled: false,
       tools: {
         search: true,
-        contents: true,
         answer: true,
         research: true,
       },
       apiKey: "GOOGLE_API_KEY",
       native: {
         searchModel: DEFAULT_SEARCH_MODEL,
-        contentsModel: DEFAULT_CONTENTS_MODEL,
         answerModel: DEFAULT_ANSWER_MODEL,
         researchAgent: DEFAULT_RESEARCH_AGENT,
       },
@@ -198,27 +196,58 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
     );
 
     const urlList = urls.map((url) => `- ${url}`).join("\n");
-    const native = getGeminiNativeConfig(config);
-    const request = buildGeminiGenerateContentRequest({
-      defaultModel: native?.contentsModel ?? DEFAULT_CONTENTS_MODEL,
-      prompt:
-        `Extract the main textual content from each of the following URLs. ` +
-        `For every successfully retrieved URL, return exactly one block in this format:\n` +
-        `[[[URL]]]\n<resolved URL>\n[[[TITLE]]]\n<title>\n[[[BODY]]]\n<cleaned body text>\n[[[END]]]\n\n` +
-        `Only include successfully retrieved URLs. Preserve headings, paragraphs, and lists in BODY, ` +
-        `but remove navigation, ads, and boilerplate. Do not add any text outside these blocks.\n\n${urlList}`,
+    const defaultModel = DEFAULT_CONTENTS_MODEL;
+    const structuredPrompt =
+      `Extract the main textual content from each of the following URLs. ` +
+      `For every successfully retrieved URL, return exactly one block in this format:\n` +
+      `[[[URL]]]\n<resolved URL>\n[[[TITLE]]]\n<title>\n[[[BODY]]]\n<cleaned body text>\n[[[END]]]\n\n` +
+      `Only include successfully retrieved URLs. Preserve headings, paragraphs, and lists in BODY, ` +
+      `but remove navigation, ads, and boilerplate. Do not add any text outside these blocks.\n\n${urlList}`;
+
+    const structuredResponse = await requestGeminiContentsExtraction({
+      ai,
+      defaultModel,
+      prompt: structuredPrompt,
       options,
-      toolConfig: { urlContext: {} },
-    });
-    const response = await ai.models.generateContent({
-      model: request.model,
-      contents: [request.contents],
-      config: addAbortSignalToGeminiConfig(request.config, context.signal),
+      signal: context.signal,
     });
 
-    const text = response.text?.trim() || "";
-    const metadata = extractUrlContextMetadata(response.candidates);
-    const contentsEntries = buildGeminiContentsEntries(text, urls, metadata);
+    let text = structuredResponse.text;
+    let metadata = structuredResponse.metadata;
+    let contentsEntries = buildGeminiContentsEntries(text, urls, metadata);
+    const hasReadyEntries = contentsEntries.some(
+      (entry) => entry.status !== "failed",
+    );
+
+    if (
+      shouldFallbackToLegacyGeminiContentsPrompt(
+        text,
+        metadata,
+        hasReadyEntries,
+      )
+    ) {
+      const fallbackResponse = await requestGeminiContentsExtraction({
+        ai,
+        defaultModel,
+        prompt:
+          `Extract the main textual content from each of the following URLs. ` +
+          `For each URL, return the page title followed by the cleaned body text. ` +
+          `Preserve the original structure (headings, paragraphs, lists) but remove ` +
+          `navigation, ads, and boilerplate.\n\n${urlList}`,
+        options,
+        signal: context.signal,
+      });
+
+      text = fallbackResponse.text;
+      metadata = fallbackResponse.metadata;
+      contentsEntries = buildGeminiContentsEntries(text, urls, metadata);
+    }
+
+    if (shouldRetryEmptyGeminiContentsResponse(text, metadata)) {
+      throw new Error(
+        "Gemini returned an empty URL Context response. Retrying may succeed.",
+      );
+    }
     const lines: string[] = [];
 
     const successfulEntries = contentsEntries.filter(
@@ -557,6 +586,79 @@ function extractUrlContextMetadata(
   }
 
   return results;
+}
+
+async function requestGeminiContentsExtraction({
+  ai,
+  defaultModel,
+  prompt,
+  options,
+  signal,
+}: {
+  ai: GoogleGenAI;
+  defaultModel: string;
+  prompt: string;
+  options: JsonObject | undefined;
+  signal: AbortSignal | undefined;
+}): Promise<{
+  text: string;
+  metadata: Array<{ url: string; status: string | undefined }>;
+}> {
+  const request = buildGeminiGenerateContentRequest({
+    defaultModel,
+    prompt,
+    options,
+    toolConfig: { urlContext: {} },
+  });
+  const response = await ai.models.generateContent({
+    model: request.model,
+    contents: [request.contents],
+    config: addAbortSignalToGeminiConfig(request.config, signal),
+  });
+
+  return {
+    text: response.text?.trim() || "",
+    metadata: extractUrlContextMetadata(response.candidates),
+  };
+}
+
+function shouldFallbackToLegacyGeminiContentsPrompt(
+  text: string,
+  metadata: Array<{ url: string; status: string | undefined }>,
+  hasReadyEntries: boolean,
+): boolean {
+  if (hasReadyEntries) {
+    return false;
+  }
+
+  if (text.trim().length === 0) {
+    return true;
+  }
+
+  return metadata.some(
+    (entry) =>
+      entry.status === undefined ||
+      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS",
+  );
+}
+
+function shouldRetryEmptyGeminiContentsResponse(
+  text: string,
+  metadata: Array<{ url: string; status: string | undefined }>,
+): boolean {
+  if (text.trim().length > 0) {
+    return false;
+  }
+
+  if (metadata.length === 0) {
+    return true;
+  }
+
+  return metadata.some(
+    (entry) =>
+      entry.status === undefined ||
+      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS",
+  );
 }
 
 function buildGeminiContentsEntries(

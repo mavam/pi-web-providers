@@ -89,7 +89,7 @@ describe("search contents prefetch", () => {
     });
 
     const searchText = searchResult.content[0]?.text ?? "";
-    expect(searchText).toContain("1. Exa SDK");
+    expect(searchText).toContain("1. [Exa SDK](<https://exa.ai/sdk>)");
     expect(searchText).toContain(
       "Background contents prefetch started via exa for 2 URL(s). Prefetch id:",
     );
