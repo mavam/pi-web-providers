@@ -18,7 +18,6 @@ afterEach(async () => {
 describe("provider tool output", () => {
   it("groups multi-query search output into per-query sections", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -96,7 +95,6 @@ describe("provider tool output", () => {
 
   it("preserves successful search results when one query in a batch fails", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -160,7 +158,6 @@ describe("provider tool output", () => {
 
   it("fails the batch when every query fails", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -207,7 +204,6 @@ describe("provider tool output", () => {
 
   it("rejects a whitespace-only query in the array", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -232,7 +228,6 @@ describe("provider tool output", () => {
 
   it("rejects an empty queries array", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -257,7 +252,6 @@ describe("provider tool output", () => {
 
   it("groups multi-query answer output into per-question sections", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         gemini: {
           enabled: true,
@@ -327,7 +321,6 @@ describe("provider tool output", () => {
 
   it("preserves successful answers when one query in a batch fails", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         gemini: {
           enabled: true,
@@ -390,7 +383,6 @@ describe("provider tool output", () => {
 
   it("fails the answer batch when every query fails", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         gemini: {
           enabled: true,
@@ -439,7 +431,6 @@ describe("provider tool output", () => {
 
   it("supports a single-question batch for web_answer", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         gemini: {
           enabled: true,
@@ -487,7 +478,6 @@ describe("provider tool output", () => {
 
   it("truncates oversized non-search output and saves the full response", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -537,7 +527,6 @@ describe("provider tool output", () => {
 
     try {
       const config: WebProvidersConfig = {
-        version: 1,
         providers: {
           perplexity: {
             enabled: true,
@@ -593,7 +582,6 @@ describe("provider tool output", () => {
 
   it("rejects lifecycle-only options for streaming foreground Perplexity research", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         perplexity: {
           enabled: true,
@@ -626,7 +614,6 @@ describe("provider tool output", () => {
 
     try {
       const config: WebProvidersConfig = {
-        version: 1,
         providers: {
           perplexity: {
             enabled: true,
@@ -689,7 +676,6 @@ describe("provider tool output", () => {
 
   it("rejects requestTimeoutMs for research providers that cannot safely enforce it", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -732,7 +718,6 @@ describe("provider tool output", () => {
 
   it("rejects malformed local execution control fields", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -769,7 +754,6 @@ describe("provider tool output", () => {
 
   it("rejects research-only execution controls on non-research tools", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -827,7 +811,6 @@ describe("provider tool output", () => {
 
   it("rejects removed resumeInteractionId compatibility for research", async () => {
     const config: WebProvidersConfig = {
-      version: 1,
       providers: {
         gemini: {
           enabled: true,

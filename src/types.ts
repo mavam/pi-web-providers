@@ -180,7 +180,6 @@ export interface ValyuProviderConfig extends LegacyProviderRoutingConfig {
 }
 
 export interface WebProvidersConfig {
-  version: 1 | 2;
   tools?: ToolProviderMapping;
   providers?: {
     claude?: ClaudeProviderConfig;

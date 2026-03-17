@@ -1417,7 +1417,7 @@ function getProviderSettings(
 class WebProvidersSettingsView implements Component {
   private config: WebProvidersConfig;
   private activeProvider: ProviderId;
-  private activeSection: "provider" | "tools" | "config" = "provider";
+  private activeSection: "provider" | "tools" | "config" = "tools";
   private selection = {
     provider: 0,
     tools: 0,
@@ -1447,21 +1447,21 @@ class WebProvidersSettingsView implements Component {
     }
 
     const lines: string[] = [];
+    const toolItems = this.buildToolSectionItems();
+    lines.push(...this.renderSection(width, "Tools", "tools", toolItems));
+    lines.push("");
+
     const providerItems = this.buildProviderSectionItems();
     lines.push(
       ...this.renderSection(width, "Providers", "provider", providerItems),
     );
     lines.push("");
 
-    const toolItems = this.buildToolSectionItems();
-    lines.push(...this.renderSection(width, "Tools", "tools", toolItems));
-    lines.push("");
-
     const configItems = this.buildConfigSectionItems();
     lines.push(
       ...this.renderSection(
         width,
-        "Provider config & policy",
+        "General",
         "config",
         configItems,
       ),
@@ -1537,10 +1537,7 @@ class WebProvidersSettingsView implements Component {
       return {
         id: `provider:${provider.id}`,
         label: provider.label,
-        currentValue:
-          provider.id === this.activeProvider
-            ? `selected · ${status.summary}`
-            : status.summary,
+        currentValue: "",
         description:
           provider.id === this.activeProvider
             ? `Editing ${provider.label} settings below. Current status: ${status.summary}.`
@@ -1716,6 +1713,10 @@ class WebProvidersSettingsView implements Component {
       const label = selected
         ? this.theme.fg("accent", paddedLabel)
         : paddedLabel;
+      if (entry.currentValue.trim().length === 0) {
+        lines.push(truncateToWidth(`${prefix}${label}`, width));
+        continue;
+      }
       const value = selected
         ? this.theme.fg("accent", entry.currentValue)
         : this.theme.fg("muted", entry.currentValue);

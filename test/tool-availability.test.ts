@@ -341,7 +341,6 @@ function createConfig(
   overrides: Partial<WebProvidersConfig> = {},
 ): WebProvidersConfig {
   return {
-    version: 2,
     tools: overrides.tools,
     providers: overrides.providers,
   };

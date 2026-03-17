@@ -41,7 +41,6 @@ describe("search contents prefetch", () => {
     const { __test__ } = await import("../src/index.js");
     const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
     const config = {
-      version: 2,
       tools: {
         contents: "exa",
       },
@@ -178,7 +177,6 @@ describe("search contents prefetch", () => {
   it("reuses partial cache hits and fetches only the missing URLs", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
-      version: 2,
       tools: {
         contents: "exa",
       },
@@ -239,7 +237,6 @@ describe("search contents prefetch", () => {
   it("reuses earlier live reads without refetching and re-renders them in the current request order", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
-      version: 2,
       tools: {
         contents: "exa",
       },
@@ -300,7 +297,6 @@ describe("search contents prefetch", () => {
       const { __test__ } = await import("../src/index.js");
       const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
       const config = {
-        version: 2,
         tools: {
           contents: "exa",
         },

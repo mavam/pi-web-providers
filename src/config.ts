@@ -30,7 +30,6 @@ import type {
 } from "./types.js";
 
 const CONFIG_FILE_NAME = "web-providers.json";
-const VERSION = 2 as const;
 const commandValueCache = new Map<
   string,
   { value?: string; errorMessage?: string }
@@ -42,7 +41,6 @@ export function getConfigPath(): string {
 
 export function createDefaultConfig(): WebProvidersConfig {
   return {
-    version: VERSION,
     tools: {
       search: "codex",
       contents: null,
@@ -186,7 +184,6 @@ export function parseProviderConfig(
 
   const wrapper = normalizeConfig(
     {
-      version: VERSION,
       providers: {
         [providerId]: raw,
       },
@@ -258,7 +255,7 @@ export function resolveEnvMap(
 }
 
 function emptyConfig(): WebProvidersConfig {
-  return { version: VERSION };
+  return {};
 }
 
 function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
@@ -266,14 +263,7 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     throw new Error(`Config in ${source} must be a JSON object.`);
   }
 
-  const version = raw.version ?? VERSION;
-  if (version !== VERSION) {
-    throw new Error(
-      `Unsupported config version '${String(version)}' in ${source}. Expected ${VERSION}.`,
-    );
-  }
-
-  const config: WebProvidersConfig = { version: VERSION };
+  const config: WebProvidersConfig = {};
 
   if (raw.tools !== undefined) {
     config.tools = parseToolProviderMapping(raw.tools, source, "tools");
@@ -340,6 +330,14 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
         `Unknown providers in ${source}: ${unknownProviders.join(", ")}.`,
       );
     }
+  }
+
+  if (
+    raw.version !== undefined &&
+    typeof raw.version !== "number" &&
+    typeof raw.version !== "string"
+  ) {
+    throw new Error(`'version' in ${source}, when present, must be a string or number.`);
   }
 
   return config;

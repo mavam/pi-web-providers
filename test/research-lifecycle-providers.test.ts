@@ -68,7 +68,6 @@ describe("research lifecycle providers", () => {
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
-        version: 1,
         providers: {
           exa: {
             enabled: true,
@@ -117,7 +116,6 @@ describe("research lifecycle providers", () => {
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
-        version: 1,
         providers: {
           exa: {
             enabled: true,
@@ -163,7 +161,6 @@ describe("research lifecycle providers", () => {
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
-        version: 1,
         providers: {
           exa: {
             enabled: true,
@@ -211,7 +208,6 @@ describe("research lifecycle providers", () => {
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
-        version: 1,
         providers: {
           exa: {
             enabled: true,
@@ -268,7 +264,6 @@ describe("research lifecycle providers", () => {
     const promise = __test__.executeProviderTool({
       capability: "research",
       config: {
-        version: 1,
         providers: {
           valyu: {
             enabled: true,
