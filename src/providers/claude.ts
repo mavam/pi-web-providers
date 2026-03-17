@@ -7,7 +7,6 @@ import {
   type SDKMessage,
   type SDKResultMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   ClaudeProviderConfig,
@@ -90,7 +89,6 @@ export class ClaudeProvider implements WebProvider<ClaudeProviderConfig> {
   createTemplate(): ClaudeProviderConfig {
     return {
       enabled: false,
-      policy: createDefaultRequestPolicy(),
     };
   }
 

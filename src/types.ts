@@ -193,9 +193,19 @@ export interface ValyuProviderConfig extends LegacyProviderRoutingConfig {
   defaults?: JsonObject;
 }
 
+export interface GenericSettingsConfig {
+  requestTimeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  researchPollIntervalMs?: number;
+  researchTimeoutMs?: number;
+  researchMaxConsecutivePollErrors?: number;
+}
+
 export interface WebProvidersConfig {
   tools?: ToolProviderMapping;
   toolSettings?: ToolSettingsConfig;
+  genericSettings?: GenericSettingsConfig;
   providers?: {
     claude?: ClaudeProviderConfig;
     codex?: CodexProviderConfig;

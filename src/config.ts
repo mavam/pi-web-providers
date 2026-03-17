@@ -4,7 +4,6 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import {
   createDefaultLifecyclePolicy,
-  createDefaultRequestPolicy,
   DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
 } from "./execution-policy-defaults.js";
 import {
@@ -12,13 +11,13 @@ import {
   type ProviderToolId,
   supportsProviderTool,
 } from "./provider-tools.js";
-import { PROVIDER_IDS } from "./types.js";
 import type {
   ClaudeProviderConfig,
   CodexProviderConfig,
   ExaProviderConfig,
   ExecutionPolicyDefaults,
   GeminiProviderConfig,
+  GenericSettingsConfig,
   JsonObject,
   ParallelProviderConfig,
   PerplexityProviderConfig,
@@ -30,6 +29,7 @@ import type {
   ValyuProviderConfig,
   WebProvidersConfig,
 } from "./types.js";
+import { PROVIDER_IDS } from "./types.js";
 
 const CONFIG_FILE_NAME = "web-providers.json";
 const commandValueCache = new Map<
@@ -49,10 +49,10 @@ export function createDefaultConfig(): WebProvidersConfig {
       answer: null,
       research: null,
     },
+    genericSettings: createDefaultLifecyclePolicy(),
     providers: {
       claude: {
         enabled: false,
-        policy: createDefaultRequestPolicy(),
       },
       codex: {
         enabled: true,
@@ -61,7 +61,6 @@ export function createDefaultConfig(): WebProvidersConfig {
           webSearchEnabled: true,
           webSearchMode: "live",
         },
-        policy: createDefaultRequestPolicy(),
       },
       exa: {
         enabled: false,
@@ -72,7 +71,6 @@ export function createDefaultConfig(): WebProvidersConfig {
             text: true,
           },
         },
-        policy: createDefaultLifecyclePolicy(),
       },
       gemini: {
         enabled: false,
@@ -82,10 +80,10 @@ export function createDefaultConfig(): WebProvidersConfig {
           answerModel: "gemini-2.5-flash",
           researchAgent: "deep-research-pro-preview-12-2025",
         },
-        policy: createDefaultLifecyclePolicy({
+        policy: {
           researchMaxConsecutivePollErrors:
             DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
-        }),
+        },
       },
       perplexity: {
         enabled: false,
@@ -98,7 +96,6 @@ export function createDefaultConfig(): WebProvidersConfig {
             model: "sonar-deep-research",
           },
         },
-        policy: createDefaultRequestPolicy(),
       },
       parallel: {
         enabled: false,
@@ -112,7 +109,6 @@ export function createDefaultConfig(): WebProvidersConfig {
             full_content: false,
           },
         },
-        policy: createDefaultRequestPolicy(),
       },
       valyu: {
         enabled: false,
@@ -121,7 +117,6 @@ export function createDefaultConfig(): WebProvidersConfig {
           searchType: "all",
           responseLength: "short",
         },
-        policy: createDefaultLifecyclePolicy(),
       },
     },
   };
@@ -282,6 +277,14 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     config.toolSettings = parseToolSettingsConfig(raw.toolSettings, source);
   }
 
+  if (raw.genericSettings !== undefined) {
+    config.genericSettings = parseOptionalGenericSettings(
+      raw.genericSettings,
+      source,
+      "genericSettings",
+    );
+  }
+
   if (raw.providers !== undefined) {
     if (!isPlainObject(raw.providers)) {
       throw new Error(`'providers' in ${source} must be a JSON object.`);
@@ -359,7 +362,9 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     typeof raw.version !== "number" &&
     typeof raw.version !== "string"
   ) {
-    throw new Error(`'version' in ${source}, when present, must be a string or number.`);
+    throw new Error(
+      `'version' in ${source}, when present, must be a string or number.`,
+    );
   }
 
   return config;
@@ -836,6 +841,58 @@ function parseOptionalExecutionPolicy(
     : undefined;
 }
 
+function parseOptionalGenericSettings(
+  value: unknown,
+  source: string,
+  field: string,
+): GenericSettingsConfig | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const settings = parseOptionalJsonObject(value, source, field);
+  if (!settings) {
+    return undefined;
+  }
+
+  const parsed: GenericSettingsConfig = {
+    requestTimeoutMs: parseOptionalInteger(
+      settings.requestTimeoutMs,
+      source,
+      `${field}.requestTimeoutMs`,
+    ),
+    retryCount: parseOptionalNonNegativeInteger(
+      settings.retryCount,
+      source,
+      `${field}.retryCount`,
+    ),
+    retryDelayMs: parseOptionalInteger(
+      settings.retryDelayMs,
+      source,
+      `${field}.retryDelayMs`,
+    ),
+    researchPollIntervalMs: parseOptionalInteger(
+      settings.researchPollIntervalMs,
+      source,
+      `${field}.researchPollIntervalMs`,
+    ),
+    researchTimeoutMs: parseOptionalInteger(
+      settings.researchTimeoutMs,
+      source,
+      `${field}.researchTimeoutMs`,
+    ),
+    researchMaxConsecutivePollErrors: parseOptionalInteger(
+      settings.researchMaxConsecutivePollErrors,
+      source,
+      `${field}.researchMaxConsecutivePollErrors`,
+    ),
+  };
+
+  return Object.values(parsed).some((entry) => entry !== undefined)
+    ? parsed
+    : undefined;
+}
+
 function parseProviderObject(
   raw: unknown,
   source: string,
@@ -893,12 +950,7 @@ function parseToolProviderMappingEntry(
   if (value === null) {
     return null;
   }
-  const providerId = parseLiteral(
-    value,
-    source,
-    field,
-    PROVIDER_IDS,
-  );
+  const providerId = parseLiteral(value, source, field, PROVIDER_IDS);
   if (!supportsProviderTool(providerId, capability as ProviderToolId)) {
     throw new Error(
       `'${field}' in ${source} must name a provider that supports '${capability}'.`,
@@ -920,7 +972,11 @@ function parseToolSettingsConfig(
     if (key !== "search") {
       throw new Error(`Unknown tool settings in ${source}: ${key}.`);
     }
-    parsed.search = parseSearchToolSettings(entry, source, "toolSettings.search");
+    parsed.search = parseSearchToolSettings(
+      entry,
+      source,
+      "toolSettings.search",
+    );
   }
 
   return parsed;
@@ -971,10 +1027,7 @@ function parseSearchContentsPrefetchConfig(
   };
 
   const unknownFields = Object.keys(value).filter(
-    (key) =>
-      key !== "provider" &&
-      key !== "maxUrls" &&
-      key !== "ttlMs",
+    (key) => key !== "provider" && key !== "maxUrls" && key !== "ttlMs",
   );
   if (unknownFields.length > 0) {
     throw new Error(
@@ -1022,9 +1075,9 @@ function inferProviderEnabled(
   config: WebProvidersConfig,
   providerId: ProviderId,
 ): boolean {
-  return (Object.values(config.tools ?? {}) as Array<ProviderId | null | undefined>).some(
-    (mappedProviderId) => mappedProviderId === providerId,
-  );
+  return (
+    Object.values(config.tools ?? {}) as Array<ProviderId | null | undefined>
+  ).some((mappedProviderId) => mappedProviderId === providerId);
 }
 
 function parseOptionalStringMap(

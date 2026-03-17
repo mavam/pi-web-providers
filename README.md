@@ -16,8 +16,8 @@ off entirely.
   turn it off entirely
 - **Multiple providers** — Claude, Codex, Exa, Gemini, Perplexity, Parallel,
   Valyu
-- **One config command** (`/web-providers`) with separate sections for provider
-  settings and tool-to-provider mappings
+- **One config command** (`/web-providers`) with separate sections for tool
+  routing, shared generic settings, and provider-specific settings
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch** — optionally start background `web_contents`
@@ -41,8 +41,9 @@ Run:
 ```
 
 This edits the global config file `~/.pi/agent/web-providers.json`. The flow is
-split into two parts: select a tool to configure its routing and tool-specific
-settings, or select a provider to edit its provider-native settings.
+split into three parts: select a tool to configure its routing and tool-specific
+settings, adjust shared generic execution settings, or select a provider to edit
+its provider-native settings.
 
 ## 🔧 Tools
 
@@ -71,10 +72,10 @@ set. `/web-providers` can also persist default search prefetch settings under
 
 Read and extract the main contents of one or more web pages.
 
-| Parameter  | Type     | Default  | Description                          |
-| ---------- | -------- | -------- | ------------------------------------ |
-| `urls`     | string[] | required | One or more URLs to extract          |
-| `options`  | object   | —        | Provider-specific extraction options |
+| Parameter | Type     | Default  | Description                          |
+| --------- | -------- | -------- | ------------------------------------ |
+| `urls`    | string[] | required | One or more URLs to extract          |
+| `options` | object   | —        | Provider-specific extraction options |
 
 `web_contents` reuses any matching cached pages already present in the local
 content store—whether they came from prefetch or an earlier read—and only
@@ -84,10 +85,10 @@ fetches missing or stale URLs.
 
 Answer one or more questions using web-grounded evidence.
 
-| Parameter  | Type     | Default  | Description                                          |
-| ---------- | -------- | -------- | ---------------------------------------------------- |
-| `queries`  | string[] | required | One or more questions to answer in one call (max 10) |
-| `options`  | object   | —        | Provider-specific options                            |
+| Parameter | Type     | Default  | Description                                          |
+| --------- | -------- | -------- | ---------------------------------------------------- |
+| `queries` | string[] | required | One or more questions to answer in one call (max 10) |
+| `options` | object   | —        | Provider-specific options                            |
 
 Responses are grouped into per-question sections when more than one question is provided.
 
@@ -95,10 +96,10 @@ Responses are grouped into per-question sections when more than one question is 
 
 Investigate a topic across web sources and produce a longer report.
 
-| Parameter  | Type   | Default  | Description                |
-| ---------- | ------ | -------- | -------------------------- |
-| `input`    | string | required | Research brief or question |
-| `options`  | object | —        | Provider-specific options  |
+| Parameter | Type   | Default  | Description                |
+| --------- | ------ | -------- | -------------------------- |
+| `input`   | string | required | Research brief or question |
+| `options` | object | —        | Provider-specific options  |
 
 `options` are provider-native and provider-specific. Equivalent concepts can use
 different field names across SDKs—for example Perplexity uses `country`, Exa

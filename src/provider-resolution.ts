@@ -1,6 +1,10 @@
-import { getMappedProviderForCapability, type ProviderConfigUnion } from "./provider-tools.js";
+import {
+  getMappedProviderForCapability,
+  type ProviderConfigUnion,
+} from "./provider-tools.js";
 import { PROVIDER_MAP } from "./providers/index.js";
 import type {
+  ExecutionPolicyDefaults,
   ProviderCapability,
   ProviderId,
   WebProvider,
@@ -34,7 +38,46 @@ export function getEffectiveProviderConfig(
   config: WebProvidersConfig,
   providerId: ProviderId,
 ): ProviderConfigUnion | undefined {
-  return config.providers?.[providerId] as ProviderConfigUnion | undefined;
+  const providerConfig = config.providers?.[providerId] as
+    | ProviderConfigUnion
+    | undefined;
+  if (!providerConfig) {
+    return undefined;
+  }
+
+  const mergedPolicy = mergeExecutionPolicyDefaults(
+    config.genericSettings,
+    providerConfig.policy,
+  );
+  if (!mergedPolicy) {
+    return providerConfig;
+  }
+
+  return {
+    ...providerConfig,
+    policy: mergedPolicy,
+  } as ProviderConfigUnion;
+}
+
+function mergeExecutionPolicyDefaults(
+  shared: WebProvidersConfig["genericSettings"],
+  provider: ExecutionPolicyDefaults | undefined,
+): ExecutionPolicyDefaults | undefined {
+  const merged: ExecutionPolicyDefaults = {
+    requestTimeoutMs: provider?.requestTimeoutMs ?? shared?.requestTimeoutMs,
+    retryCount: provider?.retryCount ?? shared?.retryCount,
+    retryDelayMs: provider?.retryDelayMs ?? shared?.retryDelayMs,
+    researchPollIntervalMs:
+      provider?.researchPollIntervalMs ?? shared?.researchPollIntervalMs,
+    researchTimeoutMs: provider?.researchTimeoutMs ?? shared?.researchTimeoutMs,
+    researchMaxConsecutivePollErrors:
+      provider?.researchMaxConsecutivePollErrors ??
+      shared?.researchMaxConsecutivePollErrors,
+  };
+
+  return Object.values(merged).some((value) => value !== undefined)
+    ? merged
+    : undefined;
 }
 
 export function getMappedProviderIdForCapability(

@@ -19,6 +19,7 @@ vi.mock("node:child_process", async () => {
 });
 
 import {
+  getEffectiveProviderConfig,
   resolveProviderChoice,
   resolveProviderForCapability,
 } from "../src/provider-resolution.js";
@@ -105,9 +106,9 @@ describe("provider resolution", () => {
   it("does not fall back when search is unmapped", () => {
     process.env.CODEX_API_KEY = "test-key";
 
-    expect(() =>
-      resolveProviderChoice(createConfig(), process.cwd()),
-    ).toThrow(/No provider is configured for 'search'/);
+    expect(() => resolveProviderChoice(createConfig(), process.cwd())).toThrow(
+      /No provider is configured for 'search'/,
+    );
   });
 
   it("rejects an unavailable mapped provider", () => {
@@ -166,6 +167,36 @@ describe("provider resolution", () => {
     );
     expect(provider.id).toBe("perplexity");
   });
+
+  it("merges shared generic settings into the effective provider policy", () => {
+    const config = createConfig({
+      genericSettings: {
+        requestTimeoutMs: 30000,
+        retryCount: 3,
+        retryDelayMs: 2000,
+        researchPollIntervalMs: 3000,
+        researchTimeoutMs: 21600000,
+        researchMaxConsecutivePollErrors: 3,
+      },
+      providers: {
+        exa: {
+          policy: {
+            retryCount: 5,
+            researchPollIntervalMs: 4000,
+          },
+        },
+      },
+    });
+
+    expect(getEffectiveProviderConfig(config, "exa")?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 5,
+      retryDelayMs: 2000,
+      researchPollIntervalMs: 4000,
+      researchTimeoutMs: 21600000,
+      researchMaxConsecutivePollErrors: 3,
+    });
+  });
 });
 
 function createConfig(
@@ -173,6 +204,7 @@ function createConfig(
 ): WebProvidersConfig {
   return {
     tools: overrides.tools,
+    genericSettings: overrides.genericSettings,
     providers: overrides.providers,
   };
 }

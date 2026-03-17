@@ -71,6 +71,7 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
+  GenericSettingsConfig,
   JsonObject,
   ParallelProviderConfig,
   ProviderId,
@@ -79,8 +80,8 @@ import type {
   ProviderToolDetails,
   ProviderToolOutput,
   SearchPrefetchSettings,
-  SearchToolSettings,
   SearchResponse,
+  SearchToolSettings,
   ValyuProviderConfig,
   WebProvidersConfig,
   WebSearchDetails,
@@ -1036,7 +1037,12 @@ async function executeProviderTool({
   await cleanupContentStore();
 
   const provider = explicitProvider
-    ? resolveProviderForCapability(config, explicitProvider, ctx.cwd, capability)
+    ? resolveProviderForCapability(
+        config,
+        explicitProvider,
+        ctx.cwd,
+        capability,
+      )
     : resolveProviderForCapability(config, ctx.cwd, capability);
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
@@ -1442,13 +1448,172 @@ function getSearchPrefetchDefaults(
   return getSearchToolSettings(config)?.prefetch;
 }
 
+type GenericSettingId = keyof GenericSettingsConfig & string;
+
+const GENERIC_SETTING_IDS: readonly GenericSettingId[] = [
+  "requestTimeoutMs",
+  "retryCount",
+  "retryDelayMs",
+  "researchPollIntervalMs",
+  "researchTimeoutMs",
+  "researchMaxConsecutivePollErrors",
+] as const;
+
+const GENERIC_SETTING_META: Record<
+  GenericSettingId,
+  {
+    label: string;
+    help: string;
+    parse: (value: string) => number | undefined;
+  }
+> = {
+  requestTimeoutMs: {
+    label: "Request timeout (ms)",
+    help: "Default maximum time to wait for a single provider request before failing that attempt. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Request timeout must be a positive integer.",
+      ),
+  },
+  retryCount: {
+    label: "Retry count",
+    help: "Default number of times transient provider failures should be retried. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalNonNegativeIntegerInput(
+        value,
+        "Retry count must be a non-negative integer.",
+      ),
+  },
+  retryDelayMs: {
+    label: "Retry delay (ms)",
+    help: "Default initial delay before retrying failed requests. Later retries back off automatically. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Retry delay must be a positive integer.",
+      ),
+  },
+  researchPollIntervalMs: {
+    label: "Research poll interval (ms)",
+    help: "Default poll interval for long-running research jobs. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Research poll interval must be a positive integer.",
+      ),
+  },
+  researchTimeoutMs: {
+    label: "Research timeout (ms)",
+    help: "Default maximum total time to wait for research before returning a resumable timeout error. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Research timeout must be a positive integer.",
+      ),
+  },
+  researchMaxConsecutivePollErrors: {
+    label: "Max poll errors",
+    help: "Default number of consecutive poll failures to tolerate before stopping a local research run. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Max poll errors must be a positive integer.",
+      ),
+  },
+};
+
+function getGenericSettingValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): number | "mixed" | undefined {
+  const explicitValue = config.genericSettings?.[id];
+  if (typeof explicitValue === "number") {
+    return explicitValue;
+  }
+
+  const values = new Set<number>();
+  for (const providerId of PROVIDER_IDS) {
+    const value = config.providers?.[providerId]?.policy?.[id];
+    if (typeof value === "number") {
+      values.add(value);
+      if (values.size > 1) {
+        return "mixed";
+      }
+    }
+  }
+
+  const [onlyValue] = values;
+  return onlyValue;
+}
+
+function getGenericSettingDisplayValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): string {
+  const value = getGenericSettingValue(config, id);
+  if (value === "mixed") {
+    return "mixed";
+  }
+  return summarizeStringValue(
+    typeof value === "number" ? String(value) : undefined,
+    false,
+  );
+}
+
+function getGenericSettingRawValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): string {
+  const value = getGenericSettingValue(config, id);
+  return typeof value === "number" ? String(value) : "";
+}
+
+function ensureGenericSettings(
+  config: WebProvidersConfig,
+): GenericSettingsConfig {
+  config.genericSettings = { ...(config.genericSettings ?? {}) };
+  return config.genericSettings;
+}
+
+function cleanupGenericSettings(config: WebProvidersConfig): void {
+  if (
+    config.genericSettings &&
+    Object.keys(config.genericSettings).length === 0
+  ) {
+    delete config.genericSettings;
+  }
+}
+
+function stripGenericPolicyDuplicates(config: WebProvidersConfig): void {
+  for (const providerId of PROVIDER_IDS) {
+    const providerConfig = config.providers?.[providerId] as
+      | ProviderConfigUnion
+      | undefined;
+    if (!providerConfig?.policy) {
+      continue;
+    }
+
+    for (const key of GENERIC_SETTING_IDS) {
+      if (providerConfig.policy[key] === config.genericSettings?.[key]) {
+        delete providerConfig.policy[key];
+      }
+    }
+
+    if (Object.keys(providerConfig.policy).length === 0) {
+      delete providerConfig.policy;
+    }
+  }
+}
+
 class WebProvidersSettingsView implements Component {
   private config: WebProvidersConfig;
   private activeProvider: ProviderId;
-  private activeSection: "provider" | "tools" = "tools";
+  private activeSection: "provider" | "tools" | "generic" = "tools";
   private selection = {
     provider: 0,
     tools: 0,
+    generic: 0,
   };
   private submenu: Component | undefined;
 
@@ -1481,6 +1646,12 @@ class WebProvidersSettingsView implements Component {
     const providerItems = this.buildProviderSectionItems();
     lines.push(
       ...this.renderSection(width, "Providers", "provider", providerItems),
+    );
+    lines.push("");
+
+    const genericItems = this.buildGenericSectionItems();
+    lines.push(
+      ...this.renderSection(width, "Generic Settings", "generic", genericItems),
     );
 
     const selected = this.getSelectedEntry();
@@ -1557,8 +1728,8 @@ class WebProvidersSettingsView implements Component {
         currentValue: enabled ? "on" : "off",
         description:
           provider.id === this.activeProvider
-            ? `Press Enter to configure ${provider.label}. Current status: ${status.summary}.`
-            : `Move here and press Enter to configure ${provider.label}. Current status: ${status.summary}.`,
+            ? `Press Enter to configure ${provider.label}'s provider-specific settings. Current status: ${status.summary}.`
+            : `Move here and press Enter to configure ${provider.label}'s provider-specific settings. Current status: ${status.summary}.`,
         kind: "action",
       };
     });
@@ -1598,6 +1769,16 @@ class WebProvidersSettingsView implements Component {
     );
   }
 
+  private buildGenericSectionItems(): SettingsEntry[] {
+    return GENERIC_SETTING_IDS.map((id) => ({
+      id: `generic:${id}`,
+      label: GENERIC_SETTING_META[id].label,
+      currentValue: getGenericSettingDisplayValue(this.config, id),
+      description: GENERIC_SETTING_META[id].help,
+      kind: "text",
+    }));
+  }
+
   private buildProviderItem(
     setting: ProviderSettingDescriptor<ProviderConfigUnion>,
     providerConfig: ProviderConfigUnion | undefined,
@@ -1623,16 +1804,11 @@ class WebProvidersSettingsView implements Component {
     };
   }
 
-  private currentProviderConfig(): ProviderConfigUnion | undefined {
-    return this.config.providers?.[this.activeProvider] as
-      | ProviderConfigUnion
-      | undefined;
-  }
-
   private getSectionEntries(
-    section: "provider" | "tools",
+    section: "provider" | "tools" | "generic",
   ): SettingsEntry[] {
     if (section === "provider") return this.buildProviderSectionItems();
+    if (section === "generic") return this.buildGenericSectionItems();
     return this.buildToolSectionItems();
   }
 
@@ -1646,7 +1822,11 @@ class WebProvidersSettingsView implements Component {
   }
 
   private moveSection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools"> = ["provider", "tools"];
+    const sections: Array<"provider" | "tools" | "generic"> = [
+      "tools",
+      "provider",
+      "generic",
+    ];
     const index = sections.indexOf(this.activeSection);
     for (let offset = 1; offset <= sections.length; offset++) {
       const next =
@@ -1662,7 +1842,11 @@ class WebProvidersSettingsView implements Component {
   }
 
   private moveSelection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools"> = ["provider", "tools"];
+    const sections: Array<"provider" | "tools" | "generic"> = [
+      "tools",
+      "provider",
+      "generic",
+    ];
     const currentEntries = this.getActiveSectionEntries();
     const currentIndex = this.selection[this.activeSection];
 
@@ -1710,7 +1894,7 @@ class WebProvidersSettingsView implements Component {
   private renderSection(
     width: number,
     title: string,
-    section: "provider" | "tools",
+    section: "provider" | "tools" | "generic",
     entries: SettingsEntry[],
   ): string[] {
     const lines = [
@@ -1749,6 +1933,25 @@ class WebProvidersSettingsView implements Component {
     const entry = this.getSelectedEntry();
     if (!entry) return;
 
+    if (entry.id.startsWith("generic:")) {
+      const settingId = entry.id.slice("generic:".length) as GenericSettingId;
+      this.submenu = new TextValueSubmenu(
+        this.tui,
+        this.theme,
+        entry.label,
+        this.currentGenericSettingRawValue(settingId),
+        entry.description,
+        (selectedValue) => {
+          this.submenu = undefined;
+          if (selectedValue !== undefined) {
+            void this.handleGenericSettingChange(settingId, selectedValue);
+          }
+          this.tui.requestRender();
+        },
+      );
+      return;
+    }
+
     if (entry.kind === "action" && entry.id.startsWith("tool:")) {
       const toolId = entry.id.slice("tool:".length) as ProviderToolId;
       this.submenu = new ToolSettingsSubmenu(
@@ -1780,9 +1983,7 @@ class WebProvidersSettingsView implements Component {
             config.providers ??= {};
             const providerConfig = getEditableProviderConfig(
               providerId,
-              config.providers?.[providerId] as
-                | ProviderConfigUnion
-                | undefined,
+              config.providers?.[providerId] as ProviderConfigUnion | undefined,
             );
             mutate(providerConfig);
             config.providers[providerId] = providerConfig as never;
@@ -1797,10 +1998,33 @@ class WebProvidersSettingsView implements Component {
     }
   }
 
+  private currentGenericSettingRawValue(id: GenericSettingId): string {
+    return getGenericSettingRawValue(this.config, id);
+  }
+
+  private async handleGenericSettingChange(
+    id: GenericSettingId,
+    value: string,
+  ): Promise<void> {
+    await this.persist((config) => {
+      const parsed = GENERIC_SETTING_META[id].parse(value);
+      const settings = ensureGenericSettings(config);
+      if (parsed === undefined) {
+        delete settings[id];
+      } else {
+        settings[id] = parsed;
+      }
+      cleanupGenericSettings(config);
+      stripGenericPolicyDuplicates(config);
+    });
+  }
+
   private currentProviderConfigFor(
     providerId: ProviderId,
   ): ProviderConfigUnion | undefined {
-    return this.config.providers?.[providerId] as ProviderConfigUnion | undefined;
+    return this.config.providers?.[providerId] as
+      | ProviderConfigUnion
+      | undefined;
   }
 
   private async persist(
@@ -1809,6 +2033,8 @@ class WebProvidersSettingsView implements Component {
     const nextConfig = structuredClone(this.config);
     try {
       mutate(nextConfig);
+      cleanupGenericSettings(nextConfig);
+      stripGenericPolicyDuplicates(nextConfig);
       await writeConfigFile(nextConfig);
       if (didContentsCacheInputsChange(this.config, nextConfig)) {
         resetContentStore();
@@ -1906,7 +2132,10 @@ class ToolSettingsSubmenu implements Component {
 
   private getEntries(): SettingsEntry[] {
     const config = this.getConfig();
-    const mappedProviderId = getMappedProviderIdForCapability(config, this.toolId);
+    const mappedProviderId = getMappedProviderIdForCapability(
+      config,
+      this.toolId,
+    );
     const enabledProviderIds = getEnabledCompatibleProvidersForTool(
       config,
       this.toolId,
@@ -1939,11 +2168,12 @@ class ToolSettingsSubmenu implements Component {
       );
       const prefetchValues = [
         "off",
-        ...prefetchProviderIds.map((providerId) => PROVIDER_MAP[providerId].label),
+        ...prefetchProviderIds.map(
+          (providerId) => PROVIDER_MAP[providerId].label,
+        ),
       ];
       const currentPrefetchProviderValue =
-        prefetch?.provider &&
-        prefetchProviderIds.includes(prefetch.provider)
+        prefetch?.provider && prefetchProviderIds.includes(prefetch.provider)
           ? PROVIDER_MAP[prefetch.provider].label
           : "off";
 
@@ -1961,7 +2191,9 @@ class ToolSettingsSubmenu implements Component {
           id: "prefetchMaxUrls",
           label: "Prefetch URLs",
           currentValue:
-            prefetch?.maxUrls !== undefined ? String(prefetch.maxUrls) : "default",
+            prefetch?.maxUrls !== undefined
+              ? String(prefetch.maxUrls)
+              : "default",
           description:
             "Maximum number of search result URLs to prefetch. Leave blank to use the built-in default.",
           kind: "text",
@@ -2052,17 +2284,17 @@ class ToolSettingsSubmenu implements Component {
           config.tools[this.toolId] =
             value === "off"
               ? null
-              : getEnabledCompatibleProvidersForTool(config, this.toolId).find(
-                    (providerId) => PROVIDER_MAP[providerId].label === value,
-                  ) ?? null;
+              : (getEnabledCompatibleProvidersForTool(config, this.toolId).find(
+                  (providerId) => PROVIDER_MAP[providerId].label === value,
+                ) ?? null);
           return;
         case "prefetchProvider": {
           const providerId =
             value === "off"
               ? null
-              : getEnabledCompatibleProvidersForTool(config, "contents").find(
-                    (candidate) => PROVIDER_MAP[candidate].label === value,
-                  ) ?? null;
+              : (getEnabledCompatibleProvidersForTool(config, "contents").find(
+                  (candidate) => PROVIDER_MAP[candidate].label === value,
+                ) ?? null);
           ensureSearchToolSettings(config).prefetch ??= {};
           ensureSearchToolSettings(config).prefetch!.provider = providerId;
           return;
@@ -2323,6 +2555,24 @@ function parseOptionalPositiveIntegerInput(
   return parsed;
 }
 
+function parseOptionalNonNegativeIntegerInput(
+  value: string,
+  errorMessage: string,
+): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(errorMessage);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(errorMessage);
+  }
+  return parsed;
+}
+
 class TextValueSubmenu implements Component {
   private readonly editor: Editor;
 
@@ -2391,10 +2641,10 @@ function getEditableProviderConfig(
   ) as ProviderConfigUnion;
 }
 
-function getInitialProviderSelection(
-  config: WebProvidersConfig,
-): ProviderId {
-  for (const capability of Object.keys(CAPABILITY_TOOL_NAMES) as ProviderCapability[]) {
+function getInitialProviderSelection(config: WebProvidersConfig): ProviderId {
+  for (const capability of Object.keys(
+    CAPABILITY_TOOL_NAMES,
+  ) as ProviderCapability[]) {
     const providerId = getMappedProviderIdForCapability(config, capability);
     if (providerId) {
       return providerId;

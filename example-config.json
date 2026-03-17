@@ -5,14 +5,17 @@
     "answer": null,
     "research": null
   },
+  "genericSettings": {
+    "requestTimeoutMs": 30000,
+    "retryCount": 3,
+    "retryDelayMs": 2000,
+    "researchPollIntervalMs": 3000,
+    "researchTimeoutMs": 21600000,
+    "researchMaxConsecutivePollErrors": 3
+  },
   "providers": {
     "claude": {
-      "enabled": false,
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
-      }
+      "enabled": false
     },
     "codex": {
       "enabled": true,
@@ -20,11 +23,6 @@
         "networkAccessEnabled": true,
         "webSearchEnabled": true,
         "webSearchMode": "live"
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "exa": {
@@ -35,14 +33,6 @@
         "contents": {
           "text": true
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
-        "researchMaxConsecutivePollErrors": 3
       }
     },
     "gemini": {
@@ -54,11 +44,6 @@
         "researchAgent": "deep-research-pro-preview-12-2025"
       },
       "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
         "researchMaxConsecutivePollErrors": 10
       }
     },
@@ -72,11 +57,6 @@
         "research": {
           "model": "sonar-deep-research"
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "parallel": {
@@ -90,11 +70,6 @@
           "excerpts": true,
           "full_content": false
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "valyu": {
@@ -103,14 +78,6 @@
       "native": {
         "searchType": "all",
         "responseLength": "short"
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
-        "researchMaxConsecutivePollErrors": 3
       }
     }
   }

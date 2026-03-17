@@ -116,6 +116,31 @@ describe("config parsing", () => {
     });
   });
 
+  it("accepts shared generic execution settings", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        genericSettings: {
+          requestTimeoutMs: 45000,
+          retryCount: 5,
+          retryDelayMs: 4000,
+          researchPollIntervalMs: 6000,
+          researchTimeoutMs: 28800000,
+          researchMaxConsecutivePollErrors: 12,
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.genericSettings).toEqual({
+      requestTimeoutMs: 45000,
+      retryCount: 5,
+      retryDelayMs: 4000,
+      researchPollIntervalMs: 6000,
+      researchTimeoutMs: 28800000,
+      researchMaxConsecutivePollErrors: 12,
+    });
+  });
+
   it("rejects unknown tool-specific settings", () => {
     expect(() =>
       parseConfig(
@@ -241,12 +266,12 @@ describe("config parsing", () => {
 
   it("maps legacy defaults into native and policy config blocks", () => {
     const loaded = parseConfig(
-        JSON.stringify({
-          version: 2,
-          providers: {
-            gemini: {
-              apiKey: "GOOGLE_API_KEY",
-              defaults: {
+      JSON.stringify({
+        version: 2,
+        providers: {
+          gemini: {
+            apiKey: "GOOGLE_API_KEY",
+            defaults: {
               searchModel: "gemini-2.5-flash",
               requestTimeoutMs: 45000,
               retryCount: 5,
@@ -265,20 +290,10 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini).not.toHaveProperty("defaults");
   });
 
-  it("seeds managed execution policy defaults for every provider template", () => {
+  it("seeds shared generic defaults and only keeps provider-specific overrides", () => {
     const config = createDefaultConfig();
 
-    expect(config.providers?.claude?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.codex?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.exa?.policy).toEqual({
+    expect(config.genericSettings).toEqual({
       requestTimeoutMs: 30000,
       retryCount: 3,
       retryDelayMs: 2000,
@@ -286,35 +301,18 @@ describe("config parsing", () => {
       researchTimeoutMs: 21600000,
       researchMaxConsecutivePollErrors: 3,
     });
+    expect(config.providers?.claude?.policy).toBeUndefined();
+    expect(config.providers?.codex?.policy).toBeUndefined();
+    expect(config.providers?.exa?.policy).toBeUndefined();
     expect(config.providers?.gemini?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-      researchPollIntervalMs: 3000,
-      researchTimeoutMs: 21600000,
       researchMaxConsecutivePollErrors: 10,
     });
-    expect(config.providers?.perplexity?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.parallel?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.valyu?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-      researchPollIntervalMs: 3000,
-      researchTimeoutMs: 21600000,
-      researchMaxConsecutivePollErrors: 3,
-    });
+    expect(config.providers?.perplexity?.policy).toBeUndefined();
+    expect(config.providers?.parallel?.policy).toBeUndefined();
+    expect(config.providers?.valyu?.policy).toBeUndefined();
   });
 
-  it("keeps provider templates aligned with the default config policy blocks", () => {
+  it("keeps provider templates aligned with provider-specific default config blocks", () => {
     const config = createDefaultConfig();
 
     expect(PROVIDER_MAP.claude.createTemplate().policy).toEqual(

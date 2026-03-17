@@ -1,7 +1,6 @@
 import Perplexity from "@perplexity-ai/perplexity_ai";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import {
   createSilentForegroundPlan,
   createStreamingForegroundPlan,
@@ -52,7 +51,6 @@ export class PerplexityProvider
           model: DEFAULT_RESEARCH_MODEL,
         },
       },
-      policy: createDefaultRequestPolicy(),
     };
   }
 

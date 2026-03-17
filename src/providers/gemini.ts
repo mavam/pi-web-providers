@@ -1,9 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { resolveConfigValue } from "../config.js";
-import {
-  createDefaultLifecyclePolicy,
-  DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
-} from "../execution-policy-defaults.js";
+import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
 import {
   createBackgroundResearchPlan,
   createSilentForegroundPlan,
@@ -43,10 +40,10 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
         answerModel: DEFAULT_ANSWER_MODEL,
         researchAgent: DEFAULT_RESEARCH_AGENT,
       },
-      policy: createDefaultLifecyclePolicy({
+      policy: {
         researchMaxConsecutivePollErrors:
           DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
-      }),
+      },
     };
   }
 

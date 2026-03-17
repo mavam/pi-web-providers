@@ -105,7 +105,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           );
         },
       }),
-      ...requestPolicySettings<ClaudeProviderConfig>(),
     ],
   },
   codex: {
@@ -215,7 +214,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
-      ...requestPolicySettings<CodexProviderConfig>(),
     ],
   },
   exa: {
@@ -277,7 +275,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
-      ...requestPolicySettings<ExaProviderConfig>(),
       ...lifecyclePolicySettings<ExaProviderConfig>(),
     ],
   },
@@ -342,7 +339,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
-      ...requestPolicySettings<GeminiProviderConfig>(),
       ...lifecyclePolicySettings<GeminiProviderConfig>(),
     ],
   },
@@ -350,7 +346,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
     settings: [
       apiKeySetting<PerplexityProviderConfig>(),
       baseUrlSetting<PerplexityProviderConfig>(),
-      ...requestPolicySettings<PerplexityProviderConfig>(),
     ],
   },
   parallel: {
@@ -415,7 +410,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupNestedObjects(config);
         },
       }),
-      ...requestPolicySettings<ParallelProviderConfig>(),
     ],
   },
   valyu: {
@@ -456,7 +450,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
-      ...requestPolicySettings<ValyuProviderConfig>(),
       ...lifecyclePolicySettings<ValyuProviderConfig>(),
     ],
   },
@@ -523,65 +516,6 @@ function baseUrlSetting<TConfig extends { baseUrl?: string }>() {
   });
 }
 
-function requestPolicySettings<
-  TConfig extends { policy?: ExecutionPolicyDefaults },
->() {
-  return [
-    integerSetting<TConfig>({
-      id: "requestTimeoutMs",
-      label: "Request timeout (ms)",
-      help: "Maximum time to wait for a single provider request before failing that attempt.",
-      minimum: 1,
-      errorMessage: "Request timeout must be a positive integer.",
-      getValue: (config) => getIntegerString(config?.policy?.requestTimeoutMs),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensurePolicy(config),
-          "requestTimeoutMs",
-          value,
-          "Request timeout must be a positive integer.",
-        );
-        cleanupEmpty(config, "policy");
-      },
-    }),
-    integerSetting<TConfig>({
-      id: "retryCount",
-      label: "Retry count",
-      help: "How many times transient provider failures should be retried.",
-      minimum: 0,
-      errorMessage: "Retry count must be a non-negative integer.",
-      getValue: (config) => getIntegerString(config?.policy?.retryCount),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensurePolicy(config),
-          "retryCount",
-          value,
-          "Retry count must be a non-negative integer.",
-          { allowZero: true },
-        );
-        cleanupEmpty(config, "policy");
-      },
-    }),
-    integerSetting<TConfig>({
-      id: "retryDelayMs",
-      label: "Retry delay (ms)",
-      help: "Initial delay before retrying failed requests. Later retries back off automatically.",
-      minimum: 1,
-      errorMessage: "Retry delay must be a positive integer.",
-      getValue: (config) => getIntegerString(config?.policy?.retryDelayMs),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensurePolicy(config),
-          "retryDelayMs",
-          value,
-          "Retry delay must be a positive integer.",
-        );
-        cleanupEmpty(config, "policy");
-      },
-    }),
-  ] as const;
-}
-
 function lifecyclePolicySettings<
   TConfig extends { policy?: ExecutionPolicyDefaults },
 >() {
@@ -589,7 +523,7 @@ function lifecyclePolicySettings<
     integerSetting<TConfig>({
       id: "researchPollIntervalMs",
       label: "Research poll interval (ms)",
-      help: "How often to poll long-running research jobs for updates.",
+      help: "How often to poll long-running research jobs for updates for this provider. Leave empty to inherit the generic setting.",
       minimum: 1,
       errorMessage: "Research poll interval must be a positive integer.",
       getValue: (config) =>
@@ -607,7 +541,7 @@ function lifecyclePolicySettings<
     integerSetting<TConfig>({
       id: "researchTimeoutMs",
       label: "Research timeout (ms)",
-      help: "Maximum total time to wait for research before returning a resumable timeout error.",
+      help: "Maximum total time to wait for research before returning a resumable timeout error for this provider. Leave empty to inherit the generic setting.",
       minimum: 1,
       errorMessage: "Research timeout must be a positive integer.",
       getValue: (config) => getIntegerString(config?.policy?.researchTimeoutMs),
@@ -624,7 +558,7 @@ function lifecyclePolicySettings<
     integerSetting<TConfig>({
       id: "researchMaxConsecutivePollErrors",
       label: "Max poll errors",
-      help: "How many consecutive poll failures to tolerate before stopping the local research run.",
+      help: "How many consecutive poll failures to tolerate before stopping the local research run for this provider. Leave empty to inherit the generic setting.",
       minimum: 1,
       errorMessage: "Max poll errors must be a positive integer.",
       getValue: (config) =>

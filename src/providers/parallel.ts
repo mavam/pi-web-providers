@@ -1,7 +1,6 @@
 import Parallel from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   JsonValue,
@@ -40,7 +39,6 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
           full_content: true,
         },
       },
-      policy: createDefaultRequestPolicy(),
     };
   }
 

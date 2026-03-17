@@ -16,6 +16,25 @@ export function createDefaultRequestPolicy(): ExecutionPolicyDefaults {
   };
 }
 
+export function createDefaultResearchLifecyclePolicy(
+  overrides: Partial<
+    Pick<
+      ExecutionPolicyDefaults,
+      | "researchPollIntervalMs"
+      | "researchTimeoutMs"
+      | "researchMaxConsecutivePollErrors"
+    >
+  > = {},
+): ExecutionPolicyDefaults {
+  return {
+    researchPollIntervalMs: DEFAULT_RESEARCH_POLL_INTERVAL_MS,
+    researchTimeoutMs: DEFAULT_RESEARCH_TIMEOUT_MS,
+    researchMaxConsecutivePollErrors:
+      DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+    ...overrides,
+  };
+}
+
 export function createDefaultLifecyclePolicy(
   overrides: Partial<
     Pick<
@@ -31,10 +50,7 @@ export function createDefaultLifecyclePolicy(
 ): ExecutionPolicyDefaults {
   return {
     ...createDefaultRequestPolicy(),
-    researchPollIntervalMs: DEFAULT_RESEARCH_POLL_INTERVAL_MS,
-    researchTimeoutMs: DEFAULT_RESEARCH_TIMEOUT_MS,
-    researchMaxConsecutivePollErrors:
-      DEFAULT_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
+    ...createDefaultResearchLifecyclePolicy(overrides),
     ...overrides,
   };
 }
