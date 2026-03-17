@@ -17,7 +17,6 @@ Before:
 
 ```json
 {
-  "version": 1,
   "providers": {
     "exa": {
       "enabled": true,
@@ -48,6 +47,6 @@ After:
 }
 ```
 
-The `version` field and per-provider `tools` toggles are removed. The
-`/web-providers` settings command now has a dedicated tool-mapping section.
-Existing config files must be migrated to the new format.
+Per-provider `tools` toggles are removed. The `/web-providers` settings command
+now has a dedicated tool-mapping section. Existing config files must be migrated
+to the new format.

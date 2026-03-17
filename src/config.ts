@@ -357,16 +357,6 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     }
   }
 
-  if (
-    raw.version !== undefined &&
-    typeof raw.version !== "number" &&
-    typeof raw.version !== "string"
-  ) {
-    throw new Error(
-      `'version' in ${source}, when present, must be a string or number.`,
-    );
-  }
-
   return config;
 }
 

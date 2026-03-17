@@ -36,7 +36,6 @@ describe("config parsing", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 2,
           providers: {
             searxng: {},
           },
@@ -50,7 +49,6 @@ describe("config parsing", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 2,
           tools: {
             summarize: "codex",
           },
@@ -79,7 +77,6 @@ describe("config parsing", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 2,
           providers: {
             valyu: {
               tools: {
@@ -267,7 +264,6 @@ describe("config parsing", () => {
   it("maps legacy defaults into native and policy config blocks", () => {
     const loaded = parseConfig(
       JSON.stringify({
-        version: 2,
         providers: {
           gemini: {
             apiKey: "GOOGLE_API_KEY",

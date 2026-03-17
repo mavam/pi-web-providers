@@ -20,18 +20,10 @@ export function supportsProviderCapability(
 
 export function resolveProviderChoice(
   config: WebProvidersConfig,
-  explicitOrCwd: ProviderId | string,
-  cwd?: string,
+  cwd: string,
+  explicit?: ProviderId,
 ) {
-  if (cwd === undefined) {
-    return resolveProviderForCapability(config, explicitOrCwd, "search");
-  }
-  return resolveProviderForCapability(
-    config,
-    explicitOrCwd as ProviderId | undefined,
-    cwd,
-    "search",
-  );
+  return resolveProviderForCapability(config, cwd, "search", explicit);
 }
 
 export function getEffectiveProviderConfig(
@@ -90,25 +82,12 @@ export function getMappedProviderIdForCapability(
 
 export function resolveProviderForCapability(
   config: WebProvidersConfig,
-  explicitOrCwd: ProviderId | string | undefined,
-  cwdOrCapability: string | ProviderCapability,
-  maybeCapability?: ProviderCapability,
+  cwd: string,
+  capability: ProviderCapability,
+  explicit?: ProviderId,
 ) {
-  const explicitProvider =
-    maybeCapability === undefined
-      ? undefined
-      : (explicitOrCwd as ProviderId | undefined);
-  const cwd =
-    maybeCapability === undefined
-      ? (explicitOrCwd as string)
-      : (cwdOrCapability as string);
-  const capability =
-    maybeCapability === undefined
-      ? (cwdOrCapability as ProviderCapability)
-      : maybeCapability;
-
   const providerId =
-    explicitProvider ?? getMappedProviderIdForCapability(config, capability);
+    explicit ?? getMappedProviderIdForCapability(config, capability);
   if (!providerId) {
     throw new Error(
       `No provider is configured for '${capability}'. Run /web-providers to configure tool mappings.`,

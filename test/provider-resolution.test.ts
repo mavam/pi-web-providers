@@ -69,7 +69,7 @@ describe("provider resolution", () => {
       },
     });
 
-    const provider = resolveProviderChoice(config, "exa", process.cwd());
+    const provider = resolveProviderChoice(config, process.cwd(), "exa");
     expect(provider.id).toBe("exa");
   });
 
@@ -81,7 +81,7 @@ describe("provider resolution", () => {
     });
 
     expect(() =>
-      resolveProviderChoice(config, "claude", process.cwd()),
+      resolveProviderChoice(config, process.cwd(), "claude"),
     ).toThrow(/Provider 'claude' is not available: missing Claude auth/);
   });
 
@@ -161,9 +161,9 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForCapability(
       config,
-      "perplexity",
       process.cwd(),
       "research",
+      "perplexity",
     );
     expect(provider.id).toBe("perplexity");
   });

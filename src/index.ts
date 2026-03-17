@@ -613,11 +613,7 @@ async function executeSearchTool({
 }) {
   await cleanupContentStore();
 
-  const provider = resolveProviderChoice(
-    config,
-    explicitProvider ?? ctx.cwd,
-    explicitProvider ? ctx.cwd : undefined,
-  );
+  const provider = resolveProviderChoice(config, ctx.cwd, explicitProvider);
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
@@ -789,9 +785,12 @@ async function executeAnswerTool({
   queries: string[];
   planOverrides?: ProviderOperationPlan<ProviderToolOutput>[];
 }) {
-  const provider = explicitProvider
-    ? resolveProviderForCapability(config, explicitProvider, ctx.cwd, "answer")
-    : resolveProviderForCapability(config, ctx.cwd, "answer");
+  const provider = resolveProviderForCapability(
+    config,
+    ctx.cwd,
+    "answer",
+    explicitProvider,
+  );
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
@@ -1036,14 +1035,12 @@ async function executeProviderTool({
 }) {
   await cleanupContentStore();
 
-  const provider = explicitProvider
-    ? resolveProviderForCapability(
-        config,
-        explicitProvider,
-        ctx.cwd,
-        capability,
-      )
-    : resolveProviderForCapability(config, ctx.cwd, capability);
+  const provider = resolveProviderForCapability(
+    config,
+    ctx.cwd,
+    capability,
+    explicitProvider,
+  );
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
