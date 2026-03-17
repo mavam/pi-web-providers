@@ -36,12 +36,6 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
 
   createTemplate(): GeminiProviderConfig {
     return {
-      enabled: false,
-      tools: {
-        search: true,
-        answer: true,
-        research: true,
-      },
       apiKey: "GOOGLE_API_KEY",
       native: {
         searchModel: DEFAULT_SEARCH_MODEL,
@@ -58,9 +52,6 @@ export class GeminiProvider implements WebProvider<GeminiProviderConfig> {
   getStatus(config: GeminiProviderConfig | undefined): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
-    }
-    if (config.enabled === false) {
-      return { available: false, summary: "disabled" };
     }
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {

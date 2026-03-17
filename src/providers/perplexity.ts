@@ -42,12 +42,6 @@ export class PerplexityProvider
 
   createTemplate(): PerplexityProviderConfig {
     return {
-      enabled: false,
-      tools: {
-        search: true,
-        answer: true,
-        research: true,
-      },
       apiKey: "PERPLEXITY_API_KEY",
       native: {
         answer: {
@@ -64,9 +58,6 @@ export class PerplexityProvider
   getStatus(config: PerplexityProviderConfig | undefined): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
-    }
-    if (config.enabled === false) {
-      return { available: false, summary: "disabled" };
     }
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {

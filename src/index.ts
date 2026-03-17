@@ -49,6 +49,7 @@ import {
 } from "./provider-config-manifests.js";
 import {
   getEffectiveProviderConfig,
+  getMappedProviderIdForCapability,
   resolveProviderChoice,
   resolveProviderForCapability,
   supportsProviderCapability,
@@ -58,9 +59,8 @@ import {
   resolvePlanExecutionSupport,
 } from "./provider-runtime.js";
 import {
-  isProviderToolEnabled,
+  getCompatibleProvidersForTool,
   PROVIDER_TOOL_META,
-  PROVIDER_TOOLS,
   type ProviderConfigUnion,
   type ProviderToolId,
 } from "./provider-tools.js";
@@ -96,9 +96,6 @@ const CAPABILITY_TOOL_NAMES: Record<ProviderCapability, string> = {
   research: "web_research",
 };
 const MANAGED_TOOL_NAMES = Object.values(CAPABILITY_TOOL_NAMES);
-const PROVIDER_OVERRIDE_GUIDELINES = [
-  "Do not set provider unless the user asks for one.",
-];
 
 export default function webProvidersExtension(pi: ExtensionAPI) {
   registerManagedTools(pi);
@@ -161,7 +158,6 @@ function registerWebSearchTool(
       `Find likely sources on the public web for up to ${MAX_SEARCH_QUERIES} queries in a single call and return titles, URLs, and snippets grouped by query. ` +
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
     promptGuidelines: [
-      ...PROVIDER_OVERRIDE_GUIDELINES,
       "Prefer batching related searches into one web_search call instead of making multiple calls.",
     ],
     parameters: Type.Object({
@@ -180,16 +176,11 @@ function registerWebSearchTool(
       options: jsonOptionsSchema(
         describeOptionsField("search", visibleProviderIds),
       ),
-      provider: providerEnum(
-        visibleProviderIds,
-        "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
-      ),
     }),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeSearchTool({
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -203,7 +194,6 @@ function registerWebSearchTool(
       return renderCallHeader(
         args as {
           queries?: string[];
-          provider?: ProviderId;
           maxResults?: number;
         },
         theme,
@@ -237,17 +227,11 @@ function registerWebContentsTool(
         description: "One or more URLs to extract",
       }),
       options: jsonOptionsSchema(describeOptionsField("contents", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports web contents.",
-      ),
     }),
-    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "contents",
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -293,19 +277,13 @@ function registerWebAnswerTool(
         description: `One or more questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
       }),
       options: jsonOptionsSchema(describeOptionsField("answer", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports web answers.",
-      ),
     }),
     promptGuidelines: [
-      ...PROVIDER_OVERRIDE_GUIDELINES,
       "Prefer batching related questions into one web_answer call instead of making multiple calls.",
     ],
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeAnswerTool({
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -319,7 +297,6 @@ function registerWebAnswerTool(
           queries: Array.isArray((args as { queries?: unknown }).queries)
             ? ((args as { queries?: string[] }).queries ?? [])
             : [],
-          provider: (args as { provider?: ProviderId }).provider,
         },
         theme,
       );
@@ -351,17 +328,11 @@ function registerWebResearchTool(
     parameters: Type.Object({
       input: Type.String({ description: "Research brief or question" }),
       options: jsonOptionsSchema(describeOptionsField("research", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports research.",
-      ),
     }),
-    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "research",
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -373,7 +344,6 @@ function registerWebResearchTool(
       return renderResearchCallHeader(
         {
           input: String((args as { input?: string }).input ?? ""),
-          provider: (args as { provider?: ProviderId }).provider,
         },
         theme,
       );
@@ -395,7 +365,7 @@ async function runWebProvidersConfig(
   ctx: ExtensionCommandContext,
 ): Promise<void> {
   const config = await loadConfig();
-  const activeProvider = await getPreferredProvider(ctx.cwd);
+  const activeProvider = getInitialProviderSelection(config);
 
   await ctx.ui.custom(
     (tui, theme, _keybindings, done) =>
@@ -417,18 +387,17 @@ function getAvailableProviderIdsForCapability(
   cwd: string,
   capability: ProviderCapability,
 ): ProviderId[] {
-  const providerIds: ProviderId[] = [];
-
-  for (const providerId of getProviderIdsForCapability(capability)) {
-    try {
-      resolveProviderForCapability(config, providerId, cwd, capability);
-      providerIds.push(providerId);
-    } catch {
-      // Exclude unavailable or disabled providers from the visible override list.
-    }
+  const providerId = getMappedProviderIdForCapability(config, capability);
+  if (!providerId) {
+    return [];
   }
 
-  return providerIds;
+  try {
+    resolveProviderForCapability(config, cwd, capability);
+    return [providerId];
+  } catch {
+    return [];
+  }
 }
 
 function getAvailableManagedToolNames(
@@ -510,18 +479,6 @@ function getProviderIdsForCapability(
   return PROVIDERS.filter((provider) =>
     supportsProviderCapability(provider, capability),
   ).map((provider) => provider.id);
-}
-
-function providerEnum(providerIds: readonly ProviderId[], description: string) {
-  if (providerIds.length === 1) {
-    return Type.Optional(Type.Literal(providerIds[0], { description }));
-  }
-  return Type.Optional(
-    Type.Union(
-      providerIds.map((id) => Type.Literal(id)),
-      { description },
-    ),
-  );
 }
 
 function jsonOptionsSchema(description: string) {
@@ -636,7 +593,7 @@ async function executeSearchTool({
   planOverrides,
 }: {
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -652,7 +609,11 @@ async function executeSearchTool({
 }) {
   await cleanupContentStore();
 
-  const provider = resolveProviderChoice(config, explicitProvider, ctx.cwd);
+  const provider = resolveProviderChoice(
+    config,
+    explicitProvider ?? ctx.cwd,
+    explicitProvider ? ctx.cwd : undefined,
+  );
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
@@ -809,7 +770,7 @@ async function executeAnswerTool({
   planOverrides,
 }: {
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -822,12 +783,9 @@ async function executeAnswerTool({
   queries: string[];
   planOverrides?: ProviderOperationPlan<ProviderToolOutput>[];
 }) {
-  const provider = resolveProviderForCapability(
-    config,
-    explicitProvider,
-    ctx.cwd,
-    "answer",
-  );
+  const provider = explicitProvider
+    ? resolveProviderForCapability(config, explicitProvider, ctx.cwd, "answer")
+    : resolveProviderForCapability(config, ctx.cwd, "answer");
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
@@ -1055,7 +1013,7 @@ async function executeProviderTool({
 }: {
   capability: Exclude<ProviderCapability, "search">;
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -1072,12 +1030,9 @@ async function executeProviderTool({
 }) {
   await cleanupContentStore();
 
-  const provider = resolveProviderForCapability(
-    config,
-    explicitProvider,
-    ctx.cwd,
-    capability,
-  );
+  const provider = explicitProvider
+    ? resolveProviderForCapability(config, explicitProvider, ctx.cwd, capability)
+    : resolveProviderForCapability(config, ctx.cwd, capability);
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
@@ -1307,7 +1262,6 @@ function renderToolCallHeader(
 function renderQuestionCallHeader(
   params: {
     queries: string[];
-    provider?: ProviderId;
   },
   theme: Theme,
 ): Component {
@@ -1324,7 +1278,6 @@ function renderQuestionCallHeader(
 function renderResearchCallHeader(
   params: {
     input: string;
-    provider?: ProviderId;
   },
   theme: Theme,
 ): Component {
@@ -1445,29 +1398,13 @@ function getCompactProviderToolSummary(
   return undefined;
 }
 
-interface ProviderToolMenuOption {
-  key: ProviderToolId;
-  label: string;
-  help: string;
-}
-
 interface SettingsEntry {
   id: string;
   label: string;
   currentValue: string;
   description: string;
-  kind: "cycle" | "text";
+  kind: "action" | "cycle" | "text";
   values?: string[];
-}
-
-function buildProviderToolMenuOptions(
-  providerId: ProviderId,
-): ProviderToolMenuOption[] {
-  return PROVIDER_TOOLS[providerId].map((toolId) => ({
-    key: toolId,
-    label: PROVIDER_TOOL_META[toolId].label,
-    help: PROVIDER_TOOL_META[toolId].help,
-  }));
 }
 
 function getProviderSettings(
@@ -1498,6 +1435,10 @@ class WebProvidersSettingsView implements Component {
   ) {
     this.config = structuredClone(initialConfig);
     this.activeProvider = initialProvider;
+    this.selection.provider = Math.max(
+      0,
+      PROVIDERS.findIndex((provider) => provider.id === initialProvider),
+    );
   }
 
   render(width: number): string[] {
@@ -1508,7 +1449,7 @@ class WebProvidersSettingsView implements Component {
     const lines: string[] = [];
     const providerItems = this.buildProviderSectionItems();
     lines.push(
-      ...this.renderSection(width, "Provider", "provider", providerItems),
+      ...this.renderSection(width, "Providers", "provider", providerItems),
     );
     lines.push("");
 
@@ -1542,7 +1483,7 @@ class WebProvidersSettingsView implements Component {
       truncateToWidth(
         this.theme.fg(
           "dim",
-          "↑↓ move · Tab/Shift+Tab switch section · Enter edit/toggle · Esc close",
+          "↑↓ move · Tab/Shift+Tab switch section · Enter select/edit/toggle · Esc close",
         ),
         width,
       ),
@@ -1588,34 +1529,55 @@ class WebProvidersSettingsView implements Component {
   }
 
   private buildProviderSectionItems(): SettingsEntry[] {
-    return [
-      {
-        id: "provider",
-        label: "Engine",
-        currentValue: PROVIDER_MAP[this.activeProvider].label,
-        description: "Active web provider. Enter cycles through providers.",
-        kind: "cycle",
-        values: PROVIDERS.map((provider) => provider.label),
-      },
-    ];
+    return PROVIDERS.map((provider) => {
+      const providerConfig = this.config.providers?.[provider.id] as
+        | ProviderConfigUnion
+        | undefined;
+      const status = provider.getStatus(providerConfig as never, this.ctx.cwd);
+      return {
+        id: `provider:${provider.id}`,
+        label: provider.label,
+        currentValue:
+          provider.id === this.activeProvider
+            ? `selected · ${status.summary}`
+            : status.summary,
+        description:
+          provider.id === this.activeProvider
+            ? `Editing ${provider.label} settings below. Current status: ${status.summary}.`
+            : `Select ${provider.label} to edit its settings. Current status: ${status.summary}.`,
+        kind: "action",
+      };
+    });
   }
 
   private buildToolSectionItems(): SettingsEntry[] {
-    const providerConfig = this.currentProviderConfig();
-    return buildProviderToolMenuOptions(this.activeProvider).map((option) => ({
-      id: `tool:${option.key}`,
-      label: option.label,
-      currentValue: isProviderToolEnabled(
-        this.activeProvider,
-        providerConfig,
-        option.key,
-      )
-        ? "on"
-        : "off",
-      description: option.help,
-      kind: "cycle",
-      values: ["on", "off"],
-    }));
+    return (Object.keys(CAPABILITY_TOOL_NAMES) as ProviderToolId[]).map(
+      (toolId) => {
+        const compatibleProviders = getCompatibleProvidersForTool(toolId);
+        const mappedProviderId = getMappedProviderIdForCapability(
+          this.config,
+          toolId,
+        );
+        const currentValue = mappedProviderId
+          ? PROVIDER_MAP[mappedProviderId].label
+          : "off";
+        const compatibleLabels = compatibleProviders.map(
+          (providerId) => PROVIDER_MAP[providerId].label,
+        );
+        return {
+          id: `tool:${toolId}`,
+          label: PROVIDER_TOOL_META[toolId].label,
+          currentValue,
+          description:
+            `${PROVIDER_TOOL_META[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
+            (compatibleLabels.length > 0
+              ? ` Compatible providers: ${compatibleLabels.join(", ")}.`
+              : ""),
+          kind: "cycle",
+          values: ["off", ...compatibleLabels],
+        };
+      },
+    );
   }
 
   private buildConfigSectionItems(): SettingsEntry[] {
@@ -1766,6 +1728,11 @@ class WebProvidersSettingsView implements Component {
     const entry = this.getSelectedEntry();
     if (!entry) return;
 
+    if (entry.kind === "action") {
+      await this.handleChange(entry.id, entry.currentValue);
+      return;
+    }
+
     if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
       const currentIndex = entry.values.indexOf(entry.currentValue);
       const nextValue = entry.values[(currentIndex + 1) % entry.values.length];
@@ -1805,23 +1772,30 @@ class WebProvidersSettingsView implements Component {
   }
 
   private async handleChange(id: string, value: string): Promise<void> {
-    if (id === "provider") {
-      const nextProvider = PROVIDERS.find(
-        (provider) => provider.label === value,
-      )?.id;
-      if (!nextProvider || nextProvider === this.activeProvider) {
+    if (id.startsWith("provider:")) {
+      const nextProvider = id.slice("provider:".length) as ProviderId;
+      if (nextProvider === this.activeProvider) {
         return;
       }
       this.activeProvider = nextProvider;
-      await this.persist((config) => {
-        setActiveProvider(config, nextProvider);
-      });
-      this.selection.tools = 0;
       this.selection.config = 0;
+      this.tui.requestRender();
       return;
     }
 
     await this.persist((config) => {
+      if (id.startsWith("tool:")) {
+        const toolId = id.slice("tool:".length) as ProviderToolId;
+        config.tools ??= {};
+        config.tools[toolId] =
+          value === "off"
+            ? null
+            : getCompatibleProvidersForTool(toolId).find(
+                (providerId) => PROVIDER_MAP[providerId].label === value,
+              ) ?? null;
+        return;
+      }
+
       config.providers ??= {};
       const providerConfig = getEditableProviderConfig(
         this.activeProvider,
@@ -1829,18 +1803,6 @@ class WebProvidersSettingsView implements Component {
           | ProviderConfigUnion
           | undefined,
       );
-
-      if (id.startsWith("tool:")) {
-        const toolId = id.slice("tool:".length) as ProviderToolId;
-        const tools = (providerConfig.tools ?? {}) as Partial<
-          Record<ProviderToolId, boolean>
-        >;
-        tools[toolId] = value === "on";
-        providerConfig.tools = tools as typeof providerConfig.tools;
-        config.providers[this.activeProvider] = providerConfig as never;
-        return;
-      }
-
       const setting = getProviderSettings(this.activeProvider).find(
         (candidate) => candidate.id === id,
       );
@@ -1938,42 +1900,17 @@ function getEditableProviderConfig(
   ) as ProviderConfigUnion;
 }
 
-function setActiveProvider(
+function getInitialProviderSelection(
   config: WebProvidersConfig,
-  providerId: ProviderId,
-): void {
-  const currentProviders = config.providers ?? {};
-  const candidateIds = new Set<ProviderId>([providerId]);
-
-  for (const id of Object.keys(currentProviders) as ProviderId[]) {
-    candidateIds.add(id);
+): ProviderId {
+  for (const capability of Object.keys(CAPABILITY_TOOL_NAMES) as ProviderCapability[]) {
+    const providerId = getMappedProviderIdForCapability(config, capability);
+    if (providerId) {
+      return providerId;
+    }
   }
 
-  config.providers ??= {};
-  for (const id of candidateIds) {
-    const providerConfig = getEditableProviderConfig(
-      id,
-      config.providers?.[id] as ProviderConfigUnion | undefined,
-    ) as Record<string, JsonObject | string | boolean | undefined>;
-    providerConfig.enabled = id === providerId;
-    config.providers[id] = providerConfig as never;
-  }
-}
-
-function getResolvedProviderChoice(
-  effective: WebProvidersConfig,
-  cwd: string,
-): ProviderId | undefined {
-  try {
-    return resolveProviderChoice(effective, undefined, cwd).id;
-  } catch {
-    return undefined;
-  }
-}
-
-async function getPreferredProvider(cwd: string): Promise<ProviderId> {
-  const current = await loadConfig();
-  return getResolvedProviderChoice(current, cwd) ?? "codex";
+  return "codex";
 }
 
 function didContentsCacheInputsChange(
@@ -2138,7 +2075,6 @@ function extractTextContent(
 function renderCallHeader(
   params: {
     queries?: string[];
-    provider?: ProviderId;
     maxResults?: number;
   },
   theme: Theme,

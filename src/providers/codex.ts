@@ -52,10 +52,6 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
 
   createTemplate(): CodexProviderConfig {
     return {
-      enabled: true,
-      tools: {
-        search: true,
-      },
       native: {
         networkAccessEnabled: true,
         webSearchEnabled: true,
@@ -71,9 +67,6 @@ export class CodexProvider implements WebProvider<CodexProviderConfig> {
   ): ProviderStatus {
     if (!config) {
       return { available: false, summary: "not configured" };
-    }
-    if (config.enabled === false) {
-      return { available: false, summary: "disabled" };
     }
     try {
       new Codex({

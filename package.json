@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "0.3.0",
-  "description": "Configurable web access extension for pi that routes search, contents, answers, and research across Claude, Codex, Exa, Gemini, Perplexity, Parallel, and Valyu providers.",
+  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Codex, Exa, Gemini, Perplexity, Parallel, and Valyu.",
   "type": "module",
   "files": [
     "dist",

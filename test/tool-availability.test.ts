@@ -84,6 +84,7 @@ describe("managed tool availability", () => {
     expect(webSearch?.parameters?.properties).not.toHaveProperty("query");
     expect(webSearch?.parameters?.properties).toHaveProperty("queries");
     expect(webSearch?.parameters?.properties).toHaveProperty("options");
+    expect(webSearch?.parameters?.properties).not.toHaveProperty("provider");
     expect(webContents?.description).toBe(
       "Read and extract the main contents of one or more web pages.",
     );
@@ -93,26 +94,27 @@ describe("managed tool availability", () => {
     );
     expect(webAnswer?.parameters?.properties).not.toHaveProperty("query");
     expect(webAnswer?.parameters?.properties).toHaveProperty("queries");
+    expect(webAnswer?.parameters?.properties).not.toHaveProperty("provider");
     expect(webResearch?.description).toBe(
       "Investigate a topic across web sources and produce a longer report.",
     );
+    expect(webResearch?.parameters?.properties).not.toHaveProperty("provider");
   });
 
-  it("only exposes available provider overrides to the model", () => {
+  it("only exposes the mapped available provider to internal capability resolution", () => {
     process.env.CODEX_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        search: "codex",
+      },
       providers: {
-        codex: {
-          enabled: true,
-        },
+        codex: {},
         exa: {
-          enabled: false,
           apiKey: "EXA_API_KEY",
         },
       },
-    };
+    });
 
     expect(
       __test__.getAvailableProviderIdsForCapability(
@@ -123,143 +125,69 @@ describe("managed tool availability", () => {
     ).toEqual(["codex"]);
   });
 
-  it("keeps web_search available via implicit Codex fallback", () => {
-    process.env.CODEX_API_KEY = "test-key";
-
-    const config: WebProvidersConfig = { version: 1 };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual(["web_search"]);
-  });
-
-  it("does not expose Claude-managed tools via implicit fallback", () => {
-    mockClaudeAvailable();
-
-    const config: WebProvidersConfig = { version: 1 };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual([]);
-  });
-
-  it("hides managed tools when no provider is available", () => {
-    const config: WebProvidersConfig = {
-      version: 1,
-      providers: {
-        codex: {
-          enabled: false,
-        },
-        exa: {
-          enabled: false,
-          apiKey: "EXA_API_KEY",
-        },
-      },
-    };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual([]);
-  });
-
-  it("hides Claude-managed tools when Claude auth is missing", () => {
-    const config: WebProvidersConfig = {
-      version: 1,
-      providers: {
-        claude: {
-          enabled: true,
-        },
-        codex: {
-          enabled: false,
-        },
-      },
-    };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual([]);
-  });
-
-  it("hides the implicit Codex fallback when Codex auth is missing", () => {
-    const config: WebProvidersConfig = { version: 1 };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual([]);
-  });
-
-  it("does not expose web_contents for Gemini", () => {
-    const config: WebProvidersConfig = {
-      version: 1,
-      providers: {
-        gemini: {
-          enabled: true,
-          apiKey: "literal-key",
-        },
-      },
-    };
-
-    expect(
-      __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual(["web_search", "web_answer", "web_research"]);
-    expect(
-      __test__.getAvailableProviderIdsForCapability(
-        config,
-        process.cwd(),
-        "contents",
-      ),
-    ).toEqual([]);
-  });
-
-  it("respects provider tool capability toggles", () => {
+  it("only exposes tools whose mapped providers are available", () => {
     process.env.EXA_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        search: null,
+        contents: "exa",
+        answer: null,
+        research: "exa",
+      },
       providers: {
-        codex: {
-          enabled: false,
-        },
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
-          tools: {
-            search: false,
-            contents: true,
-            answer: false,
-            research: true,
-          },
         },
       },
-    };
+    });
 
     expect(
       __test__.getAvailableManagedToolNames(config, process.cwd()),
     ).toEqual(["web_contents", "web_research"]);
   });
 
+  it("does not expose any managed tools when nothing is mapped", () => {
+    process.env.CODEX_API_KEY = "test-key";
+
+    expect(
+      __test__.getAvailableManagedToolNames(createConfig(), process.cwd()),
+    ).toEqual([]);
+  });
+
+  it("hides tools when the mapped provider is unavailable", () => {
+    const config = createConfig({
+      tools: {
+        search: "claude",
+      },
+      providers: {
+        claude: {},
+      },
+    });
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual([]);
+  });
+
   it("does not activate unavailable tools before agent start", () => {
     process.env.CODEX_API_KEY = "test-key";
     process.env.EXA_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        search: "codex",
+        contents: "exa",
+        answer: "exa",
+        research: "exa",
+      },
       providers: {
-        codex: {
-          enabled: true,
-        },
+        codex: {},
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
-          tools: {
-            search: false,
-            contents: true,
-            answer: true,
-            research: true,
-          },
         },
       },
-    };
+    });
 
     const activeTools = __test__.getSyncedActiveTools(
       config,
@@ -322,11 +250,9 @@ describe("managed tool availability", () => {
   });
 
   it("clears the contents cache when saved contents-capable provider settings change", () => {
-    const previous: WebProvidersConfig = {
-      version: 1,
+    const previous = createConfig({
       providers: {
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
           native: {
             type: "auto",
@@ -336,13 +262,11 @@ describe("managed tool availability", () => {
           },
         },
       },
-    };
+    });
 
-    const next: WebProvidersConfig = {
-      version: 1,
+    const next = createConfig({
       providers: {
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
           native: {
             type: "auto",
@@ -352,51 +276,49 @@ describe("managed tool availability", () => {
           },
         },
       },
-    };
+    });
 
     expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(true);
   });
 
   it("keeps the contents cache when only non-contents providers change", () => {
-    const previous: WebProvidersConfig = {
-      version: 1,
+    const previous = createConfig({
       providers: {
         codex: {
-          enabled: true,
           native: {
             webSearchEnabled: true,
           },
         },
       },
-    };
+    });
 
-    const next: WebProvidersConfig = {
-      version: 1,
+    const next = createConfig({
       providers: {
         codex: {
-          enabled: true,
           native: {
             webSearchEnabled: false,
           },
         },
       },
-    };
+    });
 
     expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(false);
   });
 
-  it("surfaces Perplexity overrides when Perplexity is available", () => {
+  it("surfaces mapped Perplexity tools when Perplexity is available", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        answer: "perplexity",
+        research: "perplexity",
+      },
       providers: {
         perplexity: {
-          enabled: true,
           apiKey: "PERPLEXITY_API_KEY",
         },
       },
-    };
+    });
 
     expect(
       __test__.getAvailableProviderIdsForCapability(
@@ -415,18 +337,19 @@ describe("managed tool availability", () => {
   });
 });
 
+function createConfig(
+  overrides: Partial<WebProvidersConfig> = {},
+): WebProvidersConfig {
+  return {
+    version: 2,
+    tools: overrides.tools,
+    providers: overrides.providers,
+  };
+}
+
 function createTheme(): Theme {
   return {
     fg: (_color: string, text: string) => text,
     bold: (text: string) => text,
   } as unknown as Theme;
-}
-
-function mockClaudeAvailable(): void {
-  execFileSyncMock.mockImplementation((_command, args: string[]) => {
-    if (args.includes("auth") && args.includes("status")) {
-      return '{"loggedIn":true,"authMethod":"claude.ai"}';
-    }
-    throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
-  });
 }

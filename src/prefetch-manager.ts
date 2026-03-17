@@ -1149,35 +1149,32 @@ function resolveContentsProvider(
   searchProviderId: ProviderId | undefined,
 ) {
   if (explicitProvider) {
-    try {
-      return resolveProviderForCapability(
-        config,
-        explicitProvider,
-        cwd,
-        "contents",
-      );
-    } catch {
-      // Explicit prefetch provider is unavailable — fall through so prefetch
-      // is silently skipped rather than sinking a successful search.
-      return undefined;
+    const provider = PROVIDER_MAP[explicitProvider];
+    if (provider.capabilities.includes("contents")) {
+      const providerConfig = getEffectiveProviderConfig(config, explicitProvider);
+      const status = provider.getStatus(providerConfig as never, cwd);
+      if (status.available) {
+        return provider;
+      }
     }
+    // Explicit prefetch provider is unavailable — fall through so prefetch
+    // is silently skipped rather than sinking a successful search.
+    return undefined;
   }
 
   if (searchProviderId) {
-    try {
-      return resolveProviderForCapability(
-        config,
-        searchProviderId,
-        cwd,
-        "contents",
-      );
-    } catch {
-      // Fall back to the configured contents provider below.
+    const provider = PROVIDER_MAP[searchProviderId];
+    if (provider.capabilities.includes("contents")) {
+      const providerConfig = getEffectiveProviderConfig(config, searchProviderId);
+      const status = provider.getStatus(providerConfig as never, cwd);
+      if (status.available) {
+        return provider;
+      }
     }
   }
 
   try {
-    return resolveProviderForCapability(config, undefined, cwd, "contents");
+    return resolveProviderForCapability(config, cwd, "contents");
   } catch {
     return undefined;
   }

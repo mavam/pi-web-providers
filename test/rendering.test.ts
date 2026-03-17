@@ -8,7 +8,6 @@ describe("web_search renderer", () => {
       __test__.renderCallHeader(
         {
           queries: ["latest exa typescript sdk docs"],
-          provider: "codex",
           maxResults: 5,
         },
         createTheme(),
@@ -27,7 +26,6 @@ describe("web_search renderer", () => {
       __test__.renderCallHeader(
         {
           queries: ["latest exa typescript sdk docs"],
-          provider: "codex",
           maxResults: 7,
         },
         createTheme(),
@@ -49,7 +47,6 @@ describe("web_search renderer", () => {
           queries: [
             "What are the main use cases of Tenzir, the security data pipeline platform? Include modern SOC and AI workflows.",
           ],
-          provider: "gemini",
           maxResults: 10,
         },
         createTheme(),
@@ -67,7 +64,6 @@ describe("web_search renderer", () => {
       __test__.renderCallHeader(
         {
           queries: ["exa sdk", "exa pricing", "exa api"],
-          provider: "exa",
           maxResults: 4,
         },
         createTheme(),
@@ -151,7 +147,6 @@ describe("web_answer renderer", () => {
       __test__.renderQuestionCallHeader(
         {
           queries: ["What are common Tenzir use cases?"],
-          provider: "gemini",
         },
         createTheme(),
       ),
@@ -172,7 +167,6 @@ describe("web_answer renderer", () => {
             "What are common Tenzir use cases?",
             "How does Tenzir help with SIEM migration?",
           ],
-          provider: "gemini",
         },
         createTheme(),
       ),
@@ -193,7 +187,6 @@ describe("web_research renderer", () => {
         {
           input:
             "Tenzir use cases: what problems does Tenzir solve, who uses it, and in what scenarios?",
-          provider: "gemini",
         },
         createTheme(),
       ),

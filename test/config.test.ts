@@ -36,7 +36,7 @@ describe("config parsing", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
+          version: 2,
           providers: {
             searxng: {},
           },
@@ -46,40 +46,52 @@ describe("config parsing", () => {
     ).toThrow(/Unknown providers/);
   });
 
-  it("rejects unknown provider tools", () => {
+  it("rejects unknown top-level tool mappings", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
+          version: 2,
+          tools: {
+            summarize: "codex",
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/Unknown tools in test-config.json: summarize/);
+  });
+
+  it("rejects legacy provider enablement", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          version: 2,
           providers: {
             codex: {
-              tools: {
-                answer: true,
-              },
+              enabled: true,
             },
           },
         }),
         "test-config.json",
       ),
-    ).toThrow(/Unknown tools for codex/);
+    ).toThrow(/providers\.codex\.enabled/);
   });
 
-  it("rejects removed provider tool aliases", () => {
+  it("rejects legacy provider-local tool toggles", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
+          version: 2,
           providers: {
             valyu: {
               tools: {
-                deepResearch: true,
+                research: true,
               },
             },
           },
         }),
         "test-config.json",
       ),
-    ).toThrow(/Unknown tools for valyu/);
+    ).toThrow(/providers\.valyu\.tools/);
   });
 
   it("loads the global config", async () => {
@@ -91,7 +103,6 @@ describe("config parsing", () => {
 
     const config = createDefaultConfig();
     config.providers!.claude = {
-      enabled: false,
       pathToClaudeCodeExecutable: "/tmp/claude-code",
       native: {
         model: "claude-sonnet-4-5",
@@ -101,14 +112,12 @@ describe("config parsing", () => {
     };
     config.providers!.codex!.native!.additionalDirectories = ["docs"];
     config.providers!.exa = {
-      enabled: true,
       apiKey: "EXA_API_KEY",
       native: {
         type: "auto",
       },
     };
     config.providers!.parallel = {
-      enabled: false,
       apiKey: "PARALLEL_API_KEY",
       native: {
         search: {
@@ -117,7 +126,6 @@ describe("config parsing", () => {
       },
     };
     config.providers!.gemini = {
-      enabled: false,
       apiKey: "GOOGLE_API_KEY",
       native: {
         apiVersion: "v1alpha",
@@ -133,7 +141,6 @@ describe("config parsing", () => {
       },
     };
     config.providers!.perplexity = {
-      enabled: true,
       apiKey: "PERPLEXITY_API_KEY",
       native: {
         search: {
@@ -164,7 +171,7 @@ describe("config parsing", () => {
     expect(loaded.providers?.codex?.native?.additionalDirectories).toEqual([
       "notes",
     ]);
-    expect(loaded.providers?.exa?.enabled).toBe(true);
+    expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
     expect(loaded.providers?.gemini?.native?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.policy?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.policy?.retryCount).toBe(5);
@@ -183,13 +190,12 @@ describe("config parsing", () => {
 
   it("maps legacy defaults into native and policy config blocks", () => {
     const loaded = parseConfig(
-      JSON.stringify({
-        version: 1,
-        providers: {
-          gemini: {
-            enabled: true,
-            apiKey: "GOOGLE_API_KEY",
-            defaults: {
+        JSON.stringify({
+          version: 2,
+          providers: {
+            gemini: {
+              apiKey: "GOOGLE_API_KEY",
+              defaults: {
               searchModel: "gemini-2.5-flash",
               requestTimeoutMs: 45000,
               retryCount: 5,

@@ -1,28 +1,23 @@
 # 🌍 pi-web-providers
 
 A _meta_ web extension for [pi](https://pi.dev) that routes search, content
-extraction, answers, and research through configurable providers.
+extraction, answers, and research through configurable per-tool providers.
 
 ## Why?
 
-Most web extensions hard-wire a single backend. **pi-web-providers** dispatches
-every request to a **configurable provider** instead, so you can swap backends,
-compare results, or tap into capabilities—like deep research—that only certain
-providers offer. The tool surface adapts automatically: only tools supported by
-your active provider are exposed to the agent.
+Most web extensions hard-wire a single backend. **pi-web-providers** lets you
+mix and match providers per tool instead, so `web_search`, `web_contents`,
+`web_answer`, and `web_research` can each use a different backend or be turned
+off entirely.
 
 ## ✨ Features
 
-- **Provider-driven tool surface** — tools are registered based on what the
-  active provider actually supports, not a fixed list
+- **Per-tool provider routing** — map each managed tool to its own provider or
+  turn it off entirely
 - **Multiple providers** — Claude, Codex, Exa, Gemini, Perplexity, Parallel,
   Valyu
-- **One config command** (`/web-providers`) with a TUI that adapts to the
-  selected provider
-- **Transparent fallback** — search falls back to Codex when no provider is
-  explicitly enabled and the local CLI is installed and authenticated
-- **Per-provider tool toggles** — disable individual capabilities without
-  switching providers
+- **One config command** (`/web-providers`) with separate sections for provider
+  settings and tool-to-provider mappings
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch** — optionally start background `web_contents`
@@ -46,13 +41,14 @@ Run:
 ```
 
 This edits the global config file `~/.pi/agent/web-providers.json`. The flow is
-provider-first: pick the active provider, then configure its tool toggles and
-settings.
+split into two parts: select a provider to edit its settings, then map each
+managed tool to one compatible provider or `off`.
 
 ## 🔧 Tools
 
-Which tools are registered depends on the active provider's capabilities. If no
-provider supports a given capability, the corresponding tool is never exposed.
+Which tools are registered depends on the configured tool mapping. A tool is
+only exposed when it is mapped to a compatible provider and that provider is
+currently available.
 
 ### `web_search`
 
@@ -64,7 +60,6 @@ and return titles, URLs, and snippets grouped by query.
 | `queries`    | string[] | required | One or more search queries to run (max 10)                           |
 | `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                            |
 | `options`    | object   | —        | Provider-specific search options plus local `prefetch` orchestration |
-| `provider`   | string   | auto     | Optional provider override                                           |
 
 `web_search.options.prefetch` is local-only and not forwarded into the provider
 SDK. It accepts `enabled`, `maxUrls`, `provider`, `ttlMs`, and
@@ -79,7 +74,6 @@ Read and extract the main contents of one or more web pages.
 | ---------- | -------- | -------- | ------------------------------------ |
 | `urls`     | string[] | required | One or more URLs to extract          |
 | `options`  | object   | —        | Provider-specific extraction options |
-| `provider` | string   | auto     | Optional provider override           |
 
 `web_contents` reuses any matching cached pages already present in the local
 content store—whether they came from prefetch or an earlier read—and only
@@ -93,7 +87,6 @@ Answer one or more questions using web-grounded evidence.
 | ---------- | -------- | -------- | ---------------------------------------------------- |
 | `queries`  | string[] | required | One or more questions to answer in one call (max 10) |
 | `options`  | object   | —        | Provider-specific options                            |
-| `provider` | string   | auto     | Optional provider override                           |
 
 Responses are grouped into per-question sections when more than one question is provided.
 
@@ -105,7 +98,6 @@ Investigate a topic across web sources and produce a longer report.
 | ---------- | ------ | -------- | -------------------------- |
 | `input`    | string | required | Research brief or question |
 | `options`  | object | —        | Provider-specific options  |
-| `provider` | string | auto     | Optional provider override |
 
 `options` are provider-native and provider-specific. Equivalent concepts can use
 different field names across SDKs—for example Perplexity uses `country`, Exa
@@ -239,14 +231,14 @@ summarises capabilities and authentication:
 
 ## 📝 Config Notes
 
-- `/web-providers` keeps exactly one provider active (`enabled: true`) and
-  disables the rest
-- Each provider can enable or disable individual tools through a `tools` block
+- `/web-providers` stores provider settings under `providers` and per-tool
+  routing under a top-level `tools` block
+- Each managed tool maps to one provider id or `null` for off
 - Provider config is split into `native` settings (forwarded to the SDK) and
   `policy` settings (enforced by the extension runtime); legacy `defaults`
   blocks are still accepted when reading
-- If no provider is explicitly enabled for search, the extension falls back to
-  Codex when the local CLI is installed and authenticated
+- Tools with no mapping, incompatible mappings, or unavailable mapped providers
+  are hidden from the agent
 - Secret-like values can be literal strings, environment variable names (e.g.,
   `EXA_API_KEY`), or shell commands prefixed with `!`
 

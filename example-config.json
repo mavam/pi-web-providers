@@ -1,12 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
+  "tools": {
+    "search": "codex",
+    "contents": null,
+    "answer": null,
+    "research": null
+  },
   "providers": {
     "claude": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "answer": true
-      },
       "policy": {
         "requestTimeoutMs": 30000,
         "retryCount": 3,
@@ -14,10 +15,6 @@
       }
     },
     "codex": {
-      "enabled": true,
-      "tools": {
-        "search": true
-      },
       "native": {
         "networkAccessEnabled": true,
         "webSearchEnabled": true,
@@ -30,13 +27,6 @@
       }
     },
     "exa": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "EXA_API_KEY",
       "native": {
         "type": "auto",
@@ -54,12 +44,6 @@
       }
     },
     "gemini": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "GOOGLE_API_KEY",
       "native": {
         "searchModel": "gemini-2.5-flash",
@@ -76,12 +60,6 @@
       }
     },
     "perplexity": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "PERPLEXITY_API_KEY",
       "native": {
         "answer": {
@@ -98,11 +76,6 @@
       }
     },
     "parallel": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true
-      },
       "apiKey": "PARALLEL_API_KEY",
       "native": {
         "search": {
@@ -120,13 +93,6 @@
       }
     },
     "valyu": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "VALYU_API_KEY",
       "native": {
         "searchType": "all",
