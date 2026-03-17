@@ -1553,9 +1553,7 @@ class WebProvidersSettingsView implements Component {
           mappedProviderId &&
           enabledCompatibleProviders.includes(mappedProviderId)
             ? PROVIDER_MAP[mappedProviderId].label
-            : mappedProviderId
-              ? `${PROVIDER_MAP[mappedProviderId].label} (disabled)`
-              : "off";
+            : "off";
         const compatibleLabels = enabledCompatibleProviders.map(
           (providerId) => PROVIDER_MAP[providerId].label,
         );
