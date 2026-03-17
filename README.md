@@ -12,19 +12,12 @@ off entirely.
 
 ## ✨ Features
 
-- **Per-tool provider routing** — map each managed tool to its own provider or
-  turn it off entirely
 - **Multiple providers** — Claude, Codex, Exa, Gemini, Perplexity, Parallel,
   Valyu
-- **One config command** (`/web-providers`) with separate sections for tool
-  routing, shared generic settings, and provider-specific settings
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch** — optionally start background `web_contents`
   extraction from `web_search` results and reuse the cached pages later
-- **Timeout and retry controls** — configurable request timeouts, retries,
-  research polling, deadlines, and resumable background jobs
-- **Truncated output with temp-file spillover** for large results
 
 ## 📦 Install
 
@@ -40,18 +33,33 @@ Run:
 /web-providers
 ```
 
-This edits the global config file `~/.pi/agent/web-providers.json`. The flow is
-split into three parts: select a tool to configure its routing and tool-specific
-settings, adjust shared generic execution settings, or select a provider to edit
-its provider-native settings.
+This edits the global config file `~/.pi/agent/web-providers.json`. The
+settings UI mirrors the three sections below: tools, providers, and generic
+settings.
 
-## 🔧 Tools
+Each tool can be routed to any compatible provider:
 
-Which tools are registered depends on the configured tool mapping. A tool is
-only exposed when it is mapped to a compatible provider and that provider is
-currently available.
+| Provider       | search | contents | answer | research | Auth                   |
+| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
+| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth |
+| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth   |
+| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`          |
+| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`       |
+| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
+| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
+| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`        |
 
-### `web_search`
+See [`example-config.json`](example-config.json) for a full default
+configuration.
+
+### Tools
+
+Each managed tool maps to one provider id or `null` for off under the top-level
+`tools` key. A tool is only exposed when it is mapped to a compatible provider
+and that provider is currently available. Tool-specific settings live under
+`toolSettings`; today this covers `toolSettings.search.prefetch`.
+
+#### `web_search`
 
 Find likely sources on the public web for up to 10 queries in a single call
 and return titles, URLs, and snippets grouped by query.
@@ -68,7 +76,7 @@ starts a background page-extraction workflow only when `prefetch.provider` is
 set. `/web-providers` can also persist default search prefetch settings under
 `toolSettings.search.prefetch`.
 
-### `web_contents`
+#### `web_contents`
 
 Read and extract the main contents of one or more web pages.
 
@@ -81,7 +89,7 @@ Read and extract the main contents of one or more web pages.
 content store—whether they came from prefetch or an earlier read—and only
 fetches missing or stale URLs.
 
-### `web_answer`
+#### `web_answer`
 
 Answer one or more questions using web-grounded evidence.
 
@@ -92,7 +100,7 @@ Answer one or more questions using web-grounded evidence.
 
 Responses are grouped into per-question sections when more than one question is provided.
 
-### `web_research`
+#### `web_research`
 
 Investigate a topic across web sources and produce a longer report.
 
@@ -130,20 +138,15 @@ Providers deliver results in one of three modes:
 
 </details>
 
-## 🔌 Providers
+### Providers
 
-Every provider is a thin adapter around an official SDK. The table below
-summarises capabilities and authentication:
-
-| Provider       | search | contents | answer | research | Auth                   |
-| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude**     |   ✓    |          |   ✓    |          | Local Claude Code auth |
-| **Codex**      |   ✓    |          |        |          | Local Codex CLI auth   |
-| **Exa**        |   ✓    |    ✓     |   ✓    |    ✓     | `EXA_API_KEY`          |
-| **Gemini**     |   ✓    |          |   ✓    |    ✓     | `GOOGLE_API_KEY`       |
-| **Perplexity** |   ✓    |          |   ✓    |    ✓     | `PERPLEXITY_API_KEY`   |
-| **Parallel**   |   ✓    |    ✓     |        |          | `PARALLEL_API_KEY`     |
-| **Valyu**      |   ✓    |    ✓     |   ✓    |    ✓     | `VALYU_API_KEY`        |
+Every provider is a thin adapter around an official SDK. Each provider has an
+`enabled` toggle that controls whether it is eligible for tool mappings.
+Provider config is split into `native` settings (forwarded to the SDK) and
+`policy` settings (local overrides that take precedence over generic settings);
+legacy `defaults` blocks are still accepted when reading. Secret-like values
+can be literal strings, environment variable names (e.g., `EXA_API_KEY`), or
+shell commands prefixed with `!`.
 
 <details>
 <summary><strong>Claude</strong></summary>
@@ -231,23 +234,19 @@ summarises capabilities and authentication:
 
 </details>
 
-## 📝 Config Notes
+### Generic settings
 
-- `/web-providers` stores provider settings under `providers` and per-tool
-  routing under a top-level `tools` block
-- Tool-local settings live under `toolSettings`; today this is used for
-  `toolSettings.search.prefetch`
-- Each managed tool maps to one provider id or `null` for off
-- Provider config is split into `native` settings (forwarded to the SDK) and
-  `policy` settings (enforced by the extension runtime); legacy `defaults`
-  blocks are still accepted when reading
-- Tools with no mapping, incompatible mappings, or unavailable mapped providers
-  are hidden from the agent
-- Secret-like values can be literal strings, environment variable names (e.g.,
-  `EXA_API_KEY`), or shell commands prefixed with `!`
+The `genericSettings` block sets shared execution defaults that apply to all
+providers unless overridden in a provider's `policy` block:
 
-See [`example-config.json`](example-config.json) for a full default
-configuration (kept in sync via CI).
+| Field                              | Default    | Description                                    |
+| ---------------------------------- | ---------- | ---------------------------------------------- |
+| `requestTimeoutMs`                 | `30000`    | Maximum time for a single provider request     |
+| `retryCount`                       | `3`        | Retries for transient failures                 |
+| `retryDelayMs`                     | `2000`     | Initial delay before retrying                  |
+| `researchPollIntervalMs`           | `3000`     | How often to poll long-running research jobs   |
+| `researchTimeoutMs`                | `21600000` | Overall deadline for research before returning |
+| `researchMaxConsecutivePollErrors` | `3`        | Consecutive poll failures before stopping      |
 
 ## 🛠️ Development
 

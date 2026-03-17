@@ -47,6 +47,10 @@ After:
 }
 ```
 
-Per-provider `tools` toggles are removed. The `/web-providers` settings command
-now has a dedicated tool-mapping section. Existing config files must be migrated
-to the new format.
+Per-provider `tools` toggles are removed and shared execution defaults
+(`requestTimeoutMs`, `retryCount`, `retryDelayMs`, and the research lifecycle
+settings) move from per-provider `policy` blocks into a top-level
+`genericSettings` section. Provider-specific `policy` overrides still take
+precedence. The `/web-providers` settings command now has three sections: tool
+routing, provider settings, and generic settings. Existing config files must be
+migrated to the new format.
