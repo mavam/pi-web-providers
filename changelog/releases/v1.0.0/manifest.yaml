@@ -1,0 +1,9 @@
+created: 2026-03-17
+title: Per-tool provider routing with async prefetch and retry controls
+intro: >-
+  Web tools now route to providers per-tool, replacing the single active-provider
+  model so you can assign different providers to search, contents, answer, and research
+  independently. Search prefetching warms an in-memory cache in the background, letting
+  follow-up web_contents calls skip re-fetching pages already seen. All tools also
+  gain configurable timeouts, retries, and backoff, while web_search and web_answer
+  now accept batched query arrays to cut round-trips.
