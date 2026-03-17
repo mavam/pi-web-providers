@@ -184,7 +184,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
         ? await client.waitForJob(response.jobId, {
             onProgress: (status) =>
               context.onProgress?.(
-                `Valyu contents: ${status.urlsProcessed}/${status.urlsTotal} processed`,
+                `Fetching contents from Valyu: ${status.urlsProcessed}/${status.urlsTotal} processed`,
               ),
           })
         : response;
@@ -314,7 +314,6 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     }
 
     const client = new Valyu(apiKey, config.baseUrl);
-    context.onProgress?.("Creating Valyu deep research task");
     const task = await client.deepresearch.create({
       input,
       ...(options ?? {}),
@@ -348,7 +347,7 @@ export class ValyuProvider implements WebProvider<ValyuProviderConfig> {
     const progress = result.progress;
     if (progress) {
       context.onProgress?.(
-        `Valyu deep research: ${progress.current_step}/${progress.total_steps}`,
+        `Researching via Valyu: step ${progress.current_step}/${progress.total_steps}`,
       );
     }
 

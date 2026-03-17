@@ -572,9 +572,7 @@ describe("provider tool output", () => {
 
       expect(result.content[0]?.text).toBe("Research complete");
       expect(updates).toContain("Starting research");
-      expect(updates).toContain(
-        "web_research still running via perplexity (15s elapsed)",
-      );
+      expect(updates).toContain("Researching via Perplexity (15s elapsed)");
     } finally {
       vi.useRealTimers();
     }
