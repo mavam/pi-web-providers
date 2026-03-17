@@ -583,33 +583,6 @@ describe("GeminiProvider contents", () => {
     });
   });
 
-  it("uses custom contentsModel from config", async () => {
-    const generateContent = vi.fn().mockResolvedValue({
-      text: "Extracted content.",
-      candidates: [],
-    });
-
-    const provider = createProvider({ models: { generateContent } });
-    const config: GeminiProviderConfig = {
-      enabled: true,
-      apiKey: "literal-key",
-      defaults: {
-        contentsModel: "gemini-2.5-pro",
-      },
-    };
-
-    await provider.contents(
-      ["https://example.com"],
-      undefined,
-      config,
-      createContext(),
-    );
-
-    expect(generateContent).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "gemini-2.5-pro" }),
-    );
-  });
-
   it("passes provider-native generateContent config for contents", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Result.",
@@ -674,11 +647,28 @@ describe("GeminiProvider contents", () => {
     });
   });
 
-  it("returns fallback text when response is empty", async () => {
-    const generateContent = vi.fn().mockResolvedValue({
-      text: "",
-      candidates: [],
-    });
+  it("falls back to the legacy prompt when the structured prompt returns nothing", async () => {
+    const generateContent = vi
+      .fn()
+      .mockResolvedValueOnce({
+        text: "",
+        candidates: [],
+      })
+      .mockResolvedValueOnce({
+        text: "# Example Page\n\nThis is the main content of the page.",
+        candidates: [
+          {
+            urlContextMetadata: {
+              urlMetadata: [
+                {
+                  retrievedUrl: "https://example.com",
+                  urlRetrievalStatus: "URL_RETRIEVAL_STATUS_SUCCESS",
+                },
+              ],
+            },
+          },
+        ],
+      });
 
     const provider = createProvider({ models: { generateContent } });
     const response = await provider.contents(
@@ -688,7 +678,94 @@ describe("GeminiProvider contents", () => {
       createContext(),
     );
 
-    expect(response.text).toBe("No contents extracted.");
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(response.text).toContain("This is the main content of the page.");
+    expect(response.summary).toBe("1 of 1 URL(s) extracted via Gemini");
+  });
+
+  it("throws on an empty response so the caller can retry", async () => {
+    const generateContent = vi.fn().mockResolvedValue({
+      text: "",
+      candidates: [],
+    });
+
+    const provider = createProvider({ models: { generateContent } });
+
+    await expect(
+      provider.contents(
+        ["https://example.com"],
+        undefined,
+        createConfig(),
+        createContext(),
+      ),
+    ).rejects.toThrow(
+      "Gemini returned an empty URL Context response. Retrying may succeed.",
+    );
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws on empty text even when urlContext reports a successful retrieval", async () => {
+    const generateContent = vi.fn().mockResolvedValue({
+      text: "",
+      candidates: [
+        {
+          urlContextMetadata: {
+            urlMetadata: [
+              {
+                retrievedUrl: "https://example.com",
+                urlRetrievalStatus: "URL_RETRIEVAL_STATUS_SUCCESS",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const provider = createProvider({ models: { generateContent } });
+
+    await expect(
+      provider.contents(
+        ["https://example.com"],
+        undefined,
+        createConfig(),
+        createContext(),
+      ),
+    ).rejects.toThrow(
+      "Gemini returned an empty URL Context response. Retrying may succeed.",
+    );
+    expect(generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps surfacing retrieval failures when Gemini returns no text", async () => {
+    const generateContent = vi.fn().mockResolvedValue({
+      text: "",
+      candidates: [
+        {
+          urlContextMetadata: {
+            urlMetadata: [
+              {
+                retrievedUrl: "https://paywall.example.com",
+                urlRetrievalStatus: "URL_RETRIEVAL_STATUS_PAYWALL",
+              },
+            ],
+          },
+        },
+      ],
+    });
+
+    const provider = createProvider({ models: { generateContent } });
+    const response = await provider.contents(
+      ["https://paywall.example.com"],
+      undefined,
+      createConfig(),
+      createContext(),
+    );
+
+    expect(response.text).toContain("Retrieval issues:");
+    expect(response.text).toContain(
+      "https://paywall.example.com: URL_RETRIEVAL_STATUS_PAYWALL",
+    );
+    expect(response.summary).toBe("0 of 1 URL(s) extracted via Gemini");
   });
 });
 

@@ -36,7 +36,6 @@ describe("config parsing", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
           providers: {
             searxng: {},
           },
@@ -46,40 +45,112 @@ describe("config parsing", () => {
     ).toThrow(/Unknown providers/);
   });
 
-  it("rejects unknown provider tools", () => {
+  it("rejects unknown top-level tool mappings", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
-          providers: {
-            codex: {
-              tools: {
-                answer: true,
-              },
-            },
+          tools: {
+            summarize: "codex",
           },
         }),
         "test-config.json",
       ),
-    ).toThrow(/Unknown tools for codex/);
+    ).toThrow(/Unknown tools in test-config.json: summarize/);
   });
 
-  it("rejects removed provider tool aliases", () => {
+  it("accepts provider enablement", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          codex: {
+            enabled: true,
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.codex?.enabled).toBe(true);
+  });
+
+  it("rejects legacy provider-local tool toggles", () => {
     expect(() =>
       parseConfig(
         JSON.stringify({
-          version: 1,
           providers: {
             valyu: {
               tools: {
-                deepResearch: true,
+                research: true,
               },
             },
           },
         }),
         "test-config.json",
       ),
-    ).toThrow(/Unknown tools for valyu/);
+    ).toThrow(/providers\.valyu\.tools/);
+  });
+
+  it("accepts search tool settings for persisted prefetch defaults", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        toolSettings: {
+          search: {
+            prefetch: {
+              provider: "exa",
+              maxUrls: 3,
+              ttlMs: 60000,
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.toolSettings?.search?.prefetch).toEqual({
+      provider: "exa",
+      maxUrls: 3,
+      ttlMs: 60000,
+    });
+  });
+
+  it("accepts shared generic execution settings", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        genericSettings: {
+          requestTimeoutMs: 45000,
+          retryCount: 5,
+          retryDelayMs: 4000,
+          researchPollIntervalMs: 6000,
+          researchTimeoutMs: 28800000,
+          researchMaxConsecutivePollErrors: 12,
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.genericSettings).toEqual({
+      requestTimeoutMs: 45000,
+      retryCount: 5,
+      retryDelayMs: 4000,
+      researchPollIntervalMs: 6000,
+      researchTimeoutMs: 28800000,
+      researchMaxConsecutivePollErrors: 12,
+    });
+  });
+
+  it("rejects unknown tool-specific settings", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          toolSettings: {
+            search: {
+              caching: true,
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/Unknown search tool settings/);
   });
 
   it("loads the global config", async () => {
@@ -91,7 +162,6 @@ describe("config parsing", () => {
 
     const config = createDefaultConfig();
     config.providers!.claude = {
-      enabled: false,
       pathToClaudeCodeExecutable: "/tmp/claude-code",
       native: {
         model: "claude-sonnet-4-5",
@@ -101,14 +171,12 @@ describe("config parsing", () => {
     };
     config.providers!.codex!.native!.additionalDirectories = ["docs"];
     config.providers!.exa = {
-      enabled: true,
       apiKey: "EXA_API_KEY",
       native: {
         type: "auto",
       },
     };
     config.providers!.parallel = {
-      enabled: false,
       apiKey: "PARALLEL_API_KEY",
       native: {
         search: {
@@ -117,12 +185,10 @@ describe("config parsing", () => {
       },
     };
     config.providers!.gemini = {
-      enabled: false,
       apiKey: "GOOGLE_API_KEY",
       native: {
         apiVersion: "v1alpha",
         searchModel: "gemini-2.5-flash",
-        contentsModel: "gemini-2.5-pro",
       },
       policy: {
         requestTimeoutMs: 45000,
@@ -134,7 +200,6 @@ describe("config parsing", () => {
       },
     };
     config.providers!.perplexity = {
-      enabled: true,
       apiKey: "PERPLEXITY_API_KEY",
       native: {
         search: {
@@ -151,6 +216,15 @@ describe("config parsing", () => {
 
     config.providers!.codex!.native!.webSearchMode = "cached";
     config.providers!.codex!.native!.additionalDirectories = ["notes"];
+    config.toolSettings = {
+      search: {
+        prefetch: {
+          provider: "exa",
+          maxUrls: 2,
+          ttlMs: 60000,
+        },
+      },
+    };
 
     await writeFile(getConfigPath(), serializeConfig(config), "utf-8");
 
@@ -165,11 +239,8 @@ describe("config parsing", () => {
     expect(loaded.providers?.codex?.native?.additionalDirectories).toEqual([
       "notes",
     ]);
-    expect(loaded.providers?.exa?.enabled).toBe(true);
+    expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
     expect(loaded.providers?.gemini?.native?.apiVersion).toBe("v1alpha");
-    expect(loaded.providers?.gemini?.native?.contentsModel).toBe(
-      "gemini-2.5-pro",
-    );
     expect(loaded.providers?.gemini?.policy?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.policy?.retryCount).toBe(5);
     expect(loaded.providers?.gemini?.policy?.retryDelayMs).toBe(4000);
@@ -183,15 +254,18 @@ describe("config parsing", () => {
       "sonar-deep-research",
     );
     expect(loaded.providers?.parallel?.native?.search?.mode).toBe("one-shot");
+    expect(loaded.toolSettings?.search?.prefetch).toEqual({
+      provider: "exa",
+      maxUrls: 2,
+      ttlMs: 60000,
+    });
   });
 
   it("maps legacy defaults into native and policy config blocks", () => {
     const loaded = parseConfig(
       JSON.stringify({
-        version: 1,
         providers: {
           gemini: {
-            enabled: true,
             apiKey: "GOOGLE_API_KEY",
             defaults: {
               searchModel: "gemini-2.5-flash",
@@ -212,20 +286,10 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini).not.toHaveProperty("defaults");
   });
 
-  it("seeds managed execution policy defaults for every provider template", () => {
+  it("seeds shared generic defaults and only keeps provider-specific overrides", () => {
     const config = createDefaultConfig();
 
-    expect(config.providers?.claude?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.codex?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.exa?.policy).toEqual({
+    expect(config.genericSettings).toEqual({
       requestTimeoutMs: 30000,
       retryCount: 3,
       retryDelayMs: 2000,
@@ -233,35 +297,18 @@ describe("config parsing", () => {
       researchTimeoutMs: 21600000,
       researchMaxConsecutivePollErrors: 3,
     });
+    expect(config.providers?.claude?.policy).toBeUndefined();
+    expect(config.providers?.codex?.policy).toBeUndefined();
+    expect(config.providers?.exa?.policy).toBeUndefined();
     expect(config.providers?.gemini?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-      researchPollIntervalMs: 3000,
-      researchTimeoutMs: 21600000,
       researchMaxConsecutivePollErrors: 10,
     });
-    expect(config.providers?.perplexity?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.parallel?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-    });
-    expect(config.providers?.valyu?.policy).toEqual({
-      requestTimeoutMs: 30000,
-      retryCount: 3,
-      retryDelayMs: 2000,
-      researchPollIntervalMs: 3000,
-      researchTimeoutMs: 21600000,
-      researchMaxConsecutivePollErrors: 3,
-    });
+    expect(config.providers?.perplexity?.policy).toBeUndefined();
+    expect(config.providers?.parallel?.policy).toBeUndefined();
+    expect(config.providers?.valyu?.policy).toBeUndefined();
   });
 
-  it("keeps provider templates aligned with the default config policy blocks", () => {
+  it("keeps provider templates aligned with provider-specific default config blocks", () => {
     const config = createDefaultConfig();
 
     expect(PROVIDER_MAP.claude.createTemplate().policy).toEqual(

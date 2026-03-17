@@ -6,10 +6,7 @@ import {
   MemoryContentStore,
 } from "./content-store.js";
 import { stripLocalExecutionOptions } from "./execution-policy.js";
-import {
-  getEffectiveProviderConfig,
-  resolveProviderForCapability,
-} from "./provider-resolution.js";
+import { getEffectiveProviderConfig } from "./provider-resolution.js";
 import { executeOperationPlan } from "./provider-runtime.js";
 import { PROVIDER_MAP } from "./providers/index.js";
 import type {
@@ -18,6 +15,7 @@ import type {
   ProviderContentsMetadataEntry,
   ProviderId,
   ProviderToolOutput,
+  SearchPrefetchSettings,
   WebProvidersConfig,
 } from "./types.js";
 
@@ -30,9 +28,8 @@ const DEFAULT_PREFETCH_MAX_URLS = 3;
 const MAX_PREFETCH_URLS = 5;
 
 export interface SearchContentsPrefetchOptions {
-  enabled?: boolean;
+  provider?: ProviderId | null;
   maxUrls?: number;
-  provider?: ProviderId;
   ttlMs?: number;
   contentsOptions?: JsonObject;
 }
@@ -162,14 +159,12 @@ export async function startContentsPrefetch({
   config,
   cwd,
   urls,
-  searchProviderId,
   options,
   onProgress,
 }: {
   config: WebProvidersConfig;
   cwd: string;
   urls: string[];
-  searchProviderId?: ProviderId;
   options: SearchContentsPrefetchOptions;
   onProgress?: (message: string) => void;
 }): Promise<PrefetchStartResult | undefined> {
@@ -178,12 +173,7 @@ export async function startContentsPrefetch({
     return undefined;
   }
 
-  const provider = resolveContentsProvider(
-    config,
-    cwd,
-    options.provider,
-    searchProviderId,
-  );
+  const provider = resolveContentsProvider(config, cwd, options.provider);
   if (!provider) {
     return undefined;
   }
@@ -612,10 +602,6 @@ export function parseSearchContentsPrefetchOptions(
     throw new Error("prefetch must be an object.");
   }
 
-  const enabled =
-    raw.enabled === undefined
-      ? true
-      : parseOptionalBoolean(raw.enabled, "enabled");
   const maxUrls = parseOptionalPositiveInteger(raw.maxUrls, "maxUrls");
   const provider = parseOptionalProviderId(raw.provider);
   const ttlMs = parseOptionalPositiveInteger(raw.ttlMs, "ttlMs");
@@ -625,11 +611,33 @@ export function parseSearchContentsPrefetchOptions(
       : assertJsonObject(raw.contentsOptions, "prefetch.contentsOptions");
 
   return {
-    enabled,
     maxUrls,
     provider,
     ttlMs,
     contentsOptions,
+  };
+}
+
+export function mergeSearchContentsPrefetchOptions(
+  defaults: SearchPrefetchSettings | undefined,
+  overrides: SearchContentsPrefetchOptions | undefined,
+): SearchContentsPrefetchOptions | undefined {
+  if (!defaults && !overrides) {
+    return undefined;
+  }
+
+  return {
+    provider:
+      overrides?.provider !== undefined
+        ? overrides.provider
+        : defaults?.provider,
+    maxUrls:
+      overrides?.maxUrls !== undefined ? overrides.maxUrls : defaults?.maxUrls,
+    ttlMs: overrides?.ttlMs !== undefined ? overrides.ttlMs : defaults?.ttlMs,
+    contentsOptions:
+      overrides?.contentsOptions !== undefined
+        ? overrides.contentsOptions
+        : undefined,
   };
 }
 
@@ -1145,42 +1153,25 @@ function buildPrefetchJobStoreKey(prefetchId: string): string {
 function resolveContentsProvider(
   config: WebProvidersConfig,
   cwd: string,
-  explicitProvider: ProviderId | undefined,
-  searchProviderId: ProviderId | undefined,
+  explicitProvider: ProviderId | null | undefined,
 ) {
-  if (explicitProvider) {
-    try {
-      return resolveProviderForCapability(
-        config,
-        explicitProvider,
-        cwd,
-        "contents",
-      );
-    } catch {
-      // Explicit prefetch provider is unavailable — fall through so prefetch
-      // is silently skipped rather than sinking a successful search.
-      return undefined;
-    }
-  }
-
-  if (searchProviderId) {
-    try {
-      return resolveProviderForCapability(
-        config,
-        searchProviderId,
-        cwd,
-        "contents",
-      );
-    } catch {
-      // Fall back to the configured contents provider below.
-    }
-  }
-
-  try {
-    return resolveProviderForCapability(config, undefined, cwd, "contents");
-  } catch {
+  if (!explicitProvider) {
     return undefined;
   }
+
+  const provider = PROVIDER_MAP[explicitProvider];
+  if (!provider.capabilities.includes("contents")) {
+    return undefined;
+  }
+
+  const providerConfig = getEffectiveProviderConfig(config, explicitProvider);
+  const status = provider.getStatus(providerConfig as never, cwd);
+  if (status.available) {
+    return provider;
+  }
+  // Explicit prefetch provider is unavailable, so skip prefetch instead of
+  // turning a successful search into a tool failure.
+  return undefined;
 }
 
 function canonicalizeUrl(url: string): string {
@@ -1363,13 +1354,6 @@ function assertJsonObject(value: unknown, field: string): JsonObject {
   return value;
 }
 
-function parseOptionalBoolean(value: unknown, field: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new Error(`prefetch.${field} must be a boolean.`);
-  }
-  return value;
-}
-
 function parseOptionalPositiveInteger(
   value: unknown,
   field: string,
@@ -1383,14 +1367,19 @@ function parseOptionalPositiveInteger(
   return Number(value);
 }
 
-function parseOptionalProviderId(value: unknown): ProviderId | undefined {
+function parseOptionalProviderId(
+  value: unknown,
+): ProviderId | null | undefined {
   if (value === undefined) {
     return undefined;
+  }
+  if (value === null) {
+    return null;
   }
   if (isProviderId(value)) {
     return value;
   }
-  throw new Error("prefetch.provider must be a valid provider id.");
+  throw new Error("prefetch.provider must be a valid provider id or null.");
 }
 
 function isProviderId(value: unknown): value is ProviderId {

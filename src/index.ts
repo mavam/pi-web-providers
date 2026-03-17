@@ -7,6 +7,7 @@ import {
   type ExtensionAPI,
   type ExtensionCommandContext,
   formatSize,
+  getMarkdownTheme,
   keyHint,
   type Theme,
   truncateHead,
@@ -17,6 +18,7 @@ import {
   type EditorTheme,
   getEditorKeybindings,
   Key,
+  Markdown,
   matchesKey,
   Text,
   type TUI,
@@ -35,6 +37,7 @@ import {
   cleanupContentStore,
   formatPrefetchStatusText,
   getPrefetchStatus,
+  mergeSearchContentsPrefetchOptions,
   parseSearchContentsPrefetchOptions,
   resetContentStore,
   resolveContentsFromStore,
@@ -47,6 +50,7 @@ import {
 } from "./provider-config-manifests.js";
 import {
   getEffectiveProviderConfig,
+  getMappedProviderIdForCapability,
   resolveProviderChoice,
   resolveProviderForCapability,
   supportsProviderCapability,
@@ -56,9 +60,8 @@ import {
   resolvePlanExecutionSupport,
 } from "./provider-runtime.js";
 import {
-  isProviderToolEnabled,
+  getCompatibleProvidersForTool,
   PROVIDER_TOOL_META,
-  PROVIDER_TOOLS,
   type ProviderConfigUnion,
   type ProviderToolId,
 } from "./provider-tools.js";
@@ -68,6 +71,7 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
+  GenericSettingsConfig,
   JsonObject,
   ParallelProviderConfig,
   ProviderId,
@@ -75,7 +79,9 @@ import type {
   ProviderOperationRequest,
   ProviderToolDetails,
   ProviderToolOutput,
+  SearchPrefetchSettings,
   SearchResponse,
+  SearchToolSettings,
   ValyuProviderConfig,
   WebProvidersConfig,
   WebSearchDetails,
@@ -94,9 +100,6 @@ const CAPABILITY_TOOL_NAMES: Record<ProviderCapability, string> = {
   research: "web_research",
 };
 const MANAGED_TOOL_NAMES = Object.values(CAPABILITY_TOOL_NAMES);
-const PROVIDER_OVERRIDE_GUIDELINES = [
-  "Do not set provider unless the user asks for one.",
-];
 
 export default function webProvidersExtension(pi: ExtensionAPI) {
   registerManagedTools(pi);
@@ -159,7 +162,6 @@ function registerWebSearchTool(
       `Find likely sources on the public web for up to ${MAX_SEARCH_QUERIES} queries in a single call and return titles, URLs, and snippets grouped by query. ` +
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
     promptGuidelines: [
-      ...PROVIDER_OVERRIDE_GUIDELINES,
       "Prefer batching related searches into one web_search call instead of making multiple calls.",
     ],
     parameters: Type.Object({
@@ -178,16 +180,11 @@ function registerWebSearchTool(
       options: jsonOptionsSchema(
         describeOptionsField("search", visibleProviderIds),
       ),
-      provider: providerEnum(
-        visibleProviderIds,
-        "Provider override. If omitted, uses the active configured provider or falls back to Codex for search when it is not explicitly disabled.",
-      ),
     }),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeSearchTool({
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -201,35 +198,19 @@ function registerWebSearchTool(
       return renderCallHeader(
         args as {
           queries?: string[];
-          provider?: ProviderId;
           maxResults?: number;
         },
         theme,
       );
     },
 
-    renderResult(result, { expanded, isPartial }, theme) {
-      const text = extractTextContent(result.content);
-      const isError = Boolean((result as { isError?: boolean }).isError);
-
-      if (isPartial) {
-        return undefined;
-      }
-
-      if (isError) {
-        return renderBlockText(text ?? "web_search failed", theme, "error");
-      }
-
-      const details = result.details as WebSearchDetails | undefined;
-      if (!details) {
-        return renderBlockText(text ?? "", theme, "toolOutput");
-      }
-
-      if (expanded) {
-        return renderBlockText(text ?? "", theme, "toolOutput");
-      }
-
-      return renderCollapsedSearchSummary(details, text, theme);
+    renderResult(result, state, theme) {
+      return renderSearchToolResult(
+        result,
+        state.expanded,
+        state.isPartial,
+        theme,
+      );
     },
   });
 }
@@ -250,17 +231,11 @@ function registerWebContentsTool(
         description: "One or more URLs to extract",
       }),
       options: jsonOptionsSchema(describeOptionsField("contents", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports web contents.",
-      ),
     }),
-    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "contents",
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -269,42 +244,13 @@ function registerWebContentsTool(
       });
     },
     renderCall(args, theme) {
-      const urls: string[] = Array.isArray((args as { urls?: string[] }).urls)
-        ? ((args as { urls?: string[] }).urls ?? [])
-        : [];
-      const provider = String(
-        (args as { provider?: string }).provider ?? "auto",
+      return renderListCallHeader(
+        "web_contents",
+        Array.isArray((args as { urls?: string[] }).urls)
+          ? ((args as { urls?: string[] }).urls ?? [])
+          : [],
+        theme,
       );
-      return {
-        invalidate() {},
-        render(width: number) {
-          const lines: string[] = [];
-          const header = theme.fg("toolTitle", theme.bold("web_contents"));
-          const headerLine = truncateToWidth(header.trimEnd(), width);
-          lines.push(
-            headerLine +
-              " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-          );
-          for (const url of urls) {
-            const urlLine = truncateToWidth(
-              `  ${theme.fg("accent", url)}`,
-              width,
-            );
-            lines.push(
-              urlLine + " ".repeat(Math.max(0, width - visibleWidth(urlLine))),
-            );
-          }
-          const detailLine = truncateToWidth(
-            `  ${theme.fg("muted", `provider=${provider}`)}`,
-            width,
-          );
-          lines.push(
-            detailLine +
-              " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-          );
-          return lines;
-        },
-      };
     },
     renderResult(result, state, theme) {
       return renderProviderToolResult(
@@ -313,7 +259,6 @@ function registerWebContentsTool(
         state.isPartial,
         "web_contents failed",
         theme,
-        { hidePartial: true },
       );
     },
   });
@@ -336,19 +281,13 @@ function registerWebAnswerTool(
         description: `One or more questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
       }),
       options: jsonOptionsSchema(describeOptionsField("answer", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports web answers.",
-      ),
     }),
     promptGuidelines: [
-      ...PROVIDER_OVERRIDE_GUIDELINES,
       "Prefer batching related questions into one web_answer call instead of making multiple calls.",
     ],
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeAnswerTool({
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -362,7 +301,6 @@ function registerWebAnswerTool(
           queries: Array.isArray((args as { queries?: unknown }).queries)
             ? ((args as { queries?: string[] }).queries ?? [])
             : [],
-          provider: (args as { provider?: ProviderId }).provider,
         },
         theme,
       );
@@ -374,7 +312,7 @@ function registerWebAnswerTool(
         state.isPartial,
         "web_answer failed",
         theme,
-        { hidePartial: true },
+        { markdownWhenExpanded: true },
       );
     },
   });
@@ -394,17 +332,11 @@ function registerWebResearchTool(
     parameters: Type.Object({
       input: Type.String({ description: "Research brief or question" }),
       options: jsonOptionsSchema(describeOptionsField("research", providerIds)),
-      provider: providerEnum(
-        providerIds,
-        "Provider override. If omitted, uses the active configured provider that supports research.",
-      ),
     }),
-    promptGuidelines: PROVIDER_OVERRIDE_GUIDELINES,
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         capability: "research",
         config: await loadConfig(),
-        explicitProvider: params.provider,
         ctx,
         signal,
         onUpdate,
@@ -413,12 +345,10 @@ function registerWebResearchTool(
       });
     },
     renderCall(args, theme) {
-      return renderToolCallHeader(
-        "web_research",
-        formatQuotedPreview(String((args as { input?: string }).input ?? "")),
-        [
-          `provider=${String((args as { provider?: string }).provider ?? "auto")}`,
-        ],
+      return renderResearchCallHeader(
+        {
+          input: String((args as { input?: string }).input ?? ""),
+        },
         theme,
       );
     },
@@ -439,7 +369,7 @@ async function runWebProvidersConfig(
   ctx: ExtensionCommandContext,
 ): Promise<void> {
   const config = await loadConfig();
-  const activeProvider = await getPreferredProvider(ctx.cwd);
+  const activeProvider = getInitialProviderSelection(config);
 
   await ctx.ui.custom(
     (tui, theme, _keybindings, done) =>
@@ -461,18 +391,17 @@ function getAvailableProviderIdsForCapability(
   cwd: string,
   capability: ProviderCapability,
 ): ProviderId[] {
-  const providerIds: ProviderId[] = [];
-
-  for (const providerId of getProviderIdsForCapability(capability)) {
-    try {
-      resolveProviderForCapability(config, providerId, cwd, capability);
-      providerIds.push(providerId);
-    } catch {
-      // Exclude unavailable or disabled providers from the visible override list.
-    }
+  const providerId = getMappedProviderIdForCapability(config, capability);
+  if (!providerId) {
+    return [];
   }
 
-  return providerIds;
+  try {
+    resolveProviderForCapability(config, cwd, capability);
+    return [providerId];
+  } catch {
+    return [];
+  }
 }
 
 function getAvailableManagedToolNames(
@@ -556,18 +485,6 @@ function getProviderIdsForCapability(
   ).map((provider) => provider.id);
 }
 
-function providerEnum(providerIds: readonly ProviderId[], description: string) {
-  if (providerIds.length === 1) {
-    return Type.Optional(Type.Literal(providerIds[0], { description }));
-  }
-  return Type.Optional(
-    Type.Union(
-      providerIds.map((id) => Type.Literal(id)),
-      { description },
-    ),
-  );
-}
-
 function jsonOptionsSchema(description: string) {
   return Type.Optional(
     Type.Object(
@@ -607,7 +524,7 @@ function describeOptionsField(
 
   if (capability === "search") {
     description +=
-      " Local orchestration options may include prefetch={ enabled, maxUrls, provider, ttlMs, contentsOptions }.";
+      " Local orchestration options may include prefetch={ provider, maxUrls, ttlMs, contentsOptions }. Prefetch runs only when prefetch.provider is set.";
   }
 
   return description;
@@ -680,7 +597,7 @@ async function executeSearchTool({
   planOverrides,
 }: {
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -696,13 +613,16 @@ async function executeSearchTool({
 }) {
   await cleanupContentStore();
 
-  const provider = resolveProviderChoice(config, explicitProvider, ctx.cwd);
+  const provider = resolveProviderChoice(config, ctx.cwd, explicitProvider);
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
     throw new Error(`Provider '${provider.id}' is not configured.`);
   }
 
-  const prefetchOptions = parseSearchContentsPrefetchOptions(options);
+  const prefetchOptions = mergeSearchContentsPrefetchOptions(
+    getSearchPrefetchDefaults(config),
+    parseSearchContentsPrefetchOptions(options),
+  );
   const providerOptions = stripSearchContentsPrefetchOptions(options);
   const searchQueries = resolveSearchQueries(queries);
   if (
@@ -758,12 +678,11 @@ async function executeSearchTool({
   }
 
   const prefetch =
-    prefetchOptions?.enabled === true && planOverrides === undefined
+    prefetchOptions !== undefined && planOverrides === undefined
       ? await startContentsPrefetch({
           config,
           cwd: ctx.cwd,
           urls: collectSearchResultUrls(outcomes),
-          searchProviderId: provider.id,
           options: prefetchOptions,
         })
       : undefined;
@@ -853,7 +772,7 @@ async function executeAnswerTool({
   planOverrides,
 }: {
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -868,9 +787,9 @@ async function executeAnswerTool({
 }) {
   const provider = resolveProviderForCapability(
     config,
-    explicitProvider,
     ctx.cwd,
     "answer",
+    explicitProvider,
   );
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
@@ -961,27 +880,26 @@ function buildAnswerBatchError(outcomes: AnswerQueryOutcome[]): Error {
 }
 
 function formatAnswerResponses(outcomes: AnswerQueryOutcome[]): string {
-  if (outcomes.length === 1) {
-    return formatSingleAnswerOutcome(outcomes[0]);
-  }
-
   return outcomes
-    .map((outcome, index) => {
-      const section = outcome.response
-        ? outcome.response.text
-        : `Answer failed: ${outcome.error ?? "Unknown error."}`;
-      return `Question ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
-    })
+    .map((outcome, index) =>
+      formatAnswerOutcomeSection(outcome, index, outcomes.length),
+    )
     .join("\n\n");
 }
 
-function formatSingleAnswerOutcome(
-  outcome: AnswerQueryOutcome | undefined,
+function formatAnswerOutcomeSection(
+  outcome: AnswerQueryOutcome,
+  index: number,
+  total: number,
 ): string {
-  if (outcome?.response) {
-    return outcome.response.text;
-  }
-  return `Answer failed: ${outcome?.error ?? "Unknown error."}`;
+  const heading =
+    total > 1
+      ? `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`
+      : `## ${formatAnswerHeading(outcome.query)}`;
+  const body = outcome.response
+    ? outcome.response.text
+    : `Answer failed: ${outcome.error ?? "Unknown error."}`;
+  return `${heading}\n\n${body}`;
 }
 
 function buildWebAnswerDetails(
@@ -1100,7 +1018,7 @@ async function executeProviderTool({
 }: {
   capability: Exclude<ProviderCapability, "search">;
   config: WebProvidersConfig;
-  explicitProvider: ProviderId | undefined;
+  explicitProvider?: ProviderId;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   onUpdate:
@@ -1119,9 +1037,9 @@ async function executeProviderTool({
 
   const provider = resolveProviderForCapability(
     config,
-    explicitProvider,
     ctx.cwd,
     capability,
+    explicitProvider,
   );
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
   if (!providerConfig) {
@@ -1276,18 +1194,35 @@ function createToolProgressReporter(
   };
 }
 
-function renderToolCallHeader(
+function renderListCallHeader(
   toolName: string,
-  primary: string,
-  details: string[],
+  items: string[],
   theme: Theme,
+  options: {
+    singleItemFormatter?: (item: string) => string;
+    multiItemFormatter?: (item: string) => string;
+    suffix?: string;
+    forceMultiline?: boolean;
+  } = {},
 ): Component {
   return {
     invalidate() {},
     render(width) {
+      const normalizedItems = items
+        .map((item) => cleanSingleLine(item))
+        .filter((item) => item.length > 0);
+      const showItemsInline =
+        normalizedItems.length === 1 && options.forceMultiline !== true;
+
       let header = theme.fg("toolTitle", theme.bold(toolName));
-      if (primary.trim().length > 0) {
-        header += ` ${theme.fg("accent", primary)}`;
+      if (showItemsInline) {
+        const singleItem =
+          options.singleItemFormatter?.(normalizedItems[0]) ??
+          normalizedItems[0];
+        header += ` ${theme.fg("accent", singleItem)}`;
+      }
+      if (options.suffix) {
+        header += theme.fg("muted", options.suffix);
       }
 
       const lines: string[] = [];
@@ -1296,15 +1231,18 @@ function renderToolCallHeader(
         headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
       );
 
-      if (details.length > 0) {
-        const detailLine = truncateToWidth(
-          `  ${theme.fg("muted", details.join(" "))}`,
-          width,
-        );
-        lines.push(
-          detailLine +
-            " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-        );
+      if (normalizedItems.length > (showItemsInline ? 1 : 0)) {
+        for (const item of normalizedItems) {
+          const renderedItem =
+            options.multiItemFormatter?.(item) ?? truncateInline(item, 120);
+          const itemLine = truncateToWidth(
+            `  ${theme.fg("accent", renderedItem)}`,
+            width,
+          );
+          lines.push(
+            itemLine + " ".repeat(Math.max(0, width - visibleWidth(itemLine))),
+          );
+        }
       }
 
       return lines;
@@ -1312,45 +1250,77 @@ function renderToolCallHeader(
   };
 }
 
+function renderToolCallHeader(
+  toolName: string,
+  primary: string,
+  details: string[],
+  theme: Theme,
+): Component {
+  return renderListCallHeader(
+    toolName,
+    primary.trim().length > 0 ? [primary] : [],
+    theme,
+    {
+      singleItemFormatter: (item) => item,
+      suffix: details.length > 0 ? ` ${details.join(" ")}` : undefined,
+    },
+  );
+}
+
 function renderQuestionCallHeader(
   params: {
     queries: string[];
-    provider?: ProviderId;
   },
   theme: Theme,
 ): Component {
-  return {
-    invalidate() {},
-    render(width) {
-      const header = theme.fg("toolTitle", theme.bold("web_answer"));
-      const questions = getAnswerQueriesForDisplay(params.queries);
-      const lines: string[] = [];
-      const headerLine = truncateToWidth(header, width);
-      lines.push(
-        headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-      );
-
-      for (const question of questions) {
-        const questionLine = truncateToWidth(
-          `  ${theme.fg("accent", truncateInline(cleanSingleLine(question), 120))}`,
-          width,
-        );
-        lines.push(
-          questionLine +
-            " ".repeat(Math.max(0, width - visibleWidth(questionLine))),
-        );
-      }
-
-      const detailLine = truncateToWidth(
-        `  ${theme.fg("muted", `provider=${params.provider ?? "auto"}`)}`,
-        width,
-      );
-      lines.push(
-        detailLine + " ".repeat(Math.max(0, width - visibleWidth(detailLine))),
-      );
-      return lines;
+  return renderListCallHeader(
+    "web_answer",
+    getAnswerQueriesForDisplay(params.queries),
+    theme,
+    {
+      singleItemFormatter: (question) => formatQuotedPreview(question),
     },
-  };
+  );
+}
+
+function renderResearchCallHeader(
+  params: {
+    input: string;
+  },
+  theme: Theme,
+): Component {
+  return renderListCallHeader("web_research", [params.input], theme, {
+    forceMultiline: true,
+  });
+}
+
+function renderSearchToolResult(
+  result: {
+    content?: Array<{ type: string; text?: string }>;
+    details?: unknown;
+    isError?: boolean;
+  },
+  expanded: boolean,
+  isPartial: boolean,
+  theme: Theme,
+): Component | undefined {
+  const text = extractTextContent(result.content);
+  const isError = Boolean((result as { isError?: boolean }).isError);
+
+  if (isPartial) {
+    return renderSimpleText(text ?? "Working…", theme, "warning");
+  }
+
+  if (isError) {
+    return renderBlockText(text ?? "web_search failed", theme, "error");
+  }
+
+  const details = result.details as WebSearchDetails | undefined;
+  if (!details || expanded) {
+    return renderMarkdownBlock(text ?? "");
+  }
+
+  return renderCollapsedSearchSummary(details, text, theme);
 }
 
 function renderProviderToolResult(
@@ -1363,14 +1333,13 @@ function renderProviderToolResult(
   isPartial: boolean,
   failureText: string,
   theme: Theme,
-  options: { hidePartial?: boolean } = {},
-): Text | undefined {
+  options: {
+    markdownWhenExpanded?: boolean;
+  } = {},
+): Component | undefined {
   const text = extractTextContent(result.content);
 
   if (isPartial) {
-    if (options.hidePartial === true) {
-      return undefined;
-    }
     return renderSimpleText(text ?? "Working…", theme, "warning");
   }
 
@@ -1379,7 +1348,9 @@ function renderProviderToolResult(
   }
 
   if (expanded) {
-    return renderBlockText(text ?? "", theme, "toolOutput");
+    return options.markdownWhenExpanded
+      ? renderMarkdownBlock(text ?? "")
+      : renderBlockText(text ?? "", theme, "toolOutput");
   }
 
   const details = result.details as ProviderToolDetails | undefined;
@@ -1405,17 +1376,34 @@ function renderCollapsedProviderToolSummary(
     return `${details.queryCount} questions via ${details.provider}${failureSuffix}`;
   }
 
-  return (
+  const baseSummary =
+    getCompactProviderToolSummary(details) ??
     details?.summary ??
     getFirstLine(text) ??
-    `${details?.tool ?? "tool"} output available`
-  );
+    `${details?.tool ?? "tool"} output available`;
+
+  if (!details?.provider) {
+    return baseSummary;
+  }
+
+  return appendProviderSummary(baseSummary, details.provider);
 }
 
-interface ProviderToolMenuOption {
-  key: ProviderToolId;
-  label: string;
-  help: string;
+function getCompactProviderToolSummary(
+  details: ProviderToolDetails | undefined,
+): string | undefined {
+  if (!details) {
+    return undefined;
+  }
+
+  if (
+    details.tool === "web_contents" &&
+    typeof details.itemCount === "number"
+  ) {
+    return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
+  }
+
+  return undefined;
 }
 
 interface SettingsEntry {
@@ -1423,18 +1411,8 @@ interface SettingsEntry {
   label: string;
   currentValue: string;
   description: string;
-  kind: "cycle" | "text";
+  kind: "action" | "cycle" | "text";
   values?: string[];
-}
-
-function buildProviderToolMenuOptions(
-  providerId: ProviderId,
-): ProviderToolMenuOption[] {
-  return PROVIDER_TOOLS[providerId].map((toolId) => ({
-    key: toolId,
-    label: PROVIDER_TOOL_META[toolId].label,
-    help: PROVIDER_TOOL_META[toolId].help,
-  }));
 }
 
 function getProviderSettings(
@@ -1444,14 +1422,195 @@ function getProviderSettings(
     .settings as readonly ProviderSettingDescriptor<ProviderConfigUnion>[];
 }
 
+function getEnabledCompatibleProvidersForTool(
+  config: WebProvidersConfig,
+  toolId: ProviderToolId,
+): ProviderId[] {
+  return getCompatibleProvidersForTool(toolId).filter(
+    (providerId) =>
+      (config.providers?.[providerId] as ProviderConfigUnion | undefined)
+        ?.enabled === true,
+  );
+}
+
+function getSearchToolSettings(
+  config: WebProvidersConfig,
+): SearchToolSettings | undefined {
+  return config.toolSettings?.search;
+}
+
+function getSearchPrefetchDefaults(
+  config: WebProvidersConfig,
+): SearchPrefetchSettings | undefined {
+  return getSearchToolSettings(config)?.prefetch;
+}
+
+type GenericSettingId = keyof GenericSettingsConfig & string;
+
+const GENERIC_SETTING_IDS: readonly GenericSettingId[] = [
+  "requestTimeoutMs",
+  "retryCount",
+  "retryDelayMs",
+  "researchPollIntervalMs",
+  "researchTimeoutMs",
+  "researchMaxConsecutivePollErrors",
+] as const;
+
+const GENERIC_SETTING_META: Record<
+  GenericSettingId,
+  {
+    label: string;
+    help: string;
+    parse: (value: string) => number | undefined;
+  }
+> = {
+  requestTimeoutMs: {
+    label: "Request timeout (ms)",
+    help: "Default maximum time to wait for a single provider request before failing that attempt. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Request timeout must be a positive integer.",
+      ),
+  },
+  retryCount: {
+    label: "Retry count",
+    help: "Default number of times transient provider failures should be retried. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalNonNegativeIntegerInput(
+        value,
+        "Retry count must be a non-negative integer.",
+      ),
+  },
+  retryDelayMs: {
+    label: "Retry delay (ms)",
+    help: "Default initial delay before retrying failed requests. Later retries back off automatically. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Retry delay must be a positive integer.",
+      ),
+  },
+  researchPollIntervalMs: {
+    label: "Research poll interval (ms)",
+    help: "Default poll interval for long-running research jobs. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Research poll interval must be a positive integer.",
+      ),
+  },
+  researchTimeoutMs: {
+    label: "Research timeout (ms)",
+    help: "Default maximum total time to wait for research before returning a resumable timeout error. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Research timeout must be a positive integer.",
+      ),
+  },
+  researchMaxConsecutivePollErrors: {
+    label: "Max poll errors",
+    help: "Default number of consecutive poll failures to tolerate before stopping a local research run. Applies to research-capable providers unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Max poll errors must be a positive integer.",
+      ),
+  },
+};
+
+function getGenericSettingValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): number | "mixed" | undefined {
+  const explicitValue = config.genericSettings?.[id];
+  if (typeof explicitValue === "number") {
+    return explicitValue;
+  }
+
+  const values = new Set<number>();
+  for (const providerId of PROVIDER_IDS) {
+    const value = config.providers?.[providerId]?.policy?.[id];
+    if (typeof value === "number") {
+      values.add(value);
+      if (values.size > 1) {
+        return "mixed";
+      }
+    }
+  }
+
+  const [onlyValue] = values;
+  return onlyValue;
+}
+
+function getGenericSettingDisplayValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): string {
+  const value = getGenericSettingValue(config, id);
+  if (value === "mixed") {
+    return "mixed";
+  }
+  return summarizeStringValue(
+    typeof value === "number" ? String(value) : undefined,
+    false,
+  );
+}
+
+function getGenericSettingRawValue(
+  config: WebProvidersConfig,
+  id: GenericSettingId,
+): string {
+  const value = getGenericSettingValue(config, id);
+  return typeof value === "number" ? String(value) : "";
+}
+
+function ensureGenericSettings(
+  config: WebProvidersConfig,
+): GenericSettingsConfig {
+  config.genericSettings = { ...(config.genericSettings ?? {}) };
+  return config.genericSettings;
+}
+
+function cleanupGenericSettings(config: WebProvidersConfig): void {
+  if (
+    config.genericSettings &&
+    Object.keys(config.genericSettings).length === 0
+  ) {
+    delete config.genericSettings;
+  }
+}
+
+function stripGenericPolicyDuplicates(config: WebProvidersConfig): void {
+  for (const providerId of PROVIDER_IDS) {
+    const providerConfig = config.providers?.[providerId] as
+      | ProviderConfigUnion
+      | undefined;
+    if (!providerConfig?.policy) {
+      continue;
+    }
+
+    for (const key of GENERIC_SETTING_IDS) {
+      if (providerConfig.policy[key] === config.genericSettings?.[key]) {
+        delete providerConfig.policy[key];
+      }
+    }
+
+    if (Object.keys(providerConfig.policy).length === 0) {
+      delete providerConfig.policy;
+    }
+  }
+}
+
 class WebProvidersSettingsView implements Component {
   private config: WebProvidersConfig;
   private activeProvider: ProviderId;
-  private activeSection: "provider" | "tools" | "config" = "provider";
+  private activeSection: "provider" | "tools" | "generic" = "tools";
   private selection = {
     provider: 0,
     tools: 0,
-    config: 0,
+    generic: 0,
   };
   private submenu: Component | undefined;
 
@@ -1465,6 +1624,10 @@ class WebProvidersSettingsView implements Component {
   ) {
     this.config = structuredClone(initialConfig);
     this.activeProvider = initialProvider;
+    this.selection.provider = Math.max(
+      0,
+      PROVIDERS.findIndex((provider) => provider.id === initialProvider),
+    );
   }
 
   render(width: number): string[] {
@@ -1473,24 +1636,19 @@ class WebProvidersSettingsView implements Component {
     }
 
     const lines: string[] = [];
-    const providerItems = this.buildProviderSectionItems();
-    lines.push(
-      ...this.renderSection(width, "Provider", "provider", providerItems),
-    );
-    lines.push("");
-
     const toolItems = this.buildToolSectionItems();
     lines.push(...this.renderSection(width, "Tools", "tools", toolItems));
     lines.push("");
 
-    const configItems = this.buildConfigSectionItems();
+    const providerItems = this.buildProviderSectionItems();
     lines.push(
-      ...this.renderSection(
-        width,
-        "Provider config & policy",
-        "config",
-        configItems,
-      ),
+      ...this.renderSection(width, "Providers", "provider", providerItems),
+    );
+    lines.push("");
+
+    const genericItems = this.buildGenericSectionItems();
+    lines.push(
+      ...this.renderSection(width, "Generic Settings", "generic", genericItems),
     );
 
     const selected = this.getSelectedEntry();
@@ -1509,7 +1667,7 @@ class WebProvidersSettingsView implements Component {
       truncateToWidth(
         this.theme.fg(
           "dim",
-          "↑↓ move · Tab/Shift+Tab switch section · Enter edit/toggle · Esc close",
+          "↑↓ move · Tab/Shift+Tab switch section · Enter edit/open · Esc close",
         ),
         width,
       ),
@@ -1555,41 +1713,67 @@ class WebProvidersSettingsView implements Component {
   }
 
   private buildProviderSectionItems(): SettingsEntry[] {
-    return [
-      {
-        id: "provider",
-        label: "Engine",
-        currentValue: PROVIDER_MAP[this.activeProvider].label,
-        description: "Active web provider. Enter cycles through providers.",
-        kind: "cycle",
-        values: PROVIDERS.map((provider) => provider.label),
-      },
-    ];
+    return PROVIDERS.map((provider) => {
+      const providerConfig = this.config.providers?.[provider.id] as
+        | ProviderConfigUnion
+        | undefined;
+      const status = provider.getStatus(providerConfig as never, this.ctx.cwd);
+      const enabled = providerConfig?.enabled === true;
+      return {
+        id: `provider:${provider.id}`,
+        label: provider.label,
+        currentValue: enabled ? "on" : "off",
+        description:
+          provider.id === this.activeProvider
+            ? `Press Enter to configure ${provider.label}'s provider-specific settings. Current status: ${status.summary}.`
+            : `Move here and press Enter to configure ${provider.label}'s provider-specific settings. Current status: ${status.summary}.`,
+        kind: "action",
+      };
+    });
   }
 
   private buildToolSectionItems(): SettingsEntry[] {
-    const providerConfig = this.currentProviderConfig();
-    return buildProviderToolMenuOptions(this.activeProvider).map((option) => ({
-      id: `tool:${option.key}`,
-      label: option.label,
-      currentValue: isProviderToolEnabled(
-        this.activeProvider,
-        providerConfig,
-        option.key,
-      )
-        ? "on"
-        : "off",
-      description: option.help,
-      kind: "cycle",
-      values: ["on", "off"],
-    }));
+    return (Object.keys(CAPABILITY_TOOL_NAMES) as ProviderToolId[]).map(
+      (toolId) => {
+        const enabledCompatibleProviders = getEnabledCompatibleProvidersForTool(
+          this.config,
+          toolId,
+        );
+        const mappedProviderId = getMappedProviderIdForCapability(
+          this.config,
+          toolId,
+        );
+        const currentValue =
+          mappedProviderId &&
+          enabledCompatibleProviders.includes(mappedProviderId)
+            ? PROVIDER_MAP[mappedProviderId].label
+            : "off";
+        const compatibleLabels = enabledCompatibleProviders.map(
+          (providerId) => PROVIDER_MAP[providerId].label,
+        );
+        return {
+          id: `tool:${toolId}`,
+          label: PROVIDER_TOOL_META[toolId].label,
+          currentValue,
+          description:
+            `Press Enter to configure web_${toolId}. ${PROVIDER_TOOL_META[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
+            (compatibleLabels.length > 0
+              ? ` Enabled compatible providers: ${compatibleLabels.join(", ")}.`
+              : ""),
+          kind: "action",
+        };
+      },
+    );
   }
 
-  private buildConfigSectionItems(): SettingsEntry[] {
-    const providerConfig = this.currentProviderConfig();
-    return getProviderSettings(this.activeProvider).map((setting) =>
-      this.buildProviderItem(setting, providerConfig),
-    );
+  private buildGenericSectionItems(): SettingsEntry[] {
+    return GENERIC_SETTING_IDS.map((id) => ({
+      id: `generic:${id}`,
+      label: GENERIC_SETTING_META[id].label,
+      currentValue: getGenericSettingDisplayValue(this.config, id),
+      description: GENERIC_SETTING_META[id].help,
+      kind: "text",
+    }));
   }
 
   private buildProviderItem(
@@ -1617,18 +1801,12 @@ class WebProvidersSettingsView implements Component {
     };
   }
 
-  private currentProviderConfig(): ProviderConfigUnion | undefined {
-    return this.config.providers?.[this.activeProvider] as
-      | ProviderConfigUnion
-      | undefined;
-  }
-
   private getSectionEntries(
-    section: "provider" | "tools" | "config",
+    section: "provider" | "tools" | "generic",
   ): SettingsEntry[] {
     if (section === "provider") return this.buildProviderSectionItems();
-    if (section === "tools") return this.buildToolSectionItems();
-    return this.buildConfigSectionItems();
+    if (section === "generic") return this.buildGenericSectionItems();
+    return this.buildToolSectionItems();
   }
 
   private getActiveSectionEntries(): SettingsEntry[] {
@@ -1641,10 +1819,10 @@ class WebProvidersSettingsView implements Component {
   }
 
   private moveSection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools" | "config"> = [
-      "provider",
+    const sections: Array<"provider" | "tools" | "generic"> = [
       "tools",
-      "config",
+      "provider",
+      "generic",
     ];
     const index = sections.indexOf(this.activeSection);
     for (let offset = 1; offset <= sections.length; offset++) {
@@ -1654,27 +1832,30 @@ class WebProvidersSettingsView implements Component {
         ];
       if (this.getSectionEntries(next).length > 0) {
         this.activeSection = next;
+        this.syncActiveProviderToSelection();
         return;
       }
     }
   }
 
   private moveSelection(direction: 1 | -1): void {
-    const sections: Array<"provider" | "tools" | "config"> = [
-      "provider",
+    const sections: Array<"provider" | "tools" | "generic"> = [
       "tools",
-      "config",
+      "provider",
+      "generic",
     ];
     const currentEntries = this.getActiveSectionEntries();
     const currentIndex = this.selection[this.activeSection];
 
     if (direction === -1 && currentIndex > 0) {
       this.selection[this.activeSection] = currentIndex - 1;
+      this.syncActiveProviderToSelection();
       return;
     }
 
     if (direction === 1 && currentIndex < currentEntries.length - 1) {
       this.selection[this.activeSection] = currentIndex + 1;
+      this.syncActiveProviderToSelection();
       return;
     }
 
@@ -1691,14 +1872,26 @@ class WebProvidersSettingsView implements Component {
       this.activeSection = nextSection;
       this.selection[nextSection] =
         direction === 1 ? 0 : nextEntries.length - 1;
+      this.syncActiveProviderToSelection();
       return;
     }
+  }
+
+  private syncActiveProviderToSelection(): void {
+    if (this.activeSection !== "provider") {
+      return;
+    }
+    const provider = PROVIDERS[this.selection.provider];
+    if (!provider) {
+      return;
+    }
+    this.activeProvider = provider.id;
   }
 
   private renderSection(
     width: number,
     title: string,
-    section: "provider" | "tools" | "config",
+    section: "provider" | "tools" | "generic",
     entries: SettingsEntry[],
   ): string[] {
     const lines = [
@@ -1721,6 +1914,10 @@ class WebProvidersSettingsView implements Component {
       const label = selected
         ? this.theme.fg("accent", paddedLabel)
         : paddedLabel;
+      if (entry.currentValue.trim().length === 0) {
+        lines.push(truncateToWidth(`${prefix}${label}`, width));
+        continue;
+      }
       const value = selected
         ? this.theme.fg("accent", entry.currentValue)
         : this.theme.fg("muted", entry.currentValue);
@@ -1731,6 +1928,547 @@ class WebProvidersSettingsView implements Component {
 
   private async activateCurrentEntry(): Promise<void> {
     const entry = this.getSelectedEntry();
+    if (!entry) return;
+
+    if (entry.id.startsWith("generic:")) {
+      const settingId = entry.id.slice("generic:".length) as GenericSettingId;
+      this.submenu = new TextValueSubmenu(
+        this.tui,
+        this.theme,
+        entry.label,
+        this.currentGenericSettingRawValue(settingId),
+        entry.description,
+        (selectedValue) => {
+          this.submenu = undefined;
+          if (selectedValue !== undefined) {
+            void this.handleGenericSettingChange(settingId, selectedValue);
+          }
+          this.tui.requestRender();
+        },
+      );
+      return;
+    }
+
+    if (entry.kind === "action" && entry.id.startsWith("tool:")) {
+      const toolId = entry.id.slice("tool:".length) as ProviderToolId;
+      this.submenu = new ToolSettingsSubmenu(
+        this.tui,
+        this.theme,
+        toolId,
+        () => this.config,
+        async (mutate) => {
+          await this.persist(mutate);
+        },
+        () => {
+          this.submenu = undefined;
+          this.tui.requestRender();
+        },
+      );
+      return;
+    }
+
+    if (entry.kind === "action" && entry.id.startsWith("provider:")) {
+      const providerId = entry.id.slice("provider:".length) as ProviderId;
+      this.activeProvider = providerId;
+      this.submenu = new ProviderSettingsSubmenu(
+        this.tui,
+        this.theme,
+        providerId,
+        () => this.currentProviderConfigFor(providerId),
+        async (mutate) => {
+          await this.persist((config) => {
+            config.providers ??= {};
+            const providerConfig = getEditableProviderConfig(
+              providerId,
+              config.providers?.[providerId] as ProviderConfigUnion | undefined,
+            );
+            mutate(providerConfig);
+            config.providers[providerId] = providerConfig as never;
+          });
+        },
+        () => {
+          this.submenu = undefined;
+          this.tui.requestRender();
+        },
+      );
+      return;
+    }
+  }
+
+  private currentGenericSettingRawValue(id: GenericSettingId): string {
+    return getGenericSettingRawValue(this.config, id);
+  }
+
+  private async handleGenericSettingChange(
+    id: GenericSettingId,
+    value: string,
+  ): Promise<void> {
+    await this.persist((config) => {
+      const parsed = GENERIC_SETTING_META[id].parse(value);
+      const settings = ensureGenericSettings(config);
+      if (parsed === undefined) {
+        delete settings[id];
+      } else {
+        settings[id] = parsed;
+      }
+      cleanupGenericSettings(config);
+      stripGenericPolicyDuplicates(config);
+    });
+  }
+
+  private currentProviderConfigFor(
+    providerId: ProviderId,
+  ): ProviderConfigUnion | undefined {
+    return this.config.providers?.[providerId] as
+      | ProviderConfigUnion
+      | undefined;
+  }
+
+  private async persist(
+    mutate: (config: WebProvidersConfig) => void,
+  ): Promise<void> {
+    const nextConfig = structuredClone(this.config);
+    try {
+      mutate(nextConfig);
+      cleanupGenericSettings(nextConfig);
+      stripGenericPolicyDuplicates(nextConfig);
+      await writeConfigFile(nextConfig);
+      if (didContentsCacheInputsChange(this.config, nextConfig)) {
+        resetContentStore();
+      }
+      this.config = nextConfig;
+      this.tui.requestRender();
+    } catch (error) {
+      this.ctx.ui.notify((error as Error).message, "error");
+    }
+  }
+}
+
+class ToolSettingsSubmenu implements Component {
+  private selection = 0;
+  private submenu: Component | undefined;
+
+  constructor(
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly toolId: ProviderToolId,
+    private readonly getConfig: () => WebProvidersConfig,
+    private readonly persist: (
+      mutate: (config: WebProvidersConfig) => void,
+    ) => Promise<void>,
+    private readonly done: () => void,
+  ) {}
+
+  render(width: number): string[] {
+    if (this.submenu) {
+      return this.submenu.render(width);
+    }
+
+    const entries = this.getEntries();
+    const lines = [
+      truncateToWidth(
+        this.theme.fg("accent", PROVIDER_TOOL_META[this.toolId].label),
+        width,
+      ),
+      "",
+      ...this.renderEntries(width, entries),
+    ];
+
+    const selected = entries[this.selection];
+    if (selected) {
+      lines.push("");
+      for (const line of wrapTextWithAnsi(
+        selected.description,
+        Math.max(10, width - 2),
+      )) {
+        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
+      }
+    }
+
+    lines.push("");
+    lines.push(
+      truncateToWidth(
+        this.theme.fg("dim", "↑↓ move · Enter edit/toggle · Esc back"),
+        width,
+      ),
+    );
+    return lines;
+  }
+
+  invalidate(): void {
+    this.submenu?.invalidate();
+  }
+
+  handleInput(data: string): void {
+    if (this.submenu) {
+      this.submenu.handleInput?.(data);
+      this.tui.requestRender();
+      return;
+    }
+
+    const kb = getEditorKeybindings();
+    const entries = this.getEntries();
+
+    if (kb.matches(data, "selectUp")) {
+      if (this.selection > 0) {
+        this.selection -= 1;
+      }
+    } else if (kb.matches(data, "selectDown")) {
+      if (this.selection < entries.length - 1) {
+        this.selection += 1;
+      }
+    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+      void this.activateCurrentEntry();
+    } else if (kb.matches(data, "selectCancel")) {
+      this.done();
+      return;
+    }
+
+    this.tui.requestRender();
+  }
+
+  private getEntries(): SettingsEntry[] {
+    const config = this.getConfig();
+    const mappedProviderId = getMappedProviderIdForCapability(
+      config,
+      this.toolId,
+    );
+    const enabledProviderIds = getEnabledCompatibleProvidersForTool(
+      config,
+      this.toolId,
+    );
+    const providerValues = [
+      "off",
+      ...enabledProviderIds.map((providerId) => PROVIDER_MAP[providerId].label),
+    ];
+    const currentProviderValue =
+      mappedProviderId && enabledProviderIds.includes(mappedProviderId)
+        ? PROVIDER_MAP[mappedProviderId].label
+        : "off";
+
+    const entries: SettingsEntry[] = [
+      {
+        id: "provider",
+        label: "Provider",
+        currentValue: currentProviderValue,
+        description: `Route web_${this.toolId} to one compatible enabled provider or turn it off.`,
+        kind: "cycle",
+        values: providerValues,
+      },
+    ];
+
+    if (this.toolId === "search") {
+      const prefetch = getSearchPrefetchDefaults(config);
+      const prefetchProviderIds = getEnabledCompatibleProvidersForTool(
+        config,
+        "contents",
+      );
+      const prefetchValues = [
+        "off",
+        ...prefetchProviderIds.map(
+          (providerId) => PROVIDER_MAP[providerId].label,
+        ),
+      ];
+      const currentPrefetchProviderValue =
+        prefetch?.provider && prefetchProviderIds.includes(prefetch.provider)
+          ? PROVIDER_MAP[prefetch.provider].label
+          : "off";
+
+      entries.push(
+        {
+          id: "prefetchProvider",
+          label: "Prefetch",
+          currentValue: currentPrefetchProviderValue,
+          description:
+            "Optionally start background web_contents extraction after search using a contents-capable provider. Off means no prefetch.",
+          kind: "cycle",
+          values: prefetchValues,
+        },
+        {
+          id: "prefetchMaxUrls",
+          label: "Prefetch URLs",
+          currentValue:
+            prefetch?.maxUrls !== undefined
+              ? String(prefetch.maxUrls)
+              : "default",
+          description:
+            "Maximum number of search result URLs to prefetch. Leave blank to use the built-in default.",
+          kind: "text",
+        },
+        {
+          id: "prefetchTtlMs",
+          label: "Prefetch TTL",
+          currentValue:
+            prefetch?.ttlMs !== undefined ? String(prefetch.ttlMs) : "default",
+          description:
+            "How long prefetched contents stay reusable in the local cache, in milliseconds. Leave blank to use the built-in default.",
+          kind: "text",
+        },
+      );
+    }
+
+    return entries;
+  }
+
+  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
+    const labelWidth = Math.min(
+      24,
+      Math.max(...entries.map((entry) => entry.label.length), 0),
+    );
+    return entries.map((entry, index) => {
+      const selected = this.selection === index;
+      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
+      const paddedLabel = entry.label.padEnd(labelWidth, " ");
+      const label = selected
+        ? this.theme.fg("accent", paddedLabel)
+        : paddedLabel;
+      const value = selected
+        ? this.theme.fg("accent", entry.currentValue)
+        : this.theme.fg("muted", entry.currentValue);
+      return truncateToWidth(`${prefix}${label}  ${value}`, width);
+    });
+  }
+
+  private async activateCurrentEntry(): Promise<void> {
+    const entry = this.getEntries()[this.selection];
+    if (!entry) {
+      return;
+    }
+
+    if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
+      const currentIndex = entry.values.indexOf(entry.currentValue);
+      const nextValue = entry.values[(currentIndex + 1) % entry.values.length];
+      await this.handleChange(entry.id, nextValue);
+      return;
+    }
+
+    if (entry.kind === "text") {
+      const currentValue = this.getEntryRawValue(entry.id);
+      this.submenu = new TextValueSubmenu(
+        this.tui,
+        this.theme,
+        entry.label,
+        currentValue,
+        entry.description,
+        (selectedValue) => {
+          this.submenu = undefined;
+          if (selectedValue !== undefined) {
+            void this.handleChange(entry.id, selectedValue);
+          }
+          this.tui.requestRender();
+        },
+      );
+    }
+  }
+
+  private getEntryRawValue(id: string): string {
+    const prefetch = getSearchPrefetchDefaults(this.getConfig());
+    switch (id) {
+      case "prefetchMaxUrls":
+        return prefetch?.maxUrls !== undefined ? String(prefetch.maxUrls) : "";
+      case "prefetchTtlMs":
+        return prefetch?.ttlMs !== undefined ? String(prefetch.ttlMs) : "";
+      default:
+        return "";
+    }
+  }
+
+  private async handleChange(id: string, value: string): Promise<void> {
+    await this.persist((config) => {
+      switch (id) {
+        case "provider":
+          config.tools ??= {};
+          config.tools[this.toolId] =
+            value === "off"
+              ? null
+              : (getEnabledCompatibleProvidersForTool(config, this.toolId).find(
+                  (providerId) => PROVIDER_MAP[providerId].label === value,
+                ) ?? null);
+          return;
+        case "prefetchProvider": {
+          const providerId =
+            value === "off"
+              ? null
+              : (getEnabledCompatibleProvidersForTool(config, "contents").find(
+                  (candidate) => PROVIDER_MAP[candidate].label === value,
+                ) ?? null);
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.provider = providerId;
+          return;
+        }
+        case "prefetchMaxUrls":
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.maxUrls =
+            parseOptionalPositiveIntegerInput(
+              value,
+              "Prefetch URLs must be a positive integer.",
+            );
+          return;
+        case "prefetchTtlMs":
+          ensureSearchToolSettings(config).prefetch ??= {};
+          ensureSearchToolSettings(config).prefetch!.ttlMs =
+            parseOptionalPositiveIntegerInput(
+              value,
+              "Prefetch TTL must be a positive integer.",
+            );
+          return;
+        default:
+          throw new Error(`Unknown tool setting '${id}'.`);
+      }
+    });
+  }
+}
+
+class ProviderSettingsSubmenu implements Component {
+  private selection = 0;
+  private submenu: Component | undefined;
+
+  constructor(
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly providerId: ProviderId,
+    private readonly getProviderConfig: () => ProviderConfigUnion | undefined,
+    private readonly persist: (
+      mutate: (config: ProviderConfigUnion) => void,
+    ) => Promise<void>,
+    private readonly done: () => void,
+  ) {}
+
+  render(width: number): string[] {
+    if (this.submenu) {
+      return this.submenu.render(width);
+    }
+
+    const provider = PROVIDER_MAP[this.providerId];
+    const providerConfig = this.getProviderConfig();
+    const entries = this.getEntries();
+    const lines = [
+      truncateToWidth(this.theme.fg("accent", provider.label), width),
+      "",
+      ...this.renderEntries(width, entries),
+    ];
+
+    const selected = entries[this.selection];
+    if (selected) {
+      lines.push("");
+      for (const line of wrapTextWithAnsi(
+        selected.description,
+        Math.max(10, width - 2),
+      )) {
+        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
+      }
+    }
+
+    const status = provider.getStatus(providerConfig as never, "");
+    lines.push("");
+    lines.push(
+      truncateToWidth(this.theme.fg("dim", `Status: ${status.summary}`), width),
+    );
+    lines.push(
+      truncateToWidth(
+        this.theme.fg("dim", "↑↓ move · Enter edit/toggle · Esc back"),
+        width,
+      ),
+    );
+    return lines;
+  }
+
+  invalidate(): void {
+    this.submenu?.invalidate();
+  }
+
+  handleInput(data: string): void {
+    if (this.submenu) {
+      this.submenu.handleInput?.(data);
+      this.tui.requestRender();
+      return;
+    }
+
+    const kb = getEditorKeybindings();
+    const entries = this.getEntries();
+
+    if (kb.matches(data, "selectUp")) {
+      if (this.selection > 0) {
+        this.selection -= 1;
+      }
+    } else if (kb.matches(data, "selectDown")) {
+      if (this.selection < entries.length - 1) {
+        this.selection += 1;
+      }
+    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+      void this.activateCurrentEntry();
+    } else if (kb.matches(data, "selectCancel")) {
+      this.done();
+      return;
+    }
+
+    this.tui.requestRender();
+  }
+
+  private getEntries(): SettingsEntry[] {
+    const providerConfig = this.getProviderConfig();
+    return [
+      {
+        id: "providerEnabled",
+        label: "Enabled",
+        currentValue: providerConfig?.enabled === true ? "on" : "off",
+        description:
+          "Whether this provider is eligible for tool mappings and runtime use.",
+        kind: "cycle",
+        values: ["on", "off"],
+      },
+      ...getProviderSettings(this.providerId).map((setting) =>
+        this.buildProviderItem(setting, providerConfig),
+      ),
+    ];
+  }
+
+  private buildProviderItem(
+    setting: ProviderSettingDescriptor<ProviderConfigUnion>,
+    providerConfig: ProviderConfigUnion | undefined,
+  ): SettingsEntry {
+    if (setting.kind === "values") {
+      return {
+        id: setting.id,
+        label: setting.label,
+        currentValue: setting.getValue(providerConfig),
+        values: setting.values,
+        description: setting.help,
+        kind: "cycle",
+      };
+    }
+
+    const currentValue = setting.getValue(providerConfig);
+    return {
+      id: setting.id,
+      label: setting.label,
+      currentValue: summarizeStringValue(currentValue, setting.secret === true),
+      description: setting.help,
+      kind: "text",
+    };
+  }
+
+  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
+    const labelWidth = Math.min(
+      24,
+      Math.max(...entries.map((entry) => entry.label.length), 0),
+    );
+    return entries.map((entry, index) => {
+      const selected = this.selection === index;
+      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
+      const paddedLabel = entry.label.padEnd(labelWidth, " ");
+      const label = selected
+        ? this.theme.fg("accent", paddedLabel)
+        : paddedLabel;
+      const value = selected
+        ? this.theme.fg("accent", entry.currentValue)
+        : this.theme.fg("muted", entry.currentValue);
+      return truncateToWidth(`${prefix}${label}  ${value}`, width);
+    });
+  }
+
+  private async activateCurrentEntry(): Promise<void> {
+    const entry = this.getEntries()[this.selection];
     if (!entry) return;
 
     if (entry.kind === "cycle" && entry.values && entry.values.length > 0) {
@@ -1756,13 +2494,12 @@ class WebProvidersSettingsView implements Component {
           this.tui.requestRender();
         },
       );
-      return;
     }
   }
 
   private getEntryRawValue(id: string): string | undefined {
-    const providerConfig = this.currentProviderConfig();
-    const setting = getProviderSettings(this.activeProvider).find(
+    const providerConfig = this.getProviderConfig();
+    const setting = getProviderSettings(this.providerId).find(
       (candidate) => candidate.id === id,
     );
     if (!setting || setting.kind !== "text") {
@@ -1772,69 +2509,65 @@ class WebProvidersSettingsView implements Component {
   }
 
   private async handleChange(id: string, value: string): Promise<void> {
-    if (id === "provider") {
-      const nextProvider = PROVIDERS.find(
-        (provider) => provider.label === value,
-      )?.id;
-      if (!nextProvider || nextProvider === this.activeProvider) {
-        return;
-      }
-      this.activeProvider = nextProvider;
-      await this.persist((config) => {
-        setActiveProvider(config, nextProvider);
-      });
-      this.selection.tools = 0;
-      this.selection.config = 0;
-      return;
-    }
-
-    await this.persist((config) => {
-      config.providers ??= {};
-      const providerConfig = getEditableProviderConfig(
-        this.activeProvider,
-        config.providers?.[this.activeProvider] as
-          | ProviderConfigUnion
-          | undefined,
-      );
-
-      if (id.startsWith("tool:")) {
-        const toolId = id.slice("tool:".length) as ProviderToolId;
-        const tools = (providerConfig.tools ?? {}) as Partial<
-          Record<ProviderToolId, boolean>
-        >;
-        tools[toolId] = value === "on";
-        providerConfig.tools = tools as typeof providerConfig.tools;
-        config.providers[this.activeProvider] = providerConfig as never;
+    await this.persist((providerConfig) => {
+      if (id === "providerEnabled") {
+        providerConfig.enabled = value === "on";
         return;
       }
 
-      const setting = getProviderSettings(this.activeProvider).find(
+      const setting = getProviderSettings(this.providerId).find(
         (candidate) => candidate.id === id,
       );
       if (!setting) {
         throw new Error(`Unknown setting '${id}'.`);
       }
       setting.setValue(providerConfig, value);
-      config.providers[this.activeProvider] = providerConfig as never;
     });
   }
+}
 
-  private async persist(
-    mutate: (config: WebProvidersConfig) => void,
-  ): Promise<void> {
-    const nextConfig = structuredClone(this.config);
-    try {
-      mutate(nextConfig);
-      await writeConfigFile(nextConfig);
-      if (didContentsCacheInputsChange(this.config, nextConfig)) {
-        resetContentStore();
-      }
-      this.config = nextConfig;
-      this.tui.requestRender();
-    } catch (error) {
-      this.ctx.ui.notify((error as Error).message, "error");
-    }
+function ensureSearchToolSettings(
+  config: WebProvidersConfig,
+): SearchToolSettings {
+  config.toolSettings ??= {};
+  config.toolSettings.search ??= {};
+  return config.toolSettings.search;
+}
+
+function parseOptionalPositiveIntegerInput(
+  value: string,
+  errorMessage: string,
+): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
   }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(errorMessage);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(errorMessage);
+  }
+  return parsed;
+}
+
+function parseOptionalNonNegativeIntegerInput(
+  value: string,
+  errorMessage: string,
+): number | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(errorMessage);
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error(errorMessage);
+  }
+  return parsed;
 }
 
 class TextValueSubmenu implements Component {
@@ -1905,42 +2638,17 @@ function getEditableProviderConfig(
   ) as ProviderConfigUnion;
 }
 
-function setActiveProvider(
-  config: WebProvidersConfig,
-  providerId: ProviderId,
-): void {
-  const currentProviders = config.providers ?? {};
-  const candidateIds = new Set<ProviderId>([providerId]);
-
-  for (const id of Object.keys(currentProviders) as ProviderId[]) {
-    candidateIds.add(id);
+function getInitialProviderSelection(config: WebProvidersConfig): ProviderId {
+  for (const capability of Object.keys(
+    CAPABILITY_TOOL_NAMES,
+  ) as ProviderCapability[]) {
+    const providerId = getMappedProviderIdForCapability(config, capability);
+    if (providerId) {
+      return providerId;
+    }
   }
 
-  config.providers ??= {};
-  for (const id of candidateIds) {
-    const providerConfig = getEditableProviderConfig(
-      id,
-      config.providers?.[id] as ProviderConfigUnion | undefined,
-    ) as Record<string, JsonObject | string | boolean | undefined>;
-    providerConfig.enabled = id === providerId;
-    config.providers[id] = providerConfig as never;
-  }
-}
-
-function getResolvedProviderChoice(
-  effective: WebProvidersConfig,
-  cwd: string,
-): ProviderId | undefined {
-  try {
-    return resolveProviderChoice(effective, undefined, cwd).id;
-  } catch {
-    return undefined;
-  }
-}
-
-async function getPreferredProvider(cwd: string): Promise<ProviderId> {
-  const current = await loadConfig();
-  return getResolvedProviderChoice(current, cwd) ?? "codex";
+  return "codex";
 }
 
 function didContentsCacheInputsChange(
@@ -2105,54 +2813,31 @@ function extractTextContent(
 function renderCallHeader(
   params: {
     queries?: string[];
-    provider?: ProviderId;
     maxResults?: number;
   },
   theme: Theme,
 ): Component {
-  return {
-    invalidate() {},
-    render(width) {
-      let header = theme.fg("toolTitle", theme.bold("web_search"));
-      const queries = getSearchQueriesForDisplay(params.queries);
-      const showExpandedQueries = queries.length > 1;
-      if (queries.length === 1) {
-        header += ` ${theme.fg("accent", formatQuotedPreview(queries[0]))} `;
-      }
+  const maxResultsSuffix =
+    params.maxResults !== undefined && params.maxResults !== DEFAULT_MAX_RESULTS
+      ? ` (max ${params.maxResults})`
+      : undefined;
 
-      const lines: string[] = [];
-      const headerLine = truncateToWidth(header.trimEnd(), width);
-      lines.push(
-        headerLine + " ".repeat(Math.max(0, width - visibleWidth(headerLine))),
-      );
-
-      if (showExpandedQueries) {
-        for (const query of queries) {
-          const queryLine = truncateToWidth(
-            `  ${theme.fg("accent", truncateInline(cleanSingleLine(query), 120))}`,
-            width,
-          );
-          lines.push(
-            queryLine +
-              " ".repeat(Math.max(0, width - visibleWidth(queryLine))),
-          );
-        }
-      }
-
-      const detailParts = [
-        `provider=${params.provider ?? "auto"}`,
-        `maxResults=${params.maxResults ?? DEFAULT_MAX_RESULTS}`,
-      ];
-      const details = truncateToWidth(
-        `  ${theme.fg("muted", detailParts.join(" "))}`,
-        width,
-      );
-      lines.push(
-        details + " ".repeat(Math.max(0, width - visibleWidth(details))),
-      );
-      return lines;
+  return renderListCallHeader(
+    "web_search",
+    getSearchQueriesForDisplay(params.queries),
+    theme,
+    {
+      singleItemFormatter: (query) => formatQuotedPreview(query),
+      suffix: maxResultsSuffix,
     },
-  };
+  );
+}
+
+function renderMarkdownBlock(text: string): Markdown | Text {
+  if (!text) {
+    return new Text("", 0, 0);
+  }
+  return new Markdown(`\n${text}`, 0, 0, getMarkdownTheme());
 }
 
 function renderBlockText(
@@ -2180,20 +2865,26 @@ function renderSimpleText(
 
 function renderCollapsedSearchSummary(
   details: WebSearchDetails,
-  text: string | undefined,
+  _text: string | undefined,
   theme: Pick<Theme, "fg">,
 ): Text {
   const count = `${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`;
-  const queryCount = details.queryCount;
   const failureSuffix =
     details.failedQueryCount > 0 ? `, ${details.failedQueryCount} failed` : "";
   const base =
-    queryCount > 1
-      ? `${queryCount} queries, ${count} via ${details.provider}${failureSuffix}`
-      : (getFirstLine(text) ?? `${count} via ${details.provider}`);
+    details.queryCount > 1
+      ? `${details.queryCount} queries, ${count} via ${details.provider}${failureSuffix}`
+      : `${count} via ${details.provider}${failureSuffix}`;
   let summary = theme.fg("success", base);
   summary += theme.fg("muted", ` (${getExpandHint()})`);
   return new Text(summary, 0, 0);
+}
+
+function appendProviderSummary(summary: string, provider: ProviderId): string {
+  const providerSuffix = `via ${provider}`;
+  return summary.toLowerCase().includes(providerSuffix)
+    ? summary
+    : `${summary} ${providerSuffix}`;
 }
 
 function getFirstLine(text: string | undefined): string | undefined {
@@ -2224,32 +2915,40 @@ function formatSearchResponses(
   outcomes: SearchQueryOutcome[],
   prefetch?: { prefetchId: string; provider: ProviderId; urlCount: number },
 ): string {
-  const body =
-    outcomes.length === 1
-      ? formatSingleSearchOutcome(outcomes[0])
-      : outcomes
-          .map((outcome, index) => {
-            const section = outcome.response
-              ? formatSearchResponse(outcome.response)
-              : `Search failed: ${outcome.error ?? "Unknown error."}`;
-            return `Query ${index + 1}: ${formatQuotedPreview(outcome.query)}\n${section}`;
-          })
-          .join("\n\n");
+  const body = outcomes
+    .map((outcome, index) =>
+      formatSearchOutcomeSection(outcome, index, outcomes.length),
+    )
+    .join("\n\n");
 
   if (!prefetch) {
     return body;
   }
 
-  return `${body}\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
+  return `${body}\n\n---\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
 }
 
-function formatSingleSearchOutcome(
-  outcome: SearchQueryOutcome | undefined,
+function formatSearchOutcomeSection(
+  outcome: SearchQueryOutcome,
+  index: number,
+  total: number,
 ): string {
-  if (outcome?.response) {
-    return formatSearchResponse(outcome.response);
-  }
-  return `Search failed: ${outcome?.error ?? "Unknown error."}`;
+  const heading =
+    total > 1
+      ? `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`
+      : `## ${formatSearchHeading(outcome.query)}`;
+  const body = outcome.response
+    ? formatSearchResponseMarkdown(outcome.response)
+    : `Search failed: ${outcome.error ?? "Unknown error."}`;
+  return `${heading}\n\n${body}`;
+}
+
+function formatSearchHeading(query: string): string {
+  return `"${escapeMarkdownText(cleanSingleLine(query))}"`;
+}
+
+function formatAnswerHeading(query: string): string {
+  return `"${escapeMarkdownText(cleanSingleLine(query))}"`;
 }
 
 function collectSearchResultUrls(outcomes: SearchQueryOutcome[]): string[] {
@@ -2258,21 +2957,41 @@ function collectSearchResultUrls(outcomes: SearchQueryOutcome[]): string[] {
   );
 }
 
-function formatSearchResponse(response: SearchResponse): string {
+function formatSearchResponseMarkdown(response: SearchResponse): string {
   if (response.results.length === 0) {
     return "No results found.";
   }
 
-  const lines: string[] = [];
-  for (const [index, result] of response.results.entries()) {
-    lines.push(`${index + 1}. ${result.title}`);
-    lines.push(`   ${result.url}`);
-    if (result.snippet) {
-      lines.push(`   ${result.snippet}`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n").trimEnd();
+  return response.results
+    .map((result, index) => {
+      const lines = [
+        `${index + 1}. ${formatMarkdownLink(result.title, result.url)}`,
+      ];
+      if (result.snippet) {
+        lines.push(`   ${escapeMarkdownText(cleanSingleLine(result.snippet))}`);
+      }
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+function formatMarkdownLink(label: string, url: string): string {
+  return `[${escapeMarkdownLinkLabel(label)}](<${url}>)`;
+}
+
+function escapeMarkdownLinkLabel(text: string): string {
+  return cleanSingleLine(text).replaceAll("\\", "\\\\").replaceAll("]", "\\]");
+}
+
+function escapeMarkdownText(text: string): string {
+  return text
+    .replaceAll("\\", "\\\\")
+    .replaceAll("*", "\\*")
+    .replaceAll("_", "\\_")
+    .replaceAll("`", "\\`")
+    .replaceAll("#", "\\#")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]");
 }
 
 async function truncateAndSave(text: string, prefix: string): Promise<string> {
@@ -2329,5 +3048,12 @@ export const __test__ = {
   getSyncedActiveTools,
   renderCallHeader,
   renderQuestionCallHeader,
+  renderResearchCallHeader,
+  renderToolCallHeader,
   renderCollapsedSearchSummary,
+  renderCollapsedProviderToolSummary,
+  renderSearchToolResult,
+  renderProviderToolResult,
+  formatSearchResponses,
+  formatAnswerResponses,
 };

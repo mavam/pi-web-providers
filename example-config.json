@@ -1,89 +1,54 @@
 {
-  "version": 1,
+  "tools": {
+    "search": "codex",
+    "contents": null,
+    "answer": null,
+    "research": null
+  },
+  "genericSettings": {
+    "requestTimeoutMs": 30000,
+    "retryCount": 3,
+    "retryDelayMs": 2000,
+    "researchPollIntervalMs": 3000,
+    "researchTimeoutMs": 21600000,
+    "researchMaxConsecutivePollErrors": 3
+  },
   "providers": {
     "claude": {
-      "enabled": false,
-      "tools": {
-        "search": true,
-        "answer": true
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
-      }
+      "enabled": false
     },
     "codex": {
       "enabled": true,
-      "tools": {
-        "search": true
-      },
       "native": {
         "networkAccessEnabled": true,
         "webSearchEnabled": true,
         "webSearchMode": "live"
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "exa": {
       "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "EXA_API_KEY",
       "native": {
         "type": "auto",
         "contents": {
           "text": true
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
-        "researchMaxConsecutivePollErrors": 3
       }
     },
     "gemini": {
       "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "GOOGLE_API_KEY",
       "native": {
         "searchModel": "gemini-2.5-flash",
-        "contentsModel": "gemini-2.5-flash",
         "answerModel": "gemini-2.5-flash",
         "researchAgent": "deep-research-pro-preview-12-2025"
       },
       "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
         "researchMaxConsecutivePollErrors": 10
       }
     },
     "perplexity": {
       "enabled": false,
-      "tools": {
-        "search": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "PERPLEXITY_API_KEY",
       "native": {
         "answer": {
@@ -92,19 +57,10 @@
         "research": {
           "model": "sonar-deep-research"
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "parallel": {
       "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true
-      },
       "apiKey": "PARALLEL_API_KEY",
       "native": {
         "search": {
@@ -114,33 +70,14 @@
           "excerpts": true,
           "full_content": false
         }
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000
       }
     },
     "valyu": {
       "enabled": false,
-      "tools": {
-        "search": true,
-        "contents": true,
-        "answer": true,
-        "research": true
-      },
       "apiKey": "VALYU_API_KEY",
       "native": {
         "searchType": "all",
         "responseLength": "short"
-      },
-      "policy": {
-        "requestTimeoutMs": 30000,
-        "retryCount": 3,
-        "retryDelayMs": 2000,
-        "researchPollIntervalMs": 3000,
-        "researchTimeoutMs": 21600000,
-        "researchMaxConsecutivePollErrors": 3
       }
     }
   }

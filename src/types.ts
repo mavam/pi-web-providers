@@ -12,6 +12,23 @@ export const PROVIDER_IDS = [
 
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 export type ProviderCapability = "search" | "contents" | "answer" | "research";
+export type ToolProviderMapping = Partial<
+  Record<ProviderCapability, ProviderId | null>
+>;
+
+export interface SearchPrefetchSettings {
+  provider?: ProviderId | null;
+  maxUrls?: number;
+  ttlMs?: number;
+}
+
+export interface SearchToolSettings {
+  prefetch?: SearchPrefetchSettings;
+}
+
+export interface ToolSettingsConfig {
+  search?: SearchToolSettings;
+}
 
 export type JsonValue =
   | string
@@ -97,7 +114,6 @@ export interface CodexProviderNativeConfig {
 export interface GeminiProviderNativeConfig {
   apiVersion?: string;
   searchModel?: string;
-  contentsModel?: string;
   answerModel?: string;
   researchAgent?: string;
 }
@@ -113,23 +129,21 @@ export interface ParallelProviderNativeConfig {
   extract?: JsonObject;
 }
 
-export interface ClaudeProviderConfig {
+// Legacy routing fields are tolerated in TypeScript shapes for internal tests,
+// but config parsing rejects them in persisted config files.
+export interface LegacyProviderRoutingConfig {
   enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    answer?: boolean;
-  };
+  tools?: Partial<Record<ProviderCapability, boolean>>;
+}
+
+export interface ClaudeProviderConfig extends LegacyProviderRoutingConfig {
   pathToClaudeCodeExecutable?: string;
   native?: ClaudeProviderNativeConfig;
   policy?: ExecutionPolicyDefaults;
   defaults?: ClaudeProviderNativeConfig;
 }
 
-export interface CodexProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-  };
+export interface CodexProviderConfig extends LegacyProviderRoutingConfig {
   codexPath?: string;
   baseUrl?: string;
   apiKey?: string;
@@ -140,14 +154,7 @@ export interface CodexProviderConfig {
   defaults?: CodexProviderNativeConfig;
 }
 
-export interface ExaProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    contents?: boolean;
-    answer?: boolean;
-    research?: boolean;
-  };
+export interface ExaProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
   native?: JsonObject;
@@ -155,27 +162,14 @@ export interface ExaProviderConfig {
   defaults?: JsonObject;
 }
 
-export interface GeminiProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    contents?: boolean;
-    answer?: boolean;
-    research?: boolean;
-  };
+export interface GeminiProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   native?: GeminiProviderNativeConfig;
   policy?: ExecutionPolicyDefaults;
   defaults?: GeminiProviderNativeConfig & ExecutionPolicyDefaults;
 }
 
-export interface PerplexityProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    answer?: boolean;
-    research?: boolean;
-  };
+export interface PerplexityProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
   native?: PerplexityProviderNativeConfig;
@@ -183,12 +177,7 @@ export interface PerplexityProviderConfig {
   defaults?: PerplexityProviderNativeConfig;
 }
 
-export interface ParallelProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    contents?: boolean;
-  };
+export interface ParallelProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
   native?: ParallelProviderNativeConfig;
@@ -196,14 +185,7 @@ export interface ParallelProviderConfig {
   defaults?: ParallelProviderNativeConfig;
 }
 
-export interface ValyuProviderConfig {
-  enabled?: boolean;
-  tools?: {
-    search?: boolean;
-    contents?: boolean;
-    answer?: boolean;
-    research?: boolean;
-  };
+export interface ValyuProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
   native?: JsonObject;
@@ -211,8 +193,19 @@ export interface ValyuProviderConfig {
   defaults?: JsonObject;
 }
 
+export interface GenericSettingsConfig {
+  requestTimeoutMs?: number;
+  retryCount?: number;
+  retryDelayMs?: number;
+  researchPollIntervalMs?: number;
+  researchTimeoutMs?: number;
+  researchMaxConsecutivePollErrors?: number;
+}
+
 export interface WebProvidersConfig {
-  version: 1;
+  tools?: ToolProviderMapping;
+  toolSettings?: ToolSettingsConfig;
+  genericSettings?: GenericSettingsConfig;
   providers?: {
     claude?: ClaudeProviderConfig;
     codex?: CodexProviderConfig;

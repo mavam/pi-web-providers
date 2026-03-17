@@ -74,7 +74,6 @@ describe("session cache reset", () => {
     } as unknown as ExtensionAPI);
 
     const config = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -141,7 +140,6 @@ describe("session cache reset", () => {
     } as unknown as ExtensionAPI);
 
     const config = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,
@@ -242,7 +240,6 @@ describe("session cache reset", () => {
     } as unknown as ExtensionAPI);
 
     const config = {
-      version: 1,
       providers: {
         exa: {
           enabled: true,

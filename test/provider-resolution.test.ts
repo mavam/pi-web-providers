@@ -19,6 +19,7 @@ vi.mock("node:child_process", async () => {
 });
 
 import {
+  getEffectiveProviderConfig,
   resolveProviderChoice,
   resolveProviderForCapability,
 } from "../src/provider-resolution.js";
@@ -60,205 +61,150 @@ describe("provider resolution", () => {
   it("uses the explicit provider when it is configured", () => {
     process.env.EXA_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
       providers: {
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
         },
       },
-    };
+    });
 
-    const provider = resolveProviderChoice(config, "exa", process.cwd());
+    const provider = resolveProviderChoice(config, process.cwd(), "exa");
     expect(provider.id).toBe("exa");
   });
 
-  it("rejects Claude when it is explicitly enabled without local auth", () => {
-    const config: WebProvidersConfig = {
-      version: 1,
+  it("rejects Claude when it is explicitly selected without local auth", () => {
+    const config = createConfig({
       providers: {
-        claude: {
-          enabled: true,
-        },
+        claude: {},
       },
-    };
+    });
 
     expect(() =>
-      resolveProviderChoice(config, "claude", process.cwd()),
+      resolveProviderChoice(config, process.cwd(), "claude"),
     ).toThrow(/Provider 'claude' is not available: missing Claude auth/);
   });
 
-  it("prefers explicitly enabled providers in alphabetical order", () => {
+  it("uses the mapped search provider", () => {
     process.env.EXA_API_KEY = "test-key";
-    process.env.GOOGLE_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        search: "exa",
+      },
       providers: {
-        codex: {
-          enabled: false,
-        },
         exa: {
-          enabled: true,
           apiKey: "EXA_API_KEY",
         },
-        gemini: {
-          enabled: true,
-          apiKey: "GOOGLE_API_KEY",
-        },
-        valyu: {
-          enabled: true,
-          apiKey: "VALYU_API_KEY",
-        },
       },
-    };
+    });
 
-    const provider = resolveProviderChoice(config, undefined, process.cwd());
+    const provider = resolveProviderChoice(config, process.cwd());
     expect(provider.id).toBe("exa");
   });
 
-  it("falls back to implicit Codex search when no provider is explicitly enabled", () => {
+  it("does not fall back when search is unmapped", () => {
     process.env.CODEX_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
-      providers: {
-        exa: {
-          enabled: false,
-          apiKey: "EXA_API_KEY",
-        },
-      },
-    };
-
-    const provider = resolveProviderChoice(config, undefined, process.cwd());
-    expect(provider.id).toBe("codex");
-  });
-
-  it("allows explicit Codex search without a config file entry", () => {
-    process.env.CODEX_API_KEY = "test-key";
-
-    const provider = resolveProviderChoice(
-      { version: 1 },
-      "codex",
-      process.cwd(),
+    expect(() => resolveProviderChoice(createConfig(), process.cwd())).toThrow(
+      /No provider is configured for 'search'/,
     );
-    expect(provider.id).toBe("codex");
   });
 
-  it("respects an explicitly enabled non-Codex provider over the implicit Codex fallback", () => {
-    process.env.CODEX_API_KEY = "test-key";
-    process.env.EXA_API_KEY = "test-key";
-
-    const config: WebProvidersConfig = {
-      version: 1,
-      providers: {
-        exa: {
-          enabled: true,
-          apiKey: "EXA_API_KEY",
-        },
+  it("rejects an unavailable mapped provider", () => {
+    const config = createConfig({
+      tools: {
+        search: "codex",
       },
-    };
+      providers: {
+        codex: {},
+      },
+    });
 
-    const provider = resolveProviderChoice(config, undefined, process.cwd());
-    expect(provider.id).toBe("exa");
+    expect(() => resolveProviderChoice(config, process.cwd())).toThrow(
+      /Provider 'codex' is not available: missing Codex auth/,
+    );
   });
 
-  it("rejects Codex fallback when the CLI has no configured auth", () => {
-    expect(() =>
-      resolveProviderChoice({ version: 1 }, undefined, process.cwd()),
-    ).toThrow(/No provider is configured for 'search'/);
-  });
-
-  it("does not implicitly fall back to Claude when Codex auth is missing", () => {
-    mockClaudeWithoutQueryAccess();
-
-    expect(() =>
-      resolveProviderChoice({ version: 1 }, undefined, process.cwd()),
-    ).toThrow(/No provider is configured for 'search'/);
-  });
-
-  it("skips providers that have the requested tool disabled", () => {
-    process.env.EXA_API_KEY = "test-key";
+  it("uses the mapped contents provider", () => {
     process.env.PARALLEL_API_KEY = "test-key";
-    process.env.VALYU_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
+      tools: {
+        contents: "parallel",
+      },
       providers: {
-        exa: {
-          enabled: true,
-          apiKey: "EXA_API_KEY",
-          tools: {
-            contents: false,
-          },
-        },
         parallel: {
-          enabled: true,
           apiKey: "PARALLEL_API_KEY",
-          tools: {
-            contents: true,
-          },
-        },
-        valyu: {
-          enabled: true,
-          apiKey: "VALYU_API_KEY",
-          tools: {
-            contents: true,
-          },
         },
       },
-    };
+    });
 
     const provider = resolveProviderForCapability(
       config,
-      undefined,
       process.cwd(),
       "contents",
     );
     expect(provider.id).toBe("parallel");
   });
 
-  it("treats Perplexity research as an explicit blocking-provider exception", () => {
+  it("treats Perplexity research as a direct explicit-provider selection", () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
 
-    const config: WebProvidersConfig = {
-      version: 1,
+    const config = createConfig({
       providers: {
         perplexity: {
-          enabled: true,
           apiKey: "PERPLEXITY_API_KEY",
-          tools: {
-            research: true,
-          },
         },
       },
-    };
+    });
 
     const provider = resolveProviderForCapability(
       config,
-      undefined,
       process.cwd(),
       "research",
+      "perplexity",
     );
     expect(provider.id).toBe("perplexity");
   });
+
+  it("merges shared generic settings into the effective provider policy", () => {
+    const config = createConfig({
+      genericSettings: {
+        requestTimeoutMs: 30000,
+        retryCount: 3,
+        retryDelayMs: 2000,
+        researchPollIntervalMs: 3000,
+        researchTimeoutMs: 21600000,
+        researchMaxConsecutivePollErrors: 3,
+      },
+      providers: {
+        exa: {
+          policy: {
+            retryCount: 5,
+            researchPollIntervalMs: 4000,
+          },
+        },
+      },
+    });
+
+    expect(getEffectiveProviderConfig(config, "exa")?.policy).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 5,
+      retryDelayMs: 2000,
+      researchPollIntervalMs: 4000,
+      researchTimeoutMs: 21600000,
+      researchMaxConsecutivePollErrors: 3,
+    });
+  });
 });
 
-function mockClaudeAvailable(): void {
-  execFileSyncMock.mockImplementation((_command, args: string[]) => {
-    if (args.includes("auth") && args.includes("status")) {
-      return '{"loggedIn":true,"authMethod":"claude.ai"}';
-    }
-    throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
-  });
-}
-
-function mockClaudeWithoutQueryAccess(): void {
-  execFileSyncMock.mockImplementation((_command, args: string[]) => {
-    if (args.includes("auth") && args.includes("status")) {
-      return '{"loggedIn":true,"authMethod":"claude.ai"}';
-    }
-    throw new Error(`Unexpected Claude command: ${args.join(" ")}`);
-  });
+function createConfig(
+  overrides: Partial<WebProvidersConfig> = {},
+): WebProvidersConfig {
+  return {
+    tools: overrides.tools,
+    genericSettings: overrides.genericSettings,
+    providers: overrides.providers,
+  };
 }

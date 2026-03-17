@@ -3,10 +3,12 @@ import type {
   CodexProviderConfig,
   ExaProviderConfig,
   GeminiProviderConfig,
-  PerplexityProviderConfig,
   ParallelProviderConfig,
+  PerplexityProviderConfig,
+  ProviderCapability,
   ProviderId,
   ValyuProviderConfig,
+  WebProvidersConfig,
 } from "./types.js";
 
 export const PROVIDER_TOOL_IDS = [
@@ -22,7 +24,7 @@ export const PROVIDER_TOOLS: Record<ProviderId, readonly ProviderToolId[]> = {
   claude: ["search", "answer"],
   codex: ["search"],
   exa: ["search", "contents", "answer", "research"],
-  gemini: ["search", "contents", "answer", "research"],
+  gemini: ["search", "answer", "research"],
   perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
@@ -66,16 +68,17 @@ export function supportsProviderTool(
   return PROVIDER_TOOLS[providerId].includes(toolId);
 }
 
-export function isProviderToolEnabled(
-  providerId: ProviderId,
-  config: ProviderConfigUnion | undefined,
+export function getCompatibleProvidersForTool(
   toolId: ProviderToolId,
-): boolean {
-  if (!supportsProviderTool(providerId, toolId)) {
-    return false;
-  }
-  const tools = config?.tools as
-    | Partial<Record<ProviderToolId, boolean>>
-    | undefined;
-  return tools?.[toolId] ?? true;
+): ProviderId[] {
+  return (Object.keys(PROVIDER_TOOLS) as ProviderId[]).filter((providerId) =>
+    supportsProviderTool(providerId, toolId),
+  );
+}
+
+export function getMappedProviderForCapability(
+  config: WebProvidersConfig,
+  capability: ProviderCapability,
+): ProviderId | null | undefined {
+  return config.tools?.[capability];
 }

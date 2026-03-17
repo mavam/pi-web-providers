@@ -1,7 +1,6 @@
 import Parallel from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import { createDefaultRequestPolicy } from "../execution-policy-defaults.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   JsonValue,
@@ -14,7 +13,12 @@ import type {
   SearchResponse,
   WebProvider,
 } from "../types.js";
-import { asJsonObject, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  normalizeContentText,
+  pushIndentedBlock,
+  trimSnippet,
+} from "./shared.js";
 
 export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   readonly id: "parallel" = "parallel";
@@ -25,21 +29,16 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
   createTemplate(): ParallelProviderConfig {
     return {
       enabled: false,
-      tools: {
-        search: true,
-        contents: true,
-      },
       apiKey: "PARALLEL_API_KEY",
       native: {
         search: {
           mode: "agentic",
         },
         extract: {
-          excerpts: true,
-          full_content: false,
+          excerpts: false,
+          full_content: true,
         },
       },
-      policy: createDefaultRequestPolicy(),
     };
   }
 
@@ -150,11 +149,9 @@ export class ParallelProvider implements WebProvider<ParallelProviderConfig> {
         const title = result.title ?? result.url;
         const entryLines = [`${index + 1}. ${title}`, `   ${result.url}`];
 
-        const text = result.excerpts?.join(" ") ?? result.full_content ?? "";
-        const body = trimSnippet(text);
-        if (body) {
-          entryLines.push(`   ${body}`);
-        }
+        const text = result.full_content ?? result.excerpts?.join("\n\n") ?? "";
+        const body = normalizeContentText(text);
+        pushIndentedBlock(entryLines, body);
 
         lines.push(...entryLines, "");
         return {
