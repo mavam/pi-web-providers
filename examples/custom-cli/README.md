@@ -1,12 +1,43 @@
 # Custom CLI wrapper examples
 
-The `custom-cli` provider runs one local command per capability. Each wrapper:
+These examples keep the wrapper logic small. They are bash scripts that use
+`jq` for JSON handling. Each wrapper uses a different backend pattern:
+
+- `wrappers/codex-search.sh` — `codex --search exec`
+- `wrappers/gemini-contents.sh` — Gemini API via `curl`
+- `wrappers/claude-answer.sh` — `claude -p`
+- `wrappers/perplexity-research.sh` — Perplexity API via `curl`
+
+Each wrapper:
 
 - reads one JSON request from `stdin`
 - writes one JSON response to `stdout`
-- may stream progress lines on `stderr`
+- may write progress text to `stderr`
 
-A mixed setup can route different managed tools through different wrappers:
+## Requirements
+
+You need:
+
+- `bash`
+- `jq`
+- `curl`
+- `codex` on your `PATH` and authenticated locally
+- `claude` on your `PATH` and authenticated locally
+- `GOOGLE_API_KEY` for the Gemini example
+- `PERPLEXITY_API_KEY` for the Perplexity example
+
+## Copy the wrappers into your project
+
+```bash
+mkdir -p ./wrappers
+cp examples/custom-cli/wrappers/codex-search.sh ./wrappers/
+cp examples/custom-cli/wrappers/gemini-contents.sh ./wrappers/
+cp examples/custom-cli/wrappers/claude-answer.sh ./wrappers/
+cp examples/custom-cli/wrappers/perplexity-research.sh ./wrappers/
+chmod +x ./wrappers/*.sh
+```
+
+Then configure `custom-cli` like this:
 
 ```json
 {
@@ -14,24 +45,23 @@ A mixed setup can route different managed tools through different wrappers:
     "search": "custom-cli",
     "contents": "custom-cli",
     "answer": "custom-cli",
-    "research": null
+    "research": "custom-cli"
   },
   "providers": {
     "custom-cli": {
       "enabled": true,
       "native": {
         "search": {
-          "argv": ["node", "./wrappers/codex-search.mjs"],
-          "cwd": ".",
-          "env": {
-            "CODEX_PROFILE": "demo"
-          }
+          "argv": ["bash", "./wrappers/codex-search.sh"]
         },
         "contents": {
-          "argv": ["node", "./wrappers/gemini-contents.mjs"]
+          "argv": ["bash", "./wrappers/gemini-contents.sh"]
         },
         "answer": {
-          "argv": ["node", "./wrappers/claude-answer.mjs"]
+          "argv": ["bash", "./wrappers/claude-answer.sh"]
+        },
+        "research": {
+          "argv": ["bash", "./wrappers/perplexity-research.sh"]
         }
       }
     }
@@ -39,87 +69,134 @@ A mixed setup can route different managed tools through different wrappers:
 }
 ```
 
-That example uses:
-
-- Codex for `web_search`
-- Gemini for `web_contents`
-- Claude for `web_answer`
-
-Each capability can also set an optional `cwd` and `env`. Relative `cwd`
-values resolve from the active project directory. `env` must be a JSON object
-of strings. Each value can be a literal string, an environment variable name,
-or `!command`.
-
 `web_research` runs as a foreground wrapper command, so polling controls and
 `resumeId` do not apply to `custom-cli`.
 
-## Request shapes
+## Core command shapes
 
-Every wrapper receives a single request object. The shape depends on the
-capability:
+### Search with Codex
 
-### `search`
+```bash
+codex --search exec \
+  --skip-git-repo-check \
+  --sandbox read-only \
+  --output-schema ./schema.json \
+  "Search the public web and return JSON only"
+```
+
+### Contents with Gemini and `curl`
+
+```bash
+curl -sS -X POST \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$GOOGLE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contents": [{"parts": [{"text": "Extract the main content from https://example.com and return JSON only"}]}],
+    "tools": [{"urlContext": {}}],
+    "generationConfig": {"responseMimeType": "application/json"}
+  }'
+```
+
+### Answers with Claude
+
+```bash
+claude -p \
+  --output-format json \
+  --json-schema "$schema" \
+  --permission-mode dontAsk \
+  --allowedTools "WebSearch,WebFetch" \
+  "Answer this question using current public web information"
+```
+
+### Research with Perplexity and `curl`
+
+```bash
+curl -sS https://api.perplexity.ai/chat/completions \
+  -H "Authorization: Bearer $PERPLEXITY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sonar-deep-research",
+    "stream": false,
+    "messages": [{"role": "user", "content": "Research this topic and return a long-form answer"}]
+  }'
+```
+
+## Try a wrapper directly
+
+### Search
+
+```bash
+printf '%s' '{
+  "capability": "search",
+  "query": "latest Codex CLI release notes",
+  "maxResults": 5,
+  "options": {},
+  "cwd": "'"$PWD"'"
+}' | bash examples/custom-cli/wrappers/codex-search.sh
+```
+
+### Contents
+
+```bash
+printf '%s' '{
+  "capability": "contents",
+  "urls": ["https://example.com"],
+  "options": {},
+  "cwd": "'"$PWD"'"
+}' | bash examples/custom-cli/wrappers/gemini-contents.sh
+```
+
+### Answer
+
+```bash
+printf '%s' '{
+  "capability": "answer",
+  "query": "What changed in the latest Claude Code release?",
+  "options": {},
+  "cwd": "'"$PWD"'"
+}' | bash examples/custom-cli/wrappers/claude-answer.sh
+```
+
+### Research
+
+```bash
+printf '%s' '{
+  "capability": "research",
+  "input": "Compare current local agent CLIs for web-grounded tasks.",
+  "options": {},
+  "cwd": "'"$PWD"'"
+}' | bash examples/custom-cli/wrappers/perplexity-research.sh
+```
+
+## Request and response contract
+
+### Search request
 
 ```json
 {
   "capability": "search",
-  "query": "latest codex sdk docs",
+  "query": "latest Codex CLI release notes",
   "maxResults": 5,
   "options": {},
   "cwd": "/path/to/project"
 }
 ```
 
-### `contents`
-
-```json
-{
-  "capability": "contents",
-  "urls": ["https://example.com"],
-  "options": {},
-  "cwd": "/path/to/project"
-}
-```
-
-### `answer`
-
-```json
-{
-  "capability": "answer",
-  "query": "What changed in the latest Claude Code release?",
-  "options": {},
-  "cwd": "/path/to/project"
-}
-```
-
-### `research`
-
-```json
-{
-  "capability": "research",
-  "input": "Compare current local agent SDKs for web-grounded tasks.",
-  "options": {},
-  "cwd": "/path/to/project"
-}
-```
-
-## Response shapes
-
-### `search`
+### Search response
 
 ```json
 {
   "results": [
     {
-      "title": "Codex SDK docs",
-      "url": "https://github.com/openai/codex/tree/main/sdk/typescript",
-      "snippet": "TypeScript SDK reference and examples."
+      "title": "Codex CLI docs",
+      "url": "https://github.com/openai/codex",
+      "snippet": "CLI docs, examples, and release information."
     }
   ]
 }
 ```
 
-### `contents`, `answer`, `research`
+### Contents, answer, and research response
 
 ```json
 {
@@ -129,116 +206,3 @@ capability:
   "metadata": {}
 }
 ```
-
-## Wrapper sketch: Codex search
-
-```js
-// codex-search.mjs
-import { Codex } from "@openai/codex-sdk";
-
-const request = await readJsonStdin();
-const codex = new Codex();
-const thread = codex.startThread({
-  approvalPolicy: "never",
-  sandboxMode: "read-only",
-  skipGitRepoCheck: true,
-  webSearchEnabled: true,
-  workingDirectory: request.cwd,
-});
-
-const streamed = await thread.runStreamed(
-  `Search the public web and return JSON with at most ${request.maxResults} results for: ${request.query}`,
-  {
-    outputSchema: {
-      type: "object",
-      properties: {
-        results: {
-          type: "array",
-          items: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              url: { type: "string" },
-              snippet: { type: "string" },
-            },
-            required: ["title", "url", "snippet"],
-          },
-        },
-      },
-      required: ["results"],
-    },
-  },
-);
-
-let finalText = "";
-for await (const event of streamed.events) {
-  if (event.type === "item.completed" && event.item.type === "agent_message") {
-    finalText = event.item.text;
-  }
-}
-process.stdout.write(finalText);
-```
-
-## Wrapper sketch: Gemini contents
-
-```js
-// gemini-contents.mjs
-import { GoogleGenAI } from "@google/genai";
-
-const request = await readJsonStdin();
-const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
-const prompt = `Extract the main textual content from these URLs:\n${request.urls.join("\n")}`;
-const response = await ai.models.generateContent({
-  model: "gemini-2.5-flash",
-  contents: prompt,
-  config: {
-    tools: [{ urlContext: {} }],
-  },
-});
-process.stdout.write(
-  JSON.stringify({
-    text: response.text ?? "No content returned.",
-    summary: `Contents via Gemini for ${request.urls.length} URL(s)`,
-    itemCount: request.urls.length,
-  }),
-);
-```
-
-## Wrapper sketch: Claude answer
-
-```js
-// claude-answer.mjs
-import { query } from "@anthropic-ai/claude-agent-sdk";
-
-const request = await readJsonStdin();
-const stream = query({
-  prompt: `Answer using current public web information: ${request.query}`,
-  options: {
-    allowedTools: ["WebSearch", "WebFetch"],
-    cwd: request.cwd,
-    outputFormat: {
-      type: "json_schema",
-      schema: {
-        type: "object",
-        properties: {
-          text: { type: "string" },
-        },
-        required: ["text"],
-      },
-    },
-    permissionMode: "dontAsk",
-    persistSession: false,
-  },
-});
-
-let finalText = "";
-for await (const message of stream) {
-  if (message.type === "result") {
-    finalText = message.result;
-  }
-}
-process.stdout.write(finalText);
-```
-
-The wrapper code above is intentionally minimal. In practice you will usually
-add stricter schemas, better error handling, and richer summaries or metadata.

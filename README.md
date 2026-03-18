@@ -169,13 +169,7 @@ Providers deliver results in one of three modes:
 
 ### Providers
 
-Every provider is a thin adapter around an official SDK. Each provider has an
-`enabled` toggle that controls whether it is eligible for tool mappings.
-Provider config is split into `native` settings (forwarded to the SDK) and
-`policy` settings (local overrides that take precedence over generic settings);
-legacy `defaults` blocks are still accepted when reading. Secret-like values
-can be literal strings, environment variable names (e.g., `EXA_API_KEY`), or
-shell commands prefixed with `!`.
+The built-in providers below are thin adapters around official SDKs.
 
 <details>
 <summary><strong>Claude</strong></summary>
@@ -199,22 +193,6 @@ shell commands prefixed with `!`.
 - Supports request-shaping `web_search.options` such as `model`,
   `modelReasoningEffort`, and `webSearchMode`
 - Best if you already use the local Codex CLI and auth flow
-
-</details>
-
-<details>
-<summary><strong>Custom CLI</strong></summary>
-
-- Runs a caller-configured local command per capability
-- Each command can set its own `argv`, `cwd`, and `env`
-- Commands read one JSON request from `stdin` and must write one JSON result to
-  `stdout`
-- `stderr` is treated as progress output and streamed into the tool call while
-  the command runs
-- `web_research` runs as a foreground command, so it supports request timeouts
-  and retries but not polling controls or `resumeId`
-- Good for wrapping local agent CLIs, shell scripts, or small adapter programs
-  without adding a first-class provider to this extension
 
 </details>
 
@@ -281,9 +259,24 @@ shell commands prefixed with `!`.
 
 ### Custom CLI provider
 
-`custom-cli` lets you bring your own wrapper command for any managed tool. Each
-capability can point at a different local command under
-`providers["custom-cli"].native`:
+The `custom-cli` provider lets you bring your own wrapper command for any
+managed tool. Each capability can point at a different local command under
+`providers["custom-cli"].native`.
+
+The repo includes actual wrapper examples under
+[`examples/custom-cli/wrappers/`](examples/custom-cli/wrappers/). They are
+small bash scripts that use `jq` for JSON handling. Each one uses a different
+backend pattern:
+
+- `codex --search exec` for `web_search`
+- Gemini API via `curl` for `web_contents`
+- `claude -p` for `web_answer`
+- Perplexity API via `curl` for `web_research`
+
+<details>
+<summary><strong>Configuration example</strong></summary>
+
+Copy the example wrappers into a local `./wrappers/` directory, then configure:
 
 ```json
 {
@@ -291,20 +284,23 @@ capability can point at a different local command under
     "search": "custom-cli",
     "contents": "custom-cli",
     "answer": "custom-cli",
-    "research": null
+    "research": "custom-cli"
   },
   "providers": {
     "custom-cli": {
       "enabled": true,
       "native": {
         "search": {
-          "argv": ["node", "./wrappers/codex-search.mjs"]
+          "argv": ["bash", "./wrappers/codex-search.sh"]
         },
         "contents": {
-          "argv": ["node", "./wrappers/gemini-contents.mjs"]
+          "argv": ["bash", "./wrappers/gemini-contents.sh"]
         },
         "answer": {
-          "argv": ["node", "./wrappers/claude-answer.mjs"]
+          "argv": ["bash", "./wrappers/claude-answer.sh"]
+        },
+        "research": {
+          "argv": ["bash", "./wrappers/perplexity-research.sh"]
         }
       }
     }
@@ -312,9 +308,8 @@ capability can point at a different local command under
 }
 ```
 
-That example uses three different wrappers behind the same provider mapping:
-Codex for `web_search`, Gemini for `web_contents`, and Claude for
-`web_answer`.
+Those example wrappers deliberately use different local CLIs and APIs so you
+can see several wrapper styles in one setup without extra glue code.
 
 Each capability can also set an optional `cwd` and `env` block. Use `cwd` when
 one wrapper must run from a specific directory. Use `env` for per-command
@@ -336,8 +331,12 @@ Wrapper contract:
 - exit code `0`: success
 - non-zero exit code: failure
 
+</details>
+
 See [`examples/custom-cli/README.md`](examples/custom-cli/README.md) for a
-longer example showing Codex, Claude, and Gemini wrappers.
+copy-and-pasteable setup, and see
+[`examples/custom-cli/wrappers/`](examples/custom-cli/wrappers/) for the actual
+wrapper files.
 
 ### Generic settings
 
@@ -353,12 +352,10 @@ providers unless overridden in a provider's `policy` block:
 | `researchTimeoutMs`                | `21600000` | Overall deadline for research before returning |
 | `researchMaxConsecutivePollErrors` | `3`        | Consecutive poll failures before stopping      |
 
-## 🛠️ Development
+## 📄 License
 
-```bash
-npm run check
-npm test
-```
+[MIT](LICENSE)
+MaxConsecutivePollErrors`|`3` | Consecutive poll failures before stopping |
 
 ## 📄 License
 
