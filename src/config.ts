@@ -1149,8 +1149,13 @@ function parseOptionalCustomCliCommand(
   }
 
   const argv = parseOptionalStringArray(config.argv, source, `${field}.argv`);
-  if (argv !== undefined && argv.length === 0) {
-    throw new Error(`'${field}.argv' in ${source} must not be empty.`);
+  if (
+    argv !== undefined &&
+    (argv.length === 0 || argv.some((entry) => entry.trim().length === 0))
+  ) {
+    throw new Error(
+      `'${field}.argv' in ${source} must be a non-empty array of non-empty strings.`,
+    );
   }
 
   return {

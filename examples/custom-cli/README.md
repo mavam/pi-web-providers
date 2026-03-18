@@ -21,7 +21,11 @@ A mixed setup can route different managed tools through different wrappers:
       "enabled": true,
       "native": {
         "search": {
-          "argv": ["node", "./wrappers/codex-search.mjs"]
+          "argv": ["node", "./wrappers/codex-search.mjs"],
+          "cwd": ".",
+          "env": {
+            "CODEX_PROFILE": "demo"
+          }
         },
         "contents": {
           "argv": ["node", "./wrappers/gemini-contents.mjs"]
@@ -40,6 +44,14 @@ That example uses:
 - Codex for `web_search`
 - Gemini for `web_contents`
 - Claude for `web_answer`
+
+Each capability can also set an optional `cwd` and `env`. Relative `cwd`
+values resolve from the active project directory. `env` must be a JSON object
+of strings. Each value can be a literal string, an environment variable name,
+or `!command`.
+
+`web_research` runs as a foreground wrapper command, so polling controls and
+`resumeId` do not apply to `custom-cli`.
 
 ## Request shapes
 

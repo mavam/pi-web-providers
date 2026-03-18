@@ -68,11 +68,11 @@ and that provider is currently available. Tool-specific settings live under
 Find likely sources on the public web for up to 10 queries in a single call
 and return titles, URLs, and snippets grouped by query.
 
-| Parameter    | Type     | Default  | Description                                                          |
-| ------------ | -------- | -------- | -------------------------------------------------------------------- |
-| `queries`    | string[] | required | One or more search queries to run (max 10)                           |
-| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                            |
-| `options`    | object   | —        | Provider-specific search options plus local `prefetch` orchestration |
+| Parameter    | Type     | Default  | Description                                                    |
+| ------------ | -------- | -------- | -------------------------------------------------------------- |
+| `queries`    | string[] | required | One or more search queries to run (max 10)                     |
+| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                      |
+| `options`    | object   | —        | Provider-specific search options and local `prefetch` settings |
 
 `web_search.options.prefetch` is local-only and not forwarded into the provider
 SDK. It accepts `provider`, `maxUrls`, `ttlMs`, and `contentsOptions`, and
@@ -181,10 +181,13 @@ shell commands prefixed with `!`.
 <summary><strong>Custom CLI</strong></summary>
 
 - Runs a caller-configured local command per capability
+- Each command can set its own `argv`, `cwd`, and `env`
 - Commands read one JSON request from `stdin` and must write one JSON result to
   `stdout`
 - `stderr` is treated as progress output and streamed into the tool call while
   the command runs
+- `web_research` runs as a foreground command, so it supports request timeouts
+  and retries but not polling controls or `resumeId`
 - Good for wrapping local agent CLIs, shell scripts, or small adapter programs
   without adding a first-class provider to this extension
 
@@ -287,6 +290,15 @@ capability can point at a different local command under
 That example uses three different wrappers behind the same provider mapping:
 Codex for `web_search`, Gemini for `web_contents`, and Claude for
 `web_answer`.
+
+Each capability can also set an optional `cwd` and `env` block. Use `cwd` when
+one wrapper must run from a specific directory. Use `env` for per-command
+variables; each value can be a literal string, an environment variable name, or
+`!command`.
+
+`web_research` runs as a foreground wrapper command, so local polling controls
+(`pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`) and `resumeId` do
+not apply to `custom-cli`.
 
 Wrapper contract:
 

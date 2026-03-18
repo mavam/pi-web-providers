@@ -177,6 +177,25 @@ describe("config parsing", () => {
     });
   });
 
+  it("rejects blank custom CLI argv entries", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          providers: {
+            "custom-cli": {
+              native: {
+                search: {
+                  argv: ["node", "   "],
+                },
+              },
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/non-empty array of non-empty strings/);
+  });
+
   it("rejects unknown tool-specific settings", () => {
     expect(() =>
       parseConfig(
