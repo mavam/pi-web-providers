@@ -65,8 +65,11 @@ and that provider is currently available. Tool-specific settings live under
 
 #### `web_search`
 
-Find likely sources on the public web for up to 10 queries in a single call
-and return titles, URLs, and snippets grouped by query.
+Search the public web for up to 10 queries in one call. It returns grouped
+titles, URLs, and snippets for each query.
+
+<details>
+<summary><strong>Parameters and behavior</strong></summary>
 
 | Parameter    | Type     | Default  | Description                                                    |
 | ------------ | -------- | -------- | -------------------------------------------------------------- |
@@ -80,9 +83,15 @@ starts a background page-extraction workflow only when `prefetch.provider` is
 set. `/web-providers` can also persist default search prefetch settings under
 `toolSettings.search.prefetch`.
 
+</details>
+
 #### `web_contents`
 
-Read and extract the main contents of one or more web pages.
+Read the main text from one or more web pages. It reuses cached pages when they
+match and fetches only missing or stale URLs.
+
+<details>
+<summary><strong>Parameters and behavior</strong></summary>
 
 | Parameter | Type     | Default  | Description                          |
 | --------- | -------- | -------- | ------------------------------------ |
@@ -93,20 +102,34 @@ Read and extract the main contents of one or more web pages.
 content store—whether they came from prefetch or an earlier read—and only
 fetches missing or stale URLs.
 
+</details>
+
 #### `web_answer`
 
-Answer one or more questions using web-grounded evidence.
+Answer one or more questions using web-grounded evidence. When you ask more
+than one question, the response is grouped into per-question sections.
+
+<details>
+<summary><strong>Parameters and behavior</strong></summary>
 
 | Parameter | Type     | Default  | Description                                          |
 | --------- | -------- | -------- | ---------------------------------------------------- |
 | `queries` | string[] | required | One or more questions to answer in one call (max 10) |
 | `options` | object   | —        | Provider-specific options                            |
 
-Responses are grouped into per-question sections when more than one question is provided.
+Responses are grouped into per-question sections when more than one question is
+provided.
+
+</details>
 
 #### `web_research`
 
-Investigate a topic across web sources and produce a longer report.
+Investigate a topic across web sources and produce a longer report. The
+provider-specific `options` stay native to each SDK, and runtime options
+override provider configuration when both are set.
+
+<details>
+<summary><strong>Parameters and behavior</strong></summary>
 
 | Parameter | Type   | Default  | Description                |
 | --------- | ------ | -------- | -------------------------- |
@@ -117,6 +140,8 @@ Investigate a topic across web sources and produce a longer report.
 different field names across SDKs—for example Perplexity uses `country`, Exa
 uses `userLocation`, and Valyu uses `countryCode`. Runtime `options` override
 provider-native config, but managed tool inputs and tool wiring stay fixed.
+
+</details>
 
 <details>
 <summary><strong>Timeout, retry, and delivery modes</strong></summary>
