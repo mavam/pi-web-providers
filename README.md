@@ -355,8 +355,3 @@ providers unless overridden in a provider's `policy` block:
 ## 📄 License
 
 [MIT](LICENSE)
-MaxConsecutivePollErrors`|`3` | Consecutive poll failures before stopping |
-
-## 📄 License
-
-[MIT](LICENSE)

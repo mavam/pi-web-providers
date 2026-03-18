@@ -68,6 +68,14 @@ describe("provider config manifests", () => {
     getTextSetting("customCliAnswerEnv").setValue(config, "");
     expect(config.native?.answer).toBeUndefined();
   });
+
+  it("rejects empty custom-cli argv arrays in the settings manifest", () => {
+    const config: CustomCliProviderConfig = { enabled: true };
+
+    expect(() =>
+      getTextSetting("customCliSearchArgv").setValue(config, "[]"),
+    ).toThrow(/non-empty JSON string array/);
+  });
 });
 
 function getTextSetting(

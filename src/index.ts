@@ -1424,13 +1424,22 @@ function getProviderSettings(
 
 function getEnabledCompatibleProvidersForTool(
   config: WebProvidersConfig,
+  cwd: string,
   toolId: ProviderToolId,
 ): ProviderId[] {
-  return getCompatibleProvidersForTool(toolId).filter(
-    (providerId) =>
-      (config.providers?.[providerId] as ProviderConfigUnion | undefined)
-        ?.enabled === true,
-  );
+  return getCompatibleProvidersForTool(toolId).filter((providerId) => {
+    const providerConfig = config.providers?.[providerId] as
+      | ProviderConfigUnion
+      | undefined;
+    if (providerConfig?.enabled !== true) {
+      return false;
+    }
+    return PROVIDER_MAP[providerId].getStatus(
+      providerConfig as never,
+      cwd,
+      toolId,
+    ).available;
+  });
 }
 
 function getSearchToolSettings(
@@ -1737,6 +1746,7 @@ class WebProvidersSettingsView implements Component {
       (toolId) => {
         const enabledCompatibleProviders = getEnabledCompatibleProvidersForTool(
           this.config,
+          this.ctx.cwd,
           toolId,
         );
         const mappedProviderId = getMappedProviderIdForCapability(
@@ -1955,6 +1965,7 @@ class WebProvidersSettingsView implements Component {
         this.tui,
         this.theme,
         toolId,
+        this.ctx.cwd,
         () => this.config,
         async (mutate) => {
           await this.persist(mutate);
@@ -2052,6 +2063,7 @@ class ToolSettingsSubmenu implements Component {
     private readonly tui: TUI,
     private readonly theme: Theme,
     private readonly toolId: ProviderToolId,
+    private readonly cwd: string,
     private readonly getConfig: () => WebProvidersConfig,
     private readonly persist: (
       mutate: (config: WebProvidersConfig) => void,
@@ -2135,6 +2147,7 @@ class ToolSettingsSubmenu implements Component {
     );
     const enabledProviderIds = getEnabledCompatibleProvidersForTool(
       config,
+      this.cwd,
       this.toolId,
     );
     const providerValues = [
@@ -2161,6 +2174,7 @@ class ToolSettingsSubmenu implements Component {
       const prefetch = getSearchPrefetchDefaults(config);
       const prefetchProviderIds = getEnabledCompatibleProvidersForTool(
         config,
+        this.cwd,
         "contents",
       );
       const prefetchValues = [
@@ -2281,7 +2295,11 @@ class ToolSettingsSubmenu implements Component {
           config.tools[this.toolId] =
             value === "off"
               ? null
-              : (getEnabledCompatibleProvidersForTool(config, this.toolId).find(
+              : (getEnabledCompatibleProvidersForTool(
+                  config,
+                  this.cwd,
+                  this.toolId,
+                ).find(
                   (providerId) => PROVIDER_MAP[providerId].label === value,
                 ) ?? null);
           return;
@@ -2289,7 +2307,11 @@ class ToolSettingsSubmenu implements Component {
           const providerId =
             value === "off"
               ? null
-              : (getEnabledCompatibleProvidersForTool(config, "contents").find(
+              : (getEnabledCompatibleProvidersForTool(
+                  config,
+                  this.cwd,
+                  "contents",
+                ).find(
                   (candidate) => PROVIDER_MAP[candidate].label === value,
                 ) ?? null);
           ensureSearchToolSettings(config).prefetch ??= {};
@@ -3043,6 +3065,7 @@ export const __test__ = {
   executeSearchTool,
   extractTextContent,
   getAvailableManagedToolNames,
+  getEnabledCompatibleProvidersForTool,
   describeOptionsField,
   getAvailableProviderIdsForCapability,
   getSyncedActiveTools,

@@ -6,7 +6,9 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "example-config.json",
+    "examples"
   ],
   "keywords": [
     "pi-package",

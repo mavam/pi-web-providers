@@ -192,6 +192,36 @@ describe("managed tool availability", () => {
     ).toEqual([]);
   });
 
+  it("only lists Custom CLI as selectable for capabilities with a configured command", () => {
+    const config = createConfig({
+      providers: {
+        "custom-cli": {
+          enabled: true,
+          native: {
+            answer: {
+              argv: [process.execPath, "./answer-wrapper.mjs"],
+            },
+          },
+        },
+      },
+    });
+
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "search",
+      ),
+    ).toEqual([]);
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "answer",
+      ),
+    ).toEqual(["custom-cli"]);
+  });
+
   it("does not activate unavailable tools before agent start", () => {
     process.env.CODEX_API_KEY = "test-key";
     process.env.EXA_API_KEY = "test-key";

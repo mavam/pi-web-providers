@@ -988,6 +988,7 @@ function setCustomCliArgv(
 
   if (
     !Array.isArray(parsed) ||
+    parsed.length === 0 ||
     parsed.some(
       (entry) => typeof entry !== "string" || entry.trim().length === 0,
     )
