@@ -2,6 +2,7 @@ import type { ModelReasoningEffort, WebSearchMode } from "@openai/codex-sdk";
 
 export const PROVIDER_IDS = [
   "claude",
+  "cloudflare",
   "codex",
   "custom-cli",
   "exa",
@@ -119,6 +120,11 @@ export interface GeminiProviderNativeConfig {
   researchAgent?: string;
 }
 
+export interface CloudflareProviderNativeConfig {
+  /** Timeout in ms to wait for Cloudflare Browser Rendering. */
+  requestTimeoutMs?: number;
+}
+
 export interface PerplexityProviderNativeConfig {
   search?: JsonObject;
   answer?: JsonObject;
@@ -183,6 +189,13 @@ export interface GeminiProviderConfig extends LegacyProviderRoutingConfig {
   defaults?: GeminiProviderNativeConfig & ExecutionPolicyDefaults;
 }
 
+export interface CloudflareProviderConfig extends LegacyProviderRoutingConfig {
+  apiToken?: string;
+  accountId?: string;
+  native?: CloudflareProviderNativeConfig;
+  policy?: ExecutionPolicyDefaults;
+}
+
 export interface PerplexityProviderConfig extends LegacyProviderRoutingConfig {
   apiKey?: string;
   baseUrl?: string;
@@ -228,6 +241,7 @@ export interface WebProvidersConfig {
   genericSettings?: GenericSettingsConfig;
   providers?: {
     claude?: ClaudeProviderConfig;
+    cloudflare?: CloudflareProviderConfig;
     codex?: CodexProviderConfig;
     "custom-cli"?: CustomCliProviderConfig;
     exa?: ExaProviderConfig;

@@ -13,6 +13,7 @@ import {
 } from "./provider-tools.js";
 import type {
   ClaudeProviderConfig,
+  CloudflareProviderConfig,
   CodexProviderConfig,
   CustomCliCommandConfig,
   CustomCliProviderConfig,
@@ -55,6 +56,11 @@ export function createDefaultConfig(): WebProvidersConfig {
     providers: {
       claude: {
         enabled: false,
+      },
+      cloudflare: {
+        enabled: false,
+        apiToken: "CLOUDFLARE_API_TOKEN",
+        accountId: "CLOUDFLARE_ACCOUNT_ID",
       },
       codex: {
         enabled: true,
@@ -174,6 +180,7 @@ export function parseProviderConfig(
   source = CONFIG_FILE_NAME,
 ):
   | ClaudeProviderConfig
+  | CloudflareProviderConfig
   | CodexProviderConfig
   | CustomCliProviderConfig
   | ExaProviderConfig
@@ -303,6 +310,12 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
         source,
       );
     }
+    if (raw.providers.cloudflare !== undefined) {
+      config.providers.cloudflare = normalizeCloudflareProvider(
+        raw.providers.cloudflare,
+        source,
+      );
+    }
     if (raw.providers.codex !== undefined) {
       config.providers.codex = normalizeCodexProvider(
         raw.providers.codex,
@@ -346,6 +359,7 @@ function normalizeConfig(raw: unknown, source: string): WebProvidersConfig {
     const unknownProviders = Object.keys(raw.providers).filter(
       (key) =>
         key !== "claude" &&
+        key !== "cloudflare" &&
         key !== "codex" &&
         key !== "custom-cli" &&
         key !== "exa" &&
@@ -427,6 +441,68 @@ function normalizeClaudeProvider(
         : "providers.claude.defaults",
     ),
   };
+}
+
+function normalizeCloudflareProvider(
+  raw: unknown,
+  source: string,
+): CloudflareProviderConfig {
+  if (!isPlainObject(raw)) {
+    throw new Error(
+      `'providers.cloudflare' in ${source} must be a JSON object.`,
+    );
+  }
+
+  rejectLegacyProviderToolFields(raw, source, "cloudflare");
+
+  const config: CloudflareProviderConfig = {};
+
+  if (typeof raw.enabled === "boolean") {
+    config.enabled = raw.enabled;
+  }
+
+  config.apiToken = parseOptionalString(
+    raw.apiToken,
+    "providers.cloudflare.apiToken",
+    source,
+  );
+
+  config.accountId = parseOptionalString(
+    raw.accountId,
+    "providers.cloudflare.accountId",
+    source,
+  );
+
+  if (raw.native !== undefined) {
+    if (!isPlainObject(raw.native)) {
+      throw new Error(
+        `'providers.cloudflare.native' in ${source} must be a JSON object.`,
+      );
+    }
+    config.native = {};
+    if (raw.native.requestTimeoutMs !== undefined) {
+      if (
+        typeof raw.native.requestTimeoutMs !== "number" ||
+        !Number.isInteger(raw.native.requestTimeoutMs) ||
+        raw.native.requestTimeoutMs < 1
+      ) {
+        throw new Error(
+          `'providers.cloudflare.native.requestTimeoutMs' in ${source} must be a positive integer.`,
+        );
+      }
+      config.native.requestTimeoutMs = raw.native.requestTimeoutMs;
+    }
+  }
+
+  if (raw.policy !== undefined) {
+    config.policy = parseOptionalExecutionPolicy(
+      raw.policy,
+      "providers.cloudflare.policy",
+      source,
+    );
+  }
+
+  return config;
 }
 
 function normalizeCodexProvider(

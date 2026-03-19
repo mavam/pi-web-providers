@@ -1,6 +1,7 @@
 import type {
   ClaudeProviderConfig,
   ClaudeProviderNativeConfig,
+  CloudflareProviderConfig,
   CodexProviderConfig,
   CodexProviderNativeConfig,
   CustomCliProviderConfig,
@@ -216,6 +217,44 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "native");
         },
       }),
+    ],
+  },
+  cloudflare: {
+    settings: [
+      stringSetting<CloudflareProviderConfig>({
+        id: "apiToken",
+        label: "API token",
+        help: "Cloudflare API token with Browser Rendering permissions. You can use a literal value, an env var name like CLOUDFLARE_API_TOKEN, or !command.",
+        secret: true,
+        getValue: (config) => config?.apiToken,
+        setValue: (config, value) => {
+          assignOptionalString(
+            config as Record<
+              string,
+              string | number | boolean | JsonObject | undefined
+            >,
+            "apiToken",
+            value,
+          );
+        },
+      }),
+      stringSetting<CloudflareProviderConfig>({
+        id: "accountId",
+        label: "Account ID",
+        help: "Cloudflare account ID. You can use a literal value, an env var name like CLOUDFLARE_ACCOUNT_ID, or !command.",
+        getValue: (config) => config?.accountId,
+        setValue: (config, value) => {
+          assignOptionalString(
+            config as Record<
+              string,
+              string | number | boolean | JsonObject | undefined
+            >,
+            "accountId",
+            value,
+          );
+        },
+      }),
+      ...requestPolicySettings<CloudflareProviderConfig>(),
     ],
   },
   "custom-cli": {

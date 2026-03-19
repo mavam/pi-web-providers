@@ -17,6 +17,11 @@
     "claude": {
       "enabled": false
     },
+    "cloudflare": {
+      "enabled": false,
+      "apiToken": "CLOUDFLARE_API_TOKEN",
+      "accountId": "CLOUDFLARE_ACCOUNT_ID"
+    },
     "codex": {
       "enabled": true,
       "native": {
