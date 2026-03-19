@@ -12,7 +12,7 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers** — Claude, Codex, Custom CLI, Exa, Gemini,
+- **Multiple providers** — Claude, Cloudflare, Codex, Custom CLI, Exa, Gemini,
   Perplexity, Parallel, Valyu
 - **Batched search and answers** — run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
@@ -39,15 +39,16 @@ settings.
 
 Each tool can be routed to any compatible provider:
 
-| Provider       | search | contents | answer | research | Auth                   |
-| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth |
-| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth   |
-| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`          |
-| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`       |
-| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
-| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
-| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`        |
+| Provider       | search | contents | answer | research | Auth                                         |
+| -------------- | :----: | :------: | :----: | :------: | -------------------------------------------- |
+| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth                       |
+| **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
+| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth                         |
+| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                |
+| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                             |
+| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                         |
+| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                           |
+| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                              |
 
 Advanced option: `custom-cli` is a configurable adapter provider that can route
 any managed tool through a local wrapper command using a JSON stdin/stdout
@@ -181,6 +182,23 @@ The built-in providers below are thin adapters around official SDKs.
 - Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
   `maxTurns`
 - Great for search plus grounded answers if you already use Claude Code locally
+
+</details>
+
+<details>
+<summary><strong>Cloudflare</strong></summary>
+
+- API: [Cloudflare Browser Rendering REST API](https://developers.cloudflare.com/browser-rendering/rest-api/)
+- Uses the `/markdown` endpoint to render pages in headless Chrome on
+  Cloudflare's edge network and return clean Markdown
+- Runs in **silent foreground** mode
+- No external SDK dependency — uses `fetch` against the REST API
+- Handles JavaScript-rendered pages, dynamic content, and complex layouts
+- Reports per-URL success/failure with structured content entries
+- Requires a Cloudflare API token with **Browser Rendering** permissions and
+  an account ID
+- Free tier: 10 min/day browser time, 6 req/min; Workers Paid ($5/mo):
+  10 hrs/month, 600 req/min
 
 </details>
 
