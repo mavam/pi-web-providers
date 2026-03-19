@@ -1,7 +1,7 @@
 {
-  "name": "pi-web-providers",
-  "version": "1.1.0",
-  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Codex, Custom CLI, Exa, Gemini, Perplexity, Parallel, and Valyu.",
+  "name": "@arpagon/pi-web-providers",
+  "version": "1.2.0",
+  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Cloudflare, Codex, Custom CLI, Exa, Gemini, Perplexity, Parallel, and Valyu.",
   "type": "module",
   "files": [
     "dist",
@@ -16,6 +16,7 @@
     "coding-agent",
     "web-search",
     "claude",
+    "cloudflare",
     "codex",
     "custom-cli",
     "exa",
@@ -24,11 +25,11 @@
     "parallel",
     "valyu"
   ],
-  "author": "mavam",
+  "author": "arpagon",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mavam/pi-web-providers.git"
+    "url": "git+https://github.com/arpagon/pi-web-providers.git"
   },
   "engines": {
     "node": ">=24.0.0"
