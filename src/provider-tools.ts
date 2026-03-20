@@ -1,5 +1,6 @@
 import type {
   ClaudeProviderConfig,
+  CloudflareProviderConfig,
   CodexProviderConfig,
   CustomCliProviderConfig,
   ExaProviderConfig,
@@ -23,6 +24,7 @@ export type ProviderToolId = (typeof PROVIDER_TOOL_IDS)[number];
 
 export const PROVIDER_TOOLS: Record<ProviderId, readonly ProviderToolId[]> = {
   claude: ["search", "answer"],
+  cloudflare: ["contents"],
   codex: ["search"],
   "custom-cli": ["search", "contents", "answer", "research"],
   exa: ["search", "contents", "answer", "research"],
@@ -56,6 +58,7 @@ export const PROVIDER_TOOL_META: Record<
 
 export type ProviderConfigUnion =
   | ClaudeProviderConfig
+  | CloudflareProviderConfig
   | CodexProviderConfig
   | CustomCliProviderConfig
   | ExaProviderConfig
