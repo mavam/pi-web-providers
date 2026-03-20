@@ -219,7 +219,6 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `Answer via Claude with ${output.sources.length} source(s)`,
       itemCount: output.sources.length,
     };
   }

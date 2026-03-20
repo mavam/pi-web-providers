@@ -906,15 +906,10 @@ function buildWebAnswerDetails(
     ): outcome is Extract<AnswerQueryOutcome, { response: ToolOutput }> =>
       outcome.response !== undefined,
   );
-  const summary =
-    successfulOutcomes.length === 1 && outcomes.length === 1
-      ? successfulOutcomes[0]?.response.summary
-      : undefined;
 
   return {
     tool: "web_answer",
     provider,
-    summary,
     itemCount:
       successfulOutcomes.length === 1
         ? successfulOutcomes[0]?.response.itemCount
@@ -1080,7 +1075,6 @@ async function executeProviderTool({
   const details: ToolDetails = {
     tool: `web_${capability}`,
     provider: response.provider,
-    summary: response.summary,
     itemCount: response.itemCount,
   };
   const text = await truncateAndSave(response.text, capability);
@@ -1386,7 +1380,6 @@ function renderCollapsedProviderToolSummary(
 
   const baseSummary =
     getCompactProviderToolSummary(details) ??
-    details?.summary ??
     getFirstLine(text) ??
     `${details?.tool ?? "tool"} output available`;
 
@@ -1409,6 +1402,14 @@ function getCompactProviderToolSummary(
     typeof details.itemCount === "number"
   ) {
     return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
+  }
+
+  if (details.tool === "web_answer") {
+    return "Answer";
+  }
+
+  if (details.tool === "web_research") {
+    return "Research";
   }
 
   return undefined;

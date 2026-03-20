@@ -224,7 +224,6 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
             url: result.url,
             title: result.title,
             body,
-            summary: "1 content result via Valyu",
             status: "ready",
           },
         ];
@@ -234,7 +233,6 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
-      summary: `${results.length} content result(s) via Valyu`,
       itemCount: results.length,
       metadata: {
         contentsEntries: contentsEntries as unknown,
@@ -287,7 +285,6 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `Answer via Valyu with ${sources.length} source(s)`,
       itemCount: sources.length,
     };
   }
@@ -359,7 +356,6 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
         output: {
           provider: this.id,
           text: lines.join("\n").trimEnd(),
-          summary: `Research via Valyu with ${sources.length} source(s)`,
           itemCount: sources.length,
         },
       };

@@ -278,7 +278,6 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents extracted.",
-      summary: `${successCount} of ${urls.length} URL(s) extracted via Gemini`,
       itemCount: successCount,
       metadata: {
         contentsEntries: contentsEntries as unknown,
@@ -327,7 +326,6 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `Answer via Gemini with ${sources.length} source(s)`,
       itemCount: sources.length,
     };
   }
@@ -376,7 +374,6 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
         output: {
           provider: this.id,
           text: text || "Gemini research completed without textual output.",
-          summary: "Research via Gemini",
         },
       };
     }
@@ -655,7 +652,6 @@ function buildGeminiContentsEntries(
     orderedReadyEntries.length > 0
       ? orderedReadyEntries.map((entry) => ({
           ...entry,
-          summary: "1 content result via Gemini",
           status: "ready" as const,
         }))
       : buildFallbackGeminiContentsEntries(text, urls, metadata);
@@ -786,7 +782,6 @@ function buildFallbackGeminiContentsEntries(
       url: fallbackUrl,
       title: extractGeminiContentsTitle(text),
       body: text,
-      summary: "1 content result via Gemini",
       status: "ready",
     },
   ];

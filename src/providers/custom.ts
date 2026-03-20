@@ -285,7 +285,6 @@ function parseToolOutput(
   return {
     provider: providerId,
     text: readRequiredString(value.text, "text"),
-    ...(typeof value.summary === "string" ? { summary: value.summary } : {}),
     ...(isNonNegativeInteger(value.itemCount)
       ? { itemCount: value.itemCount }
       : {}),

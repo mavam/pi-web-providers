@@ -330,7 +330,6 @@ export async function executeResearchWithLifecycle({
             result.output ?? {
               provider: providerId,
               text: `${providerLabel} research completed without textual output.`,
-              summary: `Research via ${providerLabel}`,
             }
           );
         }

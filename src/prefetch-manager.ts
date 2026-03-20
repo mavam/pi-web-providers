@@ -36,7 +36,6 @@ interface StoredContentItem {
   url?: string;
   title?: string;
   body: string;
-  summary?: string;
   status?: "ready" | "failed";
 }
 
@@ -59,7 +58,6 @@ interface StoredBatchContentsValue {
   urls: string[];
   provider: ProviderId;
   items: StoredContentItem[];
-  summary?: string;
   itemCount?: number;
   fetchedAt: number;
 }
@@ -483,9 +481,6 @@ export async function resolveContentsFromStore({
           text: renderStoredContentItems(
             orderStoredContentItemsForRequest(batch.value.items, urls),
           ),
-          summary:
-            batch.value.summary ??
-            `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
           itemCount: batch.value.itemCount ?? batch.value.urls.length,
         },
         cachedCount: batch.fromCache ? batch.value.urls.length : 0,
@@ -556,10 +551,6 @@ export async function resolveContentsFromStore({
       output: {
         provider,
         text: textBlocks.join("\n\n").trim() || "No contents found.",
-        summary:
-          cachedCount > 0
-            ? `${results.length} of ${urls.length} URL(s) resolved via ${provider} (${cachedCount} cached)`
-            : `${results.length} of ${urls.length} URL(s) fetched via ${provider}`,
         itemCount: results.length,
       },
       cachedCount,
@@ -581,9 +572,6 @@ export async function resolveContentsFromStore({
       text: renderStoredContentItems(
         orderStoredContentItemsForRequest(batch.value.items, urls),
       ),
-      summary:
-        batch.value.summary ??
-        `${batch.value.urls.length} URL(s) fetched via ${batch.value.provider}`,
       itemCount: batch.value.itemCount ?? batch.value.urls.length,
     },
     cachedCount: batch.fromCache ? batch.value.urls.length : 0,
@@ -820,7 +808,6 @@ async function ensureBatchContentsStored({
           structuredEntries.length > 0
             ? structuredEntries.map((entry) => toStoredContentItem(entry))
             : [{ body: result.text }],
-        summary: result.summary,
         itemCount: result.itemCount,
         fetchedAt,
       };
@@ -1095,7 +1082,6 @@ function isStoredContentsMetadataEntry(
     typeof value.url === "string" &&
     (value.title === undefined || typeof value.title === "string") &&
     typeof value.body === "string" &&
-    (value.summary === undefined || typeof value.summary === "string") &&
     (value.status === undefined ||
       value.status === "ready" ||
       value.status === "failed")
@@ -1109,7 +1095,6 @@ function toStoredContentItem(
     url: entry.url,
     title: entry.title,
     body: entry.body,
-    summary: entry.summary,
     status: entry.status,
   };
 }
@@ -1440,7 +1425,6 @@ function isStoredContentItem(
     (value.url === undefined || typeof value.url === "string") &&
     (value.title === undefined || typeof value.title === "string") &&
     typeof value.body === "string" &&
-    (value.summary === undefined || typeof value.summary === "string") &&
     (value.status === undefined ||
       value.status === "ready" ||
       value.status === "failed")

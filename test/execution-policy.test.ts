@@ -166,7 +166,6 @@ describe("execution policy", () => {
         output: {
           provider: "gemini" as const,
           text: "done",
-          summary: "Research via Gemini",
         },
       });
 
@@ -224,7 +223,6 @@ describe("execution policy", () => {
         output: {
           provider: "gemini" as const,
           text: "done",
-          summary: "Research via Gemini",
         },
       });
 
@@ -463,7 +461,6 @@ describe("execution policy", () => {
           output: {
             provider: "gemini" as const,
             text: "done",
-            summary: "Research via Gemini",
           },
         });
 
@@ -510,7 +507,6 @@ describe("execution policy", () => {
           output: {
             provider: "gemini" as const,
             text: "done",
-            summary: "Research via Gemini",
           },
         });
 

@@ -38,7 +38,6 @@ export interface SearchResponse {
 export interface ToolOutput {
   provider: ProviderId;
   text: string;
-  summary?: string;
   itemCount?: number;
   metadata?: Record<string, unknown>;
 }
@@ -64,7 +63,6 @@ export interface WebSearchDetails {
 export interface ToolDetails {
   tool: string;
   provider: ProviderId;
-  summary?: string;
   itemCount?: number;
   queryCount?: number;
   failedQueryCount?: number;

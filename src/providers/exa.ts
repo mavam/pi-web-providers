@@ -217,7 +217,6 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
             url,
             title,
             body,
-            summary: "1 content result via Exa",
             status: "ready",
           },
         ];
@@ -227,7 +226,6 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
-      summary: `${results.length} content result(s) via Exa`,
       itemCount: results.length,
       metadata: {
         contentsEntries: contentsEntries as unknown,
@@ -271,7 +269,6 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `Answer via Exa with ${citations.length} source(s)`,
       itemCount: citations.length,
     };
   }
@@ -322,7 +319,6 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
               : content !== undefined
                 ? formatJson(content)
                 : "Exa research completed without textual output.",
-          summary: "Research via Exa",
         },
       };
     }

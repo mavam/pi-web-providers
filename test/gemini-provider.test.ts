@@ -349,7 +349,6 @@ describe("GeminiAdapter answer", () => {
     );
     expect(response.text).toContain("   https://tenzir.com/docs");
     expect(response.text).not.toContain("vertexaisearch.cloud.google.com");
-    expect(response.summary).toBe("Answer via Gemini with 2 source(s)");
     expect(response.itemCount).toBe(2);
   });
 });
@@ -389,7 +388,6 @@ describe("GeminiAdapter contents", () => {
     });
     expect(response.text).toContain("This is the main content of the page.");
     expect(response.text).not.toContain("Retrieval issues");
-    expect(response.summary).toBe("1 of 1 URL(s) extracted via Gemini");
     expect(response.itemCount).toBe(1);
   });
 
@@ -422,7 +420,6 @@ describe("GeminiAdapter contents", () => {
     expect(response.text).toContain(
       "https://paywall.example.com: URL_RETRIEVAL_STATUS_PAYWALL",
     );
-    expect(response.summary).toBe("0 of 1 URL(s) extracted via Gemini");
     expect(response.itemCount).toBe(0);
   });
 
@@ -487,7 +484,6 @@ describe("GeminiAdapter contents", () => {
     expect(response.text).toContain(
       "https://example.com/b: URL_RETRIEVAL_STATUS_ERROR",
     );
-    expect(response.summary).toBe("2 of 3 URL(s) extracted via Gemini");
     expect(response.itemCount).toBe(2);
     expect(response.metadata).toEqual({
       contentsEntries: [
@@ -495,14 +491,12 @@ describe("GeminiAdapter contents", () => {
           url: "https://example.com/a",
           title: "Page A",
           body: "Content from the first URL.",
-          summary: "1 content result via Gemini",
           status: "ready",
         },
         {
           url: "https://example.com/c",
           title: "Page C",
           body: "Content from the third URL.",
-          summary: "1 content result via Gemini",
           status: "ready",
         },
         {
@@ -562,7 +556,6 @@ describe("GeminiAdapter contents", () => {
     expect(response.text).toContain(
       "https://example.com/b: Gemini returned content for this URL in an unexpected format.",
     );
-    expect(response.summary).toBe("1 of 2 URL(s) extracted via Gemini");
     expect(response.itemCount).toBe(1);
     expect(response.metadata).toEqual({
       contentsEntries: [
@@ -570,7 +563,6 @@ describe("GeminiAdapter contents", () => {
           url: "https://example.com/a",
           title: "Page A",
           body: "Content from the first URL.",
-          summary: "1 content result via Gemini",
           status: "ready",
         },
         {
@@ -680,7 +672,7 @@ describe("GeminiAdapter contents", () => {
 
     expect(generateContent).toHaveBeenCalledTimes(2);
     expect(response.text).toContain("This is the main content of the page.");
-    expect(response.summary).toBe("1 of 1 URL(s) extracted via Gemini");
+    expect(response.itemCount).toBe(1);
   });
 
   it("throws on an empty response so the caller can retry", async () => {
@@ -765,7 +757,7 @@ describe("GeminiAdapter contents", () => {
     expect(response.text).toContain(
       "https://paywall.example.com: URL_RETRIEVAL_STATUS_PAYWALL",
     );
-    expect(response.summary).toBe("0 of 1 URL(s) extracted via Gemini");
+    expect(response.itemCount).toBe(0);
   });
 });
 
@@ -865,7 +857,6 @@ describe("GeminiAdapter research", () => {
       output: {
         provider: "gemini",
         text: "Research result",
-        summary: "Research via Gemini",
       },
     });
   });

@@ -139,7 +139,6 @@ describe("PerplexityAdapter", () => {
     expect(response.text).toBe(
       "Perplexity answer\n\nSources:\n1. Source A\n   https://example.com/a",
     );
-    expect(response.summary).toBe("Answer via Perplexity with 1 source(s)");
     expect(response.itemCount).toBe(1);
   });
 
@@ -203,7 +202,7 @@ describe("PerplexityAdapter", () => {
     expect(response.text).toBe(
       "Research result\n\nSources:\n1. https://example.com/research\n   https://example.com/research",
     );
-    expect(response.summary).toBe("Research via Perplexity with 1 source(s)");
+    expect(response.itemCount).toBe(1);
   });
 
   it("falls back to citations when search_results is empty", async () => {
@@ -235,7 +234,6 @@ describe("PerplexityAdapter", () => {
     expect(response.text).toBe(
       "Answer with citations fallback\n\nSources:\n1. https://example.com/fallback\n   https://example.com/fallback",
     );
-    expect(response.summary).toBe("Answer via Perplexity with 1 source(s)");
     expect(response.itemCount).toBe(1);
   });
 });

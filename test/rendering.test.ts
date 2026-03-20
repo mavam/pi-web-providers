@@ -248,7 +248,6 @@ describe("provider tool summaries", () => {
         tool: "web_contents",
         provider: "gemini",
         itemCount: 2,
-        summary: "2 pages extracted",
       },
       undefined,
     );
@@ -275,7 +274,6 @@ describe("provider tool summaries", () => {
       {
         tool: "web_research",
         provider: "gemini",
-        summary: "Research via Gemini",
       },
       undefined,
     );

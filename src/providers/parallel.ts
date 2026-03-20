@@ -153,7 +153,6 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
           url: result.url,
           title,
           body,
-          summary: "1 content result via Parallel",
           status: "ready",
         };
       },
@@ -182,7 +181,6 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd() || "No contents found.",
-      summary: `${itemCount} content result(s) via Parallel`,
       itemCount,
       metadata: {
         contentsEntries: contentsEntries as unknown,

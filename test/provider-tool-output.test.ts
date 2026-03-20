@@ -280,7 +280,6 @@ describe("provider tool output", () => {
           execute: async () => ({
             provider: "gemini",
             text: "Tenzir is used for detection engineering and security data pipelines.",
-            summary: "Answer via Gemini with 2 source(s)",
           }),
         },
         {
@@ -291,7 +290,6 @@ describe("provider tool output", () => {
           execute: async () => ({
             provider: "gemini",
             text: "Tenzir can reduce SIEM costs during migration by reshaping and routing data.",
-            summary: "Answer via Gemini with 3 source(s)",
           }),
         },
       ],
@@ -312,7 +310,6 @@ describe("provider tool output", () => {
     expect(result.details).toEqual({
       tool: "web_answer",
       provider: "gemini",
-      summary: undefined,
       itemCount: undefined,
       queryCount: 2,
       failedQueryCount: 0,
@@ -349,7 +346,6 @@ describe("provider tool output", () => {
           execute: async () => ({
             provider: "gemini",
             text: "Tenzir is used for detection engineering and security data pipelines.",
-            summary: "Answer via Gemini with 2 source(s)",
           }),
         },
         {
@@ -374,7 +370,6 @@ describe("provider tool output", () => {
     expect(result.details).toEqual({
       tool: "web_answer",
       provider: "gemini",
-      summary: undefined,
       itemCount: undefined,
       queryCount: 2,
       failedQueryCount: 1,
@@ -456,7 +451,6 @@ describe("provider tool output", () => {
           execute: async () => ({
             provider: "gemini",
             text: "Tenzir is used for detection engineering and SIEM migration.",
-            summary: "Answer via Gemini with 2 source(s)",
             itemCount: 2,
           }),
         },
@@ -469,7 +463,6 @@ describe("provider tool output", () => {
     expect(result.details).toEqual({
       tool: "web_answer",
       provider: "gemini",
-      summary: "Answer via Gemini with 2 source(s)",
       itemCount: 2,
       queryCount: 1,
       failedQueryCount: 0,
@@ -506,7 +499,6 @@ describe("provider tool output", () => {
             { length: 2500 },
             (_, index) => `line ${index + 1}: ${"x".repeat(40)}`,
           ).join("\n"),
-          summary: "Large contents via Exa",
           itemCount: 2500,
         }),
       },
@@ -560,7 +552,6 @@ describe("provider tool output", () => {
             return {
               provider: "perplexity",
               text: "Research complete",
-              summary: "Research via Perplexity",
             };
           },
         },

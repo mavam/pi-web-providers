@@ -94,7 +94,6 @@ describe("CustomAdapter", () => {
         "  const request = JSON.parse(input);",
         "  process.stdout.write(JSON.stringify({",
         "    text: `Answer for: ${request.query}` ,",
-        '    summary: "answered via wrapper",',
         "    itemCount: 2,",
         '    metadata: { source: "fixture" }',
         "  }));",
@@ -123,7 +122,6 @@ describe("CustomAdapter", () => {
     expect(result).toEqual({
       provider: "custom",
       text: "Answer for: what is this?",
-      summary: "answered via wrapper",
       itemCount: 2,
       metadata: { source: "fixture" },
     });

@@ -239,7 +239,6 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `${label} via Perplexity with ${sources.length} source(s)`,
       itemCount: sources.length,
     };
   }
@@ -306,7 +305,6 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     return {
       provider: this.id,
       text: lines.join("\n").trimEnd(),
-      summary: `${label} via Perplexity with ${dedupedSources.length} source(s)`,
       itemCount: dedupedSources.length,
     };
   }
