@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "1.1.0",
-  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Codex, Custom, Exa, Gemini, Perplexity, Parallel, and Valyu.",
+  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Codex, Custom, Exa, Firecrawl, Gemini, Perplexity, Parallel, and Valyu.",
   "type": "module",
   "files": [
     "dist",
@@ -19,6 +19,7 @@
     "codex",
     "custom",
     "exa",
+    "firecrawl",
     "gemini",
     "perplexity",
     "parallel",
@@ -42,7 +43,7 @@
     ]
   },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:exa-js --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@mendable/firecrawl-js --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:exa-js --external:parallel-web --external:valyu-js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
@@ -54,6 +55,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.71",
     "@google/genai": "^1.44.0",
+    "@mendable/firecrawl-js": "^4.16.0",
     "@openai/codex-sdk": "^0.111.0",
     "@perplexity-ai/perplexity_ai": "^0.26.1",
     "exa-js": "^2.7.0",

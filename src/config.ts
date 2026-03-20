@@ -14,6 +14,7 @@ import type {
   Custom,
   Exa,
   ExecutionSettings,
+  Firecrawl,
   Gemini,
   Parallel,
   Perplexity,
@@ -68,6 +69,19 @@ export function createDefaultConfig(): WebProviders {
           type: "auto",
           contents: {
             text: true,
+          },
+        },
+      },
+      firecrawl: {
+        enabled: false,
+        apiKey: "FIRECRAWL_API_KEY",
+        options: {
+          search: {
+            sources: ["web"],
+          },
+          scrape: {
+            formats: ["markdown"],
+            onlyMainContent: true,
           },
         },
       },
@@ -162,7 +176,16 @@ export function parseProviderConfig(
   providerId: ProviderId,
   text: string,
   source = CONFIG_FILE_NAME,
-): Claude | Codex | Custom | Exa | Gemini | Perplexity | Parallel | Valyu {
+):
+  | Claude
+  | Codex
+  | Custom
+  | Exa
+  | Firecrawl
+  | Gemini
+  | Perplexity
+  | Parallel
+  | Valyu {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -292,6 +315,12 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
     if (raw.providers.exa !== undefined) {
       config.providers.exa = normalizeExaProvider(raw.providers.exa, source);
     }
+    if (raw.providers.firecrawl !== undefined) {
+      config.providers.firecrawl = normalizeFirecrawlProvider(
+        raw.providers.firecrawl,
+        source,
+      );
+    }
     if (raw.providers.gemini !== undefined) {
       config.providers.gemini = normalizeGeminiProvider(
         raw.providers.gemini,
@@ -323,6 +352,7 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
         key !== "codex" &&
         key !== "custom" &&
         key !== "exa" &&
+        key !== "firecrawl" &&
         key !== "gemini" &&
         key !== "perplexity" &&
         key !== "parallel" &&
@@ -504,6 +534,54 @@ function normalizeExaProvider(raw: unknown, source: string): Exa {
       provider.settings,
       source,
       "providers.exa.settings",
+    ),
+  };
+}
+
+function normalizeFirecrawlProvider(raw: unknown, source: string): Firecrawl {
+  const provider = parseProviderObject(raw, source, "firecrawl");
+  rejectLegacyProviderToolFields(provider, source, "firecrawl");
+  const options = parseOptionalJsonObject(
+    provider.options,
+    source,
+    "providers.firecrawl.options",
+  );
+
+  return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.firecrawl.enabled",
+    ),
+    apiKey: parseOptionalString(
+      provider.apiKey,
+      source,
+      "providers.firecrawl.apiKey",
+    ),
+    baseUrl: parseOptionalString(
+      provider.baseUrl,
+      source,
+      "providers.firecrawl.baseUrl",
+    ),
+    options:
+      options === undefined
+        ? undefined
+        : {
+            search: parseOptionalJsonObject(
+              options.search,
+              source,
+              "providers.firecrawl.options.search",
+            ),
+            scrape: parseOptionalJsonObject(
+              options.scrape,
+              source,
+              "providers.firecrawl.options.scrape",
+            ),
+          },
+    settings: parseOptionalExecutionPolicy(
+      provider.settings,
+      source,
+      "providers.firecrawl.settings",
     ),
   };
 }
@@ -764,6 +842,7 @@ function toPublicProviderConfig(
     | Codex
     | Custom
     | Exa
+    | Firecrawl
     | Gemini
     | Perplexity
     | Parallel

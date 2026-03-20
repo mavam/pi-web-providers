@@ -38,6 +38,19 @@
         }
       }
     },
+    "firecrawl": {
+      "enabled": false,
+      "apiKey": "FIRECRAWL_API_KEY",
+      "options": {
+        "search": {
+          "sources": ["web"]
+        },
+        "scrape": {
+          "formats": ["markdown"],
+          "onlyMainContent": true
+        }
+      }
+    },
     "gemini": {
       "enabled": false,
       "apiKey": "GOOGLE_API_KEY",

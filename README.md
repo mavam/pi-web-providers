@@ -12,8 +12,8 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers**: Claude, Codex, Exa, Gemini, Perplexity, Parallel,
-  Valyu
+- **Multiple providers**: Claude, Codex, Exa, Firecrawl, Gemini, Perplexity,
+  Parallel, Valyu
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -43,6 +43,7 @@ Each tool can be routed to any compatible provider:
 | **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth |
 | **Codex**      |   ✔    |          |        |          | Local Codex CLI auth   |
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`          |
+| **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`    |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`       |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
@@ -204,6 +205,18 @@ The built-in providers below are thin adapters around official SDKs.
 - Research runs in **background research** mode and supports `resumeId`
 - Neural, keyword, hybrid, and deep-research search modes
 - Inline text-content extraction on search results
+
+</details>
+
+<details>
+<summary><strong>Firecrawl</strong></summary>
+
+- SDK: `@mendable/firecrawl-js`
+- Search and contents run in **silent foreground** mode
+- Uses Firecrawl v2 search for `web_search`
+- Uses `scrape` and `batchScrape` for `web_contents`
+- Good fit when you want markdown-first page extraction plus Firecrawl-specific
+  search and scrape controls under `web_search.options` and `web_contents.options`
 
 </details>
 

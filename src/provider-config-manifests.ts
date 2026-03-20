@@ -7,6 +7,7 @@ import type {
   CustomOptions,
   Exa,
   ExecutionSettings,
+  Firecrawl,
   Gemini,
   GeminiOptions,
   Parallel,
@@ -406,6 +407,9 @@ export const PROVIDER_CONFIG_MANIFESTS = {
       }),
       ...researchSettings<Exa>(),
     ],
+  },
+  firecrawl: {
+    settings: [apiKeySetting<Firecrawl>(), baseUrlSetting<Firecrawl>()],
   },
   gemini: {
     settings: [

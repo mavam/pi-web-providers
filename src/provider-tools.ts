@@ -10,6 +10,7 @@ export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   codex: ["search"],
   custom: ["search", "contents", "answer", "research"],
   exa: ["search", "contents", "answer", "research"],
+  firecrawl: ["search", "contents"],
   gemini: ["search", "answer", "research"],
   perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
