@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import { resolveConfigValue } from "../config.js";
-import type { ContentsAnswer, ContentsResponse } from "../contents.js";
 import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
 import {
   createBackgroundResearchPlan,
@@ -19,7 +18,6 @@ import type {
 } from "../types.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
-const DEFAULT_CONTENTS_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
 
@@ -79,15 +77,6 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
               context,
               request.options,
             ),
-        });
-      case "contents":
-        return createSilentForegroundPlan({
-          config: planConfig,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.contents(request.urls, config, context, request.options),
         });
       case "answer":
         return createSilentForegroundPlan({
@@ -169,74 +158,6 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
     return {
       provider: this.id,
       results,
-    };
-  }
-
-  async contents(
-    urls: string[],
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse> {
-    const ai = this.createClient(config);
-
-    const urlList = urls.map((url) => `- ${url}`).join("\n");
-    const defaultModel = DEFAULT_CONTENTS_MODEL;
-    const structuredPrompt =
-      `Extract the main textual content from each of the following URLs. ` +
-      `For every successfully retrieved URL, return exactly one block in this format:\n` +
-      `[[[URL]]]\n<resolved URL>\n[[[TITLE]]]\n<title>\n[[[BODY]]]\n<cleaned body text>\n[[[END]]]\n\n` +
-      `Only include successfully retrieved URLs. Preserve headings, paragraphs, and lists in BODY, ` +
-      `but remove navigation, ads, and boilerplate. Do not add any text outside these blocks.\n\n${urlList}`;
-
-    const structuredResponse = await requestGeminiContentsExtraction({
-      ai,
-      defaultModel,
-      prompt: structuredPrompt,
-      options,
-      signal: context.signal,
-    });
-
-    let text = structuredResponse.text;
-    let metadata = structuredResponse.metadata;
-    let answers = buildGeminiContentsAnswers(text, urls, metadata);
-    const hasReadyAnswers = answers.some(
-      (answer) => answer.error === undefined,
-    );
-
-    if (
-      shouldFallbackToLegacyGeminiContentsPrompt(
-        text,
-        metadata,
-        hasReadyAnswers,
-      )
-    ) {
-      const fallbackResponse = await requestGeminiContentsExtraction({
-        ai,
-        defaultModel,
-        prompt:
-          `Extract the main textual content from each of the following URLs. ` +
-          `For each URL, return the page title followed by the cleaned body text. ` +
-          `Preserve the original structure (headings, paragraphs, lists) but remove ` +
-          `navigation, ads, and boilerplate.\n\n${urlList}`,
-        options,
-        signal: context.signal,
-      });
-
-      text = fallbackResponse.text;
-      metadata = fallbackResponse.metadata;
-      answers = buildGeminiContentsAnswers(text, urls, metadata);
-    }
-
-    if (shouldRetryEmptyGeminiContentsResponse(text, metadata)) {
-      throw new Error(
-        "Gemini returned an empty URL Context response. Retrying may succeed.",
-      );
-    }
-
-    return {
-      provider: this.id,
-      answers,
     };
   }
 
@@ -478,303 +399,6 @@ function extractGroundingSources(
   }
 
   return sources;
-}
-
-function extractUrlContextMetadata(
-  candidates: unknown,
-): Array<{ url: string; status: string | undefined }> {
-  const results: Array<{ url: string; status: string | undefined }> = [];
-
-  if (!Array.isArray(candidates)) {
-    return results;
-  }
-
-  for (const candidate of candidates) {
-    if (typeof candidate !== "object" || candidate === null) {
-      continue;
-    }
-
-    const metadata = (candidate as Record<string, unknown>)
-      .urlContextMetadata as
-      | { urlMetadata?: Array<Record<string, unknown>> }
-      | undefined;
-    if (!metadata?.urlMetadata || !Array.isArray(metadata.urlMetadata)) {
-      continue;
-    }
-
-    for (const entry of metadata.urlMetadata) {
-      if (typeof entry !== "object" || entry === null) {
-        continue;
-      }
-
-      results.push({
-        url:
-          typeof entry.retrievedUrl === "string"
-            ? entry.retrievedUrl
-            : "unknown",
-        status:
-          typeof entry.urlRetrievalStatus === "string"
-            ? entry.urlRetrievalStatus
-            : undefined,
-      });
-    }
-  }
-
-  return results;
-}
-
-async function requestGeminiContentsExtraction({
-  ai,
-  defaultModel,
-  prompt,
-  options,
-  signal,
-}: {
-  ai: GoogleGenAI;
-  defaultModel: string;
-  prompt: string;
-  options: Record<string, unknown> | undefined;
-  signal: AbortSignal | undefined;
-}): Promise<{
-  text: string;
-  metadata: Array<{ url: string; status: string | undefined }>;
-}> {
-  const request = buildGeminiGenerateContentRequest({
-    defaultModel,
-    prompt,
-    options,
-    toolConfig: { urlContext: {} },
-  });
-  const response = await ai.models.generateContent({
-    model: request.model,
-    contents: [request.contents],
-    config: addAbortSignalToGeminiConfig(request.config, signal),
-  });
-
-  return {
-    text: response.text?.trim() || "",
-    metadata: extractUrlContextMetadata(response.candidates),
-  };
-}
-
-function shouldFallbackToLegacyGeminiContentsPrompt(
-  text: string,
-  metadata: Array<{ url: string; status: string | undefined }>,
-  hasReadyEntries: boolean,
-): boolean {
-  if (hasReadyEntries) {
-    return false;
-  }
-
-  if (text.trim().length === 0) {
-    return true;
-  }
-
-  return metadata.some(
-    (entry) =>
-      entry.status === undefined ||
-      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS",
-  );
-}
-
-function shouldRetryEmptyGeminiContentsResponse(
-  text: string,
-  metadata: Array<{ url: string; status: string | undefined }>,
-): boolean {
-  if (text.trim().length > 0) {
-    return false;
-  }
-
-  if (metadata.length === 0) {
-    return true;
-  }
-
-  return metadata.some(
-    (entry) =>
-      entry.status === undefined ||
-      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS",
-  );
-}
-
-function buildGeminiContentsAnswers(
-  text: string,
-  urls: string[],
-  metadata: Array<{ url: string; status: string | undefined }>,
-): ContentsAnswer[] {
-  const parsedAnswers = parseGeminiContentsBlocks(text);
-  const readyAnswers =
-    parsedAnswers.length > 0
-      ? orderGeminiContentsEntries(parsedAnswers, urls).map((entry) => ({
-          url: entry.url,
-          content: entry.body,
-        }))
-      : buildFallbackGeminiContentsAnswers(text, urls, metadata);
-
-  return urls.map((url) => {
-    const readyAnswer = takeGeminiContentsAnswerForUrl(readyAnswers, url);
-    if (readyAnswer) {
-      return readyAnswer;
-    }
-
-    const retrievalFailure = metadata.find(
-      (entry) =>
-        normalizeGeminiUrl(entry.url) === normalizeGeminiUrl(url) &&
-        entry.status !== undefined &&
-        entry.status !== "URL_RETRIEVAL_STATUS_SUCCESS",
-    );
-    if (retrievalFailure?.status) {
-      return {
-        url,
-        error: retrievalFailure.status,
-      };
-    }
-
-    const metadataEntry = metadata.find(
-      (entry) => normalizeGeminiUrl(entry.url) === normalizeGeminiUrl(url),
-    );
-    if (isGeminiMetadataSuccess(metadataEntry ?? { status: undefined })) {
-      return {
-        url,
-        error: "Gemini returned content for this URL in an unexpected format.",
-      };
-    }
-
-    return {
-      url,
-      error: "No contents extracted.",
-    };
-  });
-}
-
-function parseGeminiContentsBlocks(
-  text: string,
-): Array<{ url: string; title?: string; body: string }> {
-  const normalized = text.replace(/\r\n/g, "\n");
-  const blocks: Array<{ url: string; title?: string; body: string }> = [];
-  const pattern =
-    /\[\[\[URL\]\]\]\s*\n([^\n]+)\n\[\[\[TITLE\]\]\]\s*\n([^\n]*)\n\[\[\[BODY\]\]\]\s*\n([\s\S]*?)\n\[\[\[END\]\]\]/g;
-
-  for (const match of normalized.matchAll(pattern)) {
-    const url = match[1]?.trim();
-    const title = match[2]?.trim();
-    const body = match[3]?.trim();
-    if (!url || !body) {
-      continue;
-    }
-
-    blocks.push({
-      url,
-      ...(title ? { title } : {}),
-      body,
-    });
-  }
-
-  return blocks;
-}
-
-function orderGeminiContentsEntries<T extends { url: string }>(
-  entries: T[],
-  urls: string[],
-): T[] {
-  if (entries.length <= 1) {
-    return entries;
-  }
-
-  const entriesByUrl = new Map<string, T[]>();
-  for (const entry of entries) {
-    const key = normalizeGeminiUrl(entry.url);
-    const bucket = entriesByUrl.get(key);
-    if (bucket) {
-      bucket.push(entry);
-    } else {
-      entriesByUrl.set(key, [entry]);
-    }
-  }
-
-  const ordered: T[] = [];
-  for (const url of urls) {
-    const key = normalizeGeminiUrl(url);
-    const bucket = entriesByUrl.get(key);
-    const next = bucket?.shift();
-    if (next) {
-      ordered.push(next);
-    }
-    if (bucket && bucket.length === 0) {
-      entriesByUrl.delete(key);
-    }
-  }
-
-  for (const bucket of entriesByUrl.values()) {
-    ordered.push(...bucket);
-  }
-
-  return ordered;
-}
-
-function buildFallbackGeminiContentsAnswers(
-  text: string,
-  urls: string[],
-  metadata: Array<{ url: string; status: string | undefined }>,
-): ContentsAnswer[] {
-  if (!text) {
-    return [];
-  }
-
-  const successfulMetadata = metadata.filter(
-    (entry) =>
-      entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
-      entry.status === undefined,
-  );
-  const fallbackUrl =
-    successfulMetadata.length === 1
-      ? successfulMetadata[0]?.url
-      : urls.length === 1 && metadata.length === 0
-        ? urls[0]
-        : undefined;
-
-  if (!fallbackUrl) {
-    return [];
-  }
-
-  return [
-    {
-      url: fallbackUrl,
-      content: text,
-    },
-  ];
-}
-
-function isGeminiMetadataSuccess(entry: {
-  status: string | undefined;
-}): boolean {
-  return (
-    entry.status === "URL_RETRIEVAL_STATUS_SUCCESS" ||
-    entry.status === undefined
-  );
-}
-
-function takeGeminiContentsAnswerForUrl(
-  answers: ContentsAnswer[],
-  url: string,
-): ContentsAnswer | undefined {
-  const normalized = normalizeGeminiUrl(url);
-  const index = answers.findIndex(
-    (answer) => normalizeGeminiUrl(answer.url) === normalized,
-  );
-  if (index === -1) {
-    return undefined;
-  }
-  return answers.splice(index, 1)[0];
-}
-
-function normalizeGeminiUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    parsed.hash = "";
-    return parsed.toString();
-  } catch {
-    return url.trim();
-  }
 }
 
 function formatInteractionOutputs(outputs: unknown): string {
@@ -1058,7 +682,7 @@ function buildGeminiGenerateContentRequest({
   defaultModel: string;
   prompt: string;
   options: Record<string, unknown> | undefined;
-  toolConfig: { urlContext: {} } | { googleSearch: {} };
+  toolConfig: { googleSearch: {} };
 }): {
   model: string;
   contents: string;
