@@ -76,6 +76,20 @@ describe("provider config manifests", () => {
       getTextSetting("customSearchArgv").setValue(config, "[]"),
     ).toThrow(/non-empty JSON string array/);
   });
+
+  it("exposes Tavily auth and research lifecycle settings", () => {
+    const ids = getProviderConfigManifest("tavily").settings.map(
+      (setting) => setting.id,
+    );
+
+    expect(ids).toEqual([
+      "apiKey",
+      "baseUrl",
+      "researchPollIntervalMs",
+      "researchTimeoutMs",
+      "researchMaxConsecutivePollErrors",
+    ]);
+  });
 });
 
 function getTextSetting(id: string): ProviderTextSettingDescriptor<Custom> {

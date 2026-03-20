@@ -41,6 +41,7 @@ afterEach(() => {
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
   resetClaudeProviderCachesForTests();
@@ -142,6 +143,26 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("uses Tavily for explicitly selected research when configured", () => {
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const config = createConfig({
+      providers: {
+        tavily: {
+          apiKey: "TAVILY_API_KEY",
+        },
+      },
+    });
+
+    const provider = resolveProviderForTool(
+      config,
+      process.cwd(),
+      "research",
+      "tavily",
+    );
+    expect(provider.id).toBe("tavily");
   });
 
   it("rejects Custom when the mapped capability has no command configured", () => {

@@ -17,6 +17,7 @@ import type {
   Gemini,
   Parallel,
   Perplexity,
+  Tavily,
   Tool,
   ProviderId,
   SearchSettings,
@@ -109,6 +110,10 @@ export function createDefaultConfig(): WebProviders {
           },
         },
       },
+      tavily: {
+        enabled: false,
+        apiKey: "TAVILY_API_KEY",
+      },
       valyu: {
         enabled: false,
         apiKey: "VALYU_API_KEY",
@@ -162,7 +167,16 @@ export function parseProviderConfig(
   providerId: ProviderId,
   text: string,
   source = CONFIG_FILE_NAME,
-): Claude | Codex | Custom | Exa | Gemini | Perplexity | Parallel | Valyu {
+):
+  | Claude
+  | Codex
+  | Custom
+  | Exa
+  | Gemini
+  | Perplexity
+  | Parallel
+  | Tavily
+  | Valyu {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -310,6 +324,12 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
         source,
       );
     }
+    if (raw.providers.tavily !== undefined) {
+      config.providers.tavily = normalizeTavilyProvider(
+        raw.providers.tavily,
+        source,
+      );
+    }
     if (raw.providers.valyu !== undefined) {
       config.providers.valyu = normalizeValyuProvider(
         raw.providers.valyu,
@@ -326,6 +346,7 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
         key !== "gemini" &&
         key !== "perplexity" &&
         key !== "parallel" &&
+        key !== "tavily" &&
         key !== "valyu",
     );
     if (unknownProviders.length > 0) {
@@ -694,6 +715,59 @@ function normalizeParallelProvider(raw: unknown, source: string): Parallel {
   };
 }
 
+function normalizeTavilyProvider(raw: unknown, source: string): Tavily {
+  const provider = parseProviderObject(raw, source, "tavily");
+  rejectLegacyProviderToolFields(provider, source, "tavily");
+  const options = parseOptionalJsonObject(
+    provider.options,
+    source,
+    "providers.tavily.options",
+  );
+
+  return {
+    enabled: parseOptionalBoolean(
+      provider.enabled,
+      source,
+      "providers.tavily.enabled",
+    ),
+    apiKey: parseOptionalString(
+      provider.apiKey,
+      source,
+      "providers.tavily.apiKey",
+    ),
+    baseUrl: parseOptionalString(
+      provider.baseUrl,
+      source,
+      "providers.tavily.baseUrl",
+    ),
+    options:
+      options === undefined
+        ? undefined
+        : {
+            search: parseOptionalJsonObject(
+              options.search,
+              source,
+              "providers.tavily.options.search",
+            ),
+            extract: parseOptionalJsonObject(
+              options.extract,
+              source,
+              "providers.tavily.options.extract",
+            ),
+            research: parseOptionalJsonObject(
+              options.research,
+              source,
+              "providers.tavily.options.research",
+            ),
+          },
+    settings: parseOptionalExecutionPolicy(
+      provider.settings,
+      source,
+      "providers.tavily.settings",
+    ),
+  };
+}
+
 function normalizeCustomProvider(raw: unknown, source: string): Custom {
   const provider = parseProviderObject(raw, source, "custom");
   rejectLegacyProviderToolFields(provider, source, "custom");
@@ -767,6 +841,7 @@ function toPublicProviderConfig(
     | Gemini
     | Perplexity
     | Parallel
+    | Tavily
     | Valyu,
 ): Record<string, unknown> {
   return {

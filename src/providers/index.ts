@@ -6,6 +6,7 @@ import { ExaAdapter } from "./exa.js";
 import { GeminiAdapter } from "./gemini.js";
 import { ParallelAdapter } from "./parallel.js";
 import { PerplexityAdapter } from "./perplexity.js";
+import { TavilyAdapter } from "./tavily.js";
 import { ValyuAdapter } from "./valyu.js";
 
 const claudeProvider = new ClaudeAdapter();
@@ -14,6 +15,7 @@ const exaProvider = new ExaAdapter();
 const geminiProvider = new GeminiAdapter();
 const perplexityProvider = new PerplexityAdapter();
 const parallelProvider = new ParallelAdapter();
+const tavilyProvider = new TavilyAdapter();
 const valyuProvider = new ValyuAdapter();
 const customProvider = new CustomAdapter();
 
@@ -24,6 +26,7 @@ export const ADAPTERS: ReadonlyArray<ProviderAdapter<AnyProvider>> = [
   geminiProvider,
   perplexityProvider,
   parallelProvider,
+  tavilyProvider,
   valyuProvider,
   customProvider,
 ];
@@ -39,5 +42,6 @@ export const ADAPTERS_BY_ID: Record<
   gemini: geminiProvider,
   perplexity: perplexityProvider,
   parallel: parallelProvider,
+  tavily: tavilyProvider,
   valyu: valyuProvider,
 };

@@ -36,6 +36,7 @@ afterEach(() => {
   delete process.env.EXA_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   execFileSyncMock.mockReset();
   resetClaudeProviderCachesForTests();
   if (originalHome === undefined) {
@@ -145,6 +146,48 @@ describe("managed tool availability", () => {
     expect(
       __test__.getAvailableManagedToolNames(config, process.cwd()),
     ).toEqual(["web_contents", "web_research"]);
+  });
+
+  it("exposes Tavily only for search, contents, and research", () => {
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const config = createConfig({
+      providers: {
+        tavily: {
+          enabled: true,
+          apiKey: "TAVILY_API_KEY",
+        },
+      },
+    });
+
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "search",
+      ),
+    ).toContain("tavily");
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "contents",
+      ),
+    ).toContain("tavily");
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "research",
+      ),
+    ).toContain("tavily");
+    expect(
+      __test__.getEnabledCompatibleProvidersForTool(
+        config,
+        process.cwd(),
+        "answer",
+      ),
+    ).not.toContain("tavily");
   });
 
   it("does not expose any managed tools when nothing is mapped", () => {
