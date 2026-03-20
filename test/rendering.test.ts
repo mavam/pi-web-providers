@@ -139,6 +139,34 @@ describe("web_search renderer", () => {
     expect(summary).toContain("3 queries, 4 results via Exa, 1 failed");
     expect(summary).toContain("to expand");
   });
+
+  it("falls back gracefully when collapsed search details are missing", () => {
+    const summary = renderComponentText(
+      __test__.renderCollapsedSearchSummary(
+        {} as never,
+        '## Query 1: "exa sdk"\n\n1. [Exa SDK](<https://exa.ai/sdk>)\n\n## Query 2: "exa pricing"\n\nSearch failed: rate limited',
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(summary).toContain("2 queries, 1 result, 1 failed");
+    expect(summary).not.toContain("undefined");
+  });
+
+  it("falls back gracefully for single-query collapsed search summaries", () => {
+    const summary = renderComponentText(
+      __test__.renderCollapsedSearchSummary(
+        {} as never,
+        "1. [Tenzir](<https://tenzir.com/>)\n   Security data pipelines for detection and response.",
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(summary).toContain("1 result");
+    expect(summary).not.toContain("undefined");
+  });
 });
 
 describe("web_answer renderer", () => {

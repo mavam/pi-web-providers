@@ -156,6 +156,59 @@ describe("provider tool output", () => {
     });
   });
 
+  it("labels batched search progress as query indices instead of completion", async () => {
+    const config: WebProviders = {
+      providers: {
+        exa: {
+          enabled: true,
+          apiKey: "literal-key",
+        },
+      },
+    };
+    const updates: string[] = [];
+
+    await __test__.executeSearchTool({
+      config,
+      explicitProvider: "exa",
+      ctx: { cwd: process.cwd() },
+      signal: undefined,
+      onUpdate: (update) => {
+        const text = update.content[0]?.text;
+        if (text) {
+          updates.push(text);
+        }
+      },
+      options: undefined,
+      maxResults: 3,
+      queries: ["exa sdk", "exa pricing"],
+      planOverrides: [
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [],
+          }),
+        },
+        {
+          capability: "search",
+          providerId: "exa",
+          providerLabel: "Exa",
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [],
+          }),
+        },
+      ],
+    });
+
+    expect(updates).toContain("Searching via Exa: exa sdk (query 1/2)");
+    expect(updates).toContain("Searching via Exa: exa pricing (query 2/2)");
+  });
+
   it("fails the batch when every query fails", async () => {
     const config: WebProviders = {
       providers: {

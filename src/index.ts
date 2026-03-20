@@ -2873,7 +2873,7 @@ function createBatchProgressReporter(
     return report;
   }
 
-  const label = `${index + 1}/${queries.length}`;
+  const label = `query ${index + 1}/${queries.length}`;
   return (message: string) => {
     report(`${message} (${label})`);
   };
@@ -2965,21 +2965,92 @@ function renderSimpleText(
 
 function renderCollapsedSearchSummary(
   details: WebSearchDetails,
-  _text: string | undefined,
+  text: string | undefined,
   theme: Pick<Theme, "fg">,
 ): Text {
+  const queryCount =
+    typeof details?.queryCount === "number"
+      ? details.queryCount
+      : inferSearchQueryCount(text);
+  const resultCount =
+    typeof details?.resultCount === "number"
+      ? details.resultCount
+      : inferSearchResultCount(text);
+  const failedQueryCount =
+    typeof details?.failedQueryCount === "number"
+      ? details.failedQueryCount
+      : inferSearchFailureCount(text);
   const providerLabel =
-    ADAPTERS_BY_ID[details.provider]?.label ?? details.provider;
-  const count = `${details.resultCount} result${details.resultCount === 1 ? "" : "s"}`;
-  const failureSuffix =
-    details.failedQueryCount > 0 ? `, ${details.failedQueryCount} failed` : "";
-  const base =
-    details.queryCount > 1
-      ? `${details.queryCount} queries, ${count} via ${providerLabel}${failureSuffix}`
-      : `${count} via ${providerLabel}${failureSuffix}`;
+    typeof details?.provider === "string"
+      ? (ADAPTERS_BY_ID[details.provider]?.label ?? details.provider)
+      : undefined;
+
+  let base = buildSearchSummaryText({
+    queryCount,
+    resultCount,
+  });
+
+  if (providerLabel) {
+    base = `${base} via ${providerLabel}`;
+  }
+
+  if (failedQueryCount && failedQueryCount > 0) {
+    base += `, ${failedQueryCount} failed`;
+  }
+
   let summary = theme.fg("success", base);
   summary += theme.fg("muted", ` (${getExpandHint()})`);
   return new Text(summary, 0, 0);
+}
+
+function buildSearchSummaryText({
+  queryCount,
+  resultCount,
+}: {
+  queryCount?: number;
+  resultCount?: number;
+}): string {
+  const countSummary =
+    typeof resultCount === "number"
+      ? `${resultCount} result${resultCount === 1 ? "" : "s"}`
+      : "Search output available";
+
+  if (queryCount && queryCount > 1) {
+    return `${queryCount} queries, ${countSummary}`;
+  }
+
+  return countSummary;
+}
+
+function inferSearchQueryCount(text: string | undefined): number | undefined {
+  if (!text) {
+    return undefined;
+  }
+
+  const headingMatches = text.match(/^(?:##\s+)?Query\s+\d+:/gm);
+  if (headingMatches && headingMatches.length > 0) {
+    return headingMatches.length;
+  }
+
+  return undefined;
+}
+
+function inferSearchResultCount(text: string | undefined): number | undefined {
+  if (!text) {
+    return undefined;
+  }
+
+  const resultMatches = text.match(/^\d+\.\s+/gm);
+  return resultMatches?.length;
+}
+
+function inferSearchFailureCount(text: string | undefined): number | undefined {
+  if (!text) {
+    return undefined;
+  }
+
+  const failureMatches = text.match(/^Search failed:/gm);
+  return failureMatches?.length;
 }
 
 function appendProviderSummary(summary: string, provider: ProviderId): string {
