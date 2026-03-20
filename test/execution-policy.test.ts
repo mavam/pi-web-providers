@@ -535,15 +535,11 @@ describe("execution policy", () => {
         "research-123",
         expect.objectContaining({ cwd: process.cwd() }),
       );
-      expect(progress).toContain(
-        "Resuming research via Gemini: research-123",
-      );
+      expect(progress).toContain("Resuming research via Gemini: research-123");
       expect(progress).toContain(
         "Research via Gemini: in_progress (0s elapsed)",
       );
-      expect(progress).toContain(
-        "Research via Gemini: completed (5s elapsed)",
-      );
+      expect(progress).toContain("Research via Gemini: completed (5s elapsed)");
     } finally {
       vi.useRealTimers();
     }

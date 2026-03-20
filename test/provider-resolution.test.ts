@@ -38,6 +38,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
+  delete process.env.FIRECRAWL_API_KEY;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
@@ -142,6 +143,24 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("uses Firecrawl for mapped contents when configured", () => {
+    process.env.FIRECRAWL_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        contents: "firecrawl",
+      },
+      providers: {
+        firecrawl: {
+          apiKey: "FIRECRAWL_API_KEY",
+        },
+      },
+    });
+
+    const provider = resolveProviderForTool(config, process.cwd(), "contents");
+    expect(provider.id).toBe("firecrawl");
   });
 
   it("rejects Custom when the mapped capability has no command configured", () => {

@@ -1308,6 +1308,7 @@ function isProviderId(value: unknown): value is ProviderId {
     value === "claude" ||
     value === "codex" ||
     value === "exa" ||
+    value === "firecrawl" ||
     value === "gemini" ||
     value === "perplexity" ||
     value === "parallel" ||

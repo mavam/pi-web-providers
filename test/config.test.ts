@@ -27,6 +27,7 @@ afterEach(async () => {
   }
   delete process.env.PI_CODING_AGENT_DIR;
   delete process.env.GOOGLE_API_KEY;
+  delete process.env.FIRECRAWL_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
 });
@@ -232,6 +233,18 @@ describe("config parsing", () => {
         type: "auto",
       },
     };
+    config.providers!.firecrawl = {
+      apiKey: "FIRECRAWL_API_KEY",
+      options: {
+        search: {
+          sources: ["web"],
+        },
+        scrape: {
+          formats: ["markdown"],
+          onlyMainContent: true,
+        },
+      },
+    };
     config.providers!.parallel = {
       apiKey: "PARALLEL_API_KEY",
       options: {
@@ -295,6 +308,14 @@ describe("config parsing", () => {
       "notes",
     ]);
     expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
+    expect(loaded.providers?.firecrawl?.apiKey).toBe("FIRECRAWL_API_KEY");
+    expect(loaded.providers?.firecrawl?.options?.search?.sources).toEqual([
+      "web",
+    ]);
+    expect(loaded.providers?.firecrawl?.options?.scrape).toEqual({
+      formats: ["markdown"],
+      onlyMainContent: true,
+    });
     expect(loaded.providers?.gemini?.options?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.settings?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.settings?.retryCount).toBe(5);
@@ -334,6 +355,7 @@ describe("config parsing", () => {
     expect(config.providers?.claude?.settings).toBeUndefined();
     expect(config.providers?.codex?.settings).toBeUndefined();
     expect(config.providers?.exa?.settings).toBeUndefined();
+    expect(config.providers?.firecrawl?.settings).toBeUndefined();
     expect(config.providers?.gemini?.settings).toEqual({
       researchMaxConsecutivePollErrors: 10,
     });
@@ -353,6 +375,9 @@ describe("config parsing", () => {
     );
     expect(ADAPTERS_BY_ID.exa.createTemplate().settings).toEqual(
       config.providers?.exa?.settings,
+    );
+    expect(ADAPTERS_BY_ID.firecrawl.createTemplate().settings).toEqual(
+      config.providers?.firecrawl?.settings,
     );
     expect(ADAPTERS_BY_ID.gemini.createTemplate().settings).toEqual(
       config.providers?.gemini?.settings,

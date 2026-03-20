@@ -1,0 +1,6 @@
+created: 2026-03-20
+title: Firecrawl provider for search and contents
+intro: >-
+  Firecrawl is now available as a built-in provider for web_search and
+  web_contents, adding Firecrawl-backed search plus markdown-first page
+  extraction through the existing per-tool provider routing model.
