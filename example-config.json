@@ -75,6 +75,10 @@
         }
       }
     },
+    "tavily": {
+      "enabled": false,
+      "apiKey": "TAVILY_API_KEY"
+    },
     "valyu": {
       "enabled": false,
       "apiKey": "VALYU_API_KEY",

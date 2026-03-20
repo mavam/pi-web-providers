@@ -13,7 +13,7 @@ off entirely.
 ## ✨ Features
 
 - **Multiple providers**: Claude, Codex, Exa, Gemini, Perplexity, Parallel,
-  Valyu
+  Tavily, Valyu
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -46,6 +46,7 @@ Each tool can be routed to any compatible provider:
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`       |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
+| **Tavily**     |   ✔    |    ✔     |        |    ✔     | `TAVILY_API_KEY`       |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`        |
 
 Advanced option: `custom` is a configurable adapter provider that can route
@@ -138,8 +139,9 @@ override provider configuration when both are set.
 
 `options` are provider-specific. Equivalent concepts can use
 different field names across SDKs—for example Perplexity uses `country`, Exa
-uses `userLocation`, and Valyu uses `countryCode`. Runtime `options` override
-provider config, but managed tool inputs and tool wiring stay fixed.
+uses `userLocation`, Tavily uses `topic`, and Valyu uses `countryCode`.
+Runtime `options` override provider config, but managed tool inputs and tool
+wiring stay fixed.
 
 </details>
 
@@ -152,8 +154,9 @@ The extension accepts local control fields for robustness: `requestTimeoutMs`,
 `web_research` for lifecycle-based research providers. These fields are handled
 by the extension and are not forwarded into the provider SDK call.
 
-- Exa and Valyu research support polling, overall deadlines, and resume IDs
-  but reject `requestTimeoutMs` and do not retry non-idempotent job creation.
+- Exa, Tavily, and Valyu research support polling, overall deadlines, and
+  resume IDs but reject `requestTimeoutMs` and do not retry non-idempotent
+  job creation.
 - Perplexity research runs in streaming foreground mode and only supports
   `requestTimeoutMs`, `retryCount`, and `retryDelayMs`.
 
@@ -241,6 +244,19 @@ The built-in providers below are thin adapters around official SDKs.
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
 - Supports provider-specific search and extraction options from the Parallel SDK
+
+</details>
+
+<details>
+<summary><strong>Tavily</strong></summary>
+
+- SDK: `@tavily/core`
+- Search and contents run in **silent foreground** mode
+- Research runs in **background research** mode and supports `resumeId`
+- Uses Tavily Search for `web_search` and Tavily Extract for `web_contents`
+- Uses Tavily Research plus `getResearch` polling for `web_research`
+- Supports provider-specific request options such as `topic`, `searchDepth`,
+  `extractDepth`, `format`, `model`, and `citationFormat`
 
 </details>
 

@@ -29,6 +29,7 @@ afterEach(async () => {
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
+  delete process.env.TAVILY_API_KEY;
 });
 
 describe("config parsing", () => {
@@ -240,6 +241,25 @@ describe("config parsing", () => {
         },
       },
     };
+    config.providers!.tavily = {
+      apiKey: "TAVILY_API_KEY",
+      options: {
+        search: {
+          topic: "news",
+        },
+        extract: {
+          format: "markdown",
+        },
+        research: {
+          model: "pro",
+        },
+      },
+      settings: {
+        researchPollIntervalMs: 4500,
+        researchTimeoutMs: 14400000,
+        researchMaxConsecutivePollErrors: 7,
+      },
+    };
     config.providers!.gemini = {
       apiKey: "GOOGLE_API_KEY",
       options: {
@@ -313,6 +333,18 @@ describe("config parsing", () => {
       "sonar-deep-research",
     );
     expect(loaded.providers?.parallel?.options?.search?.mode).toBe("one-shot");
+    expect(loaded.providers?.tavily?.options?.search?.topic).toBe("news");
+    expect(loaded.providers?.tavily?.options?.extract?.format).toBe("markdown");
+    expect(loaded.providers?.tavily?.options?.research?.model).toBe("pro");
+    expect(loaded.providers?.tavily?.settings?.researchPollIntervalMs).toBe(
+      4500,
+    );
+    expect(loaded.providers?.tavily?.settings?.researchTimeoutMs).toBe(
+      14400000,
+    );
+    expect(
+      loaded.providers?.tavily?.settings?.researchMaxConsecutivePollErrors,
+    ).toBe(7);
     expect(loaded.settings?.search).toEqual({
       provider: "exa",
       maxUrls: 2,
@@ -339,6 +371,7 @@ describe("config parsing", () => {
     });
     expect(config.providers?.perplexity?.settings).toBeUndefined();
     expect(config.providers?.parallel?.settings).toBeUndefined();
+    expect(config.providers?.tavily?.settings).toBeUndefined();
     expect(config.providers?.valyu?.settings).toBeUndefined();
   });
 
@@ -362,6 +395,9 @@ describe("config parsing", () => {
     );
     expect(ADAPTERS_BY_ID.parallel.createTemplate().settings).toEqual(
       config.providers?.parallel?.settings,
+    );
+    expect(ADAPTERS_BY_ID.tavily.createTemplate().settings).toEqual(
+      config.providers?.tavily?.settings,
     );
     expect(ADAPTERS_BY_ID.valyu.createTemplate().settings).toEqual(
       config.providers?.valyu?.settings,
