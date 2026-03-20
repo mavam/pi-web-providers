@@ -606,9 +606,7 @@ function buildGeminiContentsAnswers(
     parsedAnswers.length > 0
       ? orderGeminiContentsEntries(parsedAnswers, urls).map((entry) => ({
           url: entry.url,
-          content: {
-            markdown: entry.body,
-          },
+          content: entry.body,
         }))
       : buildFallbackGeminiContentsAnswers(text, urls, metadata);
 
@@ -741,9 +739,7 @@ function buildFallbackGeminiContentsAnswers(
   return [
     {
       url: fallbackUrl,
-      content: {
-        markdown: text,
-      },
+      content: text,
     },
   ];
 }

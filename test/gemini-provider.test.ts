@@ -10,26 +10,13 @@ afterEach(() => {
 function getContentText(
   response: {
     answers: Array<{
-      content?: { text?: string; markdown?: string } | Record<string, unknown>;
+      content?: string;
       error?: string;
     }>;
   },
   index: number,
 ): string | undefined {
-  const answer = response.answers[index];
-  if (!answer || !answer.content || typeof answer.content !== "object") {
-    return undefined;
-  }
-  if ("text" in answer.content && typeof answer.content.text === "string") {
-    return answer.content.text;
-  }
-  if (
-    "markdown" in answer.content &&
-    typeof answer.content.markdown === "string"
-  ) {
-    return answer.content.markdown;
-  }
-  return undefined;
+  return response.answers[index]?.content;
 }
 
 function getErrorText(
@@ -509,9 +496,7 @@ describe("GeminiAdapter contents", () => {
     expect(response.answers).toEqual([
       {
         url: "https://example.com/a",
-        content: {
-          markdown: "Content from the first URL.",
-        },
+        content: "Content from the first URL.",
       },
       {
         url: "https://example.com/b",
@@ -519,9 +504,7 @@ describe("GeminiAdapter contents", () => {
       },
       {
         url: "https://example.com/c",
-        content: {
-          markdown: "Content from the third URL.",
-        },
+        content: "Content from the third URL.",
       },
     ]);
   });
@@ -570,9 +553,7 @@ describe("GeminiAdapter contents", () => {
     expect(response.answers).toEqual([
       {
         url: "https://example.com/a",
-        content: {
-          markdown: "Content from the first URL.",
-        },
+        content: "Content from the first URL.",
       },
       {
         url: "https://example.com/b",

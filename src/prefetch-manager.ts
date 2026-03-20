@@ -6,7 +6,6 @@ import {
   MemoryContentStore,
 } from "./content-store.js";
 import {
-  type Content,
   type ContentsAnswer,
   type ContentsResponse,
   renderContentsAnswer,
@@ -1043,6 +1042,8 @@ function toStoredContentItem(entry: ContentsAnswer): StoredContentItem {
   return {
     url: entry.url,
     ...(entry.content !== undefined ? { content: entry.content } : {}),
+    ...(entry.summary !== undefined ? { summary: entry.summary } : {}),
+    ...(entry.metadata !== undefined ? { metadata: entry.metadata } : {}),
     ...(entry.error !== undefined ? { error: entry.error } : {}),
   };
 }
@@ -1359,16 +1360,9 @@ function isStoredContentItem(
   return (
     isJsonObject(value) &&
     (value.url === undefined || typeof value.url === "string") &&
+    (value.content === undefined || typeof value.content === "string") &&
     (value.error === undefined || typeof value.error === "string") &&
-    (value.content === undefined || isStoredContent(value.content))
-  );
-}
-
-function isStoredContent(value: unknown): value is Content {
-  return (
-    (isJsonObject(value) && typeof value.text === "string") ||
-    (isJsonObject(value) && typeof value.markdown === "string") ||
-    isJsonObject(value)
+    (value.metadata === undefined || isJsonObject(value.metadata))
   );
 }
 

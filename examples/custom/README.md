@@ -203,9 +203,9 @@ printf '%s' '{
   "answers": [
     {
       "url": "https://example.com",
-      "content": {
-        "markdown": "# Example\n\nMain page content"
-      }
+      "content": "# Example\n\nMain page content",
+      "summary": "Optional short summary",
+      "metadata": {}
     }
   ]
 }

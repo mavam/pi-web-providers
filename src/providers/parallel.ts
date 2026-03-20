@@ -1,6 +1,6 @@
 import ParallelClient from "parallel-web";
 import { resolveConfigValue } from "../config.js";
-import { type ContentsResponse, toContent } from "../contents.js";
+import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
@@ -146,7 +146,9 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
         if (result) {
           return {
             url,
-            content: toContent(result) ?? { text: formatJson(result) },
+            content:
+              result.full_content ?? result.excerpts?.join("\n\n") ?? undefined,
+            metadata: result as unknown as Record<string, unknown>,
           };
         }
 

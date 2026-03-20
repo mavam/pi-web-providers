@@ -88,7 +88,9 @@ describe("contents providers", () => {
     expect(result.answers).toHaveLength(1);
     expect(result.answers[0]).toMatchObject({
       url: "https://example.com",
-      content: {
+      content: `Heading\n\n${longParagraph}`,
+      summary: "short summary",
+      metadata: {
         title: "Example",
         url: "https://example.com",
         text: `Heading\n\n${longParagraph}`,
@@ -133,7 +135,8 @@ describe("contents providers", () => {
     );
     expect(result.answers[0]).toMatchObject({
       url: "https://parallel.ai/docs",
-      content: {
+      content: "Section 1\n\nSection 2",
+      metadata: {
         title: "Parallel Docs",
         url: "https://parallel.ai/docs",
         excerpts: ["short excerpt"],
@@ -170,7 +173,9 @@ describe("contents providers", () => {
 
     expect(result.answers[0]).toMatchObject({
       url: "https://valyu.ai/docs",
-      content: {
+      content: "Intro\n\n- Item 1\n- Item 2",
+      summary: "summary only",
+      metadata: {
         url: "https://valyu.ai/docs",
         title: "Valyu Docs",
         summary: "summary only",

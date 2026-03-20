@@ -1,36 +1,16 @@
 import type { ProviderId } from "./types.js";
 
-export type TextContent = { text: string };
-export type MarkdownContent = { markdown: string };
-export type StructuredContent = Record<string, unknown>;
-
-export type Content = TextContent | MarkdownContent | StructuredContent;
-
 export interface ContentsAnswer {
   url: string;
-  content?: Content;
+  content?: string;
+  summary?: unknown;
+  metadata?: Record<string, unknown>;
   error?: string;
 }
 
 export interface ContentsResponse {
   provider: ProviderId;
   answers: ContentsAnswer[];
-}
-
-export function renderContent(content: Content | undefined): string {
-  if (!content) {
-    return "";
-  }
-
-  if (isTextContent(content)) {
-    return content.text.trim();
-  }
-
-  if (isMarkdownContent(content)) {
-    return content.markdown.trim();
-  }
-
-  return JSON.stringify(content, null, 2).trim();
 }
 
 export function renderContentsAnswer(
@@ -48,10 +28,20 @@ export function renderContentsAnswer(
   const body =
     answer.error !== undefined
       ? answer.error.trim()
-      : renderContent(answer.content);
+      : (answer.content?.trim() ?? "");
   if (body) {
     for (const line of body.split("\n")) {
       lines.push(`   ${line}`);
+    }
+  }
+
+  if (answer.summary !== undefined) {
+    const summaryText = renderUnknown(answer.summary);
+    if (summaryText) {
+      lines.push("   Summary:");
+      for (const line of summaryText.split("\n")) {
+        lines.push(`   ${line}`);
+      }
     }
   }
 
@@ -71,47 +61,14 @@ export function renderContentsAnswers(answers: ContentsAnswer[]): string {
   );
 }
 
-export function asStructuredContent(
-  value: unknown,
-): StructuredContent | undefined {
-  if (!isPlainObject(value)) {
-    return undefined;
-  }
-  return value;
-}
-
-export function toContent(value: unknown): Content | undefined {
+function renderUnknown(value: unknown): string {
   if (typeof value === "string") {
-    return { text: value };
+    return value.trim();
   }
 
-  if (
-    typeof value === "number" ||
-    typeof value === "boolean" ||
-    value === null
-  ) {
-    return { text: String(value) };
+  if (value === undefined) {
+    return "";
   }
 
-  return asStructuredContent(value);
-}
-
-export function isTextContent(value: unknown): value is TextContent {
-  return (
-    isPlainObject(value) &&
-    typeof value.text === "string" &&
-    Object.keys(value).length === 1
-  );
-}
-
-export function isMarkdownContent(value: unknown): value is MarkdownContent {
-  return (
-    isPlainObject(value) &&
-    typeof value.markdown === "string" &&
-    Object.keys(value).length === 1
-  );
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return JSON.stringify(value, null, 2).trim();
 }

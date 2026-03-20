@@ -1,6 +1,6 @@
 import { Exa as ExaClient } from "exa-js";
 import { resolveConfigValue } from "../config.js";
-import { type ContentsResponse, toContent } from "../contents.js";
+import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import {
   createBackgroundResearchPlan,
@@ -171,15 +171,19 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
       provider: this.id,
       answers: urls.map((url, index) => {
         const result = results[index];
-        return result
-          ? {
-              url,
-              content: toContent(result) ?? { text: formatJson(result) },
-            }
-          : {
-              url,
-              error: "No content returned for this URL.",
-            };
+        if (!result) {
+          return {
+            url,
+            error: "No content returned for this URL.",
+          };
+        }
+
+        return {
+          url,
+          ...(typeof result.text === "string" ? { content: result.text } : {}),
+          ...(result.summary !== undefined ? { summary: result.summary } : {}),
+          metadata: result as unknown as Record<string, unknown>,
+        };
       }),
     };
   }

@@ -326,7 +326,7 @@ Wrapper contract:
   inputs (`query`, `urls`, `input`, `maxResults`, `options`, `cwd`)
 - `stdout`: one JSON response object
   - `search`: `{ "results": [{ "title", "url", "snippet" }] }`
-  - `contents`: `{ "answers": [{ "url", "content"?: { "text": "..." } | { "markdown": "..." } | {}, "error"?: "..." }] }`
+  - `contents`: `{ "answers": [{ "url", "content"?: "...", "summary"?: unknown, "metadata"?: {}, "error"?: "..." }] }`
   - `answer` / `research`: `{ "text": "...", "summary"?: "...", "itemCount"?: 1, "metadata"?: {} }`
 - `stderr`: optional progress lines
 - exit code `0`: success

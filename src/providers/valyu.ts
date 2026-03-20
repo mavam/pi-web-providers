@@ -1,6 +1,6 @@
 import { Valyu as ValyuClient } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
-import { type ContentsResponse, toContent } from "../contents.js";
+import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import {
   createBackgroundResearchPlan,
@@ -191,7 +191,14 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
             }
           : {
               url,
-              content: toContent(result) ?? { text: formatJson(result) },
+              ...(typeof result.content === "string" ||
+              typeof result.content === "number"
+                ? { content: String(result.content) }
+                : {}),
+              ...(result.summary !== undefined
+                ? { summary: result.summary }
+                : {}),
+              metadata: result as unknown as Record<string, unknown>,
             };
       }),
     };

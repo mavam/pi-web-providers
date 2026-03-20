@@ -16,8 +16,9 @@ $urls
 Return JSON only with this shape:
 - answers: an array with exactly $url_count items
 - each answer must include the input url, and either:
-  - content: {"markdown":"..."}
+  - content: the extracted text as a string
   - or error: a short error string when extraction fails
+- optionally include summary and metadata
 EOF
 )"
 

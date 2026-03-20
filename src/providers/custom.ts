@@ -1,9 +1,4 @@
-import {
-  asStructuredContent,
-  type Content,
-  type ContentsAnswer,
-  type ContentsResponse,
-} from "../contents.js";
+import type { ContentsAnswer, ContentsResponse } from "../contents.js";
 import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   Custom,
@@ -304,9 +299,7 @@ function parseContentsResponse(
       answers: [
         {
           url: urls[0] ?? "",
-          content: {
-            text: value.text,
-          },
+          content: value.text,
         },
       ],
     };
@@ -328,7 +321,12 @@ function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
   const content =
     entry.content === undefined
       ? undefined
-      : parseContent(entry.content, `answers[${index}].content`);
+      : readRequiredString(entry.content, `answers[${index}].content`);
+  const summary = entry.summary;
+  const metadata =
+    entry.metadata === undefined
+      ? undefined
+      : readRecord(entry.metadata, `answers[${index}].metadata`);
   const error =
     entry.error === undefined
       ? undefined
@@ -343,35 +341,10 @@ function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
   return {
     url,
     ...(content !== undefined ? { content } : {}),
+    ...(summary !== undefined ? { summary } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
     ...(error !== undefined ? { error } : {}),
   };
-}
-
-function parseContent(value: unknown, field: string): Content {
-  if (!isRecord(value)) {
-    throw new Error(`Custom output field '${field}' must be a JSON object.`);
-  }
-
-  if (typeof value.text === "string" && Object.keys(value).length === 1) {
-    return {
-      text: value.text,
-    };
-  }
-
-  if (typeof value.markdown === "string" && Object.keys(value).length === 1) {
-    return {
-      markdown: value.markdown,
-    };
-  }
-
-  const structured = asStructuredContent(value);
-  if (structured) {
-    return structured;
-  }
-
-  throw new Error(
-    `Custom output field '${field}' must be { text: string }, { markdown: string }, or a JSON object.`,
-  );
 }
 
 function parseToolOutput(
@@ -390,6 +363,13 @@ function parseToolOutput(
       : {}),
     ...(isRecord(value.metadata) ? { metadata: value.metadata } : {}),
   };
+}
+
+function readRecord(value: unknown, field: string): Record<string, unknown> {
+  if (!isRecord(value)) {
+    throw new Error(`Custom output field '${field}' must be a JSON object.`);
+  }
+  return value;
 }
 
 function readRequiredString(value: unknown, field: string): string {
