@@ -22,7 +22,7 @@ export function renderContentsAnswer(
       ? `Error: ${answer.url || "Untitled"}`
       : answer.url || "Untitled";
   const lines = [
-    `${index === undefined ? "" : `${index + 1}. `}${heading}`.trim(),
+    `## ${index === undefined ? "" : `${index + 1}. `}${heading}`.trim(),
   ];
 
   const body =
@@ -30,18 +30,13 @@ export function renderContentsAnswer(
       ? answer.error.trim()
       : (answer.content?.trim() ?? "");
   if (body) {
-    for (const line of body.split("\n")) {
-      lines.push(`   ${line}`);
-    }
+    lines.push("", body);
   }
 
   if (answer.summary !== undefined) {
     const summaryText = renderUnknown(answer.summary);
     if (summaryText) {
-      lines.push("   Summary:");
-      for (const line of summaryText.split("\n")) {
-        lines.push(`   ${line}`);
-      }
+      lines.push("", "### Summary", "", summaryText);
     }
   }
 
@@ -70,5 +65,5 @@ function renderUnknown(value: unknown): string {
     return "";
   }
 
-  return JSON.stringify(value, null, 2).trim();
+  return `\`\`\`json\n${JSON.stringify(value, null, 2).trim()}\n\`\`\``;
 }

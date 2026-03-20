@@ -253,6 +253,7 @@ function registerWebContentsTool(
         state.isPartial,
         "web_contents failed",
         theme,
+        { markdownWhenExpanded: true },
       );
     },
   });
