@@ -399,6 +399,17 @@ function getAvailableProviderIdsForCapability(
   }
 }
 
+function getProviderStatusForTool(
+  config: WebProviders,
+  cwd: string,
+  providerId: ProviderId,
+  capability: Tool,
+) {
+  const provider = ADAPTERS_BY_ID[providerId];
+  const providerConfig = getEffectiveProviderConfig(config, providerId);
+  return provider.getStatus(providerConfig as never, cwd, capability);
+}
+
 function getAvailableManagedToolNames(
   config: WebProviders,
   cwd: string,
@@ -689,6 +700,98 @@ async function executeSearchTool({
     content: [{ type: "text" as const, text: rendered }],
     details: buildWebSearchDetails(provider.id, outcomes),
   };
+}
+
+async function executeRawProviderRequest({
+  capability,
+  config,
+  explicitProvider,
+  ctx,
+  signal,
+  options,
+  maxResults,
+  urls,
+  query,
+  input,
+}: {
+  capability: Tool;
+  config: WebProviders;
+  explicitProvider: ProviderId;
+  ctx: { cwd: string };
+  signal: AbortSignal | null | undefined;
+  options: Record<string, unknown> | undefined;
+  maxResults?: number;
+  urls?: string[];
+  query?: string;
+  input?: string;
+}): Promise<SearchResponse | ContentsResponse | ToolOutput> {
+  if (capability === "search") {
+    const provider = resolveSearchProvider(config, ctx.cwd, explicitProvider);
+    const providerConfig = getEffectiveProviderConfig(config, provider.id);
+    if (!providerConfig) {
+      throw new Error(`Provider '${provider.id}' is not configured.`);
+    }
+
+    return executeSingleSearchQuery({
+      provider,
+      providerConfig: providerConfig as AnyProvider,
+      query: query ?? "",
+      maxResults: clampResults(maxResults),
+      options,
+      providerContext: {
+        cwd: ctx.cwd,
+        signal: signal ?? undefined,
+      },
+    });
+  }
+
+  const provider = resolveProviderForTool(
+    config,
+    ctx.cwd,
+    capability,
+    explicitProvider,
+  );
+  const providerConfig = getEffectiveProviderConfig(config, provider.id);
+  if (!providerConfig) {
+    throw new Error(`Provider '${provider.id}' is not configured.`);
+  }
+
+  if (capability === "contents") {
+    return executeProviderOperation({
+      capability,
+      config,
+      provider,
+      providerConfig: providerConfig as AnyProvider,
+      ctx,
+      signal,
+      options,
+      urls,
+    });
+  }
+
+  if (capability === "answer") {
+    return executeProviderOperation({
+      capability,
+      config,
+      provider,
+      providerConfig: providerConfig as AnyProvider,
+      ctx,
+      signal,
+      options,
+      query,
+    });
+  }
+
+  return executeProviderOperation({
+    capability,
+    config,
+    provider,
+    providerConfig: providerConfig as AnyProvider,
+    ctx,
+    signal,
+    options,
+    input,
+  });
 }
 
 type SearchQueryOutcome =
@@ -3211,8 +3314,10 @@ function truncateInline(text: string, maxLength: number): string {
 }
 
 export const __test__ = {
+  loadConfig,
   didContentsCacheInputsChange,
   executeAnswerTool,
+  executeRawProviderRequest,
   executeProviderTool,
   executeSearchTool,
   extractTextContent,
@@ -3220,6 +3325,7 @@ export const __test__ = {
   getEnabledCompatibleProvidersForTool,
   describeOptionsField,
   getAvailableProviderIdsForCapability,
+  getProviderStatusForTool,
   getSyncedActiveTools,
   renderCallHeader,
   renderQuestionCallHeader,

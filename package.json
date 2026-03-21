@@ -48,6 +48,7 @@
     "check": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
+    "smoke:live": "npm run build && node scripts/live-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

@@ -2,7 +2,6 @@ import ParallelClient from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   Parallel,
   ProviderAdapter,
@@ -11,6 +10,7 @@ import type {
   ProviderStatus,
   SearchResponse,
 } from "../types.js";
+import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ParallelAdapter implements ProviderAdapter<Parallel> {
@@ -50,34 +50,41 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
   }
 
   buildPlan(request: ProviderRequest, config: Parallel) {
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      handlers: {
+        search: silentForegroundHandler(
+          (
+            searchRequest,
+            providerConfig: Parallel,
+            context: ProviderContext,
+          ) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "contents":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.contents(request.urls, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+        ),
+        contents: silentForegroundHandler(
+          (
+            contentsRequest,
+            providerConfig: Parallel,
+            context: ProviderContext,
+          ) =>
+            this.contents(
+              contentsRequest.urls,
+              providerConfig,
+              context,
+              contentsRequest.options,
+            ),
+        ),
+      },
+    });
   }
 
   async search(

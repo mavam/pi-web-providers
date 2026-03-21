@@ -353,6 +353,27 @@ providers unless overridden in a provider's own `settings` block:
 | `researchTimeoutMs`                | `21600000` | Overall deadline for research before returning |
 | `researchMaxConsecutivePollErrors` | `3`        | Consecutive poll failures before stopping      |
 
+## 🔎 Live smoke tests
+
+Use the opt-in live smoke runner to validate the configured providers with the
+same config-resolution and execution path the extension uses at runtime:
+
+```bash
+npm run smoke:live
+```
+
+Optional filters:
+
+```bash
+npm run smoke:live -- --provider gemini
+npm run smoke:live -- --tool contents
+npm run smoke:live -- --include-research
+```
+
+The default run exercises `search`, `contents`, and `answer`. Research probes
+are excluded unless you pass `--include-research`, because they are slower and
+may incur higher provider cost.
+
 ## 📄 License
 
 [MIT](LICENSE)

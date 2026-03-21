@@ -1,10 +1,6 @@
 import PerplexityClient from "@perplexity-ai/perplexity_ai";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import {
-  createSilentForegroundPlan,
-  createStreamingForegroundPlan,
-} from "../provider-plans.js";
 import type {
   Perplexity,
   ProviderContext,
@@ -14,6 +10,11 @@ import type {
   SearchResponse,
   ProviderAdapter,
 } from "../types.js";
+import {
+  buildProviderPlan,
+  silentForegroundHandler,
+  streamingForegroundHandler,
+} from "./framework.js";
 import { asJsonObject, trimSnippet } from "./shared.js";
 
 const DEFAULT_ANSWER_MODEL = "sonar";
@@ -67,38 +68,52 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
   }
 
   buildPlan(request: ProviderRequest, config: Perplexity) {
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      handlers: {
+        search: silentForegroundHandler(
+          (
+            searchRequest,
+            providerConfig: Perplexity,
+            context: ProviderContext,
+          ) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "answer":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.answer(request.query, config, context, request.options),
-        });
-      case "research":
-        return createStreamingForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          traits: {
+        ),
+        answer: silentForegroundHandler(
+          (
+            answerRequest,
+            providerConfig: Perplexity,
+            context: ProviderContext,
+          ) =>
+            this.answer(
+              answerRequest.query,
+              providerConfig,
+              context,
+              answerRequest.options,
+            ),
+        ),
+        research: streamingForegroundHandler(
+          (
+            researchRequest,
+            providerConfig: Perplexity,
+            context: ProviderContext,
+          ) =>
+            this.research(
+              researchRequest.input,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+          {
             executionSupport: {
               requestTimeoutMs: true,
               retryCount: true,
@@ -109,12 +124,9 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
               resumeId: false,
             },
           },
-          execute: (context: ProviderContext) =>
-            this.research(request.input, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+        ),
+      },
+    });
   }
 
   async search(

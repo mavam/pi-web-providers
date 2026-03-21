@@ -3,7 +3,6 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, extname, join } from "node:path";
 import { query, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
-import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   Claude,
   ProviderAdapter,
@@ -13,6 +12,7 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
+import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
 const require = createRequire(import.meta.url);
@@ -107,34 +107,33 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
   }
 
   buildPlan(request: ProviderRequest, config: Claude) {
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      handlers: {
+        search: silentForegroundHandler(
+          (searchRequest, providerConfig: Claude, context: ProviderContext) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "answer":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.answer(request.query, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+        ),
+        answer: silentForegroundHandler(
+          (answerRequest, providerConfig: Claude, context: ProviderContext) =>
+            this.answer(
+              answerRequest.query,
+              providerConfig,
+              context,
+              answerRequest.options,
+            ),
+        ),
+      },
+    });
   }
 
   async search(

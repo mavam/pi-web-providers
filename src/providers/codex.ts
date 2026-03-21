@@ -3,7 +3,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Codex as CodexClient } from "@openai/codex-sdk";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
-import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   Codex,
   ProviderContext,
@@ -12,6 +11,7 @@ import type {
   SearchResponse,
   ProviderAdapter,
 } from "../types.js";
+import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
 const OUTPUT_SCHEMA = {
@@ -85,23 +85,23 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
   }
 
   buildPlan(request: ProviderRequest, config: Codex) {
-    if (request.capability !== "search") {
-      return null;
-    }
-
-    return createSilentForegroundPlan({
+    return buildProviderPlan({
+      request,
       config,
-      capability: request.capability,
       providerId: this.id,
       providerLabel: this.label,
-      execute: (context: ProviderContext) =>
-        this.search(
-          request.query,
-          request.maxResults,
-          config,
-          context,
-          request.options,
+      handlers: {
+        search: silentForegroundHandler(
+          (searchRequest, providerConfig: Codex, context: ProviderContext) =>
+            this.search(
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
+              context,
+              searchRequest.options,
+            ),
         ),
+      },
     });
   }
 

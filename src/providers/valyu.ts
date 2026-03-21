@@ -2,10 +2,6 @@ import { Valyu as ValyuClient } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import {
-  createBackgroundResearchPlan,
-  createSilentForegroundPlan,
-} from "../provider-plans.js";
 import type {
   ProviderAdapter,
   ProviderContext,
@@ -17,6 +13,11 @@ import type {
   ToolOutput,
   Valyu,
 } from "../types.js";
+import {
+  backgroundResearchHandler,
+  buildProviderPlan,
+  silentForegroundHandler,
+} from "./framework.js";
 import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
 
 export class ValyuAdapter implements ProviderAdapter<Valyu> {
@@ -51,46 +52,41 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
   }
 
   buildPlan(request: ProviderRequest, config: Valyu) {
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      handlers: {
+        search: silentForegroundHandler(
+          (searchRequest, providerConfig: Valyu, context: ProviderContext) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "contents":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.contents(request.urls, config, context, request.options),
-        });
-      case "answer":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.answer(request.query, config, context, request.options),
-        });
-      case "research":
-        return createBackgroundResearchPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
+        ),
+        contents: silentForegroundHandler(
+          (contentsRequest, providerConfig: Valyu, context: ProviderContext) =>
+            this.contents(
+              contentsRequest.urls,
+              providerConfig,
+              context,
+              contentsRequest.options,
+            ),
+        ),
+        answer: silentForegroundHandler(
+          (answerRequest, providerConfig: Valyu, context: ProviderContext) =>
+            this.answer(
+              answerRequest.query,
+              providerConfig,
+              context,
+              answerRequest.options,
+            ),
+        ),
+        research: backgroundResearchHandler({
           traits: {
             executionSupport: {
               requestTimeoutMs: false,
@@ -106,14 +102,32 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
               supportsRequestTimeouts: false,
             },
           },
-          start: (context: ProviderContext) =>
-            this.startResearch(request.input, config, context, request.options),
-          poll: (id: string, context: ProviderContext) =>
-            this.pollResearch(id, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+          start: (
+            researchRequest,
+            providerConfig: Valyu,
+            context: ProviderContext,
+          ) =>
+            this.startResearch(
+              researchRequest.input,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+          poll: (
+            researchRequest,
+            providerConfig: Valyu,
+            id: string,
+            context: ProviderContext,
+          ) =>
+            this.pollResearch(
+              id,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+        }),
+      },
+    });
   }
 
   async search(

@@ -173,6 +173,136 @@ describe("GeminiAdapter search", () => {
     ]);
   });
 
+  it("extracts title and URL from rendered content when Gemini omits structured fields", async () => {
+    const provider = createProvider({
+      interactions: {
+        create: vi.fn().mockResolvedValue({
+          outputs: [
+            {
+              type: "google_search_result",
+              result: [
+                {
+                  renderedContent:
+                    '<div class="result"><a href="https://tenzir.com/use-cases" aria-label="Tenzir use cases">Tenzir &amp; use cases</a></div>',
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    const response = await provider.search(
+      "tenzir use cases",
+      5,
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(response.results).toEqual([
+      {
+        title: "Tenzir & use cases",
+        url: "https://tenzir.com/use-cases",
+        snippet: "",
+      },
+    ]);
+  });
+
+  it("skips empty Gemini search result placeholders", async () => {
+    const provider = createProvider({
+      interactions: {
+        create: vi.fn().mockResolvedValue({
+          outputs: [
+            {
+              type: "google_search_result",
+              result: [
+                {},
+                {
+                  title: "Alpha",
+                  uri: "https://example.com/alpha",
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    const response = await provider.search(
+      "example query",
+      5,
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(response.results).toEqual([
+      {
+        title: "Alpha",
+        url: "https://example.com/alpha",
+        snippet: "",
+      },
+    ]);
+  });
+
+  it("extracts suggestion chips when Gemini only returns search_suggestions HTML", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          headers: new Headers({
+            location: "https://platform.openai.com/docs/overview",
+          }),
+        })
+        .mockResolvedValueOnce({
+          headers: new Headers({
+            location: "https://platform.openai.com/docs/introduction",
+          }),
+        }),
+    );
+
+    const provider = createProvider({
+      interactions: {
+        create: vi.fn().mockResolvedValue({
+          outputs: [
+            {
+              type: "google_search_result",
+              result: [
+                {
+                  search_suggestions:
+                    '<div><a class="chip" href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/a">OpenAI API overview</a><a class="chip" href="https://vertexaisearch.cloud.google.com/grounding-api-redirect/b">OpenAI API docs</a></div>',
+                },
+              ],
+            },
+          ],
+        }),
+      },
+    });
+
+    const response = await provider.search(
+      "OpenAI API",
+      5,
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(response.results).toEqual([
+      {
+        title: "OpenAI API overview",
+        url: "https://platform.openai.com/docs/overview",
+        snippet: "",
+      },
+      {
+        title: "OpenAI API docs",
+        url: "https://platform.openai.com/docs/introduction",
+        snippet: "",
+      },
+    ]);
+  });
+
   it("caps Gemini search results by maxResults", async () => {
     const provider = createProvider({
       interactions: {

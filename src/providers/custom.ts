@@ -1,5 +1,4 @@
 import type { ContentsAnswer, ContentsResponse } from "../contents.js";
-import { createSilentForegroundPlan } from "../provider-plans.js";
 import type {
   Custom,
   CustomCommandConfig,
@@ -11,6 +10,7 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
 import { runCliJsonCommand } from "./cli-json.js";
 
 export class CustomAdapter implements ProviderAdapter<Custom> {
@@ -53,52 +53,51 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
   }
 
   buildPlan(request: ProviderRequest, config: Custom) {
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      handlers: {
+        search: silentForegroundHandler(
+          (searchRequest, providerConfig: Custom, context: ProviderContext) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "contents":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.contents(request.urls, config, context, request.options),
-        });
-      case "answer":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.answer(request.query, config, context, request.options),
-        });
-      case "research":
-        return createSilentForegroundPlan({
-          config,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.research(request.input, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+        ),
+        contents: silentForegroundHandler(
+          (contentsRequest, providerConfig: Custom, context: ProviderContext) =>
+            this.contents(
+              contentsRequest.urls,
+              providerConfig,
+              context,
+              contentsRequest.options,
+            ),
+        ),
+        answer: silentForegroundHandler(
+          (answerRequest, providerConfig: Custom, context: ProviderContext) =>
+            this.answer(
+              answerRequest.query,
+              providerConfig,
+              context,
+              answerRequest.options,
+            ),
+        ),
+        research: silentForegroundHandler(
+          (researchRequest, providerConfig: Custom, context: ProviderContext) =>
+            this.research(
+              researchRequest.input,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+        ),
+      },
+    });
   }
 
   async search(

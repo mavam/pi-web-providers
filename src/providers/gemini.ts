@@ -1,10 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { resolveConfigValue } from "../config.js";
 import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
-import {
-  createBackgroundResearchPlan,
-  createSilentForegroundPlan,
-} from "../provider-plans.js";
 import type {
   Gemini,
   ProviderAdapter,
@@ -16,6 +12,11 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
+import {
+  backgroundResearchHandler,
+  buildProviderPlan,
+  silentForegroundHandler,
+} from "./framework.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
@@ -58,41 +59,35 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
   }
 
   buildPlan(request: ProviderRequest, config: Gemini) {
-    const planConfig = {
-      settings: config.settings,
-    };
-
-    switch (request.capability) {
-      case "search":
-        return createSilentForegroundPlan({
-          config: planConfig,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: this.id,
+      providerLabel: this.label,
+      resolvePlanConfig: (providerConfig) => ({
+        settings: providerConfig.settings,
+      }),
+      handlers: {
+        search: silentForegroundHandler(
+          (searchRequest, providerConfig: Gemini, context: ProviderContext) =>
             this.search(
-              request.query,
-              request.maxResults,
-              config,
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
               context,
-              request.options,
+              searchRequest.options,
             ),
-        });
-      case "answer":
-        return createSilentForegroundPlan({
-          config: planConfig,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
-          execute: (context: ProviderContext) =>
-            this.answer(request.query, config, context, request.options),
-        });
-      case "research":
-        return createBackgroundResearchPlan({
-          config: planConfig,
-          capability: request.capability,
-          providerId: this.id,
-          providerLabel: this.label,
+        ),
+        answer: silentForegroundHandler(
+          (answerRequest, providerConfig: Gemini, context: ProviderContext) =>
+            this.answer(
+              answerRequest.query,
+              providerConfig,
+              context,
+              answerRequest.options,
+            ),
+        ),
+        research: backgroundResearchHandler({
           traits: {
             executionSupport: {
               requestTimeoutMs: true,
@@ -108,14 +103,32 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
               supportsRequestTimeouts: true,
             },
           },
-          start: (context: ProviderContext) =>
-            this.startResearch(request.input, config, context, request.options),
-          poll: (id: string, context: ProviderContext) =>
-            this.pollResearch(id, config, context, request.options),
-        });
-      default:
-        return null;
-    }
+          start: (
+            researchRequest,
+            providerConfig: Gemini,
+            context: ProviderContext,
+          ) =>
+            this.startResearch(
+              researchRequest.input,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+          poll: (
+            researchRequest,
+            providerConfig: Gemini,
+            id: string,
+            context: ProviderContext,
+          ) =>
+            this.pollResearch(
+              id,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+        }),
+      },
+    });
   }
 
   async search(
@@ -315,6 +328,7 @@ function addAbortSignalToGeminiConfig(
 function extractGoogleSearchResults(
   outputs: unknown,
 ): Array<{ title?: string; url?: string; rendered_content?: string }> {
+  const seen = new Set<string>();
   const results: Array<{
     title?: string;
     url?: string;
@@ -341,19 +355,214 @@ function extractGoogleSearchResults(
         continue;
       }
 
-      const record = item as Record<string, unknown>;
-      results.push({
-        title: typeof record.title === "string" ? record.title : undefined,
-        url: typeof record.url === "string" ? record.url : undefined,
-        rendered_content:
-          typeof record.rendered_content === "string"
-            ? record.rendered_content
-            : undefined,
-      });
+      const normalizedResults = normalizeGoogleSearchResult(
+        item as Record<string, unknown>,
+      );
+      for (const normalized of normalizedResults) {
+        if (!normalized.title && !normalized.url) {
+          continue;
+        }
+
+        const key = [
+          normalized.title?.trim().toLowerCase() ?? "",
+          normalized.url?.trim().toLowerCase() ?? "",
+        ].join("::");
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        results.push(normalized);
+      }
     }
   }
 
   return results;
+}
+
+function normalizeGoogleSearchResult(
+  record: Record<string, unknown>,
+): Array<{
+  title?: string;
+  url?: string;
+  rendered_content?: string;
+}> {
+  const renderedContent =
+    readNonEmptyString(record.rendered_content) ??
+    readNonEmptyString(record.renderedContent);
+  const suggestionResults = extractSearchResultsFromSuggestions(record);
+  const fallback = extractSearchResultsFromHtml(renderedContent)[0] ?? {};
+  const primary = {
+    title:
+      readNonEmptyString(record.title) ??
+      readNonEmptyString(record.name) ??
+      readNonEmptyString(record.headline) ??
+      fallback.title,
+    url:
+      readNonEmptyString(record.url) ??
+      readNonEmptyString(record.uri) ??
+      readNonEmptyString(record.link) ??
+      readNonEmptyString(record.href) ??
+      fallback.url,
+    rendered_content: renderedContent,
+  };
+
+  if (primary.title || primary.url) {
+    return [primary, ...suggestionResults];
+  }
+
+  return suggestionResults;
+}
+
+function extractSearchResultsFromSuggestions(
+  record: Record<string, unknown>,
+): Array<{ title?: string; url?: string; rendered_content?: string }> {
+  const fragments = [
+    readNonEmptyString(record.search_suggestions),
+    readNonEmptyString(record.searchSuggestions),
+  ].filter((value): value is string => value !== undefined);
+
+  return fragments.flatMap((fragment) =>
+    extractSearchResultsFromHtml(fragment).map((result) => ({
+      ...result,
+      rendered_content: fragment,
+    })),
+  );
+}
+
+function extractSearchResultsFromHtml(
+  fragment: string | undefined,
+): Array<{ title?: string; url?: string }> {
+  if (!fragment) {
+    return [];
+  }
+
+  const results: Array<{ title?: string; url?: string }> = [];
+
+  for (const match of fragment.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = parseHtmlAttributes(match[1] ?? "");
+    const result = {
+      title:
+        cleanExtractedHtmlText(match[2]) ??
+        normalizeHtmlAttributeValue(attrs.title) ??
+        normalizeHtmlAttributeValue(attrs["aria-label"]) ??
+        normalizeHtmlAttributeValue(attrs["data-title"]),
+      url:
+        normalizeSearchUrl(attrs.href) ??
+        normalizeSearchUrl(attrs["data-href"]) ??
+        normalizeSearchUrl(attrs["data-url"]) ??
+        normalizeSearchUrl(attrs.url),
+    };
+
+    if (result.title || result.url) {
+      results.push(result);
+    }
+  }
+
+  if (results.length > 0) {
+    return results;
+  }
+
+  const attrs = parseHtmlAttributes(fragment);
+  const fallback = {
+    title:
+      normalizeHtmlAttributeValue(attrs.title) ??
+      normalizeHtmlAttributeValue(attrs["aria-label"]) ??
+      normalizeHtmlAttributeValue(attrs["data-title"]),
+    url:
+      normalizeSearchUrl(attrs.href) ??
+      normalizeSearchUrl(attrs["data-href"]) ??
+      normalizeSearchUrl(attrs["data-url"]) ??
+      normalizeSearchUrl(attrs.url),
+  };
+
+  if (fallback.title || fallback.url) {
+    return [fallback];
+  }
+
+  return [];
+}
+
+function extractSearchResultFromRenderedContent(
+  renderedContent: string | undefined,
+): { title?: string; url?: string } {
+  const [result] = extractSearchResultsFromHtml(renderedContent);
+  if (!result) {
+    return {};
+  }
+  return result;
+}
+
+function parseHtmlAttributes(fragment: string): Record<string, string> {
+  const attributes: Record<string, string> = {};
+
+  for (const match of fragment.matchAll(
+    /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(['"])([\s\S]*?)\2/g,
+  )) {
+    attributes[match[1].toLowerCase()] = decodeHtmlEntities(match[3]);
+  }
+
+  return attributes;
+}
+
+function cleanExtractedHtmlText(html: string | undefined): string | undefined {
+  if (!html) {
+    return undefined;
+  }
+
+  const text = decodeHtmlEntities(
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return text || undefined;
+}
+
+function normalizeHtmlAttributeValue(
+  value: string | undefined,
+): string | undefined {
+  return readNonEmptyString(value);
+}
+
+function normalizeSearchUrl(value: string | undefined): string | undefined {
+  const url = normalizeHtmlAttributeValue(value);
+  if (!url || url.startsWith("#") || /^javascript:/i.test(url)) {
+    return undefined;
+  }
+  return url;
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text.replace(
+    /&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g,
+    (_match, entity: string) => decodeHtmlEntity(entity),
+  );
+}
+
+function decodeHtmlEntity(entity: string): string {
+  const normalized = entity.toLowerCase();
+  if (normalized === "amp") return "&";
+  if (normalized === "lt") return "<";
+  if (normalized === "gt") return ">";
+  if (normalized === "quot") return '"';
+  if (normalized === "apos" || normalized === "#39") return "'";
+  if (normalized === "nbsp") return " ";
+
+  const isHex = normalized.startsWith("#x");
+  const isNumeric = normalized.startsWith("#");
+  if (!isNumeric) {
+    return `&${entity};`;
+  }
+
+  const value = Number.parseInt(
+    normalized.slice(isHex ? 2 : 1),
+    isHex ? 16 : 10,
+  );
+  return Number.isFinite(value) ? String.fromCodePoint(value) : `&${entity};`;
 }
 
 function extractGroundingSources(
