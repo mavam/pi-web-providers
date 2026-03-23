@@ -16,7 +16,7 @@ import {
   type Component,
   Editor,
   type EditorTheme,
-  getEditorKeybindings,
+  getKeybindings,
   Key,
   Markdown,
   matchesKey,
@@ -1894,14 +1894,14 @@ class WebProvidersSettingsView implements Component {
       return;
     }
 
-    const kb = getEditorKeybindings();
+    const kb = getKeybindings();
     const entries = this.getActiveSectionEntries();
 
-    if (kb.matches(data, "selectUp")) {
+    if (kb.matches(data, "tui.select.up")) {
       if (entries.length > 0) {
         this.moveSelection(-1);
       }
-    } else if (kb.matches(data, "selectDown")) {
+    } else if (kb.matches(data, "tui.select.down")) {
       if (entries.length > 0) {
         this.moveSelection(1);
       }
@@ -1909,9 +1909,9 @@ class WebProvidersSettingsView implements Component {
       this.moveSection(1);
     } else if (matchesKey(data, Key.shift("tab"))) {
       this.moveSection(-1);
-    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+    } else if (kb.matches(data, "tui.select.confirm") || data === " ") {
       void this.activateCurrentEntry();
-    } else if (kb.matches(data, "selectCancel")) {
+    } else if (kb.matches(data, "tui.select.cancel")) {
       this.done(undefined);
       return;
     }
@@ -2307,20 +2307,20 @@ class ToolSettingsSubmenu implements Component {
       return;
     }
 
-    const kb = getEditorKeybindings();
+    const kb = getKeybindings();
     const entries = this.getEntries();
 
-    if (kb.matches(data, "selectUp")) {
+    if (kb.matches(data, "tui.select.up")) {
       if (this.selection > 0) {
         this.selection -= 1;
       }
-    } else if (kb.matches(data, "selectDown")) {
+    } else if (kb.matches(data, "tui.select.down")) {
       if (this.selection < entries.length - 1) {
         this.selection += 1;
       }
-    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+    } else if (kb.matches(data, "tui.select.confirm") || data === " ") {
       void this.activateCurrentEntry();
-    } else if (kb.matches(data, "selectCancel")) {
+    } else if (kb.matches(data, "tui.select.cancel")) {
       this.done();
       return;
     }
@@ -2591,20 +2591,20 @@ class ProviderSettingsSubmenu implements Component {
       return;
     }
 
-    const kb = getEditorKeybindings();
+    const kb = getKeybindings();
     const entries = this.getEntries();
 
-    if (kb.matches(data, "selectUp")) {
+    if (kb.matches(data, "tui.select.up")) {
       if (this.selection > 0) {
         this.selection -= 1;
       }
-    } else if (kb.matches(data, "selectDown")) {
+    } else if (kb.matches(data, "tui.select.down")) {
       if (this.selection < entries.length - 1) {
         this.selection += 1;
       }
-    } else if (kb.matches(data, "selectConfirm") || data === " ") {
+    } else if (kb.matches(data, "tui.select.confirm") || data === " ") {
       void this.activateCurrentEntry();
-    } else if (kb.matches(data, "selectCancel")) {
+    } else if (kb.matches(data, "tui.select.cancel")) {
       this.done();
       return;
     }
