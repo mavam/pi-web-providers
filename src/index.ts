@@ -1780,6 +1780,78 @@ function getProviderSettings(
     .settings as readonly ProviderSettingDescriptor<AnyProvider>[];
 }
 
+function buildManifestSettingsEntry(
+  setting: ProviderSettingDescriptor<AnyProvider>,
+  providerConfig: AnyProvider | undefined,
+): SettingsEntry {
+  if (setting.kind === "values") {
+    return {
+      id: setting.id,
+      label: setting.label,
+      currentValue: setting.getValue(providerConfig),
+      values: setting.values,
+      description: setting.help,
+      kind: "cycle",
+    };
+  }
+
+  return {
+    id: setting.id,
+    label: setting.label,
+    currentValue: summarizeStringValue(
+      setting.getValue(providerConfig),
+      setting.secret === true,
+    ),
+    description: setting.help,
+    kind: "text",
+  };
+}
+
+function renderEntryList(
+  width: number,
+  theme: Theme,
+  entries: SettingsEntry[],
+  selection: number,
+): string[] {
+  const labelWidth = Math.min(
+    24,
+    Math.max(...entries.map((entry) => entry.label.length), 0),
+  );
+  return entries.map((entry, index) => {
+    const selected = selection === index;
+    const prefix = selected ? theme.fg("accent", "→ ") : "  ";
+    const paddedLabel = entry.label.padEnd(labelWidth, " ");
+    const label = selected ? theme.fg("accent", paddedLabel) : paddedLabel;
+    const value = selected
+      ? theme.fg("accent", entry.currentValue)
+      : theme.fg("muted", entry.currentValue);
+    return truncateToWidth(`${prefix}${label}  ${value}`, width);
+  });
+}
+
+function renderSelectedEntryDescription(
+  width: number,
+  theme: Theme,
+  entry: SettingsEntry | undefined,
+): string[] {
+  if (!entry) {
+    return [];
+  }
+
+  return wrapTextWithAnsi(entry.description, Math.max(10, width - 2)).map(
+    (line) => truncateToWidth(theme.fg("dim", line), width),
+  );
+}
+
+function resolveProviderSelectionValue(
+  providerIds: ProviderId[],
+  value: string,
+): ProviderId | undefined {
+  return providerIds.find(
+    (candidate) => ADAPTERS_BY_ID[candidate].label === value,
+  );
+}
+
 function getReadyCompatibleProvidersForTool(
   config: WebProviders,
   cwd: string,
@@ -2004,12 +2076,9 @@ class WebProvidersSettingsView implements Component {
     const selected = this.getSelectedEntry();
     if (selected) {
       lines.push("");
-      for (const line of wrapTextWithAnsi(
-        selected.description,
-        Math.max(10, width - 2),
-      )) {
-        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
-      }
+      lines.push(
+        ...renderSelectedEntryDescription(width, this.theme, selected),
+      );
     }
 
     lines.push("");
@@ -2120,31 +2189,6 @@ class WebProvidersSettingsView implements Component {
       description: SETTING_META[id].help,
       kind: "text",
     }));
-  }
-
-  private buildProviderItem(
-    setting: ProviderSettingDescriptor<AnyProvider>,
-    providerConfig: AnyProvider | undefined,
-  ): SettingsEntry {
-    if (setting.kind === "values") {
-      return {
-        id: setting.id,
-        label: setting.label,
-        currentValue: setting.getValue(providerConfig),
-        values: setting.values,
-        description: setting.help,
-        kind: "cycle",
-      };
-    }
-
-    const currentValue = setting.getValue(providerConfig);
-    return {
-      id: setting.id,
-      label: setting.label,
-      currentValue: summarizeStringValue(currentValue, setting.secret === true),
-      description: setting.help,
-      kind: "text",
-    };
   }
 
   private getSectionEntries(
@@ -2415,18 +2459,15 @@ class ToolSettingsSubmenu implements Component {
         width,
       ),
       "",
-      ...this.renderEntries(width, entries),
+      ...renderEntryList(width, this.theme, entries, this.selection),
     ];
 
     const selected = entries[this.selection];
     if (selected) {
       lines.push("");
-      for (const line of wrapTextWithAnsi(
-        selected.description,
-        Math.max(10, width - 2),
-      )) {
-        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
-      }
+      lines.push(
+        ...renderSelectedEntryDescription(width, this.theme, selected),
+      );
     }
 
     lines.push("");
@@ -2550,25 +2591,6 @@ class ToolSettingsSubmenu implements Component {
     return entries;
   }
 
-  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
-    const labelWidth = Math.min(
-      24,
-      Math.max(...entries.map((entry) => entry.label.length), 0),
-    );
-    return entries.map((entry, index) => {
-      const selected = this.selection === index;
-      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
-      const paddedLabel = entry.label.padEnd(labelWidth, " ");
-      const label = selected
-        ? this.theme.fg("accent", paddedLabel)
-        : paddedLabel;
-      const value = selected
-        ? this.theme.fg("accent", entry.currentValue)
-        : this.theme.fg("muted", entry.currentValue);
-      return truncateToWidth(`${prefix}${label}  ${value}`, width);
-    });
-  }
-
   private async activateCurrentEntry(): Promise<void> {
     const entry = this.getEntries()[this.selection];
     if (!entry) {
@@ -2619,16 +2641,13 @@ class ToolSettingsSubmenu implements Component {
         case "provider":
           config.tools ??= {};
           if (value === "off") {
-            if (config.tools) {
-              delete config.tools[this.toolId];
-            }
+            delete config.tools?.[this.toolId];
           } else {
             config.tools ??= {};
-            const providerId = getReadyCompatibleProvidersForTool(
-              config,
-              this.cwd,
-              this.toolId,
-            ).find((candidate) => ADAPTERS_BY_ID[candidate].label === value);
+            const providerId = resolveProviderSelectionValue(
+              getReadyCompatibleProvidersForTool(config, this.cwd, this.toolId),
+              value,
+            );
             if (!providerId) {
               throw new Error(`Unknown provider '${value}'.`);
             }
@@ -2641,11 +2660,10 @@ class ToolSettingsSubmenu implements Component {
             delete searchSettings.provider;
             return;
           }
-          const providerId = getReadyCompatibleProvidersForTool(
-            config,
-            this.cwd,
-            "contents",
-          ).find((candidate) => ADAPTERS_BY_ID[candidate].label === value);
+          const providerId = resolveProviderSelectionValue(
+            getReadyCompatibleProvidersForTool(config, this.cwd, "contents"),
+            value,
+          );
           if (!providerId) {
             throw new Error(`Unknown provider '${value}'.`);
           }
@@ -2699,18 +2717,15 @@ class ProviderSettingsSubmenu implements Component {
     const lines = [
       truncateToWidth(this.theme.fg("accent", provider.label), width),
       "",
-      ...this.renderEntries(width, entries),
+      ...renderEntryList(width, this.theme, entries, this.selection),
     ];
 
     const selected = entries[this.selection];
     if (selected) {
       lines.push("");
-      for (const line of wrapTextWithAnsi(
-        selected.description,
-        Math.max(10, width - 2),
-      )) {
-        lines.push(truncateToWidth(this.theme.fg("dim", line), width));
-      }
+      lines.push(
+        ...renderSelectedEntryDescription(width, this.theme, selected),
+      );
     }
 
     const status = getProviderReadinessSummaryForProviderConfig(
@@ -2765,52 +2780,8 @@ class ProviderSettingsSubmenu implements Component {
   private getEntries(): SettingsEntry[] {
     const providerConfig = this.getProviderConfig();
     return getProviderSettings(this.providerId).map((setting) =>
-      this.buildProviderItem(setting, providerConfig),
+      buildManifestSettingsEntry(setting, providerConfig),
     );
-  }
-
-  private buildProviderItem(
-    setting: ProviderSettingDescriptor<AnyProvider>,
-    providerConfig: AnyProvider | undefined,
-  ): SettingsEntry {
-    if (setting.kind === "values") {
-      return {
-        id: setting.id,
-        label: setting.label,
-        currentValue: setting.getValue(providerConfig),
-        values: setting.values,
-        description: setting.help,
-        kind: "cycle",
-      };
-    }
-
-    const currentValue = setting.getValue(providerConfig);
-    return {
-      id: setting.id,
-      label: setting.label,
-      currentValue: summarizeStringValue(currentValue, setting.secret === true),
-      description: setting.help,
-      kind: "text",
-    };
-  }
-
-  private renderEntries(width: number, entries: SettingsEntry[]): string[] {
-    const labelWidth = Math.min(
-      24,
-      Math.max(...entries.map((entry) => entry.label.length), 0),
-    );
-    return entries.map((entry, index) => {
-      const selected = this.selection === index;
-      const prefix = selected ? this.theme.fg("accent", "→ ") : "  ";
-      const paddedLabel = entry.label.padEnd(labelWidth, " ");
-      const label = selected
-        ? this.theme.fg("accent", paddedLabel)
-        : paddedLabel;
-      const value = selected
-        ? this.theme.fg("accent", entry.currentValue)
-        : this.theme.fg("muted", entry.currentValue);
-      return truncateToWidth(`${prefix}${label}  ${value}`, width);
-    });
   }
 
   private async activateCurrentEntry(): Promise<void> {

@@ -1,4 +1,3 @@
-import { resolveConfigValue } from "./config.js";
 import { createDefaultExecutionSettings } from "./execution-policy-defaults.js";
 import { getMappedProviderForTool } from "./provider-tools.js";
 import { ADAPTERS_BY_ID } from "./providers/index.js";
@@ -41,46 +40,80 @@ export function getEffectiveProviderConfig(
   config: WebProviders,
   providerId: ProviderId,
 ): AnyProvider {
-  const defaults = structuredClone(
-    ADAPTERS_BY_ID[providerId].createTemplate(),
-  ) as AnyProvider;
-  const providerConfig = config.providers?.[providerId] as
-    | AnyProvider
-    | undefined;
-  const merged = mergePlainObjects(
-    defaults as Record<string, unknown>,
-    (providerConfig ?? {}) as Record<string, unknown>,
-  ) as AnyProvider;
+  const defaults = ADAPTERS_BY_ID[providerId].createTemplate() as AnyProvider;
+  const overrides = (config.providers?.[providerId] ?? {}) as AnyProvider;
+  const providerSettings = mergeExecutionSettings(
+    defaults.settings,
+    overrides.settings,
+  );
 
-  const mergedSettings = mergeSettings(config.settings, merged.settings);
-  if (mergedSettings) {
-    merged.settings = mergedSettings;
+  const resolved = {
+    ...defaults,
+    ...overrides,
+    options: mergeNestedObjects(defaults.options, overrides.options),
+  } as AnyProvider;
+
+  const effectiveSettings = mergeExecutionSettings(
+    config.settings,
+    providerSettings,
+  );
+  if (effectiveSettings) {
+    resolved.settings = effectiveSettings;
   } else {
-    delete merged.settings;
+    delete resolved.settings;
   }
 
-  return merged;
+  return resolved;
 }
 
-function mergeSettings(
-  shared: ExecutionSettings | undefined,
-  provider: ExecutionSettings | undefined,
+function mergeExecutionSettings(
+  base: ExecutionSettings | undefined,
+  overrides: ExecutionSettings | undefined,
 ): ExecutionSettings | undefined {
   const merged: ExecutionSettings = {
-    requestTimeoutMs: provider?.requestTimeoutMs ?? shared?.requestTimeoutMs,
-    retryCount: provider?.retryCount ?? shared?.retryCount,
-    retryDelayMs: provider?.retryDelayMs ?? shared?.retryDelayMs,
+    requestTimeoutMs: overrides?.requestTimeoutMs ?? base?.requestTimeoutMs,
+    retryCount: overrides?.retryCount ?? base?.retryCount,
+    retryDelayMs: overrides?.retryDelayMs ?? base?.retryDelayMs,
     researchPollIntervalMs:
-      provider?.researchPollIntervalMs ?? shared?.researchPollIntervalMs,
-    researchTimeoutMs: provider?.researchTimeoutMs ?? shared?.researchTimeoutMs,
+      overrides?.researchPollIntervalMs ?? base?.researchPollIntervalMs,
+    researchTimeoutMs: overrides?.researchTimeoutMs ?? base?.researchTimeoutMs,
     researchMaxConsecutivePollErrors:
-      provider?.researchMaxConsecutivePollErrors ??
-      shared?.researchMaxConsecutivePollErrors,
+      overrides?.researchMaxConsecutivePollErrors ??
+      base?.researchMaxConsecutivePollErrors,
   };
 
   return Object.values(merged).some((value) => value !== undefined)
     ? merged
     : undefined;
+}
+
+function mergeNestedObjects<T>(
+  base: T | undefined,
+  overrides: T | undefined,
+): T | undefined {
+  if (base === undefined) {
+    return overrides;
+  }
+  if (overrides === undefined) {
+    return base;
+  }
+  if (!isPlainObject(base) || !isPlainObject(overrides)) {
+    return overrides;
+  }
+
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(overrides)) {
+    const baseValue = result[key];
+    result[key] =
+      isPlainObject(baseValue) && isPlainObject(value)
+        ? mergeNestedObjects(baseValue, value)
+        : value;
+  }
+  return result as T;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function getMappedProviderIdForTool(
@@ -97,8 +130,11 @@ export function getProviderCapabilityStatus(
   tool?: Tool,
 ): ProviderCapabilityStatus {
   const provider = ADAPTERS_BY_ID[providerId];
-  const providerConfig = getEffectiveProviderConfig(config, providerId);
-  return provider.getCapabilityStatus(providerConfig as never, cwd, tool);
+  return provider.getCapabilityStatus(
+    getEffectiveProviderConfig(config, providerId) as never,
+    cwd,
+    tool,
+  );
 }
 
 export function isProviderCapabilityReady(
@@ -189,26 +225,4 @@ export function resolveProviderForTool(
   }
 
   return provider;
-}
-
-function mergePlainObjects<T extends Record<string, unknown>>(
-  base: T,
-  overrides: Record<string, unknown>,
-): T {
-  const result: Record<string, unknown> = { ...base };
-
-  for (const [key, value] of Object.entries(overrides)) {
-    const baseValue = result[key];
-    if (isPlainObject(baseValue) && isPlainObject(value)) {
-      result[key] = mergePlainObjects(baseValue, value);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result as T;
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
