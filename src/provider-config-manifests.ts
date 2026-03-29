@@ -69,12 +69,10 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupEmpty(config, "options");
         },
       }),
-      integerSetting<Claude>({
+      stringSetting<Claude>({
         id: "claudeMaxTurns",
         label: "Max turns",
         help: "Optional maximum number of Claude turns. Leave empty to use the SDK default.",
-        minimum: 1,
-        errorMessage: "Claude max turns must be a positive integer.",
         getValue: (config) =>
           getIntegerString(getClaudeOptions(config)?.maxTurns),
         setValue: (config, value) => {
@@ -218,7 +216,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
   },
   custom: {
     settings: [
-      jsonArraySetting<Custom>({
+      stringSetting<Custom>({
         id: "customSearchArgv",
         label: "Search argv",
         help: `Optional JSON string array for the command to run for web_search, for example ["node","./scripts/codex-search.mjs"].`,
@@ -249,7 +247,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           setCustomEnv(config, "search", value);
         },
       }),
-      jsonArraySetting<Custom>({
+      stringSetting<Custom>({
         id: "customContentsArgv",
         label: "Contents argv",
         help: "Optional JSON string array for the command to run for web_contents.",
@@ -280,7 +278,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           setCustomEnv(config, "contents", value);
         },
       }),
-      jsonArraySetting<Custom>({
+      stringSetting<Custom>({
         id: "customAnswerArgv",
         label: "Answer argv",
         help: "Optional JSON string array for the command to run for web_answer.",
@@ -311,7 +309,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           setCustomEnv(config, "answer", value);
         },
       }),
-      jsonArraySetting<Custom>({
+      stringSetting<Custom>({
         id: "customResearchArgv",
         label: "Research argv",
         help: "Optional JSON string array for the command to run for web_research.",
@@ -501,10 +499,14 @@ export const PROVIDER_CONFIG_MANIFESTS = {
         label: "Extract excerpts",
         help: "Include excerpts in Parallel extraction results. 'default' uses the SDK default.",
         values: ["default", "on", "off"],
-        getValue: (config) =>
-          getOnOffValue(
-            readBoolean(getParallelOptions(config)?.extract?.excerpts),
-          ),
+        getValue: (config) => {
+          const value = getParallelOptions(config)?.extract?.excerpts;
+          return typeof value === "boolean"
+            ? value
+              ? "on"
+              : "off"
+            : "default";
+        },
         setValue: (config, value) => {
           const options = ensureParallelOptions(config);
           options.extract = asJsonObject(options.extract) ?? {};
@@ -521,10 +523,14 @@ export const PROVIDER_CONFIG_MANIFESTS = {
         label: "Extract full content",
         help: "Include full page content in Parallel extraction results. 'default' uses the SDK default.",
         values: ["default", "on", "off"],
-        getValue: (config) =>
-          getOnOffValue(
-            readBoolean(getParallelOptions(config)?.extract?.full_content),
-          ),
+        getValue: (config) => {
+          const value = getParallelOptions(config)?.extract?.full_content;
+          return typeof value === "boolean"
+            ? value
+              ? "on"
+              : "off"
+            : "default";
+        },
         setValue: (config, value) => {
           const options = ensureParallelOptions(config);
           options.extract = asJsonObject(options.extract) ?? {};
@@ -603,15 +609,6 @@ function valuesSetting<TConfig>(
   };
 }
 
-function jsonArraySetting<TConfig>(
-  setting: Omit<ProviderTextSettingDescriptor<TConfig>, "kind">,
-): ProviderTextSettingDescriptor<TConfig> {
-  return {
-    kind: "text",
-    ...setting,
-  };
-}
-
 function apiKeySetting<TConfig extends { apiKey?: string }>() {
   return stringSetting<TConfig>({
     id: "apiKey",
@@ -653,12 +650,10 @@ function baseUrlSetting<TConfig extends { baseUrl?: string }>() {
 
 function requestSettings<TConfig extends { settings?: ExecutionSettings }>() {
   return [
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "requestTimeoutMs",
       label: "Request timeout (ms)",
       help: "Maximum time to wait for each command before failing that attempt for this provider. Leave empty to inherit the shared setting.",
-      minimum: 1,
-      errorMessage: "Request timeout must be a positive integer.",
       getValue: (config) =>
         getIntegerString(config?.settings?.requestTimeoutMs),
       setValue: (config, value) => {
@@ -671,12 +666,10 @@ function requestSettings<TConfig extends { settings?: ExecutionSettings }>() {
         cleanupEmpty(config, "settings");
       },
     }),
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "retryCount",
       label: "Retry count",
       help: "How many times to retry transient command failures for this provider. Leave empty to inherit the shared setting.",
-      minimum: 0,
-      errorMessage: "Retry count must be a non-negative integer.",
       getValue: (config) => getIntegerString(config?.settings?.retryCount),
       setValue: (config, value) => {
         assignOptionalInteger(
@@ -689,12 +682,10 @@ function requestSettings<TConfig extends { settings?: ExecutionSettings }>() {
         cleanupEmpty(config, "settings");
       },
     }),
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "retryDelayMs",
       label: "Retry delay (ms)",
       help: "Initial delay before retrying command failures for this provider. Leave empty to inherit the shared setting.",
-      minimum: 1,
-      errorMessage: "Retry delay must be a positive integer.",
       getValue: (config) => getIntegerString(config?.settings?.retryDelayMs),
       setValue: (config, value) => {
         assignOptionalInteger(
@@ -711,12 +702,10 @@ function requestSettings<TConfig extends { settings?: ExecutionSettings }>() {
 
 function researchSettings<TConfig extends { settings?: ExecutionSettings }>() {
   return [
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "researchPollIntervalMs",
       label: "Research poll interval (ms)",
       help: "How often to poll long-running research jobs for updates for this provider. Leave empty to inherit the shared setting.",
-      minimum: 1,
-      errorMessage: "Research poll interval must be a positive integer.",
       getValue: (config) =>
         getIntegerString(config?.settings?.researchPollIntervalMs),
       setValue: (config, value) => {
@@ -729,12 +718,10 @@ function researchSettings<TConfig extends { settings?: ExecutionSettings }>() {
         cleanupEmpty(config, "settings");
       },
     }),
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "researchTimeoutMs",
       label: "Research timeout (ms)",
       help: "Maximum total time to wait for research before returning a resumable timeout error for this provider. Leave empty to inherit the shared setting.",
-      minimum: 1,
-      errorMessage: "Research timeout must be a positive integer.",
       getValue: (config) =>
         getIntegerString(config?.settings?.researchTimeoutMs),
       setValue: (config, value) => {
@@ -747,12 +734,10 @@ function researchSettings<TConfig extends { settings?: ExecutionSettings }>() {
         cleanupEmpty(config, "settings");
       },
     }),
-    integerSetting<TConfig>({
+    stringSetting<TConfig>({
       id: "researchMaxConsecutivePollErrors",
       label: "Max poll errors",
       help: "How many consecutive poll failures to tolerate before stopping the local research run for this provider. Leave empty to inherit the shared setting.",
-      minimum: 1,
-      errorMessage: "Max poll errors must be a positive integer.",
       getValue: (config) =>
         getIntegerString(config?.settings?.researchMaxConsecutivePollErrors),
       setValue: (config, value) => {
@@ -766,19 +751,6 @@ function researchSettings<TConfig extends { settings?: ExecutionSettings }>() {
       },
     }),
   ] as const;
-}
-
-function integerSetting<TConfig>(
-  setting: Omit<ProviderTextSettingDescriptor<TConfig>, "kind"> & {
-    minimum: number;
-    errorMessage: string;
-  },
-): ProviderTextSettingDescriptor<TConfig> {
-  const { minimum: _minimum, errorMessage: _errorMessage, ...rest } = setting;
-  return {
-    kind: "text",
-    ...rest,
-  };
 }
 
 function assignOptionalString(
@@ -842,19 +814,8 @@ function getBooleanValue(value: boolean | undefined): string {
   return typeof value === "boolean" ? String(value) : "default";
 }
 
-function getOnOffValue(value: boolean | undefined): string {
-  if (value === undefined) {
-    return "default";
-  }
-  return value ? "on" : "off";
-}
-
 function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
-}
-
-function readBoolean(value: unknown): boolean | undefined {
-  return typeof value === "boolean" ? value : undefined;
 }
 
 function asJsonObject(value: unknown): Record<string, unknown> | undefined {
