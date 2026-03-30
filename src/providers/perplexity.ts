@@ -334,7 +334,7 @@ async function runStreamingForegroundChatTool(
 function createClient(config: Perplexity): PerplexityClient {
   const apiKey = resolveConfigValue(config.apiKey);
   if (!apiKey) {
-    throw new Error("Perplexity is missing an API key.");
+    throw new Error("is missing an API key");
   }
 
   return new PerplexityClient({

@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { ContentsResponse } from "./contents.js";
 import {
   executeResearchWithLifecycle,
+  formatErrorMessage,
   parseLocalExecutionOptions,
   type ResearchExecutionPolicy,
   resolveRequestExecutionPolicy,
   resolveResearchExecutionPolicy,
   runWithExecutionPolicy,
 } from "./execution-policy.js";
+import { formatProviderDiagnostic } from "./provider-diagnostics.js";
 import {
   EXECUTION_CONTROL_KEYS,
   type ExecutionControlKey,
@@ -29,12 +31,18 @@ export async function executeOperationPlan<
 ): Promise<TResult> {
   if (plan.deliveryMode !== "background-research") {
     const requestPolicy = resolveForegroundExecutionPolicy(plan, options);
-    return await runWithExecutionPolicy(
-      `${plan.providerLabel} ${plan.capability} request`,
-      plan.execute,
-      requestPolicy,
-      context,
-    );
+    try {
+      return await runWithExecutionPolicy(
+        `${plan.providerLabel} ${plan.capability} request`,
+        plan.execute,
+        requestPolicy,
+        context,
+      );
+    } catch (error) {
+      throw new Error(
+        formatProviderDiagnostic(plan.providerLabel, formatErrorMessage(error)),
+      );
+    }
   }
 
   const researchPolicy = resolveBackgroundResearchExecutionPolicy(

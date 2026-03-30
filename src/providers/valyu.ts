@@ -186,7 +186,7 @@ export const valyuAdapter: ValyuAdapter = {
 
     const response = await client.search(query, options as never);
     if (!response.success) {
-      throw new Error(response.error || "Valyu search failed.");
+      throw new Error(response.error || "search failed");
     }
 
     return {
@@ -217,7 +217,7 @@ export const valyuAdapter: ValyuAdapter = {
         : response;
 
     if (!finalResponse.success) {
-      throw new Error(finalResponse.error || "Valyu contents failed.");
+      throw new Error(finalResponse.error || "contents failed");
     }
 
     const resultsByUrl = new Map(
@@ -273,7 +273,7 @@ export const valyuAdapter: ValyuAdapter = {
       throw new Error(
         "error" in response && typeof response.error === "string"
           ? response.error
-          : "Valyu answer failed.",
+          : "answer failed",
       );
     }
 
@@ -314,7 +314,7 @@ export const valyuAdapter: ValyuAdapter = {
     } as never);
 
     if (!task.success || !task.deepresearch_id) {
-      throw new Error(task.error || "Valyu deep research creation failed.");
+      throw new Error(task.error || "deep research creation failed");
     }
 
     return { id: task.deepresearch_id };
@@ -330,7 +330,7 @@ export const valyuAdapter: ValyuAdapter = {
     const result = await client.deepresearch.status(id);
 
     if (!result.success) {
-      throw new Error(result.error || "Valyu deep research failed.");
+      throw new Error(result.error || "deep research failed");
     }
 
     if (result.status === "completed") {
@@ -366,14 +366,14 @@ export const valyuAdapter: ValyuAdapter = {
     if (result.status === "failed") {
       return {
         status: "failed",
-        error: result.error || "Valyu deep research failed.",
+        error: result.error || "research failed",
       };
     }
 
     if (result.status === "cancelled") {
       return {
         status: "cancelled",
-        error: result.error || "Valyu deep research was canceled.",
+        error: result.error || "research was canceled",
       };
     }
 
@@ -384,7 +384,7 @@ export const valyuAdapter: ValyuAdapter = {
 function createClient(config: Valyu): ValyuClient {
   const apiKey = resolveConfigValue(config.apiKey);
   if (!apiKey) {
-    throw new Error("Valyu is missing an API key.");
+    throw new Error("is missing an API key");
   }
 
   return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));

@@ -133,7 +133,7 @@ export async function runCliJsonCommand<TOutput>({
 function normalizeArgv(command: CustomCommandConfig): string[] {
   const argv = command.argv?.filter((entry) => entry.trim().length > 0) ?? [];
   if (argv.length === 0) {
-    throw new Error("Custom command is missing argv.");
+    throw new Error("command is missing argv");
   }
   return argv;
 }

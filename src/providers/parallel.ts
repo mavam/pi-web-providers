@@ -187,7 +187,7 @@ export const parallelAdapter: ParallelAdapter = {
 function createClient(config: Parallel): ParallelClient {
   const apiKey = resolveConfigValue(config.apiKey);
   if (!apiKey) {
-    throw new Error("Parallel is missing an API key.");
+    throw new Error("is missing an API key");
   }
 
   return new ParallelClient({

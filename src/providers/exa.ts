@@ -320,14 +320,14 @@ export const exaAdapter: ExaAdapter = {
     if (result.status === "failed") {
       return {
         status: "failed",
-        error: result.error ?? "Exa research failed.",
+        error: result.error ?? "research failed",
       };
     }
 
     if (result.status === "canceled") {
       return {
         status: "cancelled",
-        error: "Exa research was canceled.",
+        error: "research was canceled",
       };
     }
 
@@ -338,7 +338,7 @@ export const exaAdapter: ExaAdapter = {
 function createClient(config: Exa): ExaClient {
   const apiKey = resolveConfigValue(config.apiKey);
   if (!apiKey) {
-    throw new Error("Exa is missing an API key.");
+    throw new Error("is missing an API key");
   }
 
   return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));

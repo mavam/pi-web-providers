@@ -297,17 +297,17 @@ function hasConfiguredReference(reference: string | undefined): boolean {
 }
 
 function parseOutput(raw: string): CodexOutput {
-  const json = extractJsonObject(raw, "Codex");
+  const json = extractJsonObject(raw);
   const parsed = codexOutputSchema.safeParse(json);
   if (!parsed.success) {
-    throw new Error("Codex returned invalid JSON output.");
+    throw new Error("returned invalid JSON output");
   }
   return parsed.data;
 }
 
-function extractJsonObject(raw: string, providerLabel: string): unknown {
+function extractJsonObject(raw: string): unknown {
   if (!raw.trim()) {
-    throw new Error(`${providerLabel} returned an empty response.`);
+    throw new Error("returned an empty response");
   }
 
   try {
@@ -315,12 +315,12 @@ function extractJsonObject(raw: string, providerLabel: string): unknown {
   } catch {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
-      throw new Error(`${providerLabel} returned invalid JSON output.`);
+      throw new Error("returned invalid JSON output");
     }
     try {
       return JSON.parse(match[0]);
     } catch {
-      throw new Error(`${providerLabel} returned invalid JSON output.`);
+      throw new Error("returned invalid JSON output");
     }
   }
 }

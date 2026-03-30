@@ -1,3 +1,7 @@
+import {
+  formatProviderDiagnostic,
+  formatResearchTerminalDiagnostic,
+} from "./provider-diagnostics.js";
 import type {
   ExecutionSettings,
   ProviderContext,
@@ -336,7 +340,11 @@ export async function executeResearchWithLifecycle({
 
         if (result.status === "failed" || result.status === "cancelled") {
           throw new NonResumableResearchError(
-            result.error || `${providerLabel} research ${result.status}.`,
+            formatResearchTerminalDiagnostic(
+              providerLabel,
+              result.status,
+              result.error,
+            ),
           );
         }
       } catch (error) {
@@ -377,7 +385,9 @@ export async function executeResearchWithLifecycle({
         throw buildUnknownResearchStartError(error);
       }
     }
-    throw error;
+    throw new Error(
+      formatProviderDiagnostic(providerLabel, formatErrorMessage(error)),
+    );
   } finally {
     cleanupLifecycle();
   }

@@ -144,7 +144,9 @@ describe("provider tool output", () => {
       "1. [Exa SDK](<https://exa.ai/sdk>)",
     );
     expect(result.content[0]?.text).toContain('Query 2: "exa pricing"');
-    expect(result.content[0]?.text).toContain("Search failed: rate limited");
+    expect(result.content[0]?.text).toContain(
+      "Search failed: Exa: rate limited.",
+    );
     expect(result.details).toEqual({
       tool: "web_search",
       provider: "exa",
@@ -250,7 +252,7 @@ describe("provider tool output", () => {
         ],
       }),
     ).rejects.toThrow(
-      'All 2 web_search queries failed: 1. "exa sdk" — timeout; 2. "exa pricing" — rate limited',
+      'All 2 web_search queries failed: 1. "exa sdk" — Exa: timeout.; 2. "exa pricing" — Exa: rate limited.',
     );
   });
 
@@ -414,7 +416,9 @@ describe("provider tool output", () => {
     expect(result.content[0]?.text).toContain(
       'Question 2: "How does Tenzir help with SIEM migration?"',
     );
-    expect(result.content[0]?.text).toContain("Answer failed: rate limited");
+    expect(result.content[0]?.text).toContain(
+      "Answer failed: Gemini: rate limited.",
+    );
     expect(result.details).toEqual({
       tool: "web_answer",
       provider: "gemini",
@@ -467,7 +471,7 @@ describe("provider tool output", () => {
         ],
       }),
     ).rejects.toThrow(
-      'All 2 web_answer queries failed: 1. "What are common Tenzir use cases?" — timeout; 2. "How does Tenzir help with SIEM migratio…" — rate limited',
+      'All 2 web_answer queries failed: 1. "What are common Tenzir use cases?" — Gemini: timeout.; 2. "How does Tenzir help with SIEM migratio…" — Gemini: rate limited.',
     );
   });
 

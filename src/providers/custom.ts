@@ -250,7 +250,7 @@ async function runCommand<TOutput>({
 }): Promise<TOutput> {
   const command = getCommandConfig(config, capability);
   if (!command) {
-    throw new Error(`Custom has no command configured for ${capability}.`);
+    throw new Error(`has no command configured for ${capability}`);
   }
 
   return await runCliJsonCommand<TOutput>({
@@ -301,12 +301,12 @@ function parseSearchResponse(
 ): SearchResponse {
   const parsed = jsonObjectSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error("Custom search output must be a JSON object.");
+    throw new Error("search output must be a JSON object");
   }
 
   const response = searchResponseSchema.safeParse(parsed.data);
   if (!response.success) {
-    throw new Error("Custom search output must include a 'results' array.");
+    throw new Error("search output must include a 'results' array");
   }
 
   return {
@@ -320,9 +320,7 @@ function parseSearchResponse(
 function parseSearchResult(entry: unknown, index: number) {
   const parsed = jsonObjectSchema.safeParse(entry);
   if (!parsed.success) {
-    throw new Error(
-      `Custom search result at index ${index} must be a JSON object.`,
-    );
+    throw new Error(`search result at index ${index} must be a JSON object`);
   }
 
   const value = parsed.data;
@@ -343,7 +341,7 @@ function parseContentsResponse(
 ): ContentsResponse {
   const parsed = jsonObjectSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error("Custom contents output must be a JSON object.");
+    throw new Error("contents output must be a JSON object");
   }
 
   const answersResponse = contentsAnswersResponseSchema.safeParse(parsed.data);
@@ -370,16 +368,14 @@ function parseContentsResponse(
   }
 
   throw new Error(
-    "Custom contents output must include an 'answers' array (or legacy 'text' for single-URL calls).",
+    "contents output must include an 'answers' array (or legacy 'text' for single-URL calls)",
   );
 }
 
 function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
   const parsed = jsonObjectSchema.safeParse(entry);
   if (!parsed.success) {
-    throw new Error(
-      `Custom contents answer at index ${index} must be a JSON object.`,
-    );
+    throw new Error(`contents answer at index ${index} must be a JSON object`);
   }
 
   const value = parsed.data;
@@ -397,7 +393,7 @@ function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
 
   if (content === undefined && error === undefined) {
     throw new Error(
-      `Custom contents answer at index ${index} must include 'content' or 'error'.`,
+      `contents answer at index ${index} must include 'content' or 'error'`,
     );
   }
 
@@ -416,7 +412,7 @@ function parseToolOutput(
 ): ToolOutput {
   const parsed = toolOutputSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error("Custom output must be a JSON object.");
+    throw new Error("output must be a JSON object");
   }
 
   const metadata = readLenientJsonObject(parsed.data.metadata);
@@ -439,7 +435,7 @@ function readRequiredJsonObject(
 
   const parsed = jsonObjectSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`Custom output field '${field}' must be a JSON object.`);
+    throw new Error(`output field '${field}' must be a JSON object`);
   }
   return parsed.data;
 }
@@ -454,7 +450,7 @@ function readLenientJsonObject(
 function readRequiredString(value: unknown, field: string): string {
   const parsed = requiredStringSchema.safeParse(value);
   if (!parsed.success) {
-    throw new Error(`Custom output field '${field}' must be a string.`);
+    throw new Error(`output field '${field}' must be a string`);
   }
   return parsed.data;
 }

@@ -309,12 +309,12 @@ export const claudeAdapter: ClaudeAdapter = {
     }
 
     if (!finalResult) {
-      throw new Error("Claude returned no result.");
+      throw new Error("returned no result");
     }
     if (finalResult.subtype !== "success") {
       throw new Error(
         finalResult.errors.join("\n") ||
-          `Claude query failed (${finalResult.subtype}).`,
+          `query failed (${finalResult.subtype})`,
       );
     }
 
@@ -433,7 +433,7 @@ function parseClaudeAuthStatus(raw: string): ClaudeAuthStatus {
 
 function parseStructuredOutput<T>(result: SDKResultMessage): T {
   if (result.subtype !== "success") {
-    throw new Error("Claude query did not succeed.");
+    throw new Error("query did not succeed");
   }
 
   if (result.structured_output !== undefined) {
@@ -441,7 +441,7 @@ function parseStructuredOutput<T>(result: SDKResultMessage): T {
   }
 
   if (!result.result.trim()) {
-    throw new Error("Claude returned an empty response.");
+    throw new Error("returned an empty response");
   }
 
   try {
@@ -449,7 +449,7 @@ function parseStructuredOutput<T>(result: SDKResultMessage): T {
   } catch {
     const match = result.result.match(/\{[\s\S]*\}/);
     if (!match) {
-      throw new Error("Claude returned invalid JSON output.");
+      throw new Error("returned invalid JSON output");
     }
     return JSON.parse(match[0]) as T;
   }
@@ -541,22 +541,22 @@ function parseClaudeAnswerOutput(value: unknown): ClaudeAnswerOutput {
 
 function readArray(value: unknown, key: string): unknown[] {
   if (typeof value !== "object" || value === null || !(key in value)) {
-    throw new Error(`Claude output is missing '${key}'.`);
+    throw new Error(`output is missing '${key}'`);
   }
   const entry = (value as Record<string, unknown>)[key];
   if (!Array.isArray(entry)) {
-    throw new Error(`Claude output field '${key}' must be an array.`);
+    throw new Error(`output field '${key}' must be an array`);
   }
   return entry;
 }
 
 function readString(value: unknown, key: string): string {
   if (typeof value !== "object" || value === null || !(key in value)) {
-    throw new Error(`Claude output is missing '${key}'.`);
+    throw new Error(`output is missing '${key}'`);
   }
   const entry = (value as Record<string, unknown>)[key];
   if (typeof entry !== "string") {
-    throw new Error(`Claude output field '${key}' must be a string.`);
+    throw new Error(`output field '${key}' must be a string`);
   }
   return entry;
 }

@@ -144,7 +144,7 @@ describe("web_search renderer", () => {
     const summary = renderComponentText(
       __test__.renderCollapsedSearchSummary(
         {} as never,
-        '## Query 1: "exa sdk"\n\n1. [Exa SDK](<https://exa.ai/sdk>)\n\n## Query 2: "exa pricing"\n\nSearch failed: rate limited',
+        '## Query 1: "exa sdk"\n\n1. [Exa SDK](<https://exa.ai/sdk>)\n\n## Query 2: "exa pricing"\n\nSearch failed: Exa: rate limited.',
         createTheme(),
       ),
       120,

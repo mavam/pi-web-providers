@@ -610,7 +610,7 @@ describe("GeminiAdapter research", () => {
 
     expect(result).toEqual({
       status: "failed",
-      error: "Gemini research failed.",
+      error: "research failed",
     });
   });
 });

@@ -296,14 +296,14 @@ export const geminiAdapter: GeminiAdapter = {
     if (interaction.status === "failed") {
       return {
         status: "failed",
-        error: "Gemini research failed.",
+        error: "research failed",
       };
     }
 
     if (interaction.status === "cancelled") {
       return {
         status: "cancelled",
-        error: "Gemini research cancelled.",
+        error: "research was canceled",
       };
     }
 
@@ -313,7 +313,7 @@ export const geminiAdapter: GeminiAdapter = {
   createClient(config: Gemini): GoogleGenAI {
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {
-      throw new Error("Gemini is missing an API key.");
+      throw new Error("is missing an API key");
     }
 
     return new GoogleGenAI({

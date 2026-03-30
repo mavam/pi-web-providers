@@ -320,7 +320,7 @@ describe("execution policy", () => {
         start: vi.fn(),
         poll: vi.fn().mockResolvedValue({
           status: "failed" as const,
-          error: "Gemini research failed.",
+          error: "research failed",
         }),
       }),
     ).rejects.toThrow("Gemini research failed.");
@@ -342,7 +342,7 @@ describe("execution policy", () => {
         start: vi.fn(),
         poll: vi.fn().mockResolvedValue({
           status: "failed" as const,
-          error: "Gemini research failed.",
+          error: "research failed",
         }),
       }).catch((error) => {
         expect((error as Error).message).not.toContain("options.resumeId");
@@ -372,7 +372,7 @@ describe("execution policy", () => {
         expect((error as Error).message).not.toContain("options.resumeId");
         throw error;
       }),
-    ).rejects.toThrow("404 not found");
+    ).rejects.toThrow("Gemini: 404 not found.");
   });
 
   it("turns total research timeouts into resumable errors even while sleeping between polls", async () => {
@@ -534,15 +534,11 @@ describe("execution policy", () => {
         "research-123",
         expect.objectContaining({ cwd: process.cwd() }),
       );
-      expect(progress).toContain(
-        "Resuming research via Gemini: research-123",
-      );
+      expect(progress).toContain("Resuming research via Gemini: research-123");
       expect(progress).toContain(
         "Research via Gemini: in_progress (0s elapsed)",
       );
-      expect(progress).toContain(
-        "Research via Gemini: completed (5s elapsed)",
-      );
+      expect(progress).toContain("Research via Gemini: completed (5s elapsed)");
     } finally {
       vi.useRealTimers();
     }
