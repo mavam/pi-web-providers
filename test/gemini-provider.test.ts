@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { GeminiAdapter } from "../src/providers/gemini.js";
+import { geminiAdapter } from "../src/providers/gemini.js";
 import type { Gemini, ProviderContext } from "../src/types.js";
 
 afterEach(() => {
@@ -479,7 +479,7 @@ describe("GeminiAdapter answer", () => {
 });
 
 it("does not build a contents plan", () => {
-  const provider = new GeminiAdapter();
+  const provider = geminiAdapter;
 
   expect(
     provider.buildPlan(
@@ -615,10 +615,11 @@ describe("GeminiAdapter research", () => {
   });
 });
 
-function createProvider(client: unknown): GeminiAdapter {
-  const provider = new GeminiAdapter() as any;
-  provider.createClient = () => client;
-  return provider as GeminiAdapter;
+function createProvider(client: unknown) {
+  return {
+    ...geminiAdapter,
+    createClient: () => client,
+  } as typeof geminiAdapter;
 }
 
 function createConfig(): Gemini {

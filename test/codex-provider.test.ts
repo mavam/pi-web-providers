@@ -14,7 +14,7 @@ vi.mock("@openai/codex-sdk", () => ({
   }),
 }));
 
-import { CodexAdapter } from "../src/providers/codex.js";
+import { codexAdapter } from "../src/providers/codex.js";
 
 afterEach(() => {
   codexCtorMock.mockClear();
@@ -24,7 +24,7 @@ afterEach(() => {
 
 describe("CodexAdapter", () => {
   it("attaches config settings to Codex operation plans", () => {
-    const provider = new CodexAdapter();
+    const provider = codexAdapter;
     const plan = provider.buildPlan(
       {
         capability: "search",
@@ -75,7 +75,7 @@ describe("CodexAdapter", () => {
       }),
     });
 
-    const provider = new CodexAdapter();
+    const provider = codexAdapter;
     const response = await provider.search(
       "latest docs",
       5,

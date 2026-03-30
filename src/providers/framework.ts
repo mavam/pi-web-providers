@@ -18,7 +18,6 @@ import type {
   ResearchRequest,
   SearchRequest,
   SearchResponse,
-  SingleProviderPlan,
   ToolOutput,
 } from "../types.js";
 
@@ -31,7 +30,7 @@ type ForegroundHandler<
   TRequest extends ProviderRequest,
   TResult extends SearchResponse | ContentsResponse | ToolOutput,
 > = {
-  deliveryMode?: SingleProviderPlan<TResult>["deliveryMode"];
+  deliveryMode: "silent-foreground" | "streaming-foreground";
   traits?: Omit<ProviderPlanTraits, "settings">;
   execute: (
     request: TRequest,

@@ -28,11 +28,33 @@ type PerplexityForegroundChunk = {
   citations?: Array<string | null> | null;
 };
 
-export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
-  readonly id: "perplexity" = "perplexity";
-  readonly label = "Perplexity";
-  readonly docsUrl = "https://docs.perplexity.ai/docs/sdk/overview.md";
-  readonly tools = ["search", "answer", "research"] as const;
+type PerplexityAdapter = ProviderAdapter<Perplexity> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Perplexity,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  answer(
+    query: string,
+    config: Perplexity,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  research(
+    input: string,
+    config: Perplexity,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+};
+
+export const perplexityAdapter: PerplexityAdapter = {
+  id: "perplexity",
+  label: "Perplexity",
+  docsUrl: "https://docs.perplexity.ai/docs/sdk/overview.md",
+  tools: ["search", "answer", "research"] as const,
 
   createTemplate(): Perplexity {
     return {
@@ -46,20 +68,20 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
         },
       },
     };
-  }
+  },
 
   getCapabilityStatus(
     config: Perplexity | undefined,
   ): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  }
+  },
 
   buildPlan(request: ProviderRequest, config: Perplexity) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: perplexityAdapter.id,
+      providerLabel: perplexityAdapter.label,
       handlers: {
         search: {
           deliveryMode: "silent-foreground",
@@ -68,7 +90,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
             providerConfig: Perplexity,
             context: ProviderContext,
           ) =>
-            this.search(
+            perplexityAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
@@ -83,7 +105,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
             providerConfig: Perplexity,
             context: ProviderContext,
           ) =>
-            this.answer(
+            perplexityAdapter.answer(
               answerRequest.query,
               providerConfig,
               context,
@@ -108,7 +130,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
             providerConfig: Perplexity,
             context: ProviderContext,
           ) =>
-            this.research(
+            perplexityAdapter.research(
               researchRequest.input,
               providerConfig,
               context,
@@ -117,7 +139,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
         },
       },
     });
-  }
+  },
 
   async search(
     query: string,
@@ -126,10 +148,9 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
+    const client = createClient(config);
     const request = {
-      ...(stripLocalExecutionOptions(asJsonObject(providerOptions?.search)) ??
+      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
         {}),
       ...(options ?? {}),
       query,
@@ -142,7 +163,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     );
 
     return {
-      provider: this.id,
+      provider: perplexityAdapter.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title,
         url: result.url,
@@ -158,7 +179,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
             : undefined,
       })),
     };
-  }
+  },
 
   async answer(
     query: string,
@@ -166,7 +187,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    return this.runSilentForegroundChatTool(
+    return runSilentForegroundChatTool(
       query,
       config,
       context,
@@ -174,7 +195,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
       "Answer",
       options,
     );
-  }
+  },
 
   async research(
     input: string,
@@ -182,7 +203,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    return this.runStreamingForegroundChatTool(
+    return runStreamingForegroundChatTool(
       input,
       config,
       context,
@@ -190,138 +211,136 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
       "Research",
       options,
     );
+  },
+};
+
+async function runSilentForegroundChatTool(
+  input: string,
+  config: Perplexity,
+  context: ProviderContext,
+  fallbackModel: string,
+  label: "Answer" | "Research",
+  options?: Record<string, unknown>,
+  isResearch = false,
+): Promise<ToolOutput> {
+  const client = createClient(config);
+  const defaults =
+    stripLocalExecutionOptions(
+      isResearch
+        ? asJsonObject(config.options?.research)
+        : asJsonObject(config.options?.answer),
+    ) ?? {};
+  const request = {
+    ...defaults,
+    ...(options ?? {}),
+    messages: [{ role: "user", content: input }],
+    model:
+      resolveModel((options ?? {}).model, defaults.model, fallbackModel) ??
+      fallbackModel,
+    stream: false,
+  };
+
+  const response = await client.chat.completions.create(
+    request as never,
+    buildRequestOptions(context),
+  );
+  const content = extractMessageText(response.choices[0]?.message?.content);
+  const sources = dedupeSources(extractSources(response));
+
+  const lines: string[] = [];
+  lines.push(content || `No ${label.toLowerCase()} returned.`);
+
+  if (sources.length > 0) {
+    lines.push("");
+    lines.push("Sources:");
+    for (const [index, source] of sources.entries()) {
+      lines.push(`${index + 1}. ${source.title}`);
+      lines.push(`   ${source.url}`);
+    }
   }
 
-  private async runSilentForegroundChatTool(
-    input: string,
-    config: Perplexity,
-    context: ProviderContext,
-    fallbackModel: string,
-    label: "Answer" | "Research",
-    options?: Record<string, unknown>,
-    isResearch = false,
-  ): Promise<ToolOutput> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
-    const defaults =
-      stripLocalExecutionOptions(
-        isResearch
-          ? asJsonObject(providerOptions?.research)
-          : asJsonObject(providerOptions?.answer),
-      ) ?? {};
-    const request = {
-      ...defaults,
-      ...(options ?? {}),
-      messages: [{ role: "user", content: input }],
-      model:
-        resolveModel((options ?? {}).model, defaults.model, fallbackModel) ??
-        fallbackModel,
-      stream: false,
-    };
+  return {
+    provider: perplexityAdapter.id,
+    text: lines.join("\n").trimEnd(),
+    itemCount: sources.length,
+  };
+}
 
-    const response = await client.chat.completions.create(
-      request as never,
-      buildRequestOptions(context),
-    );
-    const content = extractMessageText(response.choices[0]?.message?.content);
-    const sources = dedupeSources(extractSources(response));
+// Perplexity deep research currently fits streaming foreground mode: pi can
+// surface incremental text while the request is active, but there is no
+// durable job id to resume later.
+async function runStreamingForegroundChatTool(
+  input: string,
+  config: Perplexity,
+  context: ProviderContext,
+  fallbackModel: string,
+  label: "Answer" | "Research",
+  options?: Record<string, unknown>,
+): Promise<ToolOutput> {
+  const client = createClient(config);
+  const defaults =
+    stripLocalExecutionOptions(asJsonObject(config.options?.research)) ?? {};
+  const request = {
+    ...defaults,
+    ...(options ?? {}),
+    messages: [{ role: "user", content: input }],
+    model:
+      resolveModel((options ?? {}).model, defaults.model, fallbackModel) ??
+      fallbackModel,
+    stream: true as const,
+  };
 
-    const lines: string[] = [];
-    lines.push(content || `No ${label.toLowerCase()} returned.`);
+  const stream = (await client.chat.completions.create(
+    request as never,
+    buildRequestOptions(context),
+  )) as unknown as AsyncIterable<PerplexityForegroundChunk>;
 
-    if (sources.length > 0) {
-      lines.push("");
-      lines.push("Sources:");
-      for (const [index, source] of sources.entries()) {
-        lines.push(`${index + 1}. ${source.title}`);
-        lines.push(`   ${source.url}`);
-      }
+  let partialText = "";
+  let lastChunk: PerplexityForegroundChunk | undefined;
+  const sources: Array<{ title: string; url: string }> = [];
+
+  for await (const chunk of stream) {
+    lastChunk = chunk;
+    const deltaText = extractDeltaText(chunk.choices[0]?.delta?.content);
+    if (deltaText) {
+      partialText = `${partialText}${deltaText}`;
     }
-
-    return {
-      provider: this.id,
-      text: lines.join("\n").trimEnd(),
-      itemCount: sources.length,
-    };
+    sources.push(...extractSources(chunk));
   }
 
-  // Perplexity deep research currently fits streaming foreground mode: pi can
-  // surface incremental text while the request is active, but there is no
-  // durable job id to resume later.
-  private async runStreamingForegroundChatTool(
-    input: string,
-    config: Perplexity,
-    context: ProviderContext,
-    fallbackModel: string,
-    label: "Answer" | "Research",
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(providerOptions?.research)) ?? {};
-    const request = {
-      ...defaults,
-      ...(options ?? {}),
-      messages: [{ role: "user", content: input }],
-      model:
-        resolveModel((options ?? {}).model, defaults.model, fallbackModel) ??
-        fallbackModel,
-      stream: true as const,
-    };
+  const finalText =
+    partialText.trim() ||
+    extractMessageText(lastChunk?.choices?.[0]?.message?.content) ||
+    `No ${label.toLowerCase()} returned.`;
+  const dedupedSources = dedupeSources(sources);
+  const lines: string[] = [finalText];
 
-    const stream = (await client.chat.completions.create(
-      request as never,
-      buildRequestOptions(context),
-    )) as unknown as AsyncIterable<PerplexityForegroundChunk>;
-
-    let partialText = "";
-    let lastChunk: PerplexityForegroundChunk | undefined;
-    const sources: Array<{ title: string; url: string }> = [];
-
-    for await (const chunk of stream) {
-      lastChunk = chunk;
-      const deltaText = extractDeltaText(chunk.choices[0]?.delta?.content);
-      if (deltaText) {
-        partialText = `${partialText}${deltaText}`;
-      }
-      sources.push(...extractSources(chunk));
+  if (dedupedSources.length > 0) {
+    lines.push("");
+    lines.push("Sources:");
+    for (const [index, source] of dedupedSources.entries()) {
+      lines.push(`${index + 1}. ${source.title}`);
+      lines.push(`   ${source.url}`);
     }
-
-    const finalText =
-      partialText.trim() ||
-      extractMessageText(lastChunk?.choices?.[0]?.message?.content) ||
-      `No ${label.toLowerCase()} returned.`;
-    const dedupedSources = dedupeSources(sources);
-    const lines: string[] = [finalText];
-
-    if (dedupedSources.length > 0) {
-      lines.push("");
-      lines.push("Sources:");
-      for (const [index, source] of dedupedSources.entries()) {
-        lines.push(`${index + 1}. ${source.title}`);
-        lines.push(`   ${source.url}`);
-      }
-    }
-
-    return {
-      provider: this.id,
-      text: lines.join("\n").trimEnd(),
-      itemCount: dedupedSources.length,
-    };
   }
 
-  private createClient(config: Perplexity): PerplexityClient {
-    const apiKey = resolveConfigValue(config.apiKey);
-    if (!apiKey) {
-      throw new Error("Perplexity is missing an API key.");
-    }
+  return {
+    provider: perplexityAdapter.id,
+    text: lines.join("\n").trimEnd(),
+    itemCount: dedupedSources.length,
+  };
+}
 
-    return new PerplexityClient({
-      apiKey,
-      baseURL: resolveConfigValue(config.baseUrl),
-    });
+function createClient(config: Perplexity): PerplexityClient {
+  const apiKey = resolveConfigValue(config.apiKey);
+  if (!apiKey) {
+    throw new Error("Perplexity is missing an API key.");
   }
+
+  return new PerplexityClient({
+    apiKey,
+    baseURL: resolveConfigValue(config.baseUrl),
+  });
 }
 
 function resolveModel(

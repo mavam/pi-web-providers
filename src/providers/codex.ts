@@ -48,11 +48,21 @@ const codexOutputSchema = z.object({
 
 type CodexOutput = z.infer<typeof codexOutputSchema>;
 
-export class CodexAdapter implements ProviderAdapter<Codex> {
-  readonly id: "codex" = "codex";
-  readonly label = "Codex";
-  readonly docsUrl = "https://github.com/openai/codex/tree/main/sdk/typescript";
-  readonly tools = ["search"] as const;
+type CodexAdapter = ProviderAdapter<Codex> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Codex,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+};
+
+export const codexAdapter: CodexAdapter = {
+  id: "codex",
+  label: "Codex",
+  docsUrl: "https://github.com/openai/codex/tree/main/sdk/typescript",
+  tools: ["search"] as const,
 
   createTemplate(): Codex {
     return {
@@ -62,13 +72,13 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
         webSearchMode: "live",
       },
     };
-  }
+  },
 
   getCapabilityStatus(
     config: Codex | undefined,
     _cwd: string,
   ): ProviderCapabilityStatus {
-    const effectiveConfig = config ?? this.createTemplate();
+    const effectiveConfig = config ?? codexAdapter.createTemplate();
     try {
       new CodexClient({
         codexPathOverride: effectiveConfig.codexPath,
@@ -84,14 +94,14 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
       return { state: "missing_auth" };
     }
     return { state: "ready" };
-  }
+  },
 
   buildPlan(request: ProviderRequest, config: Codex) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: codexAdapter.id,
+      providerLabel: codexAdapter.label,
       handlers: {
         search: {
           deliveryMode: "silent-foreground",
@@ -100,7 +110,7 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
             providerConfig: Codex,
             context: ProviderContext,
           ) =>
-            this.search(
+            codexAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
@@ -110,7 +120,7 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
         },
       },
     });
-  }
+  },
 
   async search(
     query: string,
@@ -164,15 +174,15 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
     const parsed = parseOutput(finalResponse);
 
     return {
-      provider: this.id,
+      provider: codexAdapter.id,
       results: parsed.sources.slice(0, maxResults).map((source) => ({
         title: source.title.trim(),
         url: source.url.trim(),
         snippet: trimSnippet(source.snippet),
       })),
     };
-  }
-}
+  },
+};
 
 function buildCodexSearchThreadOptions(
   config: Codex,

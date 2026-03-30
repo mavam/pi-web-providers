@@ -23,7 +23,7 @@ vi.mock("@perplexity-ai/perplexity_ai", () => ({
   }),
 }));
 
-import { PerplexityAdapter } from "../src/providers/perplexity.js";
+import { perplexityAdapter } from "../src/providers/perplexity.js";
 
 afterEach(() => {
   delete process.env.PERPLEXITY_API_KEY;
@@ -47,7 +47,7 @@ describe("PerplexityAdapter", () => {
       ],
     });
 
-    const provider = new PerplexityAdapter();
+    const provider = perplexityAdapter;
     const response = await provider.search(
       "government policies on renewable energy",
       5,
@@ -115,7 +115,7 @@ describe("PerplexityAdapter", () => {
       ],
     });
 
-    const provider = new PerplexityAdapter();
+    const provider = perplexityAdapter;
     const response = await provider.answer(
       "What changed?",
       {
@@ -176,7 +176,7 @@ describe("PerplexityAdapter", () => {
       },
     });
 
-    const provider = new PerplexityAdapter();
+    const provider = perplexityAdapter;
     const response = await provider.research(
       "Investigate the topic",
       {
@@ -217,7 +217,7 @@ describe("PerplexityAdapter", () => {
       citations: ["https://example.com/fallback"],
     });
 
-    const provider = new PerplexityAdapter();
+    const provider = perplexityAdapter;
     const response = await provider.answer(
       "What changed?",
       {

@@ -75,16 +75,39 @@ interface ClaudeAnswerOutput {
   }>;
 }
 
-export class ClaudeAdapter implements ProviderAdapter<Claude> {
-  readonly id: "claude" = "claude";
-  readonly label = "Claude";
-  readonly docsUrl =
-    "https://github.com/anthropics/claude-agent-sdk-typescript";
-  readonly tools = ["search", "answer"] as const;
+type ClaudeAdapter = ProviderAdapter<Claude> & {
+  search(
+    queryText: string,
+    maxResults: number,
+    config: Claude,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  answer(
+    queryText: string,
+    config: Claude,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  runStructuredQuery<T>(args: {
+    prompt: string;
+    schema: Record<string, unknown>;
+    tools: string[];
+    config: Claude;
+    context: ProviderContext;
+    options: Record<string, unknown> | undefined;
+  }): Promise<T>;
+};
+
+export const claudeAdapter: ClaudeAdapter = {
+  id: "claude",
+  label: "Claude",
+  docsUrl: "https://github.com/anthropics/claude-agent-sdk-typescript",
+  tools: ["search", "answer"] as const,
 
   createTemplate(): Claude {
     return {};
-  }
+  },
 
   getCapabilityStatus(
     config: Claude | undefined,
@@ -99,7 +122,7 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
       return { state: "missing_auth" };
     }
     return { state: "ready" };
-  }
+  },
 
   buildPlan(request: ProviderRequest, config: Claude) {
     return buildProviderPlan({
@@ -139,7 +162,7 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
         },
       },
     });
-  }
+  },
 
   async search(
     queryText: string,
@@ -177,7 +200,7 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
         snippet: trimSnippet(source.snippet),
       })),
     };
-  }
+  },
 
   async answer(
     queryText: string,
@@ -222,9 +245,9 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
       text: lines.join("\n").trimEnd(),
       itemCount: output.sources.length,
     };
-  }
+  },
 
-  private async runStructuredQuery<T>({
+  async runStructuredQuery<T>({
     prompt,
     schema,
     tools,
@@ -296,8 +319,8 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
     }
 
     return parseStructuredOutput<T>(finalResult);
-  }
-}
+  },
+};
 
 interface ClaudeAuthStatus {
   loggedIn: boolean;

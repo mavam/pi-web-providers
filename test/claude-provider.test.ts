@@ -21,7 +21,7 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
 }));
 
 import {
-  ClaudeAdapter,
+  claudeAdapter,
   resetClaudeProviderCachesForTests,
 } from "../src/providers/claude.js";
 
@@ -31,11 +31,11 @@ afterEach(() => {
   resetClaudeProviderCachesForTests();
 });
 
-describe("ClaudeAdapter", () => {
+describe("claudeAdapter", () => {
   it("reports Claude as unavailable when auth status is logged out", () => {
     execFileSyncMock.mockImplementation(mockLoggedOutClaudeStatus);
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
 
     expect(
       provider.getCapabilityStatus(
@@ -53,7 +53,7 @@ describe("ClaudeAdapter", () => {
   it("reports Claude as available when auth is available", () => {
     execFileSyncMock.mockImplementation(mockClaudeAvailable);
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
 
     expect(
       provider.getCapabilityStatus(
@@ -76,12 +76,12 @@ describe("ClaudeAdapter", () => {
     };
 
     expect(
-      new ClaudeAdapter().getCapabilityStatus(config, process.cwd()),
+      claudeAdapter.getCapabilityStatus(config, process.cwd()),
     ).toEqual({
       state: "ready",
     });
     expect(
-      new ClaudeAdapter().getCapabilityStatus(config, process.cwd()),
+      claudeAdapter.getCapabilityStatus(config, process.cwd()),
     ).toEqual({
       state: "ready",
     });
@@ -89,7 +89,7 @@ describe("ClaudeAdapter", () => {
   });
 
   it("attaches config settings to Claude operation plans", () => {
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
     const plan = provider.buildPlan(
       {
         capability: "search",
@@ -139,7 +139,7 @@ describe("ClaudeAdapter", () => {
       close() {},
     }));
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
     await provider.search(
       "latest Claude docs",
       1,
@@ -185,7 +185,7 @@ describe("ClaudeAdapter", () => {
       };
     });
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
     const controller = new AbortController();
     const searchPromise = provider.search(
       "latest Claude docs",
@@ -226,7 +226,7 @@ describe("ClaudeAdapter", () => {
       }),
     );
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
     await provider.search(
       "latest Claude docs",
       1,
@@ -284,7 +284,7 @@ describe("ClaudeAdapter", () => {
       }),
     );
 
-    const provider = new ClaudeAdapter();
+    const provider = claudeAdapter;
     const response = await provider.answer(
       "What changed?",
       {

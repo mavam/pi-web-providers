@@ -19,11 +19,40 @@ const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
 
-export class GeminiAdapter implements ProviderAdapter<Gemini> {
-  readonly id: "gemini" = "gemini";
-  readonly label = "Gemini";
-  readonly docsUrl = "https://github.com/googleapis/js-genai";
-  readonly tools = ["search", "answer", "research"] as const;
+type GeminiAdapter = ProviderAdapter<Gemini> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Gemini,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  answer(
+    query: string,
+    config: Gemini,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  startResearch(
+    input: string,
+    config: Gemini,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchJob>;
+  pollResearch(
+    id: string,
+    config: Gemini,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchPollResult>;
+  createClient(config: Gemini): GoogleGenAI;
+};
+
+export const geminiAdapter: GeminiAdapter = {
+  id: "gemini",
+  label: "Gemini",
+  docsUrl: "https://github.com/googleapis/js-genai",
+  tools: ["search", "answer", "research"] as const,
 
   createTemplate(): Gemini {
     return {
@@ -38,11 +67,11 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
           DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS,
       },
     };
-  }
+  },
 
   getCapabilityStatus(config: Gemini | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  }
+  },
 
   buildPlan(request: ProviderRequest, config: Gemini) {
     return buildProviderPlan({
@@ -126,7 +155,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
         },
       },
     });
-  }
+  },
 
   async search(
     query: string,
@@ -169,7 +198,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
       provider: this.id,
       results,
     };
-  }
+  },
 
   async answer(
     query: string,
@@ -214,7 +243,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
       text: lines.join("\n").trimEnd(),
       itemCount: sources.length,
     };
-  }
+  },
 
   async startResearch(
     input: string,
@@ -236,7 +265,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
     );
 
     return { id: interaction.id };
-  }
+  },
 
   async pollResearch(
     id: string,
@@ -279,9 +308,9 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
     }
 
     return { status: "in_progress" };
-  }
+  },
 
-  private createClient(config: Gemini): GoogleGenAI {
+  createClient(config: Gemini): GoogleGenAI {
     const apiKey = resolveConfigValue(config.apiKey);
     if (!apiKey) {
       throw new Error("Gemini is missing an API key.");
@@ -291,8 +320,8 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
       apiKey,
       apiVersion: getGeminiOptions(config)?.apiVersion,
     });
-  }
-}
+  },
+};
 
 function buildGeminiRequestOptions(
   signal: AbortSignal | undefined,
