@@ -60,8 +60,7 @@ vi.mock("valyu-js", () => ({
 
 describe("contents providers", () => {
   it("keeps full Exa page text instead of collapsing to a snippet", async () => {
-    const { ExaAdapter } = await import("../src/providers/exa.js");
-    const provider = new ExaAdapter();
+    const { exaAdapter: provider } = await import("../src/providers/exa.js");
     const longParagraph = "x".repeat(420);
 
     exaGetContentsMock.mockResolvedValue({
@@ -99,8 +98,9 @@ describe("contents providers", () => {
   });
 
   it("requests full Parallel page contents by default and prefers full_content", async () => {
-    const { ParallelAdapter } = await import("../src/providers/parallel.js");
-    const provider = new ParallelAdapter();
+    const { parallelAdapter: provider } = await import(
+      "../src/providers/parallel.js"
+    );
     const config = provider.createTemplate();
     config.apiKey = "literal-key";
 
@@ -144,8 +144,9 @@ describe("contents providers", () => {
   });
 
   it("prefers Valyu content over summaries and preserves line breaks", async () => {
-    const { ValyuAdapter } = await import("../src/providers/valyu.js");
-    const provider = new ValyuAdapter();
+    const { valyuAdapter: provider } = await import(
+      "../src/providers/valyu.js"
+    );
 
     valyuContentsMock.mockResolvedValue({
       success: true,

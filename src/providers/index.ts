@@ -1,21 +1,21 @@
-import type { AnyProvider, ProviderId, ProviderAdapter } from "../types.js";
+import type { AnyProvider, ProviderAdapter, ProviderId } from "../types.js";
 import { ClaudeAdapter } from "./claude.js";
 import { CodexAdapter } from "./codex.js";
-import { CustomAdapter } from "./custom.js";
-import { ExaAdapter } from "./exa.js";
+import { customAdapter } from "./custom.js";
+import { exaAdapter } from "./exa.js";
 import { GeminiAdapter } from "./gemini.js";
-import { ParallelAdapter } from "./parallel.js";
+import { parallelAdapter } from "./parallel.js";
 import { PerplexityAdapter } from "./perplexity.js";
-import { ValyuAdapter } from "./valyu.js";
+import { valyuAdapter } from "./valyu.js";
 
 const claudeProvider = new ClaudeAdapter();
 const codexProvider = new CodexAdapter();
-const exaProvider = new ExaAdapter();
+const exaProvider = exaAdapter;
 const geminiProvider = new GeminiAdapter();
 const perplexityProvider = new PerplexityAdapter();
-const parallelProvider = new ParallelAdapter();
-const valyuProvider = new ValyuAdapter();
-const customProvider = new CustomAdapter();
+const parallelProvider = parallelAdapter;
+const valyuProvider = valyuAdapter;
+const customProvider = customAdapter;
 
 export const ADAPTERS: ReadonlyArray<ProviderAdapter<AnyProvider>> = [
   claudeProvider,

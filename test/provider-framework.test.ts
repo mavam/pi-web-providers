@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  backgroundResearchHandler,
-  buildProviderPlan,
-  silentForegroundHandler,
-  streamingForegroundHandler,
-} from "../src/providers/framework.js";
+import { buildProviderPlan } from "../src/providers/framework.js";
 
 describe("provider framework", () => {
   it("builds silent foreground plans with inherited settings", () => {
@@ -23,10 +18,13 @@ describe("provider framework", () => {
       providerId: "exa",
       providerLabel: "Exa",
       handlers: {
-        search: silentForegroundHandler(async () => ({
-          provider: "exa",
-          results: [],
-        })),
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: async () => ({
+            provider: "exa",
+            results: [],
+          }),
+        },
       },
     });
 
@@ -52,12 +50,9 @@ describe("provider framework", () => {
       providerId: "perplexity",
       providerLabel: "Perplexity",
       handlers: {
-        research: streamingForegroundHandler(
-          async () => ({
-            provider: "perplexity",
-            text: "done",
-          }),
-          {
+        research: {
+          deliveryMode: "streaming-foreground",
+          traits: {
             executionSupport: {
               requestTimeoutMs: true,
               retryCount: true,
@@ -68,7 +63,11 @@ describe("provider framework", () => {
               resumeId: false,
             },
           },
-        ),
+          execute: async () => ({
+            provider: "perplexity",
+            text: "done",
+          }),
+        },
       },
     });
 
@@ -107,7 +106,8 @@ describe("provider framework", () => {
         settings: config.settings,
       }),
       handlers: {
-        research: backgroundResearchHandler({
+        research: {
+          deliveryMode: "background-research",
           traits: {
             researchLifecycle: {
               supportsStartRetries: true,
@@ -115,8 +115,11 @@ describe("provider framework", () => {
             },
           },
           start: async () => ({ id: "job-1" }),
-          poll: async () => ({ status: "completed", output: { provider: "gemini", text: "done" } }),
-        }),
+          poll: async () => ({
+            status: "completed",
+            output: { provider: "gemini", text: "done" },
+          }),
+        },
       },
     });
 

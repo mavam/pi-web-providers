@@ -65,45 +65,6 @@ export interface ProviderCapabilityHandlers<TConfig> {
     | BackgroundResearchHandler<TConfig>;
 }
 
-export function silentForegroundHandler<
-  TConfig,
-  TRequest extends ProviderRequest,
-  TResult extends SearchResponse | ContentsResponse | ToolOutput,
->(
-  execute: ForegroundHandler<TConfig, TRequest, TResult>["execute"],
-  traits?: Omit<ProviderPlanTraits, "settings">,
-): ForegroundHandler<TConfig, TRequest, TResult> {
-  return {
-    deliveryMode: "silent-foreground",
-    ...(traits ? { traits } : {}),
-    execute,
-  };
-}
-
-export function streamingForegroundHandler<
-  TConfig,
-  TRequest extends ProviderRequest,
-  TResult extends ToolOutput,
->(
-  execute: ForegroundHandler<TConfig, TRequest, TResult>["execute"],
-  traits?: Omit<ProviderPlanTraits, "settings">,
-): ForegroundHandler<TConfig, TRequest, TResult> {
-  return {
-    deliveryMode: "streaming-foreground",
-    ...(traits ? { traits } : {}),
-    execute,
-  };
-}
-
-export function backgroundResearchHandler<TConfig>(
-  handler: Omit<BackgroundResearchHandler<TConfig>, "deliveryMode">,
-): BackgroundResearchHandler<TConfig> {
-  return {
-    deliveryMode: "background-research",
-    ...handler,
-  };
-}
-
 export function buildProviderPlan<TConfig>({
   request,
   config,
@@ -214,7 +175,8 @@ function buildForegroundPlan<
     providerId,
     providerLabel,
     ...(handler.traits ? { traits: handler.traits } : {}),
-    execute: (context: ProviderContext) => handler.execute(request, config, context),
+    execute: (context: ProviderContext) =>
+      handler.execute(request, config, context),
   });
 }
 

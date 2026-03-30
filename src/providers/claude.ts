@@ -12,7 +12,7 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
+import { buildProviderPlan } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
 const require = createRequire(import.meta.url);
@@ -108,8 +108,13 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
       providerId: this.id,
       providerLabel: this.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Claude, context: ProviderContext) =>
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Claude,
+            context: ProviderContext,
+          ) =>
             this.search(
               searchRequest.query,
               searchRequest.maxResults,
@@ -117,16 +122,21 @@ export class ClaudeAdapter implements ProviderAdapter<Claude> {
               context,
               searchRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (answerRequest, providerConfig: Claude, context: ProviderContext) =>
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            answerRequest,
+            providerConfig: Claude,
+            context: ProviderContext,
+          ) =>
             this.answer(
               answerRequest.query,
               providerConfig,
               context,
               answerRequest.options,
             ),
-        ),
+        },
       },
     });
   }

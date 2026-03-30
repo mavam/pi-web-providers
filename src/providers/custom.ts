@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { ContentsAnswer, ContentsResponse } from "../contents.js";
 import type {
   Custom,
@@ -11,18 +12,63 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
-import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
+import { buildProviderPlan } from "./framework.js";
 
-export class CustomAdapter implements ProviderAdapter<Custom> {
-  readonly id: "custom" = "custom";
-  readonly label = "Custom";
-  readonly docsUrl =
-    "https://github.com/mavam/pi-web-providers#custom-provider";
-  readonly tools = ["search", "contents", "answer", "research"] as const;
+const jsonObjectSchema = z.object({}).catchall(z.unknown());
+const requiredStringSchema = z.string();
+const nonNegativeIntegerSchema = z.number().int().nonnegative();
+const searchResponseSchema = z.object({
+  results: z.array(z.unknown()),
+});
+const contentsAnswersResponseSchema = z.object({
+  answers: z.array(z.unknown()),
+});
+const legacyContentsResponseSchema = z.object({
+  text: z.string(),
+});
+const toolOutputSchema = z.object({
+  text: z.string(),
+  itemCount: z.unknown().optional(),
+  metadata: z.unknown().optional(),
+});
+
+type CustomAdapter = ProviderAdapter<Custom> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Custom,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  contents(
+    urls: string[],
+    config: Custom,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ContentsResponse>;
+  answer(
+    query: string,
+    config: Custom,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  research(
+    input: string,
+    config: Custom,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+};
+
+export const customAdapter: CustomAdapter = {
+  id: "custom",
+  label: "Custom",
+  docsUrl: "https://github.com/mavam/pi-web-providers#custom-provider",
+  tools: ["search", "contents", "answer", "research"] as const,
 
   createTemplate(): Custom {
     return {};
-  }
+  },
 
   getCapabilityStatus(
     config: Custom | undefined,
@@ -38,55 +84,75 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
     return hasAnyCommand(config)
       ? { state: "ready" }
       : { state: "missing_command" };
-  }
+  },
 
   buildPlan(request: ProviderRequest, config: Custom) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: customAdapter.id,
+      providerLabel: customAdapter.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Custom, context: ProviderContext) =>
-            this.search(
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Custom,
+            context: ProviderContext,
+          ) =>
+            customAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
               context,
               searchRequest.options,
             ),
-        ),
-        contents: silentForegroundHandler(
-          (contentsRequest, providerConfig: Custom, context: ProviderContext) =>
-            this.contents(
+        },
+        contents: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            contentsRequest,
+            providerConfig: Custom,
+            context: ProviderContext,
+          ) =>
+            customAdapter.contents(
               contentsRequest.urls,
               providerConfig,
               context,
               contentsRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (answerRequest, providerConfig: Custom, context: ProviderContext) =>
-            this.answer(
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            answerRequest,
+            providerConfig: Custom,
+            context: ProviderContext,
+          ) =>
+            customAdapter.answer(
               answerRequest.query,
               providerConfig,
               context,
               answerRequest.options,
             ),
-        ),
-        research: silentForegroundHandler(
-          (researchRequest, providerConfig: Custom, context: ProviderContext) =>
-            this.research(
+        },
+        research: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            researchRequest,
+            providerConfig: Custom,
+            context: ProviderContext,
+          ) =>
+            customAdapter.research(
               researchRequest.input,
               providerConfig,
               context,
               researchRequest.options,
             ),
-        ),
+        },
       },
     });
-  }
+  },
 
   async search(
     query: string,
@@ -95,7 +161,7 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const output = await this.runCommand<unknown>({
+    const output = await runCommand<unknown>({
       capability: "search",
       payload: {
         capability: "search",
@@ -107,8 +173,8 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
       context,
     });
 
-    return parseSearchResponse(output, this.id);
-  }
+    return parseSearchResponse(output, customAdapter.id);
+  },
 
   async contents(
     urls: string[],
@@ -116,7 +182,7 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
-    const output = await this.runCommand<unknown>({
+    const output = await runCommand<unknown>({
       capability: "contents",
       payload: {
         capability: "contents",
@@ -127,8 +193,8 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
       context,
     });
 
-    return parseContentsResponse(output, this.id, urls);
-  }
+    return parseContentsResponse(output, customAdapter.id, urls);
+  },
 
   async answer(
     query: string,
@@ -136,7 +202,7 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    const output = await this.runCommand<unknown>({
+    const output = await runCommand<unknown>({
       capability: "answer",
       payload: {
         capability: "answer",
@@ -147,8 +213,8 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
       context,
     });
 
-    return parseToolOutput(output, this.id);
-  }
+    return parseToolOutput(output, customAdapter.id);
+  },
 
   async research(
     input: string,
@@ -156,7 +222,7 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    const output = await this.runCommand<unknown>({
+    const output = await runCommand<unknown>({
       capability: "research",
       payload: {
         capability: "research",
@@ -167,35 +233,35 @@ export class CustomAdapter implements ProviderAdapter<Custom> {
       context,
     });
 
-    return parseToolOutput(output, this.id);
+    return parseToolOutput(output, customAdapter.id);
+  },
+};
+
+async function runCommand<TOutput>({
+  capability,
+  payload,
+  config,
+  context,
+}: {
+  capability: Tool;
+  payload: Record<string, unknown>;
+  config: Custom;
+  context: ProviderContext;
+}): Promise<TOutput> {
+  const command = getCommandConfig(config, capability);
+  if (!command) {
+    throw new Error(`Custom has no command configured for ${capability}.`);
   }
 
-  private async runCommand<TOutput>({
-    capability,
-    payload,
-    config,
+  return await runCliJsonCommand<TOutput>({
+    command,
+    payload: {
+      ...payload,
+      cwd: context.cwd,
+    },
     context,
-  }: {
-    capability: Tool;
-    payload: Record<string, unknown>;
-    config: Custom;
-    context: ProviderContext;
-  }): Promise<TOutput> {
-    const command = getCommandConfig(config, capability);
-    if (!command) {
-      throw new Error(`Custom has no command configured for ${capability}.`);
-    }
-
-    return await runCliJsonCommand<TOutput>({
-      command,
-      payload: {
-        ...payload,
-        cwd: context.cwd,
-      },
-      context,
-      label: `Custom ${capability}`,
-    });
-  }
+    label: `Custom ${capability}`,
+  });
 }
 
 function getCommandConfig(
@@ -233,35 +299,40 @@ function parseSearchResponse(
   value: unknown,
   providerId: SearchResponse["provider"],
 ): SearchResponse {
-  if (!isRecord(value)) {
+  const parsed = jsonObjectSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error("Custom search output must be a JSON object.");
   }
 
-  if (!Array.isArray(value.results)) {
+  const response = searchResponseSchema.safeParse(parsed.data);
+  if (!response.success) {
     throw new Error("Custom search output must include a 'results' array.");
   }
 
   return {
     provider: providerId,
-    results: value.results.map((entry, index) =>
+    results: response.data.results.map((entry, index) =>
       parseSearchResult(entry, index),
     ),
   };
 }
 
 function parseSearchResult(entry: unknown, index: number) {
-  if (!isRecord(entry)) {
+  const parsed = jsonObjectSchema.safeParse(entry);
+  if (!parsed.success) {
     throw new Error(
       `Custom search result at index ${index} must be a JSON object.`,
     );
   }
 
+  const value = parsed.data;
+  const metadata = readLenientJsonObject(value.metadata);
   return {
-    title: readRequiredString(entry.title, `results[${index}].title`),
-    url: readRequiredString(entry.url, `results[${index}].url`),
-    snippet: readRequiredString(entry.snippet, `results[${index}].snippet`),
-    ...(typeof entry.score === "number" ? { score: entry.score } : {}),
-    ...(isRecord(entry.metadata) ? { metadata: entry.metadata } : {}),
+    title: readRequiredString(value.title, `results[${index}].title`),
+    url: readRequiredString(value.url, `results[${index}].url`),
+    snippet: readRequiredString(value.snippet, `results[${index}].snippet`),
+    ...(typeof value.score === "number" ? { score: value.score } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
   };
 }
 
@@ -270,26 +341,29 @@ function parseContentsResponse(
   providerId: ContentsResponse["provider"],
   urls: string[],
 ): ContentsResponse {
-  if (!isRecord(value)) {
+  const parsed = jsonObjectSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error("Custom contents output must be a JSON object.");
   }
 
-  if (Array.isArray(value.answers)) {
+  const answersResponse = contentsAnswersResponseSchema.safeParse(parsed.data);
+  if (answersResponse.success) {
     return {
       provider: providerId,
-      answers: value.answers.map((entry, index) =>
+      answers: answersResponse.data.answers.map((entry, index) =>
         parseContentsAnswer(entry, index),
       ),
     };
   }
 
-  if (typeof value.text === "string" && urls.length === 1) {
+  const legacyResponse = legacyContentsResponseSchema.safeParse(parsed.data);
+  if (legacyResponse.success && urls.length === 1) {
     return {
       provider: providerId,
       answers: [
         {
           url: urls[0] ?? "",
-          content: value.text,
+          content: legacyResponse.data.text,
         },
       ],
     };
@@ -301,26 +375,25 @@ function parseContentsResponse(
 }
 
 function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
-  if (!isRecord(entry)) {
+  const parsed = jsonObjectSchema.safeParse(entry);
+  if (!parsed.success) {
     throw new Error(
       `Custom contents answer at index ${index} must be a JSON object.`,
     );
   }
 
-  const url = readRequiredString(entry.url, `answers[${index}].url`);
-  const content =
-    entry.content === undefined
-      ? undefined
-      : readRequiredString(entry.content, `answers[${index}].content`);
-  const summary = entry.summary;
-  const metadata =
-    entry.metadata === undefined
-      ? undefined
-      : readRecord(entry.metadata, `answers[${index}].metadata`);
-  const error =
-    entry.error === undefined
-      ? undefined
-      : readRequiredString(entry.error, `answers[${index}].error`);
+  const value = parsed.data;
+  const url = readRequiredString(value.url, `answers[${index}].url`);
+  const content = readOptionalString(
+    value.content,
+    `answers[${index}].content`,
+  );
+  const summary = value.summary;
+  const metadata = readRequiredJsonObject(
+    value.metadata,
+    `answers[${index}].metadata`,
+  );
+  const error = readOptionalString(value.error, `answers[${index}].error`);
 
   if (content === undefined && error === undefined) {
     throw new Error(
@@ -341,38 +414,61 @@ function parseToolOutput(
   value: unknown,
   providerId: ToolOutput["provider"],
 ): ToolOutput {
-  if (!isRecord(value)) {
+  const parsed = toolOutputSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error("Custom output must be a JSON object.");
   }
 
+  const metadata = readLenientJsonObject(parsed.data.metadata);
+
   return {
     provider: providerId,
-    text: readRequiredString(value.text, "text"),
-    ...(isNonNegativeInteger(value.itemCount)
-      ? { itemCount: value.itemCount }
-      : {}),
-    ...(isRecord(value.metadata) ? { metadata: value.metadata } : {}),
+    text: parsed.data.text,
+    ...readOptionalNonNegativeInteger(parsed.data.itemCount),
+    ...(metadata !== undefined ? { metadata } : {}),
   };
 }
 
-function readRecord(value: unknown, field: string): Record<string, unknown> {
-  if (!isRecord(value)) {
+function readRequiredJsonObject(
+  value: unknown,
+  field: string,
+): Record<string, unknown> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const parsed = jsonObjectSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error(`Custom output field '${field}' must be a JSON object.`);
   }
-  return value;
+  return parsed.data;
+}
+
+function readLenientJsonObject(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const parsed = jsonObjectSchema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 function readRequiredString(value: unknown, field: string): string {
-  if (typeof value !== "string") {
+  const parsed = requiredStringSchema.safeParse(value);
+  if (!parsed.success) {
     throw new Error(`Custom output field '${field}' must be a string.`);
   }
-  return value;
+  return parsed.data;
 }
 
-function isNonNegativeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+function readOptionalString(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return readRequiredString(value, field);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+function readOptionalNonNegativeInteger(
+  value: unknown,
+): { itemCount: number } | Record<string, never> {
+  const parsed = nonNegativeIntegerSchema.safeParse(value);
+  return parsed.success ? { itemCount: parsed.data } : {};
 }

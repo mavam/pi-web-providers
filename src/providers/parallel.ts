@@ -10,14 +10,35 @@ import type {
   ProviderRequest,
   SearchResponse,
 } from "../types.js";
-import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
-import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
+import { buildProviderPlan } from "./framework.js";
+import {
+  asJsonObject,
+  formatJson,
+  getApiKeyStatus,
+  trimSnippet,
+} from "./shared.js";
 
-export class ParallelAdapter implements ProviderAdapter<Parallel> {
-  readonly id: "parallel" = "parallel";
-  readonly label = "Parallel";
-  readonly docsUrl = "https://github.com/parallel-web/parallel-sdk-typescript";
-  readonly tools = ["search", "contents"] as const;
+type ParallelAdapter = ProviderAdapter<Parallel> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Parallel,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  contents(
+    urls: string[],
+    config: Parallel,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ContentsResponse>;
+};
+
+export const parallelAdapter: ParallelAdapter = {
+  id: "parallel",
+  label: "Parallel",
+  docsUrl: "https://github.com/parallel-web/parallel-sdk-typescript",
+  tools: ["search", "contents"] as const,
 
   createTemplate(): Parallel {
     return {
@@ -32,49 +53,51 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
         },
       },
     };
-  }
+  },
 
   getCapabilityStatus(config: Parallel | undefined): ProviderCapabilityStatus {
-    const apiKey = resolveConfigValue(config?.apiKey);
-    if (!apiKey) {
-      return { state: "missing_api_key" };
-    }
-    return { state: "ready" };
-  }
+    return getApiKeyStatus(config?.apiKey);
+  },
 
   buildPlan(request: ProviderRequest, config: Parallel) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: parallelAdapter.id,
+      providerLabel: parallelAdapter.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Parallel, context: ProviderContext) =>
-            this.search(
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Parallel,
+            context: ProviderContext,
+          ) =>
+            parallelAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
               context,
               searchRequest.options,
             ),
-        ),
-        contents: silentForegroundHandler(
-          (
+        },
+        contents: {
+          deliveryMode: "silent-foreground",
+          execute: (
             contentsRequest,
             providerConfig: Parallel,
             context: ProviderContext,
           ) =>
-            this.contents(
+            parallelAdapter.contents(
               contentsRequest.urls,
               providerConfig,
               context,
               contentsRequest.options,
             ),
-        ),
+        },
       },
     });
-  }
+  },
 
   async search(
     query: string,
@@ -83,10 +106,9 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
+    const client = createClient(config);
     const defaults =
-      stripLocalExecutionOptions(asJsonObject(providerOptions?.search)) ?? {};
+      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
 
     const response = await client.beta.search(
       {
@@ -99,14 +121,14 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
     );
 
     return {
-      provider: this.id,
+      provider: parallelAdapter.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title ?? result.url,
         url: result.url,
         snippet: trimSnippet(result.excerpts?.join(" ") ?? ""),
       })),
     };
-  }
+  },
 
   async contents(
     urls: string[],
@@ -114,10 +136,9 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
+    const client = createClient(config);
     const defaults =
-      stripLocalExecutionOptions(asJsonObject(providerOptions?.extract)) ?? {};
+      stripLocalExecutionOptions(asJsonObject(config.options?.extract)) ?? {};
 
     const response = await client.beta.extract(
       {
@@ -136,7 +157,7 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
     );
 
     return {
-      provider: this.id,
+      provider: parallelAdapter.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (result) {
@@ -160,19 +181,19 @@ export class ParallelAdapter implements ProviderAdapter<Parallel> {
             };
       }),
     };
+  },
+};
+
+function createClient(config: Parallel): ParallelClient {
+  const apiKey = resolveConfigValue(config.apiKey);
+  if (!apiKey) {
+    throw new Error("Parallel is missing an API key.");
   }
 
-  private createClient(config: Parallel): ParallelClient {
-    const apiKey = resolveConfigValue(config.apiKey);
-    if (!apiKey) {
-      throw new Error("Parallel is missing an API key.");
-    }
-
-    return new ParallelClient({
-      apiKey,
-      baseURL: resolveConfigValue(config.baseUrl),
-    });
-  }
+  return new ParallelClient({
+    apiKey,
+    baseURL: resolveConfigValue(config.baseUrl),
+  });
 }
 
 function buildRequestOptions(

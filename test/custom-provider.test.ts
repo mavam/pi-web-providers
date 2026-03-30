@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { CustomAdapter } from "../src/providers/custom.js";
+import { customAdapter } from "../src/providers/custom.js";
 
 const cleanupDirs: string[] = [];
 
@@ -15,7 +15,7 @@ afterEach(async () => {
   }
 });
 
-describe("CustomAdapter", () => {
+describe("customAdapter", () => {
   it("executes a configured search command and parses structured JSON", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
     cleanupDirs.push(root);
@@ -44,7 +44,7 @@ describe("CustomAdapter", () => {
       "utf8",
     );
 
-    const provider = new CustomAdapter();
+    const provider = customAdapter;
     const progress: string[] = [];
     const result = await provider.search(
       "custom query",
@@ -58,7 +58,7 @@ describe("CustomAdapter", () => {
       },
       {
         cwd: process.cwd(),
-        onProgress: (message) => progress.push(message),
+        onProgress: (message: string) => progress.push(message),
       },
       { mode: "demo" },
     );
@@ -101,7 +101,7 @@ describe("CustomAdapter", () => {
       "utf8",
     );
 
-    const provider = new CustomAdapter();
+    const provider = customAdapter;
     const result = await provider.answer(
       "what is this?",
       {
@@ -138,7 +138,7 @@ describe("CustomAdapter", () => {
       "utf8",
     );
 
-    const provider = new CustomAdapter();
+    const provider = customAdapter;
 
     await expect(
       provider.search(

@@ -13,18 +13,53 @@ import type {
   ToolOutput,
   Valyu,
 } from "../types.js";
+import { buildProviderPlan } from "./framework.js";
 import {
-  backgroundResearchHandler,
-  buildProviderPlan,
-  silentForegroundHandler,
-} from "./framework.js";
-import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
+  asJsonObject,
+  formatJson,
+  getApiKeyStatus,
+  trimSnippet,
+} from "./shared.js";
 
-export class ValyuAdapter implements ProviderAdapter<Valyu> {
-  readonly id: "valyu" = "valyu";
-  readonly label = "Valyu";
-  readonly docsUrl = "https://docs.valyu.ai/sdk/typescript-sdk";
-  readonly tools = ["search", "contents", "answer", "research"] as const;
+type ValyuAdapter = ProviderAdapter<Valyu> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Valyu,
+    context: ProviderContext,
+    searchOptions?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  contents(
+    urls: string[],
+    config: Valyu,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ContentsResponse>;
+  answer(
+    query: string,
+    config: Valyu,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  startResearch(
+    input: string,
+    config: Valyu,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchJob>;
+  pollResearch(
+    id: string,
+    config: Valyu,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchPollResult>;
+};
+
+export const valyuAdapter: ValyuAdapter = {
+  id: "valyu",
+  label: "Valyu",
+  docsUrl: "https://docs.valyu.ai/sdk/typescript-sdk",
+  tools: ["search", "contents", "answer", "research"] as const,
 
   createTemplate(): Valyu {
     return {
@@ -34,52 +69,64 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
         responseLength: "short",
       },
     };
-  }
+  },
 
   getCapabilityStatus(config: Valyu | undefined): ProviderCapabilityStatus {
-    const apiKey = resolveConfigValue(config?.apiKey);
-    if (!apiKey) {
-      return { state: "missing_api_key" };
-    }
-    return { state: "ready" };
-  }
+    return getApiKeyStatus(config?.apiKey);
+  },
 
   buildPlan(request: ProviderRequest, config: Valyu) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: valyuAdapter.id,
+      providerLabel: valyuAdapter.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Valyu, context: ProviderContext) =>
-            this.search(
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Valyu,
+            context: ProviderContext,
+          ) =>
+            valyuAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
               context,
               searchRequest.options,
             ),
-        ),
-        contents: silentForegroundHandler(
-          (contentsRequest, providerConfig: Valyu, context: ProviderContext) =>
-            this.contents(
+        },
+        contents: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            contentsRequest,
+            providerConfig: Valyu,
+            context: ProviderContext,
+          ) =>
+            valyuAdapter.contents(
               contentsRequest.urls,
               providerConfig,
               context,
               contentsRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (answerRequest, providerConfig: Valyu, context: ProviderContext) =>
-            this.answer(
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            answerRequest,
+            providerConfig: Valyu,
+            context: ProviderContext,
+          ) =>
+            valyuAdapter.answer(
               answerRequest.query,
               providerConfig,
               context,
               answerRequest.options,
             ),
-        ),
-        research: backgroundResearchHandler({
+        },
+        research: {
+          deliveryMode: "background-research",
           traits: {
             executionSupport: {
               requestTimeoutMs: false,
@@ -100,7 +147,7 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
             providerConfig: Valyu,
             context: ProviderContext,
           ) =>
-            this.startResearch(
+            valyuAdapter.startResearch(
               researchRequest.input,
               providerConfig,
               context,
@@ -112,28 +159,27 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
             id: string,
             context: ProviderContext,
           ) =>
-            this.pollResearch(
+            valyuAdapter.pollResearch(
               id,
               providerConfig,
               context,
               researchRequest.options,
             ),
-        }),
+        },
       },
     });
-  }
+  },
 
   async search(
     query: string,
     maxResults: number,
     config: Valyu,
-    context: ProviderContext,
+    _context: ProviderContext,
     searchOptions?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const client = this.createClient(config);
-    const providerOptions = config.options;
+    const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(providerOptions)) ?? {}),
+      ...(stripLocalExecutionOptions(asJsonObject(config.options)) ?? {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
@@ -144,7 +190,7 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     }
 
     return {
-      provider: this.id,
+      provider: valyuAdapter.id,
       results: (response.results ?? []).slice(0, maxResults).map((result) => ({
         title: result.title,
         url: result.url,
@@ -155,15 +201,15 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
         score: result.relevance_score,
       })),
     };
-  }
+  },
 
   async contents(
     urls: string[],
     config: Valyu,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const response = await client.contents(urls, options as never);
     const finalResponse =
       "jobId" in response
@@ -181,7 +227,7 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     );
 
     return {
-      provider: this.id,
+      provider: valyuAdapter.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (!result) {
@@ -209,15 +255,15 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
             };
       }),
     };
-  }
+  },
 
   async answer(
     query: string,
     config: Valyu,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const response = await client.answer(query, {
       ...(options ?? {}),
       streaming: false,
@@ -249,19 +295,19 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     }
 
     return {
-      provider: this.id,
+      provider: valyuAdapter.id,
       text: lines.join("\n").trimEnd(),
       itemCount: sources.length,
     };
-  }
+  },
 
   async startResearch(
     input: string,
     config: Valyu,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ResearchJob> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const task = await client.deepresearch.create({
       input,
       ...(options ?? {}),
@@ -272,15 +318,15 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     }
 
     return { id: task.deepresearch_id };
-  }
+  },
 
   async pollResearch(
     id: string,
     config: Valyu,
-    context: ProviderContext,
+    _context: ProviderContext,
     _options?: Record<string, unknown>,
   ): Promise<ResearchPollResult> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const result = await client.deepresearch.status(id);
 
     if (!result.success) {
@@ -310,7 +356,7 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
       return {
         status: "completed",
         output: {
-          provider: this.id,
+          provider: valyuAdapter.id,
           text: lines.join("\n").trimEnd(),
           itemCount: sources.length,
         },
@@ -332,14 +378,14 @@ export class ValyuAdapter implements ProviderAdapter<Valyu> {
     }
 
     return { status: "in_progress" };
+  },
+};
+
+function createClient(config: Valyu): ValyuClient {
+  const apiKey = resolveConfigValue(config.apiKey);
+  if (!apiKey) {
+    throw new Error("Valyu is missing an API key.");
   }
 
-  private createClient(config: Valyu): ValyuClient {
-    const apiKey = resolveConfigValue(config.apiKey);
-    if (!apiKey) {
-      throw new Error("Valyu is missing an API key.");
-    }
-
-    return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));
-  }
+  return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));
 }

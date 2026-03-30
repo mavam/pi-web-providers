@@ -1,3 +1,6 @@
+import { resolveConfigValue } from "../config.js";
+import type { ProviderCapabilityStatus } from "../types.js";
+
 export function trimSnippet(
   input: string | undefined,
   maxLength = 300,
@@ -39,4 +42,12 @@ export function asJsonObject(
 
 export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
+}
+
+export function getApiKeyStatus(
+  apiKeyReference: string | undefined,
+): ProviderCapabilityStatus {
+  return resolveConfigValue(apiKeyReference)
+    ? { state: "ready" }
+    : { state: "missing_api_key" };
 }

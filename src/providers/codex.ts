@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Codex as CodexClient } from "@openai/codex-sdk";
+import { z } from "zod";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
 import type {
   Codex,
@@ -11,7 +12,7 @@ import type {
   ProviderRequest,
   SearchResponse,
 } from "../types.js";
-import { buildProviderPlan, silentForegroundHandler } from "./framework.js";
+import { buildProviderPlan } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
 const OUTPUT_SCHEMA = {
@@ -35,13 +36,17 @@ const OUTPUT_SCHEMA = {
   required: ["sources"],
 } as const;
 
-interface CodexOutput {
-  sources: Array<{
-    title: string;
-    url: string;
-    snippet: string;
-  }>;
-}
+const codexOutputSchema = z.object({
+  sources: z.array(
+    z.object({
+      title: z.string(),
+      url: z.string(),
+      snippet: z.string(),
+    }),
+  ),
+});
+
+type CodexOutput = z.infer<typeof codexOutputSchema>;
 
 export class CodexAdapter implements ProviderAdapter<Codex> {
   readonly id: "codex" = "codex";
@@ -88,8 +93,13 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
       providerId: this.id,
       providerLabel: this.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Codex, context: ProviderContext) =>
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Codex,
+            context: ProviderContext,
+          ) =>
             this.search(
               searchRequest.query,
               searchRequest.maxResults,
@@ -97,7 +107,7 @@ export class CodexAdapter implements ProviderAdapter<Codex> {
               context,
               searchRequest.options,
             ),
-        ),
+        },
       },
     });
   }
@@ -277,17 +287,30 @@ function hasConfiguredReference(reference: string | undefined): boolean {
 }
 
 function parseOutput(raw: string): CodexOutput {
+  const json = extractJsonObject(raw, "Codex");
+  const parsed = codexOutputSchema.safeParse(json);
+  if (!parsed.success) {
+    throw new Error("Codex returned invalid JSON output.");
+  }
+  return parsed.data;
+}
+
+function extractJsonObject(raw: string, providerLabel: string): unknown {
   if (!raw.trim()) {
-    throw new Error("Codex returned an empty response.");
+    throw new Error(`${providerLabel} returned an empty response.`);
   }
 
   try {
-    return JSON.parse(raw) as CodexOutput;
+    return JSON.parse(raw);
   } catch {
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) {
-      throw new Error("Codex returned invalid JSON output.");
+      throw new Error(`${providerLabel} returned invalid JSON output.`);
     }
-    return JSON.parse(match[0]) as CodexOutput;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      throw new Error(`${providerLabel} returned invalid JSON output.`);
+    }
   }
 }

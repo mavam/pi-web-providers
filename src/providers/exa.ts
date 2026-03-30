@@ -13,18 +13,53 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
+import { buildProviderPlan } from "./framework.js";
 import {
-  backgroundResearchHandler,
-  buildProviderPlan,
-  silentForegroundHandler,
-} from "./framework.js";
-import { asJsonObject, formatJson, trimSnippet } from "./shared.js";
+  asJsonObject,
+  formatJson,
+  getApiKeyStatus,
+  trimSnippet,
+} from "./shared.js";
 
-export class ExaAdapter implements ProviderAdapter<Exa> {
-  readonly id: "exa" = "exa";
-  readonly label = "Exa";
-  readonly docsUrl = "https://exa.ai/docs/sdks/typescript-sdk-specification";
-  readonly tools = ["search", "contents", "answer", "research"] as const;
+type ExaAdapter = ProviderAdapter<Exa> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Exa,
+    context: ProviderContext,
+    searchOptions?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  contents(
+    urls: string[],
+    config: Exa,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ContentsResponse>;
+  answer(
+    query: string,
+    config: Exa,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  startResearch(
+    input: string,
+    config: Exa,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchJob>;
+  pollResearch(
+    id: string,
+    config: Exa,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchPollResult>;
+};
+
+export const exaAdapter: ExaAdapter = {
+  id: "exa",
+  label: "Exa",
+  docsUrl: "https://exa.ai/docs/sdks/typescript-sdk-specification",
+  tools: ["search", "contents", "answer", "research"] as const,
 
   createTemplate(): Exa {
     return {
@@ -36,52 +71,64 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
         },
       },
     };
-  }
+  },
 
   getCapabilityStatus(config: Exa | undefined): ProviderCapabilityStatus {
-    const apiKey = resolveConfigValue(config?.apiKey);
-    if (!apiKey) {
-      return { state: "missing_api_key" };
-    }
-    return { state: "ready" };
-  }
+    return getApiKeyStatus(config?.apiKey);
+  },
 
   buildPlan(request: ProviderRequest, config: Exa) {
     return buildProviderPlan({
       request,
       config,
-      providerId: this.id,
-      providerLabel: this.label,
+      providerId: exaAdapter.id,
+      providerLabel: exaAdapter.label,
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Exa, context: ProviderContext) =>
-            this.search(
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Exa,
+            context: ProviderContext,
+          ) =>
+            exaAdapter.search(
               searchRequest.query,
               searchRequest.maxResults,
               providerConfig,
               context,
               searchRequest.options,
             ),
-        ),
-        contents: silentForegroundHandler(
-          (contentsRequest, providerConfig: Exa, context: ProviderContext) =>
-            this.contents(
+        },
+        contents: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            contentsRequest,
+            providerConfig: Exa,
+            context: ProviderContext,
+          ) =>
+            exaAdapter.contents(
               contentsRequest.urls,
               providerConfig,
               context,
               contentsRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (answerRequest, providerConfig: Exa, context: ProviderContext) =>
-            this.answer(
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            answerRequest,
+            providerConfig: Exa,
+            context: ProviderContext,
+          ) =>
+            exaAdapter.answer(
               answerRequest.query,
               providerConfig,
               context,
               answerRequest.options,
             ),
-        ),
-        research: backgroundResearchHandler({
+        },
+        research: {
+          deliveryMode: "background-research",
           traits: {
             executionSupport: {
               requestTimeoutMs: false,
@@ -102,7 +149,7 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
             providerConfig: Exa,
             context: ProviderContext,
           ) =>
-            this.startResearch(
+            exaAdapter.startResearch(
               researchRequest.input,
               providerConfig,
               context,
@@ -114,25 +161,25 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
             id: string,
             context: ProviderContext,
           ) =>
-            this.pollResearch(
+            exaAdapter.pollResearch(
               id,
               providerConfig,
               context,
               researchRequest.options,
             ),
-        }),
+        },
       },
     });
-  }
+  },
 
   async search(
     query: string,
     maxResults: number,
     config: Exa,
-    context: ProviderContext,
+    _context: ProviderContext,
     searchOptions?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const providerOptions = config.options;
     const options = {
       ...(stripLocalExecutionOptions(asJsonObject(providerOptions)) ?? {}),
@@ -143,7 +190,7 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     const response = await client.search(query, options as never);
 
     return {
-      provider: this.id,
+      provider: exaAdapter.id,
       results: (response.results ?? [])
         .slice(0, maxResults)
         .map((result: any) => ({
@@ -161,21 +208,21 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
           score: typeof result.score === "number" ? result.score : undefined,
         })),
     };
-  }
+  },
 
   async contents(
     urls: string[],
     config: Exa,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const response = await client.getContents(urls, options as never);
 
     const results = response.results ?? [];
 
     return {
-      provider: this.id,
+      provider: exaAdapter.id,
       answers: urls.map((url, index) => {
         const result = results[index];
         if (!result) {
@@ -193,15 +240,15 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
         };
       }),
     };
-  }
+  },
 
   async answer(
     query: string,
     config: Exa,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const response = await client.answer(query, options as never);
 
     const lines: string[] = [];
@@ -224,26 +271,26 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     }
 
     return {
-      provider: this.id,
+      provider: exaAdapter.id,
       text: lines.join("\n").trimEnd(),
       itemCount: citations.length,
     };
-  }
+  },
 
   async startResearch(
     input: string,
     config: Exa,
-    context: ProviderContext,
+    _context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ResearchJob> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const task = await client.research.create({
       instructions: input,
       ...(options ?? {}),
     });
 
     return { id: task.researchId };
-  }
+  },
 
   async pollResearch(
     id: string,
@@ -251,7 +298,7 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     _context: ProviderContext,
     _options?: Record<string, unknown>,
   ): Promise<ResearchPollResult> {
-    const client = this.createClient(config);
+    const client = createClient(config);
     const result = await client.research.get(id, { events: false });
 
     if (result.status === "completed") {
@@ -259,7 +306,7 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
       return {
         status: "completed",
         output: {
-          provider: this.id,
+          provider: exaAdapter.id,
           text:
             typeof content === "string"
               ? content
@@ -285,14 +332,14 @@ export class ExaAdapter implements ProviderAdapter<Exa> {
     }
 
     return { status: "in_progress" };
+  },
+};
+
+function createClient(config: Exa): ExaClient {
+  const apiKey = resolveConfigValue(config.apiKey);
+  if (!apiKey) {
+    throw new Error("Exa is missing an API key.");
   }
 
-  private createClient(config: Exa): ExaClient {
-    const apiKey = resolveConfigValue(config.apiKey);
-    if (!apiKey) {
-      throw new Error("Exa is missing an API key.");
-    }
-
-    return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));
-  }
+  return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));
 }

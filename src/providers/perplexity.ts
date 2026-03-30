@@ -10,12 +10,8 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
-import {
-  buildProviderPlan,
-  silentForegroundHandler,
-  streamingForegroundHandler,
-} from "./framework.js";
-import { asJsonObject, trimSnippet } from "./shared.js";
+import { buildProviderPlan } from "./framework.js";
+import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
@@ -55,11 +51,7 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
   getCapabilityStatus(
     config: Perplexity | undefined,
   ): ProviderCapabilityStatus {
-    const apiKey = resolveConfigValue(config?.apiKey);
-    if (!apiKey) {
-      return { state: "missing_api_key" };
-    }
-    return { state: "ready" };
+    return getApiKeyStatus(config?.apiKey);
   }
 
   buildPlan(request: ProviderRequest, config: Perplexity) {
@@ -69,8 +61,9 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
       providerId: this.id,
       providerLabel: this.label,
       handlers: {
-        search: silentForegroundHandler(
-          (
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
             searchRequest,
             providerConfig: Perplexity,
             context: ProviderContext,
@@ -82,9 +75,10 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
               context,
               searchRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
             answerRequest,
             providerConfig: Perplexity,
             context: ProviderContext,
@@ -95,20 +89,10 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
               context,
               answerRequest.options,
             ),
-        ),
-        research: streamingForegroundHandler(
-          (
-            researchRequest,
-            providerConfig: Perplexity,
-            context: ProviderContext,
-          ) =>
-            this.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-          {
+        },
+        research: {
+          deliveryMode: "streaming-foreground",
+          traits: {
             executionSupport: {
               requestTimeoutMs: true,
               retryCount: true,
@@ -119,7 +103,18 @@ export class PerplexityAdapter implements ProviderAdapter<Perplexity> {
               resumeId: false,
             },
           },
-        ),
+          execute: (
+            researchRequest,
+            providerConfig: Perplexity,
+            context: ProviderContext,
+          ) =>
+            this.research(
+              researchRequest.input,
+              providerConfig,
+              context,
+              researchRequest.options,
+            ),
+        },
       },
     });
   }

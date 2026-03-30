@@ -12,11 +12,8 @@ import type {
   SearchResponse,
   ToolOutput,
 } from "../types.js";
-import {
-  backgroundResearchHandler,
-  buildProviderPlan,
-  silentForegroundHandler,
-} from "./framework.js";
+import { buildProviderPlan } from "./framework.js";
+import { getApiKeyStatus } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
@@ -44,11 +41,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
   }
 
   getCapabilityStatus(config: Gemini | undefined): ProviderCapabilityStatus {
-    const apiKey = resolveConfigValue(config?.apiKey);
-    if (!apiKey) {
-      return { state: "missing_api_key" };
-    }
-    return { state: "ready" };
+    return getApiKeyStatus(config?.apiKey);
   }
 
   buildPlan(request: ProviderRequest, config: Gemini) {
@@ -61,8 +54,13 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
         settings: providerConfig.settings,
       }),
       handlers: {
-        search: silentForegroundHandler(
-          (searchRequest, providerConfig: Gemini, context: ProviderContext) =>
+        search: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            searchRequest,
+            providerConfig: Gemini,
+            context: ProviderContext,
+          ) =>
             this.search(
               searchRequest.query,
               searchRequest.maxResults,
@@ -70,17 +68,23 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
               context,
               searchRequest.options,
             ),
-        ),
-        answer: silentForegroundHandler(
-          (answerRequest, providerConfig: Gemini, context: ProviderContext) =>
+        },
+        answer: {
+          deliveryMode: "silent-foreground",
+          execute: (
+            answerRequest,
+            providerConfig: Gemini,
+            context: ProviderContext,
+          ) =>
             this.answer(
               answerRequest.query,
               providerConfig,
               context,
               answerRequest.options,
             ),
-        ),
-        research: backgroundResearchHandler({
+        },
+        research: {
+          deliveryMode: "background-research",
           traits: {
             executionSupport: {
               requestTimeoutMs: true,
@@ -119,7 +123,7 @@ export class GeminiAdapter implements ProviderAdapter<Gemini> {
               context,
               researchRequest.options,
             ),
-        }),
+        },
       },
     });
   }
