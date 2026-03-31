@@ -1563,14 +1563,10 @@ function buildWebResearchWidgetLines(
     const providerLabel =
       ADAPTERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
+    const icon = getWebResearchWidgetIcon(request, now);
     lines.push(
-      `${theme.fg("muted", "• ")}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${truncateInline(cleanSingleLine(request.input), 70)}`,
+      `${icon}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${truncateInline(cleanSingleLine(request.input), 70)}`,
     );
-    if (request.progress) {
-      lines.push(
-        `${theme.fg("muted", "  ")}${truncateInline(cleanSingleLine(request.progress), 90)}`,
-      );
-    }
   }
 
   if (requests.length > 3) {
@@ -1578,6 +1574,29 @@ function buildWebResearchWidgetLines(
   }
 
   return lines;
+}
+
+function getWebResearchWidgetIcon(
+  request: WebResearchRequest,
+  _now: number,
+): string {
+  if (request.progress === "poll retrying after transient errors") {
+    return "⟳ ";
+  }
+
+  if (request.progress === "queued") {
+    return "◌ ";
+  }
+
+  if (request.progress === "starting") {
+    return "◔ ";
+  }
+
+  if (request.progress?.startsWith("started:")) {
+    return "◑ ";
+  }
+
+  return "● ";
 }
 
 function summarizeWebResearchProgress(
