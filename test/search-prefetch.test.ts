@@ -39,7 +39,6 @@ afterEach(async () => {
 describe("search contents prefetch", () => {
   it("starts background contents prefetching and reuses prefetched per-URL entries when prefetch.provider is set", async () => {
     const { __test__ } = await import("../src/index.js");
-    const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
     const config = {
       tools: {
         contents: "exa",
@@ -92,11 +91,8 @@ describe("search contents prefetch", () => {
     const searchText = searchResult.content[0]?.text ?? "";
     expect(searchText).toContain("1. [Exa SDK](<https://exa.ai/sdk>)");
     expect(searchText).toContain(
-      "Background contents prefetch started via exa for 2 URL(s). Prefetch id:",
+      "Background contents prefetch started via exa for 2 URL(s).",
     );
-    const prefetchId =
-      searchText.match(/Prefetch id: ([\w-]+)/)?.[1] ?? "missing";
-    expect(prefetchId).not.toBe("missing");
     expect(exaSearchMock).toHaveBeenCalledWith("exa docs", {
       numResults: 2,
       type: "auto",
@@ -151,31 +147,6 @@ describe("search contents prefetch", () => {
     expect(cachedResult.content[0]?.text).not.toContain(
       "Fetched body for https://exa.ai/pricing",
     );
-
-    await vi.waitFor(async () => {
-      const status = await getPrefetchStatus(prefetchId);
-      expect(status).toMatchObject({
-        prefetchId,
-        provider: "exa",
-        readyUrlCount: 2,
-        totalUrlCount: 2,
-        status: "ready",
-      });
-      expect(status?.urls).toEqual([
-        expect.objectContaining({
-          url: "https://exa.ai/sdk",
-          status: "ready",
-          text: expect.stringContaining("Fetched body for https://exa.ai/sdk"),
-        }),
-        expect.objectContaining({
-          url: "https://exa.ai/pricing",
-          status: "ready",
-          text: expect.stringContaining(
-            "Fetched body for https://exa.ai/pricing",
-          ),
-        }),
-      ]);
-    });
   });
 
   it("does not start prefetching without an explicit prefetch.provider", async () => {
@@ -272,7 +243,7 @@ describe("search contents prefetch", () => {
     });
 
     expect(searchResult.content[0]?.text ?? "").toContain(
-      "Background contents prefetch started via exa for 1 URL(s). Prefetch id:",
+      "Background contents prefetch started via exa for 1 URL(s).",
     );
   });
 
@@ -440,11 +411,10 @@ describe("search contents prefetch", () => {
     expect(cachedText).toContain("Fetched body for https://exa.ai/pricing");
   });
 
-  it("cleans up expired cache entries automatically on the next tool call", async () => {
+  it("refetches expired cache entries on the next tool call", async () => {
     vi.useFakeTimers();
     try {
       const { __test__ } = await import("../src/index.js");
-      const { getPrefetchStatus } = await import("../src/prefetch-manager.js");
       const config = {
         tools: {
           contents: "exa",
@@ -473,7 +443,7 @@ describe("search contents prefetch", () => {
         })),
       }));
 
-      const searchResult = await __test__.executeSearchTool({
+      await __test__.executeSearchTool({
         config,
         explicitProvider: "exa",
         ctx: { cwd: process.cwd() },
@@ -490,15 +460,22 @@ describe("search contents prefetch", () => {
         queries: ["exa docs"],
       });
 
-      const prefetchId =
-        (searchResult.content[0]?.text ?? "").match(
-          /Prefetch id: ([\w-]+)/,
-        )?.[1] ?? "missing";
-      expect(prefetchId).not.toBe("missing");
-
-      await vi.waitFor(async () => {
-        expect((await getPrefetchStatus(prefetchId))?.status).toBe("ready");
+      await vi.waitFor(() => {
+        expect(exaGetContentsMock).toHaveBeenCalledTimes(1);
       });
+
+      await __test__.executeProviderTool({
+        capability: "contents",
+        config,
+        explicitProvider: "exa",
+        ctx: { cwd: process.cwd() },
+        signal: undefined,
+        onUpdate: undefined,
+        options: undefined,
+        urls: ["https://exa.ai/sdk"],
+      });
+
+      expect(exaGetContentsMock).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(1001);
 
@@ -510,10 +487,10 @@ describe("search contents prefetch", () => {
         signal: undefined,
         onUpdate: undefined,
         options: undefined,
-        urls: ["https://exa.ai/pricing"],
+        urls: ["https://exa.ai/sdk"],
       });
 
-      expect(await getPrefetchStatus(prefetchId)).toBeUndefined();
+      expect(exaGetContentsMock).toHaveBeenCalledTimes(2);
     } finally {
       vi.useRealTimers();
     }

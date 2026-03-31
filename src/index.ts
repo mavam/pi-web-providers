@@ -38,8 +38,6 @@ import {
   cleanupContentStore,
   DEFAULT_CONTENT_TTL_MS,
   DEFAULT_PREFETCH_MAX_URLS,
-  formatPrefetchStatusText,
-  getPrefetchStatus,
   mergeSearchContentsPrefetchOptions,
   parseSearchContentsPrefetchOptions,
   resetContentStore,
@@ -1130,12 +1128,12 @@ async function executeProviderOperation({
       }),
     );
 
-  // Route contents requests through the local content store whenever we can
+  // Route contents requests through the local in-memory cache whenever we can
   // reuse an exact batch hit or at least one per-URL cache entry. Exact cache
   // hits are served immediately, and partial cache hits fetch only missing or
   // stale URLs.
   if (capability === "contents" && planOverride === undefined) {
-    const resolved = await resolveContentsFromStore({
+    return await resolveContentsFromStore({
       urls: urls ?? [],
       providerId: provider.id,
       config,
@@ -1144,7 +1142,6 @@ async function executeProviderOperation({
       signal: signal ?? undefined,
       onProgress,
     });
-    return resolved.output;
   }
 
   if (capability === "contents") {
@@ -3357,7 +3354,7 @@ function formatQuotedPreview(text: string, maxLength = 80): string {
 
 function formatSearchResponses(
   outcomes: SearchQueryOutcome[],
-  prefetch?: { prefetchId: string; provider: ProviderId; urlCount: number },
+  prefetch?: { provider: ProviderId; urlCount: number },
 ): string {
   const body = outcomes
     .map((outcome, index) =>
@@ -3369,7 +3366,7 @@ function formatSearchResponses(
     return body;
   }
 
-  return `${body}\n\n---\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s). Prefetch id: ${prefetch.prefetchId}`;
+  return `${body}\n\n---\n\nBackground contents prefetch started via ${prefetch.provider} for ${prefetch.urlCount} URL(s).`;
 }
 
 function formatSearchOutcomeSection(

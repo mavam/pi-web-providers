@@ -103,7 +103,7 @@ each page can be acted on independently.
 | `options` | object   | —        | Provider-specific extraction options |
 
 `web_contents` reuses any matching cached pages already present in the local
-content store—whether they came from prefetch or an earlier read—and only
+in-memory cache—whether they came from prefetch or an earlier read—and only
 fetches missing or stale URLs.
 
 </details>
