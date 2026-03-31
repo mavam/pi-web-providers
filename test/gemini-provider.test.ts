@@ -633,6 +633,53 @@ describe("GeminiAdapter research", () => {
       statusText: "running",
     });
   });
+
+  it("treats incomplete Gemini research as terminal failure", async () => {
+    const get = vi.fn().mockResolvedValue({ status: "incomplete" });
+
+    const provider = createProvider({
+      interactions: {
+        get,
+      },
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      error: "research ended incomplete",
+    });
+  });
+
+  it("treats requires_action Gemini research as terminal failure", async () => {
+    const get = vi.fn().mockResolvedValue({
+      status: "requires_action",
+      outputs: [{ type: "function_call" }],
+    });
+
+    const provider = createProvider({
+      interactions: {
+        get,
+      },
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(result).toEqual({
+      status: "failed",
+      error: "research requires additional action (function_call)",
+    });
+  });
 });
 
 function createProvider(client: unknown) {

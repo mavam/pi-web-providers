@@ -301,6 +301,20 @@ export const geminiAdapter: GeminiAdapter = {
       };
     }
 
+    if (status === "incomplete") {
+      return {
+        status: "failed",
+        error: "research ended incomplete",
+      };
+    }
+
+    if (status === "requires_action") {
+      return {
+        status: "failed",
+        error: describeGeminiRequiredAction(interaction.outputs),
+      };
+    }
+
     return status === "in_progress"
       ? { status: "in_progress" }
       : { status: "in_progress", statusText: status };
@@ -930,6 +944,23 @@ function buildGeminiGenerateContentRequest({
       tools: [toolConfig],
     },
   };
+}
+
+function describeGeminiRequiredAction(outputs: unknown): string {
+  if (!Array.isArray(outputs) || outputs.length === 0) {
+    return "research requires additional action";
+  }
+
+  const firstOutput = outputs.find(
+    (value) => typeof value === "object" && value !== null,
+  ) as Record<string, unknown> | undefined;
+  const type = readNonEmptyString(firstOutput?.type);
+
+  if (!type) {
+    return "research requires additional action";
+  }
+
+  return `research requires additional action (${type})`;
 }
 
 function getGeminiResearchRequestOptions(
