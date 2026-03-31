@@ -611,6 +611,28 @@ describe("GeminiAdapter research", () => {
       error: "research failed",
     });
   });
+
+  it("surfaces unknown Gemini research states as progress text", async () => {
+    const get = vi.fn().mockResolvedValue({ status: "running" });
+
+    const provider = createProvider({
+      interactions: {
+        get,
+      },
+    });
+
+    const result = await provider.pollResearch!(
+      "research-1",
+      createConfig(),
+      createContext(),
+      undefined,
+    );
+
+    expect(result).toEqual({
+      status: "in_progress",
+      statusText: "running",
+    });
+  });
 });
 
 function createProvider(client: unknown) {

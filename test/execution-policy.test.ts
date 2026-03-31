@@ -209,6 +209,41 @@ describe("execution policy", () => {
       vi.useRealTimers();
     }
   });
+
+  it("uses provider-specific in-progress status text when available", async () => {
+    vi.useFakeTimers();
+
+    try {
+      const progress: string[] = [];
+      const promise = executeAsyncResearch({
+        providerLabel: "Gemini",
+        providerId: "gemini",
+        context: createContext(progress),
+        pollIntervalMs: 1,
+        start: vi.fn().mockResolvedValue({ id: "research-123" }),
+        poll: vi
+          .fn()
+          .mockResolvedValueOnce({
+            status: "in_progress" as const,
+            statusText: "running",
+          })
+          .mockResolvedValueOnce({
+            status: "completed" as const,
+            output: {
+              provider: "gemini" as const,
+              text: "done",
+            },
+          }),
+      });
+
+      await vi.advanceTimersByTimeAsync(1);
+      await promise;
+
+      expect(progress).toContain("Research via Gemini: running (0s elapsed)");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 function createContext(progress: string[]): ProviderContext {

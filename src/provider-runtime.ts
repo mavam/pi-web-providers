@@ -1,5 +1,6 @@
 import type { ContentsResponse } from "./contents.js";
 import {
+  formatDuration,
   formatErrorMessage,
   parseLocalExecutionOptions,
   runWithExecutionPolicy,
@@ -22,13 +23,26 @@ export async function executeOperationPlan<
 ): Promise<TResult> {
   if (plan.capability === "research") {
     rejectResearchExecutionControls(plan.providerLabel, options);
+    const deadline = createResearchDeadlineSignal(
+      context.signal,
+      plan.providerLabel,
+      plan.traits?.settings?.researchTimeoutMs,
+    );
 
     try {
-      return await plan.execute(context);
+      const researchContext = deadline
+        ? { ...context, signal: deadline.signal }
+        : context;
+      return await withAbortSignal(
+        plan.execute(researchContext),
+        researchContext.signal,
+      );
     } catch (error) {
       throw new Error(
         formatProviderDiagnostic(plan.providerLabel, formatErrorMessage(error)),
       );
+    } finally {
+      deadline?.cleanup();
     }
   }
 
@@ -60,6 +74,94 @@ function resolveExecutionPolicy(
     retryCount: localOptions.retryCount ?? defaults?.retryCount ?? 0,
     retryDelayMs: localOptions.retryDelayMs ?? defaults?.retryDelayMs ?? 2000,
   };
+}
+
+function createResearchDeadlineSignal(
+  signal: AbortSignal | undefined,
+  providerLabel: string,
+  timeoutMs: number | undefined,
+): { signal: AbortSignal; cleanup: () => void } | undefined {
+  if (timeoutMs === undefined) {
+    return undefined;
+  }
+
+  const controller = new AbortController();
+
+  if (signal?.aborted) {
+    controller.abort(getAbortError(signal));
+  }
+
+  const onAbort = () => {
+    controller.abort(getAbortError(signal));
+  };
+
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  const timer = setTimeout(() => {
+    controller.abort(
+      new Error(
+        `${providerLabel} research exceeded ${formatDuration(timeoutMs)}.`,
+      ),
+    );
+  }, timeoutMs);
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
+function getAbortError(
+  signal: AbortSignal | undefined,
+  message = "Operation aborted.",
+): Error {
+  const reason = signal?.reason;
+  if (reason instanceof Error) {
+    return reason;
+  }
+  if (typeof reason === "string" && reason.length > 0) {
+    return new Error(reason);
+  }
+  return new Error(message);
+}
+
+async function withAbortSignal<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) {
+    return await promise;
+  }
+
+  if (signal.aborted) {
+    throw getAbortError(signal);
+  }
+
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(getAbortError(signal));
+    };
+
+    const cleanup = () => {
+      signal.removeEventListener("abort", onAbort);
+    };
+
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolve(value);
+      },
+      (error) => {
+        cleanup();
+        reject(error);
+      },
+    );
+  });
 }
 
 function rejectResearchExecutionControls(

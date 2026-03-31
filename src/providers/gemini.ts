@@ -274,7 +274,9 @@ export const geminiAdapter: GeminiAdapter = {
       ),
     );
 
-    if (interaction.status === "completed") {
+    const status = readNonEmptyString(interaction.status) ?? "unknown";
+
+    if (status === "completed") {
       const text = formatInteractionOutputs(interaction.outputs);
       return {
         status: "completed",
@@ -285,21 +287,23 @@ export const geminiAdapter: GeminiAdapter = {
       };
     }
 
-    if (interaction.status === "failed") {
+    if (status === "failed") {
       return {
         status: "failed",
         error: "research failed",
       };
     }
 
-    if (interaction.status === "cancelled") {
+    if (status === "cancelled") {
       return {
         status: "cancelled",
         error: "research was canceled",
       };
     }
 
-    return { status: "in_progress" };
+    return status === "in_progress"
+      ? { status: "in_progress" }
+      : { status: "in_progress", statusText: status };
   },
 
   createClient(config: Gemini): GoogleGenAI {

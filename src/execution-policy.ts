@@ -169,6 +169,7 @@ export async function executeAsyncResearch({
     signal: deadline.signal,
   };
   let lastStatus: ResearchPollResult["status"] | undefined;
+  let lastProgressStatus: string | undefined;
   const startedAt = Date.now();
 
   try {
@@ -204,11 +205,16 @@ export async function executeAsyncResearch({
         );
         consecutivePollErrors = 0;
 
-        if (result.status !== lastStatus) {
+        const progressStatus = result.statusText ?? result.status;
+        if (
+          result.status !== lastStatus ||
+          progressStatus !== lastProgressStatus
+        ) {
           researchContext.onProgress?.(
-            `Research via ${providerLabel}: ${result.status} (${formatElapsed(Date.now() - startedAt)} elapsed)`,
+            `Research via ${providerLabel}: ${progressStatus} (${formatElapsed(Date.now() - startedAt)} elapsed)`,
           );
           lastStatus = result.status;
+          lastProgressStatus = progressStatus;
         }
 
         if (result.status === "completed") {

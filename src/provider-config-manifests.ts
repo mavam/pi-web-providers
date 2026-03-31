@@ -694,6 +694,22 @@ function requestSettings<TConfig extends { settings?: ExecutionSettings }>() {
         cleanupEmpty(config, "settings");
       },
     }),
+    stringSetting<TConfig>({
+      id: "researchTimeoutMs",
+      label: "Research timeout (ms)",
+      help: "Maximum total time to allow long-running web research for this provider before aborting it. Leave empty to inherit the shared setting.",
+      getValue: (config) =>
+        getIntegerString(config?.settings?.researchTimeoutMs),
+      setValue: (config, value) => {
+        assignOptionalInteger(
+          ensureSettings(config),
+          "researchTimeoutMs",
+          value,
+          "Research timeout must be a positive integer.",
+        );
+        cleanupEmpty(config, "settings");
+      },
+    }),
   ] as const;
 }
 

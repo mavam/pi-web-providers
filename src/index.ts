@@ -1462,7 +1462,13 @@ async function runDispatchedWebResearch({
       signal: undefined,
       options,
       input: request.input,
-      onProgress: undefined,
+      onProgress: (message) => {
+        request.progress = summarizeWebResearchProgress(
+          message,
+          provider.label,
+        );
+        updateWebResearchWidget();
+      },
       planOverride,
     });
     const completedAt = new Date().toISOString();
@@ -1491,15 +1497,18 @@ async function runDispatchedWebResearch({
     };
   }
 
-  await writeWebResearchArtifact(result, reportText);
-  activeWebResearchRequests.delete(request.id);
-  updateWebResearchWidget();
-  pi.sendMessage({
-    customType: WEB_RESEARCH_RESULT_MESSAGE_TYPE,
-    content: formatWebResearchResultMessage(result, ctx.cwd),
-    display: true,
-    details: result,
-  });
+  try {
+    await writeWebResearchArtifact(result, reportText);
+    pi.sendMessage({
+      customType: WEB_RESEARCH_RESULT_MESSAGE_TYPE,
+      content: formatWebResearchResultMessage(result, ctx.cwd),
+      display: true,
+      details: result,
+    });
+  } finally {
+    activeWebResearchRequests.delete(request.id);
+    updateWebResearchWidget();
+  }
 }
 
 function createWebResearchRequest(
@@ -1557,6 +1566,11 @@ function buildWebResearchWidgetLines(
     lines.push(
       `${theme.fg("muted", "• ")}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${truncateInline(cleanSingleLine(request.input), 70)}`,
     );
+    if (request.progress) {
+      lines.push(
+        `${theme.fg("muted", "  ")}${truncateInline(cleanSingleLine(request.progress), 90)}`,
+      );
+    }
   }
 
   if (requests.length > 3) {
@@ -1564,6 +1578,36 @@ function buildWebResearchWidgetLines(
   }
 
   return lines;
+}
+
+function summarizeWebResearchProgress(
+  message: string,
+  providerLabel: string,
+): string {
+  const startingMessage = `Starting research via ${providerLabel}`;
+  if (message === startingMessage) {
+    return "starting";
+  }
+
+  const startedPrefix = `${providerLabel} research started: `;
+  if (message.startsWith(startedPrefix)) {
+    return `started: ${message.slice(startedPrefix.length)}`;
+  }
+
+  const statusPrefix = `Research via ${providerLabel}: `;
+  if (message.startsWith(statusPrefix)) {
+    return message
+      .slice(statusPrefix.length)
+      .replace(/\s+\([^)]* elapsed\)$/u, "")
+      .trim();
+  }
+
+  const retryPrefix = `${providerLabel} research poll is still retrying after transient errors`;
+  if (message.startsWith(retryPrefix)) {
+    return "poll retrying after transient errors";
+  }
+
+  return message.trim();
 }
 
 function formatCompactElapsed(ms: number): string {
@@ -2380,6 +2424,7 @@ const SETTING_IDS = [
   "requestTimeoutMs",
   "retryCount",
   "retryDelayMs",
+  "researchTimeoutMs",
 ] as const satisfies readonly (keyof ExecutionSettings)[];
 
 type SettingId = (typeof SETTING_IDS)[number];
@@ -2417,6 +2462,15 @@ const SETTING_META: Record<
       parseOptionalPositiveIntegerInput(
         value,
         "Retry delay must be a positive integer.",
+      ),
+  },
+  researchTimeoutMs: {
+    label: "Research timeout (ms)",
+    help: "Default maximum total time to allow long-running web research before aborting it. Applies to every provider unless overridden.",
+    parse: (value) =>
+      parseOptionalPositiveIntegerInput(
+        value,
+        "Research timeout must be a positive integer.",
       ),
   },
 };

@@ -118,6 +118,7 @@ describe("config parsing", () => {
           requestTimeoutMs: 45000,
           retryCount: 5,
           retryDelayMs: 4000,
+          researchTimeoutMs: 1800000,
         },
       }),
       "test-config.json",
@@ -127,6 +128,7 @@ describe("config parsing", () => {
       requestTimeoutMs: 45000,
       retryCount: 5,
       retryDelayMs: 4000,
+      researchTimeoutMs: 1800000,
     });
   });
 
@@ -247,6 +249,7 @@ describe("config parsing", () => {
         requestTimeoutMs: 45000,
         retryCount: 5,
         retryDelayMs: 4000,
+        researchTimeoutMs: 1800000,
       },
     };
     config.providers.perplexity = {
@@ -292,6 +295,7 @@ describe("config parsing", () => {
     expect(loaded.providers?.gemini?.settings?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.settings?.retryCount).toBe(5);
     expect(loaded.providers?.gemini?.settings?.retryDelayMs).toBe(4000);
+    expect(loaded.providers?.gemini?.settings?.researchTimeoutMs).toBe(1800000);
     expect(loaded.providers?.perplexity?.options?.search?.country).toBe("US");
     expect(loaded.providers?.perplexity?.options?.research?.model).toBe(
       "sonar-deep-research",

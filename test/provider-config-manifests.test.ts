@@ -27,10 +27,10 @@ describe("provider config manifests", () => {
         "requestTimeoutMs",
         "retryCount",
         "retryDelayMs",
+        "researchTimeoutMs",
       ]),
     );
     expect(ids).not.toContain("researchPollIntervalMs");
-    expect(ids).not.toContain("researchTimeoutMs");
     expect(ids).not.toContain("researchMaxConsecutivePollErrors");
   });
 

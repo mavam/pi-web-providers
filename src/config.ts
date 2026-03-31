@@ -40,6 +40,7 @@ const executionSettingsSchema = z
     requestTimeoutMs: positiveIntegerSchema.optional(),
     retryCount: nonNegativeIntegerSchema.optional(),
     retryDelayMs: positiveIntegerSchema.optional(),
+    researchTimeoutMs: positiveIntegerSchema.optional(),
   })
   .strict();
 const searchSettingsSchema = z
@@ -508,6 +509,7 @@ function parseSettingsConfig(value: unknown, source: string): Settings {
     requestTimeoutMs: parsed.requestTimeoutMs,
     retryCount: parsed.retryCount,
     retryDelayMs: parsed.retryDelayMs,
+    researchTimeoutMs: parsed.researchTimeoutMs,
     search:
       parsed.search !== undefined
         ? parseSearchSettings(parsed.search, source, "settings.search")

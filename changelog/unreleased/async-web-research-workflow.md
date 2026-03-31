@@ -21,4 +21,4 @@ pi now returns immediately, tracks the running job, and later posts a completion
 
 If you previously passed research-specific local execution controls such as `requestTimeoutMs`, `retryCount`, `retryDelayMs`, `pollIntervalMs`, `timeoutMs`, `maxConsecutivePollErrors`, or `resumeId` in `web_research.options`, remove them. The async workflow is now the only supported research behavior.
 
-If you customized shared or provider-level research execution settings in `~/.pi/agent/web-providers.json`, remove those keys and rely on the built-in async workflow instead.
+You can still configure the overall async research deadline in `~/.pi/agent/web-providers.json` with `settings.researchTimeoutMs` or a provider-specific override such as `providers.gemini.settings.researchTimeoutMs`.

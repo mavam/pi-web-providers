@@ -201,6 +201,7 @@ describe("provider resolution", () => {
         requestTimeoutMs: 30000,
         retryCount: 3,
         retryDelayMs: 2000,
+        researchTimeoutMs: 1800000,
       },
       providers: {
         exa: {
@@ -215,6 +216,7 @@ describe("provider resolution", () => {
       requestTimeoutMs: 30000,
       retryCount: 5,
       retryDelayMs: 2000,
+      researchTimeoutMs: 1800000,
     });
   });
 });

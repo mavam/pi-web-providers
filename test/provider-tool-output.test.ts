@@ -844,6 +844,71 @@ describe("provider tool output", () => {
     expect(report).toContain("Gemini: rate limited.");
   });
 
+  it("cleans up active research jobs even when result delivery throws", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-web-research-"));
+    cleanupDirs.push(cwd);
+
+    const config: WebProviders = {
+      providers: {
+        gemini: {
+          apiKey: "literal-key",
+        },
+      },
+    };
+    const sendMessage = vi.fn(() => {
+      throw new Error("send failed");
+    });
+    const setWidget = vi.fn();
+    const activeWebResearchRequests = new Map();
+    let lastWidgetContext: any;
+    const updateWebResearchWidget = (ctx?: any) => {
+      const widgetContext = ctx ?? lastWidgetContext;
+      if (!widgetContext?.hasUI) {
+        return;
+      }
+      lastWidgetContext = widgetContext;
+      const requests = [...activeWebResearchRequests.values()];
+      widgetContext.ui.setWidget(
+        "web-research-jobs",
+        requests.length === 0
+          ? undefined
+          : [`Research jobs running: ${requests.length}`],
+      );
+    };
+
+    await __test__.dispatchWebResearch({
+      pi: { sendMessage },
+      activeWebResearchRequests,
+      updateWebResearchWidget,
+      config,
+      explicitProvider: "gemini",
+      ctx: {
+        cwd,
+        hasUI: true,
+        ui: {
+          setWidget,
+          theme: { fg: (_color: string, text: string) => text } as any,
+        },
+      } as any,
+      options: undefined,
+      input: "Investigate the topic",
+      planOverride: {
+        capability: "research",
+        providerId: "gemini",
+        providerLabel: "Gemini",
+        execute: async () => ({
+          provider: "gemini",
+          text: "Detailed report text",
+        }),
+      },
+    });
+
+    await __test__.waitForPendingResearchTasks();
+
+    expect(activeWebResearchRequests.size).toBe(0);
+    expect(setWidget).toHaveBeenLastCalledWith("web-research-jobs", undefined);
+  });
+
   it("emits heartbeat updates for long-running foreground research tools", async () => {
     vi.useFakeTimers();
 

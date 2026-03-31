@@ -49,6 +49,7 @@ export interface ResearchJob {
 
 export interface ResearchPollResult {
   status: "in_progress" | "completed" | "failed" | "cancelled";
+  statusText?: string;
   output?: ToolOutput;
   error?: string;
 }
@@ -76,6 +77,7 @@ export interface WebResearchRequest {
   input: string;
   outputPath: string;
   startedAt: string;
+  progress?: string;
 }
 
 export interface WebResearchResult extends WebResearchRequest {
@@ -227,6 +229,7 @@ export interface ExecutionSettings {
   requestTimeoutMs?: number;
   retryCount?: number;
   retryDelayMs?: number;
+  researchTimeoutMs?: number;
 }
 
 export interface SearchRequest {
@@ -264,6 +267,7 @@ export const EXECUTION_CONTROL_KEYS = [
   "requestTimeoutMs",
   "retryCount",
   "retryDelayMs",
+  "researchTimeoutMs",
 ] as const;
 
 export type ExecutionControlKey = (typeof EXECUTION_CONTROL_KEYS)[number];

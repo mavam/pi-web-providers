@@ -60,8 +60,9 @@ configuration.
 Each managed tool maps to one provider id under the top-level `tools` key.
 Removing a tool mapping turns that tool off. A tool is only exposed when it is
 mapped to a compatible provider and that provider is currently available.
-Shared defaults and tool-specific settings live under `settings`; today
-search-specific settings live under `settings.search`.
+Shared defaults and tool-specific settings live under `settings`; search-specific
+settings live under `settings.search`, and async research uses
+`settings.researchTimeoutMs`.
 
 #### `web_search`
 
@@ -328,11 +329,12 @@ wrapper files.
 The `settings` block holds shared execution defaults that apply to all
 providers unless overridden in a provider's own `settings` block:
 
-| Field              | Default | Description                                |
-| ------------------ | ------- | ------------------------------------------ |
-| `requestTimeoutMs` | `30000` | Maximum time for a single provider request |
-| `retryCount`       | `3`     | Retries for transient failures             |
-| `retryDelayMs`     | `2000`  | Initial delay before retrying              |
+| Field               | Default   | Description                                                 |
+| ------------------- | --------- | ----------------------------------------------------------- |
+| `requestTimeoutMs`  | `30000`   | Maximum time for a single provider request                  |
+| `retryCount`        | `3`       | Retries for transient failures                              |
+| `retryDelayMs`      | `2000`    | Initial delay before retrying                               |
+| `researchTimeoutMs` | `1800000` | Maximum total time for an async `web_research` job (30 min) |
 
 ## 🔎 Live smoke tests
 
