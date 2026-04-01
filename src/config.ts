@@ -117,10 +117,17 @@ const geminiProviderSchema = z
     settings: executionSettingsSchema.optional(),
   })
   .strict();
+const linkupOptionsSchema = z
+  .object({
+    search: jsonObjectSchema.optional(),
+    fetch: jsonObjectSchema.optional(),
+  })
+  .strict();
 const linkupProviderSchema = z
   .object({
     apiKey: stringSchema.optional(),
     baseUrl: stringSchema.optional(),
+    options: linkupOptionsSchema.optional(),
     settings: executionSettingsSchema.optional(),
   })
   .strict();

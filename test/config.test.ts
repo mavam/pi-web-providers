@@ -156,6 +156,14 @@ describe("config parsing", () => {
           linkup: {
             apiKey: "LINKUP_API_KEY",
             baseUrl: "https://api.linkup.test/v1",
+            options: {
+              search: {
+                depth: "deep",
+              },
+              fetch: {
+                renderJs: true,
+              },
+            },
             settings: {
               requestTimeoutMs: 45000,
             },
@@ -168,6 +176,14 @@ describe("config parsing", () => {
     expect(parsed.providers?.linkup).toEqual({
       apiKey: "LINKUP_API_KEY",
       baseUrl: "https://api.linkup.test/v1",
+      options: {
+        search: {
+          depth: "deep",
+        },
+        fetch: {
+          renderJs: true,
+        },
+      },
       settings: {
         requestTimeoutMs: 45000,
       },

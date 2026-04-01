@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 describe("linkupAdapter", () => {
-  it("uses Linkup search with fixed standard search-results mode", async () => {
+  it("forwards supported Linkup search options and keeps search-results output fixed", async () => {
     process.env.LINKUP_API_KEY = "test-key";
 
     linkupSearchMock.mockResolvedValue({
@@ -53,11 +53,19 @@ describe("linkupAdapter", () => {
       {
         apiKey: "LINKUP_API_KEY",
         baseUrl: "https://api.linkup.test/v1",
+        options: {
+          search: {
+            includeImages: true,
+            excludeDomains: ["example.com"],
+          },
+        },
       },
       { cwd: process.cwd() },
       {
         depth: "deep",
-        outputType: "structured",
+        includeDomains: ["docs.linkup.so"],
+        fromDate: "2026-01-02T03:04:05.000Z",
+        requestTimeoutMs: 5000,
       },
     );
 
@@ -67,10 +75,19 @@ describe("linkupAdapter", () => {
     });
     expect(linkupSearchMock).toHaveBeenCalledWith({
       query: "linkup sdk",
-      depth: "standard",
+      depth: "deep",
       outputType: "searchResults",
       maxResults: 2,
+      includeImages: true,
+      includeDomains: ["docs.linkup.so"],
+      excludeDomains: ["example.com"],
+      fromDate: expect.any(Date),
     });
+    expect(
+      (
+        linkupSearchMock.mock.calls[0]?.[0] as { fromDate: Date }
+      ).fromDate.toISOString(),
+    ).toBe("2026-01-02T03:04:05.000Z");
     expect(response).toEqual({
       provider: "linkup",
       results: [
@@ -95,7 +112,23 @@ describe("linkupAdapter", () => {
     });
   });
 
-  it("fetches markdown contents per URL and preserves URL order", async () => {
+  it("rejects incompatible Linkup search option overrides", async () => {
+    await expect(
+      linkupAdapter.search(
+        "linkup sdk",
+        2,
+        {
+          apiKey: "literal-key",
+        },
+        { cwd: process.cwd() },
+        {
+          outputType: "structured",
+        },
+      ),
+    ).rejects.toThrow(/only supports outputType 'searchResults'/);
+  });
+
+  it("forwards Linkup fetch options per URL and preserves URL order", async () => {
     linkupFetchMock.mockImplementation(async ({ url }: { url: string }) => {
       if (url === "https://example.com/a") {
         return {
@@ -118,10 +151,17 @@ describe("linkupAdapter", () => {
       ],
       {
         apiKey: "literal-key",
+        options: {
+          fetch: {
+            includeRawHtml: true,
+          },
+        },
       },
       { cwd: process.cwd() },
       {
         renderJs: true,
+        extractImages: true,
+        retryCount: 2,
       },
     );
 
@@ -131,12 +171,21 @@ describe("linkupAdapter", () => {
     });
     expect(linkupFetchMock).toHaveBeenNthCalledWith(1, {
       url: "https://example.com/a",
+      renderJs: true,
+      includeRawHtml: true,
+      extractImages: true,
     });
     expect(linkupFetchMock).toHaveBeenNthCalledWith(2, {
       url: "https://example.com/b",
+      renderJs: true,
+      includeRawHtml: true,
+      extractImages: true,
     });
     expect(linkupFetchMock).toHaveBeenNthCalledWith(3, {
       url: "https://example.com/c",
+      renderJs: true,
+      includeRawHtml: true,
+      extractImages: true,
     });
     expect(response.answers).toEqual([
       {

@@ -269,8 +269,12 @@ scope, or account ID is usually wrong.
 <summary><strong>Linkup</strong></summary>
 
 - SDK: `linkup-sdk`
-- Supports `web_search` via Linkup Search with standard search-results output
+- Supports `web_search` via Linkup Search with fixed `searchResults` output
 - Supports `web_contents` via Linkup Fetch and always returns markdown
+- Supports provider-specific `options.search` such as `depth`, domain filters,
+  image inclusion, and date filters
+- Supports provider-specific `options.fetch` such as `renderJs`,
+  `includeRawHtml`, and `extractImages`
 - Good fit for a simple search-plus-markdown setup without extra provider wiring
 
 </details>

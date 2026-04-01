@@ -114,6 +114,11 @@ export interface GeminiOptions {
   researchAgent?: string;
 }
 
+export interface LinkupOptions {
+  search?: Record<string, unknown>;
+  fetch?: Record<string, unknown>;
+}
+
 export interface PerplexityOptions {
   search?: Record<string, unknown>;
   answer?: Record<string, unknown>;
@@ -184,7 +189,7 @@ export interface Gemini extends Provider<GeminiOptions> {
   apiKey?: string;
 }
 
-export interface Linkup extends Provider<Record<string, unknown>> {
+export interface Linkup extends Provider<LinkupOptions> {
   apiKey?: string;
   baseUrl?: string;
 }

@@ -1,6 +1,12 @@
-import { LinkupClient } from "linkup-sdk";
+import {
+  type FetchParams,
+  LinkupClient,
+  type SearchDepth,
+  type SearchParams,
+} from "linkup-sdk";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Linkup,
   ProviderAdapter,
@@ -11,7 +17,31 @@ import type {
   SearchResult,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { getApiKeyStatus, trimSnippet } from "./shared.js";
+import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
+
+type LinkupSearchOptions = {
+  depth?: SearchDepth;
+  includeImages?: boolean;
+  includeDomains?: string[];
+  excludeDomains?: string[];
+  fromDate?: string | number | Date;
+  toDate?: string | number | Date;
+  query?: string;
+  outputType?: string;
+  maxResults?: number;
+  includeInlineCitations?: boolean;
+  includeSources?: boolean;
+  structuredOutputSchema?: unknown;
+};
+
+type LinkupFetchOptions = Omit<FetchParams, "url"> & {
+  url?: string;
+};
+
+type ManagedLinkupSearchParams = Extract<
+  SearchParams,
+  { outputType: "searchResults" }
+>;
 
 type LinkupAdapter = ProviderAdapter<Linkup> & {
   search(
@@ -88,15 +118,17 @@ export const linkupAdapter: LinkupAdapter = {
     maxResults: number,
     config: Linkup,
     _context: ProviderContext,
-    _options?: Record<string, unknown>,
+    options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const response = (await client.search({
-      query,
-      depth: "standard",
-      outputType: "searchResults",
-      maxResults,
-    })) as { results?: unknown[] };
+    const defaults =
+      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const response = await client.search(
+      buildSearchParams(query, maxResults, {
+        ...defaults,
+        ...(stripLocalExecutionOptions(options) ?? {}),
+      }),
+    );
 
     return {
       provider: linkupAdapter.id,
@@ -111,20 +143,25 @@ export const linkupAdapter: LinkupAdapter = {
     urls: string[],
     config: Linkup,
     _context: ProviderContext,
-    _options?: Record<string, unknown>,
+    options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
+    const defaults =
+      stripLocalExecutionOptions(asJsonObject(config.options?.fetch)) ?? {};
 
     return {
       provider: linkupAdapter.id,
       answers: await Promise.all(
         urls.map(async (url) => {
           try {
-            const response = (await client.fetch({ url })) as {
-              markdown?: unknown;
-            };
+            const response = await client.fetch(
+              buildFetchParams(url, {
+                ...defaults,
+                ...(stripLocalExecutionOptions(options) ?? {}),
+              }),
+            );
 
-            return typeof response.markdown === "string" && response.markdown
+            return response.markdown
               ? {
                   url,
                   content: response.markdown,
@@ -144,6 +181,84 @@ export const linkupAdapter: LinkupAdapter = {
     };
   },
 };
+
+function buildSearchParams(
+  query: string,
+  maxResults: number,
+  options: Record<string, unknown>,
+): ManagedLinkupSearchParams {
+  const searchOptions = options as LinkupSearchOptions;
+
+  if (searchOptions.query !== undefined) {
+    throw new Error("Linkup search options cannot override the managed query.");
+  }
+  if (searchOptions.maxResults !== undefined) {
+    throw new Error(
+      "Linkup search options cannot override the managed maxResults.",
+    );
+  }
+  if (
+    searchOptions.outputType !== undefined &&
+    searchOptions.outputType !== "searchResults"
+  ) {
+    throw new Error("Linkup search only supports outputType 'searchResults'.");
+  }
+  if (
+    searchOptions.includeInlineCitations !== undefined ||
+    searchOptions.includeSources !== undefined ||
+    searchOptions.structuredOutputSchema !== undefined
+  ) {
+    throw new Error(
+      "Linkup search only supports search-results mode for managed web_search.",
+    );
+  }
+
+  return {
+    query,
+    depth: searchOptions.depth ?? "standard",
+    outputType: "searchResults",
+    maxResults,
+    ...(searchOptions.includeImages !== undefined
+      ? { includeImages: searchOptions.includeImages }
+      : {}),
+    ...(searchOptions.includeDomains !== undefined
+      ? { includeDomains: searchOptions.includeDomains }
+      : {}),
+    ...(searchOptions.excludeDomains !== undefined
+      ? { excludeDomains: searchOptions.excludeDomains }
+      : {}),
+    ...(searchOptions.fromDate !== undefined
+      ? { fromDate: toDate(searchOptions.fromDate, "fromDate") }
+      : {}),
+    ...(searchOptions.toDate !== undefined
+      ? { toDate: toDate(searchOptions.toDate, "toDate") }
+      : {}),
+  };
+}
+
+function buildFetchParams(
+  url: string,
+  options: Record<string, unknown>,
+): FetchParams {
+  const fetchOptions = options as LinkupFetchOptions;
+
+  if (fetchOptions.url !== undefined) {
+    throw new Error("Linkup fetch options cannot override the managed URL.");
+  }
+
+  return {
+    url,
+    ...(fetchOptions.renderJs !== undefined
+      ? { renderJs: fetchOptions.renderJs }
+      : {}),
+    ...(fetchOptions.includeRawHtml !== undefined
+      ? { includeRawHtml: fetchOptions.includeRawHtml }
+      : {}),
+    ...(fetchOptions.extractImages !== undefined
+      ? { extractImages: fetchOptions.extractImages }
+      : {}),
+  };
+}
 
 function createClient(config: Linkup): LinkupClient {
   const apiKey = resolveConfigValue(config.apiKey);
@@ -190,4 +305,14 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function toDate(value: string | number | Date, name: string): Date {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(
+      `Linkup option '${name}' must be a valid date string, timestamp, or Date.`,
+    );
+  }
+  return date;
 }
