@@ -7,6 +7,7 @@ import {
 
 export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   claude: ["search", "answer"],
+  cloudflare: ["contents"],
   codex: ["search"],
   custom: ["search", "contents", "answer", "research"],
   exa: ["search", "contents", "answer", "research"],

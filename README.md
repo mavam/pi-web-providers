@@ -12,8 +12,8 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers**: Claude, Codex, Exa, Gemini, Perplexity, Parallel,
-  Valyu
+- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Gemini,
+  Perplexity, Parallel, Valyu
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -38,15 +38,16 @@ settings UI mirrors the three sections below: tools, providers, and settings.
 
 Each tool can be routed to any compatible provider:
 
-| Provider       | search | contents | answer | research | Auth                   |
-| -------------- | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth |
-| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth   |
-| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`          |
-| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`       |
-| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`   |
-| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`     |
-| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`        |
+| Provider       | search | contents | answer | research | Auth                                             |
+| -------------- | :----: | :------: | :----: | :------: | ------------------------------------------------ |
+| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth                           |
+| **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
+| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth                             |
+| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
+| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
+| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
+| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
+| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
 
 Advanced option: `custom` is a configurable adapter provider that can route
 any managed tool through a local wrapper command using a JSON stdin/stdout
@@ -169,6 +170,45 @@ The built-in providers below are thin adapters around official SDKs.
 - Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
   `maxTurns`
 - Great for search plus grounded answers if you already use Claude Code locally
+
+</details>
+
+<details>
+<summary><strong>Cloudflare</strong></summary>
+
+- SDK: `cloudflare`
+- Supports `web_contents` via Cloudflare Browser Rendering's `/markdown`
+  endpoint
+- Good for JavaScript-heavy pages that need a real browser render before
+  extraction
+- Supports provider-specific markdown options such as `gotoOptions`,
+  `waitForSelector`, `waitForTimeout`, `cacheTTL`, and request filtering
+
+**Setup**
+
+1. In the Cloudflare dashboard, create an API token.
+2. Grant it this permission:
+   - `Account | Browser Rendering | Edit`
+3. Scope it to the account you want to use.
+4. Copy that account's **Account ID** from the Cloudflare dashboard.
+5. Configure pi with both values:
+
+```json
+{
+  "tools": {
+    "contents": "cloudflare"
+  },
+  "providers": {
+    "cloudflare": {
+      "apiToken": "CLOUDFLARE_API_TOKEN",
+      "accountId": "CLOUDFLARE_ACCOUNT_ID"
+    }
+  }
+}
+```
+
+If Cloudflare returns `401 Authentication error`, the token permission, token
+scope, or account ID is usually wrong.
 
 </details>
 

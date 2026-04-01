@@ -33,6 +33,7 @@ beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), "pi-web-providers-home-"));
   cleanupDirs.push(home);
   process.env.HOME = home;
+  delete process.env.CLOUDFLARE_API_TOKEN;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
@@ -43,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.CLOUDFLARE_API_TOKEN;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
@@ -150,6 +152,25 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("rejects Cloudflare contents when the account id is missing", () => {
+    process.env.CLOUDFLARE_API_TOKEN = "test-token";
+
+    const config = createConfig({
+      tools: {
+        contents: "cloudflare",
+      },
+      providers: {
+        cloudflare: {
+          apiToken: "CLOUDFLARE_API_TOKEN",
+        },
+      },
+    });
+
+    expect(() =>
+      resolveProviderForTool(config, process.cwd(), "contents"),
+    ).toThrow(/Provider 'cloudflare' is not available: missing account ID/);
   });
 
   it("rejects Custom when the mapped capability has no command configured", () => {

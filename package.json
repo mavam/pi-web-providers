@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "1.1.0",
-  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research across Claude, Codex, Custom, Exa, Gemini, Perplexity, Parallel, and Valyu.",
+  "description": "Configurable web access extension for pi with per-tool provider routing for search, contents, answers, and research.",
   "type": "module",
   "files": [
     "dist",
@@ -16,6 +16,7 @@
     "coding-agent",
     "web-search",
     "claude",
+    "cloudflare",
     "codex",
     "custom",
     "exa",
@@ -42,7 +43,7 @@
     ]
   },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:exa-js --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:cloudflare --external:exa-js --external:parallel-web --external:valyu-js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
@@ -57,6 +58,7 @@
     "@google/genai": "^1.44.0",
     "@openai/codex-sdk": "^0.111.0",
     "@perplexity-ai/perplexity_ai": "^0.26.1",
+    "cloudflare": "^5.2.0",
     "exa-js": "^2.7.0",
     "parallel-web": "^0.3.1",
     "valyu-js": "^2.5.9",
@@ -65,6 +67,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
     "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
     "@sinclair/typebox": "*",
     "@types/node": "^24.3.0",
     "esbuild": "^0.25.10",

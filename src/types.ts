@@ -3,6 +3,7 @@ import type { ContentsResponse } from "./contents.js";
 
 export const PROVIDER_IDS = [
   "claude",
+  "cloudflare",
   "codex",
   "custom",
   "exa",
@@ -151,6 +152,11 @@ export interface Codex extends Provider<CodexOptions> {
   config?: Record<string, unknown>;
 }
 
+export interface Cloudflare extends Provider<Record<string, unknown>> {
+  apiToken?: string;
+  accountId?: string;
+}
+
 export interface Exa extends Provider<Record<string, unknown>> {
   apiKey?: string;
   baseUrl?: string;
@@ -183,6 +189,7 @@ export interface Settings extends ExecutionSettings {
 
 export interface Providers {
   claude?: Claude;
+  cloudflare?: Cloudflare;
   codex?: Codex;
   custom?: Custom;
   exa?: Exa;
@@ -194,6 +201,7 @@ export interface Providers {
 
 export type AnyProvider =
   | Claude
+  | Cloudflare
   | Codex
   | Custom
   | Exa

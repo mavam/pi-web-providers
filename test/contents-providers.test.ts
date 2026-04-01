@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const {
+  cloudflareCtorMock,
+  cloudflareMarkdownCreateMock,
   exaCtorMock,
   exaGetContentsMock,
   parallelCtorMock,
@@ -9,6 +11,8 @@ const {
   valyuContentsMock,
   valyuWaitForJobMock,
 } = vi.hoisted(() => ({
+  cloudflareCtorMock: vi.fn(),
+  cloudflareMarkdownCreateMock: vi.fn(),
   exaCtorMock: vi.fn(),
   exaGetContentsMock: vi.fn(),
   parallelCtorMock: vi.fn(),
@@ -16,6 +20,18 @@ const {
   valyuCtorMock: vi.fn(),
   valyuContentsMock: vi.fn(),
   valyuWaitForJobMock: vi.fn(),
+}));
+
+vi.mock("cloudflare", () => ({
+  default: cloudflareCtorMock.mockImplementation(function MockCloudflare() {
+    return {
+      browserRendering: {
+        markdown: {
+          create: cloudflareMarkdownCreateMock,
+        },
+      },
+    };
+  }),
 }));
 
 vi.mock("exa-js", () => ({
@@ -58,7 +74,58 @@ vi.mock("valyu-js", () => ({
   }),
 }));
 
+afterEach(() => {
+  cloudflareCtorMock.mockClear();
+  cloudflareMarkdownCreateMock.mockReset();
+});
+
 describe("contents providers", () => {
+  it("renders contents via Cloudflare Browser Rendering markdown", async () => {
+    const { cloudflareAdapter: provider } = await import(
+      "../src/providers/cloudflare.js"
+    );
+
+    cloudflareMarkdownCreateMock.mockResolvedValue(
+      "# Cloudflare Docs\n\nRendered content",
+    );
+
+    const result = await provider.contents(
+      ["https://developers.cloudflare.com/browser-rendering/"],
+      {
+        apiToken: "literal-token",
+        accountId: "account-id",
+        options: {
+          gotoOptions: {
+            waitUntil: "networkidle0",
+          },
+        },
+      },
+      { cwd: process.cwd() },
+      {
+        cacheTTL: 0,
+      },
+    );
+
+    expect(cloudflareCtorMock).toHaveBeenCalledWith({
+      apiToken: "literal-token",
+    });
+    expect(cloudflareMarkdownCreateMock).toHaveBeenCalledWith(
+      {
+        gotoOptions: {
+          waitUntil: "networkidle0",
+        },
+        cacheTTL: 0,
+        account_id: "account-id",
+        url: "https://developers.cloudflare.com/browser-rendering/",
+      },
+      undefined,
+    );
+    expect(result.answers[0]).toEqual({
+      url: "https://developers.cloudflare.com/browser-rendering/",
+      content: "# Cloudflare Docs\n\nRendered content",
+    });
+  });
+
   it("keeps full Exa page text instead of collapsing to a snippet", async () => {
     const { exaAdapter: provider } = await import("../src/providers/exa.js");
     const longParagraph = "x".repeat(420);

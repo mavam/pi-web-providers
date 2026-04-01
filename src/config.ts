@@ -6,6 +6,7 @@ import { z } from "zod";
 import { supportsTool } from "./provider-tools.js";
 import type {
   Claude,
+  Cloudflare,
   Codex,
   Custom,
   CustomCommandConfig,
@@ -87,6 +88,14 @@ const codexProviderSchema = z
     env: stringMapSchema.optional(),
     config: jsonObjectSchema.optional(),
     options: codexOptionsSchema.optional(),
+    settings: executionSettingsSchema.optional(),
+  })
+  .strict();
+const cloudflareProviderSchema = z
+  .object({
+    apiToken: stringSchema.optional(),
+    accountId: stringSchema.optional(),
+    options: jsonObjectSchema.optional(),
     settings: executionSettingsSchema.optional(),
   })
   .strict();
@@ -343,6 +352,7 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
 
     const normalizers = {
       claude: normalizeClaudeProvider,
+      cloudflare: normalizeCloudflareProvider,
       codex: normalizeCodexProvider,
       custom: normalizeCustomProvider,
       exa: normalizeExaProvider,
@@ -373,6 +383,15 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
 
 function normalizeClaudeProvider(raw: unknown, source: string): Claude {
   return parseProviderWithSchema(raw, source, "claude", claudeProviderSchema);
+}
+
+function normalizeCloudflareProvider(raw: unknown, source: string): Cloudflare {
+  return parseProviderWithSchema(
+    raw,
+    source,
+    "cloudflare",
+    cloudflareProviderSchema,
+  );
 }
 
 function normalizeCodexProvider(raw: unknown, source: string): Codex {
@@ -461,6 +480,7 @@ function parseProviderWithSchema<T>(
 function toPublicProviderConfig(
   provider:
     | Claude
+    | Cloudflare
     | Codex
     | Custom
     | Exa
@@ -484,6 +504,12 @@ function toPublicProviderConfig(
       : {}),
     ...("apiKey" in provider && provider.apiKey !== undefined
       ? { apiKey: provider.apiKey }
+      : {}),
+    ...("apiToken" in provider && provider.apiToken !== undefined
+      ? { apiToken: provider.apiToken }
+      : {}),
+    ...("accountId" in provider && provider.accountId !== undefined
+      ? { accountId: provider.accountId }
       : {}),
     ...("env" in provider && provider.env !== undefined
       ? { env: provider.env }

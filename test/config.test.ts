@@ -26,6 +26,8 @@ afterEach(async () => {
     );
   }
   delete process.env.PI_CODING_AGENT_DIR;
+  delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
@@ -71,6 +73,37 @@ describe("config parsing", () => {
         "test-config.json",
       ),
     ).toThrow(/providers\.codex\.enabled/);
+  });
+
+  it("parses Cloudflare provider config", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          cloudflare: {
+            apiToken: "CLOUDFLARE_API_TOKEN",
+            accountId: "CLOUDFLARE_ACCOUNT_ID",
+            options: {
+              cacheTTL: 0,
+            },
+            settings: {
+              requestTimeoutMs: 45000,
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.cloudflare).toEqual({
+      apiToken: "CLOUDFLARE_API_TOKEN",
+      accountId: "CLOUDFLARE_ACCOUNT_ID",
+      options: {
+        cacheTTL: 0,
+      },
+      settings: {
+        requestTimeoutMs: 45000,
+      },
+    });
   });
 
   it("rejects legacy provider-local tool toggles", () => {
@@ -225,6 +258,13 @@ describe("config parsing", () => {
         additionalDirectories: ["docs"],
       },
     };
+    config.providers.cloudflare = {
+      apiToken: "CLOUDFLARE_API_TOKEN",
+      accountId: "CLOUDFLARE_ACCOUNT_ID",
+      options: {
+        cacheTTL: 0,
+      },
+    };
     config.providers.exa = {
       apiKey: "EXA_API_KEY",
       options: {
@@ -290,6 +330,11 @@ describe("config parsing", () => {
     expect(loaded.providers?.codex?.options?.additionalDirectories).toEqual([
       "notes",
     ]);
+    expect(loaded.providers?.cloudflare?.apiToken).toBe("CLOUDFLARE_API_TOKEN");
+    expect(loaded.providers?.cloudflare?.accountId).toBe(
+      "CLOUDFLARE_ACCOUNT_ID",
+    );
+    expect(loaded.providers?.cloudflare?.options?.cacheTTL).toBe(0);
     expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
     expect(loaded.providers?.gemini?.options?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.settings?.requestTimeoutMs).toBe(45000);

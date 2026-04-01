@@ -157,6 +157,13 @@ export function getProviderSetupState(
     return Object.keys(providerConfig).length > 0 ? "configured" : "none";
   }
 
+  if (providerId === "cloudflare") {
+    return providerConfig.apiToken !== undefined ||
+      providerConfig.accountId !== undefined
+      ? "configured"
+      : "none";
+  }
+
   return providerConfig.apiKey !== undefined ? "configured" : "none";
 }
 

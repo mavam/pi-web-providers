@@ -3,7 +3,7 @@ import {
   getProviderConfigManifest,
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
-import type { Custom } from "../src/types.js";
+import type { Cloudflare, Custom } from "../src/types.js";
 
 describe("provider config manifests", () => {
   it("exposes custom argv, cwd, env, and request settings", () => {
@@ -75,6 +75,50 @@ describe("provider config manifests", () => {
     expect(() =>
       getTextSetting("customSearchArgv").setValue(config, "[]"),
     ).toThrow(/non-empty JSON string array/);
+  });
+
+  it("exposes Cloudflare token and account settings", () => {
+    const manifest = getProviderConfigManifest("cloudflare");
+    const ids = manifest.settings.map((setting) => setting.id);
+
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "apiToken",
+        "accountId",
+        "requestTimeoutMs",
+        "retryCount",
+        "retryDelayMs",
+        "researchTimeoutMs",
+      ]),
+    );
+  });
+
+  it("round-trips Cloudflare token and account settings", () => {
+    const manifest = getProviderConfigManifest("cloudflare");
+    const apiTokenSetting = manifest.settings.find(
+      (setting) => setting.id === "apiToken",
+    );
+    const accountIdSetting = manifest.settings.find(
+      (setting) => setting.id === "accountId",
+    );
+
+    if (
+      !apiTokenSetting ||
+      apiTokenSetting.kind !== "text" ||
+      !accountIdSetting ||
+      accountIdSetting.kind !== "text"
+    ) {
+      throw new Error("Missing Cloudflare settings.");
+    }
+
+    const config: Cloudflare = {};
+    apiTokenSetting.setValue(config, "CLOUDFLARE_API_TOKEN");
+    accountIdSetting.setValue(config, "CLOUDFLARE_ACCOUNT_ID");
+
+    expect(config).toEqual({
+      apiToken: "CLOUDFLARE_API_TOKEN",
+      accountId: "CLOUDFLARE_ACCOUNT_ID",
+    });
   });
 });
 

@@ -1,5 +1,6 @@
 import type { AnyProvider, ProviderAdapter, ProviderId } from "../types.js";
 import { claudeAdapter } from "./claude.js";
+import { cloudflareAdapter } from "./cloudflare.js";
 import { codexAdapter } from "./codex.js";
 import { customAdapter } from "./custom.js";
 import { exaAdapter } from "./exa.js";
@@ -13,6 +14,7 @@ export const ADAPTERS_BY_ID: Record<
   ProviderAdapter<AnyProvider>
 > = {
   claude: claudeAdapter,
+  cloudflare: cloudflareAdapter,
   codex: codexAdapter,
   custom: customAdapter,
   exa: exaAdapter,

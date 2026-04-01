@@ -512,10 +512,7 @@ function findAnswerForUrl(
   answers: ContentsAnswer[],
   url: string,
 ): ContentsAnswer | undefined {
-  return answers.find(
-    (answer) =>
-      answer.error === undefined && canonicalizeUrl(answer.url) === url,
-  );
+  return answers.find((answer) => canonicalizeUrl(answer.url) === url);
 }
 
 function toStoredContentItem(answer: ContentsAnswer): ContentsAnswer {

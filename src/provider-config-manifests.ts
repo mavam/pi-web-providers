@@ -1,6 +1,7 @@
 import type {
   Claude,
   ClaudeOptions,
+  Cloudflare,
   Codex,
   CodexOptions,
   Custom,
@@ -104,6 +105,44 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           );
         },
       }),
+    ],
+  },
+  cloudflare: {
+    settings: [
+      stringSetting<Cloudflare>({
+        id: "apiToken",
+        label: "API token",
+        help: "Cloudflare API token for Browser Rendering. The token needs the permission `Account | Browser Rendering | Edit`. You can use a literal value, an env var name like CLOUDFLARE_API_TOKEN, or !command.",
+        secret: true,
+        getValue: (config) => config?.apiToken,
+        setValue: (config, value) => {
+          assignOptionalString(
+            config as Record<
+              string,
+              string | number | boolean | Record<string, unknown> | undefined
+            >,
+            "apiToken",
+            value,
+          );
+        },
+      }),
+      stringSetting<Cloudflare>({
+        id: "accountId",
+        label: "Account ID",
+        help: "Cloudflare account ID for the same account the token is scoped to. You can use a literal value, an env var name like CLOUDFLARE_ACCOUNT_ID, or !command.",
+        getValue: (config) => config?.accountId,
+        setValue: (config, value) => {
+          assignOptionalString(
+            config as Record<
+              string,
+              string | number | boolean | Record<string, unknown> | undefined
+            >,
+            "accountId",
+            value,
+          );
+        },
+      }),
+      ...requestSettings<Cloudflare>(),
     ],
   },
   codex: {
