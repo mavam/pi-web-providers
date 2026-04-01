@@ -7,6 +7,7 @@ export const PROVIDER_IDS = [
   "codex",
   "custom",
   "exa",
+  "firecrawl",
   "gemini",
   "perplexity",
   "parallel",
@@ -123,6 +124,11 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
+export interface FirecrawlOptions {
+  search?: Record<string, unknown>;
+  scrape?: Record<string, unknown>;
+}
+
 export interface TavilyOptions {
   search?: Record<string, unknown>;
   extract?: Record<string, unknown>;
@@ -168,6 +174,11 @@ export interface Exa extends Provider<Record<string, unknown>> {
   baseUrl?: string;
 }
 
+export interface Firecrawl extends Provider<FirecrawlOptions> {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface Gemini extends Provider<GeminiOptions> {
   apiKey?: string;
 }
@@ -204,6 +215,7 @@ export interface Providers {
   codex?: Codex;
   custom?: Custom;
   exa?: Exa;
+  firecrawl?: Firecrawl;
   gemini?: Gemini;
   perplexity?: Perplexity;
   parallel?: Parallel;
@@ -217,6 +229,7 @@ export type AnyProvider =
   | Codex
   | Custom
   | Exa
+  | Firecrawl
   | Gemini
   | Perplexity
   | Parallel

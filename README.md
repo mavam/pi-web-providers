@@ -12,8 +12,8 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Gemini,
-  Perplexity, Parallel, [Tavily](https://tavily.com), Valyu
+- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
+  Gemini, Perplexity, Parallel, [Tavily](https://tavily.com), Valyu
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -44,6 +44,7 @@ Each tool can be routed to any compatible provider:
 | **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 | **Codex**      |   ✔    |          |        |          | Local Codex CLI auth                             |
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
+| **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
@@ -232,6 +233,21 @@ scope, or account ID is usually wrong.
 - `web_research` is exposed through pi's async research workflow
 - Neural, keyword, hybrid, and deep-research search modes
 - Inline text-content extraction on search results
+
+</details>
+
+<details>
+<summary><strong>Firecrawl</strong></summary>
+
+- SDK: `@mendable/firecrawl-js`
+- Supports `web_search` and `web_contents`
+- Search can optionally include Firecrawl scrape-backed result enrichment
+- Contents extraction uses Firecrawl scrape with markdown-first defaults
+- Supports provider-specific `options.search` such as `sources`, `categories`,
+  `location`, `timeout`, and `scrapeOptions`
+- Supports provider-specific `options.scrape` such as `formats`,
+  `onlyMainContent`, `waitFor`, `headers`, `location`, `mobile`, `proxy`, and
+  cache controls
 
 </details>
 

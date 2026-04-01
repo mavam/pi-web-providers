@@ -12,6 +12,7 @@ import type {
   CustomCommandConfig,
   Exa,
   ExecutionSettings,
+  Firecrawl,
   Gemini,
   Parallel,
   Perplexity,
@@ -144,6 +145,20 @@ const parallelProviderSchema = z
     settings: executionSettingsSchema.optional(),
   })
   .strict();
+const firecrawlOptionsSchema = z
+  .object({
+    search: jsonObjectSchema.optional(),
+    scrape: jsonObjectSchema.optional(),
+  })
+  .strict();
+const firecrawlProviderSchema = z
+  .object({
+    apiKey: stringSchema.optional(),
+    baseUrl: stringSchema.optional(),
+    options: firecrawlOptionsSchema.optional(),
+    settings: executionSettingsSchema.optional(),
+  })
+  .strict();
 const tavilyOptionsSchema = z
   .object({
     search: jsonObjectSchema.optional(),
@@ -250,8 +265,10 @@ export function parseProviderConfig(
 ):
   | Claude
   | Codex
+  | Cloudflare
   | Custom
   | Exa
+  | Firecrawl
   | Gemini
   | Perplexity
   | Parallel
@@ -380,6 +397,7 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
       codex: normalizeCodexProvider,
       custom: normalizeCustomProvider,
       exa: normalizeExaProvider,
+      firecrawl: normalizeFirecrawlProvider,
       gemini: normalizeGeminiProvider,
       perplexity: normalizePerplexityProvider,
       parallel: normalizeParallelProvider,
@@ -425,6 +443,15 @@ function normalizeCodexProvider(raw: unknown, source: string): Codex {
 
 function normalizeExaProvider(raw: unknown, source: string): Exa {
   return parseProviderWithSchema(raw, source, "exa", simpleApiProviderSchema);
+}
+
+function normalizeFirecrawlProvider(raw: unknown, source: string): Firecrawl {
+  return parseProviderWithSchema(
+    raw,
+    source,
+    "firecrawl",
+    firecrawlProviderSchema,
+  );
 }
 
 function normalizeValyuProvider(raw: unknown, source: string): Valyu {
