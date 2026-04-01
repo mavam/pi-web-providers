@@ -30,7 +30,7 @@ import {
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { loadConfig, writeConfigFile } from "./config.js";
+import { getConfigPath, loadConfig, writeConfigFile } from "./config.js";
 import { type ContentsResponse, renderContentsAnswers } from "./contents.js";
 import {
   formatElapsed,
@@ -190,7 +190,7 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     latestWidgetContext = ctx;
     resetContentStore();
     updateWebResearchWidget(ctx);
-    await refreshManagedTools(
+    await refreshManagedToolsOnStartup(
       pi,
       { activeWebResearchRequests, updateWebResearchWidget },
       ctx.cwd,
@@ -207,7 +207,7 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     latestWidgetContext = ctx;
     await cleanupContentStore();
     updateWebResearchWidget(ctx);
-    await refreshManagedTools(
+    await refreshManagedToolsOnStartup(
       pi,
       { activeWebResearchRequests, updateWebResearchWidget },
       ctx.cwd,
@@ -505,6 +505,11 @@ async function runWebProvidersConfig(
   });
 }
 
+function formatStartupConfigError(error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `web-providers config error: ${detail.replace(getConfigPath(), "~/.pi/agent/web-providers.json")}`;
+}
+
 function getAvailableProviderIdsForCapability(
   config: WebProviders,
   cwd: string,
@@ -595,6 +600,37 @@ async function refreshManagedTools(
   });
 
   await syncManagedToolAvailability(pi, nextActiveTools);
+}
+
+async function refreshManagedToolsOnStartup(
+  pi: ExtensionAPI,
+  webResearchLifecycle: {
+    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    updateWebResearchWidget: (
+      ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
+    ) => void;
+  },
+  cwd: string,
+  options: { addAvailable: boolean },
+): Promise<void> {
+  try {
+    await refreshManagedTools(pi, webResearchLifecycle, cwd, options);
+  } catch (error) {
+    const message = formatStartupConfigError(error);
+    pi.sendMessage({
+      customType: "web-providers-config-error",
+      content: message,
+      display: true,
+    });
+    await syncManagedToolAvailability(
+      pi,
+      new Set(
+        pi
+          .getActiveTools()
+          .filter((toolName) => !MANAGED_TOOL_NAMES.includes(toolName)),
+      ),
+    );
+  }
 }
 
 async function syncManagedToolAvailability(

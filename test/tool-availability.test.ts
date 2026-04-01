@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, Theme } from "@mariozechner/pi-coding-agent";
@@ -254,6 +254,67 @@ describe("managed tool availability", () => {
     );
 
     expect(Array.from(activeTools)).toEqual(["web_search"]);
+  });
+
+  it("shows a concise config error and removes managed tools on startup", async () => {
+    const agentDir = join(process.env.HOME!, ".pi", "agent");
+    mkdirSync(agentDir, { recursive: true });
+    writeFileSync(
+      join(agentDir, "web-providers.json"),
+      JSON.stringify({
+        tools: {
+          search: "wat",
+        },
+      }),
+    );
+
+    const handlers = new Map<string, Function>();
+    const sendMessage = vi.fn();
+    const setActiveTools = vi.fn();
+
+    webProvidersExtension({
+      registerTool() {},
+      registerCommand() {},
+      registerMessageRenderer() {},
+      on(event: string, handler: Function) {
+        handlers.set(event, handler);
+      },
+      sendMessage,
+      getActiveTools() {
+        return ["web_search", "shell"];
+      },
+      setActiveTools,
+    } as unknown as ExtensionAPI);
+
+    const beforeAgentStart = handlers.get("before_agent_start");
+    expect(beforeAgentStart).toBeTypeOf("function");
+
+    await expect(
+      beforeAgentStart?.(
+        {},
+        {
+          cwd: process.cwd(),
+          hasUI: true,
+          ui: {
+            notify() {},
+            setWidget() {},
+          },
+        },
+      ),
+    ).resolves.toBeUndefined();
+
+    expect(sendMessage).toHaveBeenCalledWith({
+      customType: "web-providers-config-error",
+      content: expect.stringContaining("web-providers config error:"),
+      display: true,
+    });
+    expect(sendMessage.mock.calls[0]?.[0]?.content).toContain(
+      "~/.pi/agent/web-providers.json",
+    );
+    expect(sendMessage.mock.calls[0]?.[0]?.content).not.toContain(
+      "parseOptionalLiteral",
+    );
+    expect(setActiveTools).toHaveBeenCalledWith(["shell"]);
   });
 
   it("shows partial foreground tool text in the pending tool box", () => {
