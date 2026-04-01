@@ -1,0 +1,10 @@
+created: 2026-03-31
+title: Tavily, Firecrawl, and Cloudflare providers
+intro: >-
+  Three new providers join the lineup: Tavily and Firecrawl add web search and contents
+  support, while Cloudflare Browser Rendering enables full-page extraction for JavaScript-heavy
+  sites. The web research workflow is now fully asynchronous, and the provider settings
+  view shows each backend's supported capabilities at a glance.
+source:
+  mode: sync-stable-queue
+  previous_stable: v1.1.0
