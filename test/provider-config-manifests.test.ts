@@ -3,7 +3,7 @@ import {
   getProviderConfigManifest,
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
-import type { Cloudflare, Custom } from "../src/types.js";
+import type { Cloudflare, Custom, Tavily } from "../src/types.js";
 
 describe("provider config manifests", () => {
   it("exposes custom argv, cwd, env, and request settings", () => {
@@ -118,6 +118,56 @@ describe("provider config manifests", () => {
     expect(config).toEqual({
       apiToken: "CLOUDFLARE_API_TOKEN",
       accountId: "CLOUDFLARE_ACCOUNT_ID",
+    });
+  });
+
+  it("exposes Tavily API key and base URL settings", () => {
+    const manifest = getProviderConfigManifest("tavily");
+    const ids = manifest.settings.map((setting) => setting.id);
+
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "apiKey",
+        "baseUrl",
+        "requestTimeoutMs",
+        "retryCount",
+        "retryDelayMs",
+        "researchTimeoutMs",
+      ]),
+    );
+  });
+
+  it("round-trips Tavily API key and base URL settings", () => {
+    const manifest = getProviderConfigManifest("tavily");
+    const apiKeySetting = manifest.settings.find(
+      (setting) => setting.id === "apiKey",
+    );
+    const baseUrlSetting = manifest.settings.find(
+      (setting) => setting.id === "baseUrl",
+    );
+
+    if (
+      !apiKeySetting ||
+      apiKeySetting.kind !== "text" ||
+      !baseUrlSetting ||
+      baseUrlSetting.kind !== "text"
+    ) {
+      throw new Error("Missing Tavily settings.");
+    }
+
+    const config: Tavily = {};
+    (apiKeySetting as ProviderTextSettingDescriptor<Tavily>).setValue(
+      config,
+      "TAVILY_API_KEY",
+    );
+    (baseUrlSetting as ProviderTextSettingDescriptor<Tavily>).setValue(
+      config,
+      "https://api.tavily.test",
+    );
+
+    expect(config).toEqual({
+      apiKey: "TAVILY_API_KEY",
+      baseUrl: "https://api.tavily.test",
     });
   });
 });

@@ -36,6 +36,7 @@ beforeEach(() => {
   delete process.env.GOOGLE_API_KEY;
   delete process.env.OPENAI_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
 });
 
@@ -44,6 +45,7 @@ afterEach(() => {
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.OPENAI_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   execFileSyncMock.mockReset();
   resetClaudeProviderCachesForTests();
   if (originalHome === undefined) {
@@ -395,6 +397,40 @@ describe("managed tool availability", () => {
         "research",
       ),
     ).toEqual(["perplexity"]);
+  });
+
+  it("surfaces mapped Tavily tools when Tavily is available", () => {
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        search: "tavily",
+        contents: "tavily",
+      },
+      providers: {
+        tavily: {
+          apiKey: "TAVILY_API_KEY",
+        },
+      },
+    });
+
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "search",
+      ),
+    ).toEqual(["tavily"]);
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "contents",
+      ),
+    ).toEqual(["tavily"]);
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual(["web_search", "web_contents"]);
   });
 });
 

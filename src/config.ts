@@ -18,6 +18,7 @@ import type {
   ProviderId,
   SearchSettings,
   Settings,
+  Tavily,
   Tool,
   Tools,
   Valyu,
@@ -143,6 +144,20 @@ const parallelProviderSchema = z
     settings: executionSettingsSchema.optional(),
   })
   .strict();
+const tavilyOptionsSchema = z
+  .object({
+    search: jsonObjectSchema.optional(),
+    extract: jsonObjectSchema.optional(),
+  })
+  .strict();
+const tavilyProviderSchema = z
+  .object({
+    apiKey: stringSchema.optional(),
+    baseUrl: stringSchema.optional(),
+    options: tavilyOptionsSchema.optional(),
+    settings: executionSettingsSchema.optional(),
+  })
+  .strict();
 const simpleApiProviderSchema = z
   .object({
     apiKey: stringSchema.optional(),
@@ -232,7 +247,16 @@ export function parseProviderConfig(
   providerId: ProviderId,
   text: string,
   source = CONFIG_FILE_NAME,
-): Claude | Codex | Custom | Exa | Gemini | Perplexity | Parallel | Valyu {
+):
+  | Claude
+  | Codex
+  | Custom
+  | Exa
+  | Gemini
+  | Perplexity
+  | Parallel
+  | Tavily
+  | Valyu {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
@@ -359,6 +383,7 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
       gemini: normalizeGeminiProvider,
       perplexity: normalizePerplexityProvider,
       parallel: normalizeParallelProvider,
+      tavily: normalizeTavilyProvider,
       valyu: normalizeValyuProvider,
     } satisfies Record<ProviderId, (raw: unknown, source: string) => unknown>;
 
@@ -428,6 +453,10 @@ function normalizeParallelProvider(raw: unknown, source: string): Parallel {
   );
 }
 
+function normalizeTavilyProvider(raw: unknown, source: string): Tavily {
+  return parseProviderWithSchema(raw, source, "tavily", tavilyProviderSchema);
+}
+
 function normalizeCustomProvider(raw: unknown, source: string): Custom {
   return parseProviderWithSchema(raw, source, "custom", customProviderSchema);
 }
@@ -487,6 +516,7 @@ function toPublicProviderConfig(
     | Gemini
     | Perplexity
     | Parallel
+    | Tavily
     | Valyu,
 ): Record<string, unknown> {
   return {

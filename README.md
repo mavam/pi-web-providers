@@ -13,7 +13,7 @@ off entirely.
 ## ✨ Features
 
 - **Multiple providers**: Claude, Cloudflare, Codex, Exa, Gemini,
-  Perplexity, Parallel, Valyu
+  Perplexity, Parallel, [Tavily](https://tavily.com), Valyu
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -47,6 +47,7 @@ Each tool can be routed to any compatible provider:
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
+| **Tavily**     |   ✔    |    ✔     |        |          | `TAVILY_API_KEY`                                 |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
 
 Advanced option: `custom` is a configurable adapter provider that can route
@@ -267,6 +268,22 @@ scope, or account ID is usually wrong.
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
 - Supports provider-specific search and extraction options from the Parallel SDK
+
+</details>
+
+<details>
+<summary><strong>Tavily</strong></summary>
+
+- SDK: `@tavily/core`
+- Supports `web_search` via Tavily Search
+- Supports `web_contents` via Tavily Extract
+- Good for pairing LLM-oriented web search with lightweight page extraction
+- Supports provider-specific `options.search` such as `searchDepth`, `topic`,
+  `timeRange`, `includeRawContent`, `includeDomains`, `excludeDomains`,
+  `country`, `exactMatch`, and `includeFavicon`
+- Supports provider-specific `options.extract` such as `extractDepth`,
+  `format`, `includeImages`, `query`, `chunksPerSource`, and
+  `includeFavicon`
 
 </details>
 

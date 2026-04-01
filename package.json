@@ -23,6 +23,7 @@
     "gemini",
     "perplexity",
     "parallel",
+    "tavily",
     "valyu"
   ],
   "author": "mavam",
@@ -43,7 +44,7 @@
     ]
   },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:cloudflare --external:exa-js --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:@sinclair/typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:@tavily/core --external:cloudflare --external:exa-js --external:parallel-web --external:valyu-js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
@@ -58,6 +59,7 @@
     "@google/genai": "^1.44.0",
     "@openai/codex-sdk": "^0.111.0",
     "@perplexity-ai/perplexity_ai": "^0.26.1",
+    "@tavily/core": "^0.7.2",
     "cloudflare": "^5.2.0",
     "exa-js": "^2.7.0",
     "parallel-web": "^0.3.1",
