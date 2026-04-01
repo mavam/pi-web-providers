@@ -2317,6 +2317,7 @@ interface SettingsEntry {
   description: string;
   kind: "action" | "cycle" | "text";
   values?: string[];
+  preserveValueStyle?: boolean;
 }
 
 function getProviderSettings(
@@ -2387,6 +2388,19 @@ function renderSelectedEntryDescription(
   return wrapTextWithAnsi(entry.description, Math.max(10, width - 2)).map(
     (line) => truncateToWidth(theme.fg("dim", line), width),
   );
+}
+
+function formatProviderCapabilityChecks(
+  providerId: ProviderId,
+  theme: Theme,
+): string {
+  return (["search", "contents", "answer", "research"] as const)
+    .map((tool) =>
+      supportsTool(ADAPTERS_BY_ID[providerId], tool)
+        ? theme.fg("success", "✔")
+        : " ",
+    )
+    .join(" ");
 }
 
 function resolveProviderSelectionValue(
@@ -2584,6 +2598,7 @@ class WebProvidersSettingsView implements Component {
     }
 
     const lines: string[] = [];
+
     const toolItems = this.buildToolSectionItems();
     lines.push(...this.renderSection(width, "Tools", "tools", toolItems));
     lines.push("");
@@ -2668,12 +2683,13 @@ class WebProvidersSettingsView implements Component {
       return {
         id: `provider:${provider.id}`,
         label: provider.label,
-        currentValue: formatProviderSetupState(setupState),
+        currentValue: `${formatProviderCapabilityChecks(provider.id, this.theme)}  ${this.theme.fg("muted", formatProviderSetupState(setupState))}`,
         description:
           provider.id === this.activeProvider
             ? `Press Enter to configure ${provider.label}'s provider-specific settings. ${statusSummary}`
             : `Move here and press Enter to configure ${provider.label}'s provider-specific settings. ${statusSummary}`,
         kind: "action",
+        preserveValueStyle: true,
       };
     });
   }
@@ -2810,6 +2826,10 @@ class WebProvidersSettingsView implements Component {
     section: "provider" | "tools" | "settings",
     entries: SettingsEntry[],
   ): string[] {
+    const labelWidth = Math.min(
+      Math.max(...entries.map((entry) => entry.label.length), 0),
+      Math.max(20, Math.floor(width * 0.45)),
+    );
     const lines = [
       truncateToWidth(
         this.activeSection === section
@@ -2818,10 +2838,17 @@ class WebProvidersSettingsView implements Component {
         width,
       ),
     ];
-    const labelWidth = Math.min(
-      Math.max(...entries.map((entry) => entry.label.length), 0),
-      Math.max(20, Math.floor(width * 0.45)),
-    );
+    if (section === "provider") {
+      lines.push(
+        truncateToWidth(
+          this.theme.fg(
+            "dim",
+            `  ${"Provider".padEnd(labelWidth, " ")}  S C A R  Status`,
+          ),
+          width,
+        ),
+      );
+    }
     for (const [index, entry] of entries.entries()) {
       const selected =
         this.activeSection === section && this.selection[section] === index;
@@ -2834,10 +2861,20 @@ class WebProvidersSettingsView implements Component {
         lines.push(truncateToWidth(`${prefix}${label}`, width));
         continue;
       }
-      const value = selected
-        ? this.theme.fg("accent", entry.currentValue)
-        : this.theme.fg("muted", entry.currentValue);
+      const value = entry.preserveValueStyle
+        ? entry.currentValue
+        : selected
+          ? this.theme.fg("accent", entry.currentValue)
+          : this.theme.fg("muted", entry.currentValue);
       lines.push(truncateToWidth(`${prefix}${label}  ${value}`, width));
+    }
+    if (section === "provider") {
+      lines.push(
+        truncateToWidth(
+          this.theme.fg("dim", "  S=Search  C=Contents  A=Answer  R=Research"),
+          width,
+        ),
+      );
     }
     return lines;
   }
