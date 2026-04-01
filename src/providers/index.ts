@@ -4,6 +4,7 @@ import { cloudflareAdapter } from "./cloudflare.js";
 import { codexAdapter } from "./codex.js";
 import { customAdapter } from "./custom.js";
 import { exaAdapter } from "./exa.js";
+import { firecrawlAdapter } from "./firecrawl.js";
 import { geminiAdapter } from "./gemini.js";
 import { parallelAdapter } from "./parallel.js";
 import { perplexityAdapter } from "./perplexity.js";
@@ -19,6 +20,7 @@ export const ADAPTERS_BY_ID: Record<
   codex: codexAdapter,
   custom: customAdapter,
   exa: exaAdapter,
+  firecrawl: firecrawlAdapter,
   gemini: geminiAdapter,
   perplexity: perplexityAdapter,
   parallel: parallelAdapter,
