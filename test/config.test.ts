@@ -31,6 +31,7 @@ afterEach(async () => {
   delete process.env.GOOGLE_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
+  delete process.env.TAVILY_API_KEY;
 });
 
 describe("config parsing", () => {
@@ -99,6 +100,47 @@ describe("config parsing", () => {
       accountId: "CLOUDFLARE_ACCOUNT_ID",
       options: {
         cacheTTL: 0,
+      },
+      settings: {
+        requestTimeoutMs: 45000,
+      },
+    });
+  });
+
+  it("parses Tavily provider config", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          tavily: {
+            apiKey: "TAVILY_API_KEY",
+            baseUrl: "https://api.tavily.test",
+            options: {
+              search: {
+                topic: "news",
+              },
+              extract: {
+                format: "text",
+              },
+            },
+            settings: {
+              requestTimeoutMs: 45000,
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.tavily).toEqual({
+      apiKey: "TAVILY_API_KEY",
+      baseUrl: "https://api.tavily.test",
+      options: {
+        search: {
+          topic: "news",
+        },
+        extract: {
+          format: "text",
+        },
       },
       settings: {
         requestTimeoutMs: 45000,
@@ -279,6 +321,17 @@ describe("config parsing", () => {
         },
       },
     };
+    config.providers.tavily = {
+      apiKey: "TAVILY_API_KEY",
+      options: {
+        search: {
+          topic: "news",
+        },
+        extract: {
+          format: "text",
+        },
+      },
+    };
     config.providers.gemini = {
       apiKey: "GOOGLE_API_KEY",
       options: {
@@ -346,6 +399,8 @@ describe("config parsing", () => {
       "sonar-deep-research",
     );
     expect(loaded.providers?.parallel?.options?.search?.mode).toBe("one-shot");
+    expect(loaded.providers?.tavily?.options?.search?.topic).toBe("news");
+    expect(loaded.providers?.tavily?.options?.extract?.format).toBe("text");
     expect(loaded.settings?.search).toEqual({
       provider: "exa",
       maxUrls: 2,
@@ -374,6 +429,15 @@ describe("config parsing", () => {
       webSearchMode: "live",
     });
     expect(ADAPTERS_BY_ID.gemini.createTemplate().settings).toBeUndefined();
+    expect(ADAPTERS_BY_ID.tavily.createTemplate().options).toEqual({
+      search: {
+        includeFavicon: true,
+      },
+      extract: {
+        format: "markdown",
+        includeFavicon: true,
+      },
+    });
   });
 
   it("keeps example-config.json in sync with createDefaultConfig()", async () => {

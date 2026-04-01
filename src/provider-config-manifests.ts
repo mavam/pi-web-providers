@@ -14,6 +14,7 @@ import type {
   ParallelOptions,
   Perplexity,
   ProviderId,
+  Tavily,
   Valyu,
 } from "./types.js";
 
@@ -579,6 +580,13 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupNestedObjects(config);
         },
       }),
+    ],
+  },
+  tavily: {
+    settings: [
+      apiKeySetting<Tavily>(),
+      baseUrlSetting<Tavily>(),
+      ...requestSettings<Tavily>(),
     ],
   },
   valyu: {

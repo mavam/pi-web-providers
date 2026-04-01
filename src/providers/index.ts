@@ -7,6 +7,7 @@ import { exaAdapter } from "./exa.js";
 import { geminiAdapter } from "./gemini.js";
 import { parallelAdapter } from "./parallel.js";
 import { perplexityAdapter } from "./perplexity.js";
+import { tavilyAdapter } from "./tavily.js";
 import { valyuAdapter } from "./valyu.js";
 
 export const ADAPTERS_BY_ID: Record<
@@ -21,6 +22,7 @@ export const ADAPTERS_BY_ID: Record<
   gemini: geminiAdapter,
   perplexity: perplexityAdapter,
   parallel: parallelAdapter,
+  tavily: tavilyAdapter,
   valyu: valyuAdapter,
 };
 

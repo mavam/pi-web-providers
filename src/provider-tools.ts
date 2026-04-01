@@ -14,6 +14,7 @@ export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   gemini: ["search", "answer", "research"],
   perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
+  tavily: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
 };
 

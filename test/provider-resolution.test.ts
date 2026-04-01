@@ -40,6 +40,7 @@ beforeEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
 });
 
@@ -51,6 +52,7 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
   resetClaudeProviderCachesForTests();
@@ -152,6 +154,27 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("uses the mapped Tavily provider for search and contents", () => {
+    process.env.TAVILY_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        search: "tavily",
+        contents: "tavily",
+      },
+      providers: {
+        tavily: {
+          apiKey: "TAVILY_API_KEY",
+        },
+      },
+    });
+
+    expect(resolveSearchProvider(config, process.cwd()).id).toBe("tavily");
+    expect(resolveProviderForTool(config, process.cwd(), "contents").id).toBe(
+      "tavily",
+    );
   });
 
   it("rejects Cloudflare contents when the account id is missing", () => {

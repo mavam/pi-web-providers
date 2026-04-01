@@ -10,6 +10,7 @@ export const PROVIDER_IDS = [
   "gemini",
   "perplexity",
   "parallel",
+  "tavily",
   "valyu",
 ] as const;
 
@@ -122,6 +123,11 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
+export interface TavilyOptions {
+  search?: Record<string, unknown>;
+  extract?: Record<string, unknown>;
+}
+
 export interface CustomCommandConfig {
   argv?: string[];
   cwd?: string;
@@ -178,6 +184,11 @@ export interface Parallel extends Provider<ParallelOptions> {
 
 export interface Custom extends Provider<CustomOptions> {}
 
+export interface Tavily extends Provider<TavilyOptions> {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface Valyu extends Provider<Record<string, unknown>> {
   apiKey?: string;
   baseUrl?: string;
@@ -196,6 +207,7 @@ export interface Providers {
   gemini?: Gemini;
   perplexity?: Perplexity;
   parallel?: Parallel;
+  tavily?: Tavily;
   valyu?: Valyu;
 }
 
@@ -208,6 +220,7 @@ export type AnyProvider =
   | Gemini
   | Perplexity
   | Parallel
+  | Tavily
   | Valyu;
 
 export interface WebProviders {
