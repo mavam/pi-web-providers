@@ -1,5 +1,5 @@
 import { Codex as CodexClient } from "@openai/codex-sdk";
-import { z } from "zod";
+import { type Static, type TObject, Type } from "@sinclair/typebox";
 import { resolveConfigValue, resolveEnvMap } from "../config.js";
 import type {
   Codex,
@@ -8,42 +8,22 @@ import type {
   ProviderContext,
   ProviderRequest,
   SearchResponse,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
-const OUTPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  properties: {
-    sources: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          title: { type: "string" },
-          url: { type: "string" },
-          snippet: { type: "string" },
-        },
-        required: ["title", "url", "snippet"],
-      },
-    },
-  },
-  required: ["sources"],
-} as const;
-
-const codexOutputSchema = z.object({
-  sources: z.array(
-    z.object({
-      title: z.string(),
-      url: z.string(),
-      snippet: z.string(),
+const codexOutputSchema = Type.Object({
+  sources: Type.Array(
+    Type.Object({
+      title: Type.String(),
+      url: Type.String(),
+      snippet: Type.String(),
     }),
   ),
 });
 
-type CodexOutput = z.infer<typeof codexOutputSchema>;
+type CodexOutput = Static<typeof codexOutputSchema>;
 
 type CodexAdapter = ProviderAdapter<Codex> & {
   search(
@@ -55,11 +35,49 @@ type CodexAdapter = ProviderAdapter<Codex> & {
   ): Promise<SearchResponse>;
 };
 
+const codexSearchOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(Type.String({ description: "Codex model override." })),
+    modelReasoningEffort: Type.Optional(
+      Type.Union(
+        [
+          Type.Literal("minimal"),
+          Type.Literal("low"),
+          Type.Literal("medium"),
+          Type.Literal("high"),
+          Type.Literal("xhigh"),
+        ],
+        { description: "Reasoning depth for Codex." },
+      ),
+    ),
+    webSearchMode: Type.Optional(
+      Type.Union(
+        [
+          Type.Literal("disabled"),
+          Type.Literal("cached"),
+          Type.Literal("live"),
+        ],
+        { description: "How Codex should source web results." },
+      ),
+    ),
+  },
+  { description: "Codex search options." },
+);
+
 export const codexAdapter: CodexAdapter = {
   id: "codex",
   label: "Codex",
   docsUrl: "https://github.com/openai/codex/tree/main/sdk/typescript",
   tools: ["search"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return codexSearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Codex {
     return {
@@ -146,7 +164,7 @@ export const codexAdapter: CodexAdapter = {
     ].join("\n");
 
     const streamed = await thread.runStreamed(prompt, {
-      outputSchema: OUTPUT_SCHEMA,
+      outputSchema: codexOutputSchema,
       signal: context.signal,
     });
 
@@ -249,13 +267,26 @@ function readEnum<const TValue extends string>(
     : undefined;
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function parseOutput(raw: string): CodexOutput {
   const json = extractJsonObject(raw);
-  const parsed = codexOutputSchema.safeParse(json);
-  if (!parsed.success) {
+  if (
+    !isJsonObject(json) ||
+    !Array.isArray(json.sources) ||
+    json.sources.some(
+      (source) =>
+        !isJsonObject(source) ||
+        typeof source.title !== "string" ||
+        typeof source.url !== "string" ||
+        typeof source.snippet !== "string",
+    )
+  ) {
     throw new Error("returned invalid JSON output");
   }
-  return parsed.data;
+  return json as CodexOutput;
 }
 
 function extractJsonObject(raw: string): unknown {

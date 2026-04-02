@@ -67,8 +67,7 @@
     "exa-js": "^2.10.2",
     "linkup-sdk": "^2.7.0",
     "parallel-web": "^0.3.2",
-    "valyu-js": "^2.7.6",
-    "zod": "^4.3.6"
+    "valyu-js": "^2.7.6"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",

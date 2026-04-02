@@ -1,4 +1,4 @@
-import { z } from "zod";
+import type { TObject } from "@sinclair/typebox";
 import type { ContentsAnswer, ContentsResponse } from "../contents.js";
 import type {
   Custom,
@@ -13,21 +13,6 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 import { buildProviderPlan } from "./framework.js";
-
-const jsonObjectSchema = z.object({}).catchall(z.unknown());
-const requiredStringSchema = z.string();
-const nonNegativeIntegerSchema = z.number().int().nonnegative();
-const searchResponseSchema = z.object({
-  results: z.array(z.unknown()),
-});
-const contentsAnswersResponseSchema = z.object({
-  answers: z.array(z.unknown()),
-});
-const toolOutputSchema = z.object({
-  text: z.string(),
-  itemCount: z.unknown().optional(),
-  metadata: z.unknown().optional(),
-});
 
 type CustomAdapter = ProviderAdapter<Custom> & {
   search(
@@ -62,6 +47,10 @@ export const customAdapter: CustomAdapter = {
   label: "Custom",
   docsUrl: "https://github.com/mavam/pi-web-providers#custom-provider",
   tools: ["search", "contents", "answer", "research"] as const,
+
+  getToolOptionsSchema(_capability: Tool): TObject | undefined {
+    return undefined;
+  },
 
   createTemplate(): Custom {
     return {};
@@ -292,31 +281,24 @@ function parseSearchResponse(
   value: unknown,
   providerId: SearchResponse["provider"],
 ): SearchResponse {
-  const parsed = jsonObjectSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error("search output must be a JSON object");
-  }
-
-  const response = searchResponseSchema.safeParse(parsed.data);
-  if (!response.success) {
+  const response = requireObject(value, "search output must be a JSON object");
+  if (!Array.isArray(response.results)) {
     throw new Error("search output must include a 'results' array");
   }
 
   return {
     provider: providerId,
-    results: response.data.results.map((entry, index) =>
+    results: response.results.map((entry, index) =>
       parseSearchResult(entry, index),
     ),
   };
 }
 
 function parseSearchResult(entry: unknown, index: number) {
-  const parsed = jsonObjectSchema.safeParse(entry);
-  if (!parsed.success) {
-    throw new Error(`search result at index ${index} must be a JSON object`);
-  }
-
-  const value = parsed.data;
+  const value = requireObject(
+    entry,
+    `search result at index ${index} must be a JSON object`,
+  );
   const metadata = readLenientJsonObject(value.metadata);
   return {
     title: readRequiredString(value.title, `results[${index}].title`),
@@ -331,31 +313,27 @@ function parseContentsResponse(
   value: unknown,
   providerId: ContentsResponse["provider"],
 ): ContentsResponse {
-  const parsed = jsonObjectSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error("contents output must be a JSON object");
+  const response = requireObject(
+    value,
+    "contents output must be a JSON object",
+  );
+  if (!Array.isArray(response.answers)) {
+    throw new Error("contents output must include an 'answers' array");
   }
 
-  const answersResponse = contentsAnswersResponseSchema.safeParse(parsed.data);
-  if (answersResponse.success) {
-    return {
-      provider: providerId,
-      answers: answersResponse.data.answers.map((entry, index) =>
-        parseContentsAnswer(entry, index),
-      ),
-    };
-  }
-
-  throw new Error("contents output must include an 'answers' array");
+  return {
+    provider: providerId,
+    answers: response.answers.map((entry, index) =>
+      parseContentsAnswer(entry, index),
+    ),
+  };
 }
 
 function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
-  const parsed = jsonObjectSchema.safeParse(entry);
-  if (!parsed.success) {
-    throw new Error(`contents answer at index ${index} must be a JSON object`);
-  }
-
-  const value = parsed.data;
+  const value = requireObject(
+    entry,
+    `contents answer at index ${index} must be a JSON object`,
+  );
   const url = readRequiredString(value.url, `answers[${index}].url`);
   const content = readOptionalString(
     value.content,
@@ -387,17 +365,13 @@ function parseToolOutput(
   value: unknown,
   providerId: ToolOutput["provider"],
 ): ToolOutput {
-  const parsed = toolOutputSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error("output must be a JSON object");
-  }
-
-  const metadata = readLenientJsonObject(parsed.data.metadata);
+  const output = requireObject(value, "output must be a JSON object");
+  const metadata = readLenientJsonObject(output.metadata);
 
   return {
     provider: providerId,
-    text: parsed.data.text,
-    ...readOptionalNonNegativeInteger(parsed.data.itemCount),
+    text: readRequiredString(output.text, "text"),
+    ...readOptionalNonNegativeInteger(output.itemCount),
     ...(metadata !== undefined ? { metadata } : {}),
   };
 }
@@ -410,26 +384,20 @@ function readRequiredJsonObject(
     return undefined;
   }
 
-  const parsed = jsonObjectSchema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error(`output field '${field}' must be a JSON object`);
-  }
-  return parsed.data;
+  return requireObject(value, `output field '${field}' must be a JSON object`);
 }
 
 function readLenientJsonObject(
   value: unknown,
 ): Record<string, unknown> | undefined {
-  const parsed = jsonObjectSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
+  return isJsonObject(value) ? value : undefined;
 }
 
 function readRequiredString(value: unknown, field: string): string {
-  const parsed = requiredStringSchema.safeParse(value);
-  if (!parsed.success) {
+  if (typeof value !== "string") {
     throw new Error(`output field '${field}' must be a string`);
   }
-  return parsed.data;
+  return value;
 }
 
 function readOptionalString(value: unknown, field: string): string | undefined {
@@ -442,6 +410,21 @@ function readOptionalString(value: unknown, field: string): string | undefined {
 function readOptionalNonNegativeInteger(
   value: unknown,
 ): { itemCount: number } | Record<string, never> {
-  const parsed = nonNegativeIntegerSchema.safeParse(value);
-  return parsed.success ? { itemCount: parsed.data } : {};
+  return typeof value === "number" && Number.isInteger(value) && value >= 0
+    ? { itemCount: value }
+    : {};
+}
+
+function requireObject(
+  value: unknown,
+  message: string,
+): Record<string, unknown> {
+  if (!isJsonObject(value)) {
+    throw new Error(message);
+  }
+  return value;
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

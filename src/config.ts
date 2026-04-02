@@ -2,7 +2,6 @@ import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
-import { z } from "zod";
 import { supportsTool } from "./provider-tools.js";
 import type {
   Claude,
@@ -11,7 +10,6 @@ import type {
   Custom,
   CustomCommandConfig,
   Exa,
-  ExecutionSettings,
   Firecrawl,
   Gemini,
   Linkup,
@@ -29,194 +27,6 @@ import type {
 import { PROVIDER_IDS, TOOLS } from "./types.js";
 
 const CONFIG_FILE_NAME = "web-providers.json";
-const jsonObjectSchema = z.object({}).catchall(z.unknown());
-const stringSchema = z.string();
-const booleanSchema = z.boolean();
-const positiveIntegerSchema = z.number().int().positive();
-const nonNegativeIntegerSchema = z.number().int().nonnegative();
-const stringArraySchema = z.array(z.string());
-const stringMapSchema = z.record(z.string(), z.string());
-const nonEmptyStringArraySchema = z
-  .array(z.string().refine((value) => value.trim().length > 0))
-  .nonempty();
-const executionSettingsSchema = z
-  .object({
-    requestTimeoutMs: positiveIntegerSchema.optional(),
-    retryCount: nonNegativeIntegerSchema.optional(),
-    retryDelayMs: positiveIntegerSchema.optional(),
-    researchTimeoutMs: positiveIntegerSchema.optional(),
-  })
-  .strict();
-const searchSettingsSchema = z
-  .object({
-    provider: z.enum(PROVIDER_IDS).optional(),
-    maxUrls: positiveIntegerSchema.optional(),
-    ttlMs: positiveIntegerSchema.optional(),
-  })
-  .strict();
-const settingsSchema = executionSettingsSchema.extend({
-  search: jsonObjectSchema.optional(),
-});
-const claudeOptionsSchema = z
-  .object({
-    model: stringSchema.optional(),
-    effort: z.enum(["low", "medium", "high", "max"]).optional(),
-    maxTurns: positiveIntegerSchema.optional(),
-  })
-  .strict();
-const claudeProviderSchema = z
-  .object({
-    pathToClaudeCodeExecutable: stringSchema.optional(),
-    options: claudeOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const codexOptionsSchema = z
-  .object({
-    model: stringSchema.optional(),
-    modelReasoningEffort: z
-      .enum(["minimal", "low", "medium", "high", "xhigh"])
-      .optional(),
-    networkAccessEnabled: booleanSchema.optional(),
-    webSearchMode: z.enum(["disabled", "cached", "live"]).optional(),
-    webSearchEnabled: booleanSchema.optional(),
-    additionalDirectories: stringArraySchema.optional(),
-  })
-  .strict();
-const codexProviderSchema = z
-  .object({
-    codexPath: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    apiKey: stringSchema.optional(),
-    env: stringMapSchema.optional(),
-    config: jsonObjectSchema.optional(),
-    options: codexOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const cloudflareProviderSchema = z
-  .object({
-    apiToken: stringSchema.optional(),
-    accountId: stringSchema.optional(),
-    options: jsonObjectSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const geminiOptionsSchema = z
-  .object({
-    apiVersion: stringSchema.optional(),
-    searchModel: stringSchema.optional(),
-    answerModel: stringSchema.optional(),
-    researchAgent: stringSchema.optional(),
-  })
-  .strict();
-const geminiProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    options: geminiOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const linkupOptionsSchema = z
-  .object({
-    search: jsonObjectSchema.optional(),
-    fetch: jsonObjectSchema.optional(),
-  })
-  .strict();
-const linkupProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: linkupOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const perplexityOptionsSchema = z
-  .object({
-    search: jsonObjectSchema.optional(),
-    answer: jsonObjectSchema.optional(),
-    research: jsonObjectSchema.optional(),
-  })
-  .strict();
-const perplexityProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: perplexityOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const parallelOptionsSchema = z
-  .object({
-    search: jsonObjectSchema.optional(),
-    extract: jsonObjectSchema.optional(),
-  })
-  .strict();
-const parallelProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: parallelOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const firecrawlOptionsSchema = z
-  .object({
-    search: jsonObjectSchema.optional(),
-    scrape: jsonObjectSchema.optional(),
-  })
-  .strict();
-const firecrawlProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: firecrawlOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const tavilyOptionsSchema = z
-  .object({
-    search: jsonObjectSchema.optional(),
-    extract: jsonObjectSchema.optional(),
-  })
-  .strict();
-const tavilyProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: tavilyOptionsSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const simpleApiProviderSchema = z
-  .object({
-    apiKey: stringSchema.optional(),
-    baseUrl: stringSchema.optional(),
-    options: jsonObjectSchema.optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
-const customCommandSchema = z
-  .object({
-    argv: nonEmptyStringArraySchema.optional(),
-    cwd: stringSchema.optional(),
-    env: stringMapSchema.optional(),
-  })
-  .strict();
-const customProviderSchema = z
-  .object({
-    options: z
-      .object({
-        search: customCommandSchema.optional(),
-        contents: customCommandSchema.optional(),
-        answer: customCommandSchema.optional(),
-        research: customCommandSchema.optional(),
-      })
-      .strict()
-      .optional(),
-    settings: executionSettingsSchema.optional(),
-  })
-  .strict();
 const commandValueCache = new Map<
   string,
   { value?: string; errorMessage?: string }
@@ -244,7 +54,7 @@ export async function readConfigFile(path: string): Promise<WebProviders> {
     return parseConfig(content, path);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return emptyConfig();
+      return {};
     }
     throw error;
   }
@@ -263,14 +73,7 @@ export function parseConfig(
   text: string,
   source = CONFIG_FILE_NAME,
 ): WebProviders {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (error) {
-    throw new Error(`Invalid JSON in ${source}: ${(error as Error).message}`);
-  }
-
-  return normalizeConfig(raw, source);
+  return normalizeConfig(parseJson(text, source), source);
 }
 
 export function parseProviderConfig(
@@ -290,13 +93,7 @@ export function parseProviderConfig(
   | Parallel
   | Tavily
   | Valyu {
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (error) {
-    throw new Error(`Invalid JSON in ${source}: ${(error as Error).message}`);
-  }
-
+  const raw = parseJson(text, source);
   if (!isPlainObject(raw)) {
     throw new Error(`Provider config in ${source} must be a JSON object.`);
   }
@@ -314,7 +111,6 @@ export function parseProviderConfig(
   if (!parsed) {
     throw new Error(`Failed to parse provider '${providerId}' in ${source}.`);
   }
-
   return parsed;
 }
 
@@ -373,31 +169,38 @@ export function resolveEnvMap(
   return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
-function emptyConfig(): WebProviders {
-  return {};
+function parseJson(text: string, source: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${source}: ${(error as Error).message}`);
+  }
 }
 
 function normalizeConfig(raw: unknown, source: string): WebProviders {
-  if (!isPlainObject(raw)) {
-    throw new Error(`Config in ${source} must be a JSON object.`);
-  }
-
+  const configObject = requireObject(
+    raw,
+    `Config in ${source} must be a JSON object.`,
+  );
   const config: WebProviders = {};
 
-  if (raw.tools !== undefined) {
-    config.tools = parseToolProviderMapping(raw.tools, source, "tools");
+  if (configObject.tools !== undefined) {
+    config.tools = parseToolProviderMapping(
+      configObject.tools,
+      source,
+      "tools",
+    );
   }
 
-  if (raw.settings !== undefined) {
-    config.settings = parseSettingsConfig(raw.settings, source);
+  if (configObject.settings !== undefined) {
+    config.settings = parseSettingsConfig(configObject.settings, source);
   }
 
-  if (raw.providers !== undefined) {
-    if (!isPlainObject(raw.providers)) {
-      throw new Error(`'providers' in ${source} must be a JSON object.`);
-    }
-
-    const providers = raw.providers;
+  if (configObject.providers !== undefined) {
+    const providers = requireObject(
+      configObject.providers,
+      `'providers' in ${source} must be a JSON object.`,
+    );
     const unknownProviders = Object.keys(providers).filter(
       (key) => !PROVIDER_IDS.includes(key as ProviderId),
     );
@@ -407,238 +210,217 @@ function normalizeConfig(raw: unknown, source: string): WebProviders {
       );
     }
 
-    const normalizers = {
-      claude: normalizeClaudeProvider,
-      cloudflare: normalizeCloudflareProvider,
-      codex: normalizeCodexProvider,
-      custom: normalizeCustomProvider,
-      exa: normalizeExaProvider,
-      firecrawl: normalizeFirecrawlProvider,
-      gemini: normalizeGeminiProvider,
-      linkup: normalizeLinkupProvider,
-      perplexity: normalizePerplexityProvider,
-      parallel: normalizeParallelProvider,
-      tavily: normalizeTavilyProvider,
-      valyu: normalizeValyuProvider,
-    } satisfies Record<ProviderId, (raw: unknown, source: string) => unknown>;
-
     config.providers = Object.fromEntries(
-      PROVIDER_IDS.flatMap((providerId) =>
-        providers[providerId] === undefined
+      PROVIDER_IDS.flatMap((providerId) => {
+        const value = providers[providerId];
+        return value === undefined
           ? []
-          : [
-              [
-                providerId,
-                normalizers[providerId](providers[providerId], source),
-              ],
-            ],
-      ),
+          : [[providerId, normalizeProvider(providerId, value, source)]];
+      }),
     );
   }
 
   cleanupConfig(config);
-
   return config;
 }
 
-function normalizeClaudeProvider(raw: unknown, source: string): Claude {
-  return parseProviderWithSchema(raw, source, "claude", claudeProviderSchema);
+function normalizeProvider(
+  providerId: ProviderId,
+  raw: unknown,
+  source: string,
+):
+  | Claude
+  | Cloudflare
+  | Codex
+  | Custom
+  | Exa
+  | Firecrawl
+  | Gemini
+  | Linkup
+  | Parallel
+  | Perplexity
+  | Tavily
+  | Valyu {
+  switch (providerId) {
+    case "claude":
+      return parseProviderWithShape<Claude>(raw, source, providerId, {
+        pathToClaudeCodeExecutable: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "cloudflare":
+      return parseProviderWithShape<Cloudflare>(raw, source, providerId, {
+        apiToken: readOptionalString,
+        accountId: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "codex":
+      return parseProviderWithShape<Codex>(raw, source, providerId, {
+        codexPath: readOptionalString,
+        baseUrl: readOptionalString,
+        apiKey: readOptionalString,
+        env: readOptionalStringMap,
+        config: readOptionalObject,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "exa":
+    case "valyu":
+      return parseProviderWithShape<Exa | Valyu>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "gemini":
+      return parseProviderWithShape<Gemini>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "firecrawl":
+    case "linkup":
+    case "parallel":
+    case "perplexity":
+    case "tavily":
+      return parseProviderWithShape<
+        Firecrawl | Linkup | Parallel | Perplexity | Tavily
+      >(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "custom":
+      return parseProviderWithShape<Custom>(raw, source, providerId, {
+        options: parseOptionalCustomProviderOptions,
+        settings: parseOptionalExecutionSettings,
+      });
+  }
 }
 
-function normalizeCloudflareProvider(raw: unknown, source: string): Cloudflare {
-  return parseProviderWithSchema(
-    raw,
-    source,
-    "cloudflare",
-    cloudflareProviderSchema,
-  );
-}
-
-function normalizeCodexProvider(raw: unknown, source: string): Codex {
-  return parseProviderWithSchema(raw, source, "codex", codexProviderSchema);
-}
-
-function normalizeExaProvider(raw: unknown, source: string): Exa {
-  return parseProviderWithSchema(raw, source, "exa", simpleApiProviderSchema);
-}
-
-function normalizeFirecrawlProvider(raw: unknown, source: string): Firecrawl {
-  return parseProviderWithSchema(
-    raw,
-    source,
-    "firecrawl",
-    firecrawlProviderSchema,
-  );
-}
-
-function normalizeValyuProvider(raw: unknown, source: string): Valyu {
-  return parseProviderWithSchema(raw, source, "valyu", simpleApiProviderSchema);
-}
-
-function normalizeGeminiProvider(raw: unknown, source: string): Gemini {
-  return parseProviderWithSchema(raw, source, "gemini", geminiProviderSchema);
-}
-
-function normalizeLinkupProvider(raw: unknown, source: string): Linkup {
-  return parseProviderWithSchema(raw, source, "linkup", linkupProviderSchema);
-}
-
-function normalizePerplexityProvider(raw: unknown, source: string): Perplexity {
-  return parseProviderWithSchema(
-    raw,
-    source,
-    "perplexity",
-    perplexityProviderSchema,
-  );
-}
-
-function normalizeParallelProvider(raw: unknown, source: string): Parallel {
-  return parseProviderWithSchema(
-    raw,
-    source,
-    "parallel",
-    parallelProviderSchema,
-  );
-}
-
-function normalizeTavilyProvider(raw: unknown, source: string): Tavily {
-  return parseProviderWithSchema(raw, source, "tavily", tavilyProviderSchema);
-}
-
-function normalizeCustomProvider(raw: unknown, source: string): Custom {
-  return parseProviderWithSchema(raw, source, "custom", customProviderSchema);
-}
-
-function toPublicConfig(config: WebProviders): Record<string, unknown> {
-  const providers = config.providers
-    ? Object.fromEntries(
-        Object.entries(config.providers).flatMap(([providerId, provider]) =>
-          provider ? [[providerId, toPublicProviderConfig(provider)]] : [],
-        ),
-      )
-    : undefined;
-
-  return {
-    ...(config.tools ? { tools: config.tools } : {}),
-    ...(config.settings ? { settings: config.settings } : {}),
-    ...(providers && Object.keys(providers).length > 0 ? { providers } : {}),
-  } as unknown as Record<string, unknown>;
-}
-
-function parseProviderWithSchema<T>(
+function parseProviderWithShape<T>(
   raw: unknown,
   source: string,
   providerId: ProviderId,
-  schema: z.ZodType<T>,
+  shape: Record<
+    string,
+    (value: unknown, source: string, field: string) => unknown
+  >,
 ): T {
   const provider = parseProviderObject(raw, source, providerId);
-  rejectLegacyProviderToolFields(provider, source, providerId);
-  rejectRemovedProviderEnabledField(provider, source, providerId);
-
-  const parsed = schema.safeParse(provider);
-  if (!parsed.success) {
-    const argvIssue = parsed.error.issues.find((issue) =>
-      issue.path.includes("argv"),
-    );
-    if (argvIssue) {
-      const commandField = argvIssue.path.slice(0, -1).join(".");
-      throw new Error(
-        `'providers.${providerId}.${commandField}' in ${source} must be a non-empty array of non-empty strings.`,
-      );
-    }
+  const allowedKeys = Object.keys(shape);
+  const unknownKeys = Object.keys(provider).filter(
+    (key) => !allowedKeys.includes(key),
+  );
+  if (unknownKeys.length > 0) {
     throw new Error(
       `'providers.${providerId}' in ${source} must be a valid provider config.`,
     );
   }
 
-  return parsed.data;
-}
-
-function toPublicProviderConfig(
-  provider:
-    | Claude
-    | Cloudflare
-    | Codex
-    | Custom
-    | Exa
-    | Firecrawl
-    | Gemini
-    | Linkup
-    | Perplexity
-    | Parallel
-    | Tavily
-    | Valyu,
-): Record<string, unknown> {
-  return {
-    ...("pathToClaudeCodeExecutable" in provider &&
-    provider.pathToClaudeCodeExecutable !== undefined
-      ? {
-          pathToClaudeCodeExecutable: provider.pathToClaudeCodeExecutable,
-        }
-      : {}),
-    ...("codexPath" in provider && provider.codexPath !== undefined
-      ? { codexPath: provider.codexPath }
-      : {}),
-    ...("baseUrl" in provider && provider.baseUrl !== undefined
-      ? { baseUrl: provider.baseUrl }
-      : {}),
-    ...("apiKey" in provider && provider.apiKey !== undefined
-      ? { apiKey: provider.apiKey }
-      : {}),
-    ...("apiToken" in provider && provider.apiToken !== undefined
-      ? { apiToken: provider.apiToken }
-      : {}),
-    ...("accountId" in provider && provider.accountId !== undefined
-      ? { accountId: provider.accountId }
-      : {}),
-    ...("env" in provider && provider.env !== undefined
-      ? { env: provider.env }
-      : {}),
-    ...("config" in provider && provider.config !== undefined
-      ? { config: provider.config }
-      : {}),
-    ...(provider.options ? { options: provider.options } : {}),
-    ...(provider.settings ? { settings: provider.settings } : {}),
-  } as unknown as Record<string, unknown>;
-}
-
-function parseSettingsConfig(value: unknown, source: string): Settings {
-  const parsed = parseWithSchema(
-    value,
-    settingsSchema,
-    source,
-    "settings",
-    "must be a JSON object.",
-  );
-
-  const settings: Settings = {
-    requestTimeoutMs: parsed.requestTimeoutMs,
-    retryCount: parsed.retryCount,
-    retryDelayMs: parsed.retryDelayMs,
-    researchTimeoutMs: parsed.researchTimeoutMs,
-    search:
-      parsed.search !== undefined
-        ? parseSearchSettings(parsed.search, source, "settings.search")
-        : undefined,
-  };
-
-  return Object.values(settings).some((entry) => entry !== undefined)
-    ? settings
-    : {};
+  return Object.fromEntries(
+    Object.entries(shape).map(([key, parser]) => [
+      key,
+      parser(provider[key], source, `providers.${providerId}.${key}`),
+    ]),
+  ) as T;
 }
 
 function parseProviderObject(
   raw: unknown,
   source: string,
-  field: string,
+  providerId: ProviderId,
 ): Record<string, unknown> {
-  return parseWithSchema(
+  const provider = requireObject(
     raw,
-    jsonObjectSchema,
-    source,
-    `providers.${field}`,
-    "must be a JSON object.",
+    `'providers.${providerId}' in ${source} must be a JSON object.`,
   );
+  if (provider.tools !== undefined) {
+    throw new Error(
+      `'providers.${providerId}.tools' in ${source} is no longer supported. Use top-level 'tools' mappings instead.`,
+    );
+  }
+  if (provider.enabled !== undefined) {
+    throw new Error(
+      `'providers.${providerId}.enabled' in ${source} is no longer supported. Providers are always on; use top-level 'tools' mappings to route or disable capabilities.`,
+    );
+  }
+  return provider;
+}
+
+function parseSettingsConfig(value: unknown, source: string): Settings {
+  return parseExecutionSettings(value, source, "settings", true);
+}
+
+function parseOptionalExecutionSettings(
+  value: unknown,
+  source: string,
+  field: string,
+): Settings | undefined {
+  return value === undefined
+    ? undefined
+    : parseExecutionSettings(value, source, field, false);
+}
+
+function parseExecutionSettings(
+  value: unknown,
+  source: string,
+  field: string,
+  allowSearch: boolean,
+): Settings {
+  const settings = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  const unknownKeys = Object.keys(settings).filter(
+    (key) =>
+      key !== "requestTimeoutMs" &&
+      key !== "retryCount" &&
+      key !== "retryDelayMs" &&
+      key !== "researchTimeoutMs" &&
+      (!allowSearch || key !== "search"),
+  );
+  if (unknownKeys.length > 0) {
+    throw new Error(`'${field}' in ${source} must be a JSON object.`);
+  }
+
+  const parsed: Settings = {
+    requestTimeoutMs: parseOptionalPositiveInteger(
+      settings.requestTimeoutMs,
+      source,
+      `${field}.requestTimeoutMs`,
+    ),
+    retryCount: parseOptionalNonNegativeInteger(
+      settings.retryCount,
+      source,
+      `${field}.retryCount`,
+    ),
+    retryDelayMs: parseOptionalPositiveInteger(
+      settings.retryDelayMs,
+      source,
+      `${field}.retryDelayMs`,
+    ),
+    researchTimeoutMs: parseOptionalPositiveInteger(
+      settings.researchTimeoutMs,
+      source,
+      `${field}.researchTimeoutMs`,
+    ),
+    ...(allowSearch && settings.search !== undefined
+      ? {
+          search: parseSearchSettings(
+            settings.search,
+            source,
+            `${field}.search`,
+          ),
+        }
+      : {}),
+  };
+
+  return Object.values(parsed).some((entry) => entry !== undefined)
+    ? parsed
+    : {};
 }
 
 function parseToolProviderMapping(
@@ -646,12 +428,13 @@ function parseToolProviderMapping(
   source: string,
   field: string,
 ): Tools {
-  if (!isPlainObject(value)) {
-    throw new Error(`'${field}' in ${source} must be a JSON object.`);
-  }
-
+  const mapping = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
   const parsed: Tools = {};
-  for (const [key, entry] of Object.entries(value)) {
+
+  for (const [key, entry] of Object.entries(mapping)) {
     if (!TOOLS.includes(key as Tool)) {
       throw new Error(`Unknown tools in ${source}: ${key}.`);
     }
@@ -686,15 +469,11 @@ function parseSearchSettings(
   source: string,
   field: string,
 ): SearchSettings {
-  const raw = parseWithSchema(
+  const settings = requireObject(
     value,
-    jsonObjectSchema,
-    source,
-    field,
-    "must be a JSON object.",
+    `'${field}' in ${source} must be a JSON object.`,
   );
-
-  const unknownFields = Object.keys(raw).filter(
+  const unknownFields = Object.keys(settings).filter(
     (key) => key !== "provider" && key !== "maxUrls" && key !== "ttlMs",
   );
   if (unknownFields.length > 0) {
@@ -703,85 +482,267 @@ function parseSearchSettings(
     );
   }
 
-  const parsed = parseWithSchema(
-    raw,
-    searchSettingsSchema,
+  const provider = parseOptionalLiteral(
+    settings.provider,
     source,
-    field,
-    "must be a JSON object.",
+    `${field}.provider`,
+    PROVIDER_IDS,
   );
-
-  if (
-    parsed.provider !== undefined &&
-    !supportsTool(parsed.provider, "contents")
-  ) {
+  if (provider !== undefined && !supportsTool(provider, "contents")) {
     throw new Error(
       `'${field}.provider' in ${source} must name a provider that supports 'contents'.`,
     );
   }
 
-  return parsed;
+  return {
+    provider,
+    maxUrls: parseOptionalPositiveInteger(
+      settings.maxUrls,
+      source,
+      `${field}.maxUrls`,
+    ),
+    ttlMs: parseOptionalPositiveInteger(
+      settings.ttlMs,
+      source,
+      `${field}.ttlMs`,
+    ),
+  };
 }
 
-function rejectLegacyProviderToolFields(
-  provider: Record<string, unknown>,
-  source: string,
-  providerId: ProviderId,
-): void {
-  if (provider.tools !== undefined) {
-    throw new Error(
-      `'providers.${providerId}.tools' in ${source} is no longer supported. Use top-level 'tools' mappings instead.`,
-    );
-  }
-}
-
-function rejectRemovedProviderEnabledField(
-  provider: Record<string, unknown>,
-  source: string,
-  providerId: ProviderId,
-): void {
-  if (provider.enabled !== undefined) {
-    throw new Error(
-      `'providers.${providerId}.enabled' in ${source} is no longer supported. Providers are always on; use top-level 'tools' mappings to route or disable capabilities.`,
-    );
-  }
-}
-
-function parseOptionalWithSchema<T>(
+function parseOptionalCustomProviderOptions(
   value: unknown,
-  schema: z.ZodType<T>,
   source: string,
   field: string,
-  errorMessage: string,
-): T | undefined {
+): Custom["options"] | undefined {
   if (value === undefined) {
     return undefined;
   }
-  const parsed = schema.safeParse(value);
-  if (!parsed.success) {
-    throw new Error(`'${field}' in ${source} ${errorMessage}`);
+  const options = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  const unknownKeys = Object.keys(options).filter(
+    (key) =>
+      key !== "search" &&
+      key !== "contents" &&
+      key !== "answer" &&
+      key !== "research",
+  );
+  if (unknownKeys.length > 0) {
+    throw new Error(`'${field}' in ${source} must be a valid provider config.`);
   }
-  return parsed.data;
+
+  return {
+    search: parseOptionalCustomCommandConfig(
+      options.search,
+      source,
+      `${field}.search`,
+    ),
+    contents: parseOptionalCustomCommandConfig(
+      options.contents,
+      source,
+      `${field}.contents`,
+    ),
+    answer: parseOptionalCustomCommandConfig(
+      options.answer,
+      source,
+      `${field}.answer`,
+    ),
+    research: parseOptionalCustomCommandConfig(
+      options.research,
+      source,
+      `${field}.research`,
+    ),
+  };
 }
 
-function parseWithSchema<T>(
+function parseOptionalCustomCommandConfig(
   value: unknown,
-  schema: z.ZodType<T>,
   source: string,
   field: string,
-  errorMessage: string,
-): T {
-  const parsed = parseOptionalWithSchema(
-    value,
-    schema,
-    source,
-    field,
-    errorMessage,
-  );
-  if (parsed === undefined) {
-    throw new Error(`'${field}' in ${source} ${errorMessage}`);
+): CustomCommandConfig | undefined {
+  if (value === undefined) {
+    return undefined;
   }
-  return parsed;
+  const command = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  const unknownKeys = Object.keys(command).filter(
+    (key) => key !== "argv" && key !== "cwd" && key !== "env",
+  );
+  if (unknownKeys.length > 0) {
+    throw new Error(`'${field}' in ${source} must be a valid provider config.`);
+  }
+
+  return {
+    argv: readOptionalNonEmptyStringArray(
+      command.argv,
+      source,
+      `${field}.argv`,
+    ),
+    cwd: readOptionalString(command.cwd, source, `${field}.cwd`),
+    env: readOptionalStringMap(command.env, source, `${field}.env`),
+  };
+}
+
+function toPublicConfig(config: WebProviders): Record<string, unknown> {
+  const providers = config.providers
+    ? Object.fromEntries(
+        Object.entries(config.providers).flatMap(([providerId, provider]) =>
+          provider ? [[providerId, toPublicProviderConfig(provider)]] : [],
+        ),
+      )
+    : undefined;
+
+  return {
+    ...(config.tools ? { tools: config.tools } : {}),
+    ...(config.settings ? { settings: config.settings } : {}),
+    ...(providers && Object.keys(providers).length > 0 ? { providers } : {}),
+  };
+}
+
+function toPublicProviderConfig(
+  provider:
+    | Claude
+    | Cloudflare
+    | Codex
+    | Custom
+    | Exa
+    | Firecrawl
+    | Gemini
+    | Linkup
+    | Parallel
+    | Perplexity
+    | Tavily
+    | Valyu,
+): Record<string, unknown> {
+  return {
+    ...("pathToClaudeCodeExecutable" in provider &&
+    provider.pathToClaudeCodeExecutable !== undefined
+      ? {
+          pathToClaudeCodeExecutable: provider.pathToClaudeCodeExecutable,
+        }
+      : {}),
+    ...("codexPath" in provider && provider.codexPath !== undefined
+      ? { codexPath: provider.codexPath }
+      : {}),
+    ...("baseUrl" in provider && provider.baseUrl !== undefined
+      ? { baseUrl: provider.baseUrl }
+      : {}),
+    ...("apiKey" in provider && provider.apiKey !== undefined
+      ? { apiKey: provider.apiKey }
+      : {}),
+    ...("apiToken" in provider && provider.apiToken !== undefined
+      ? { apiToken: provider.apiToken }
+      : {}),
+    ...("accountId" in provider && provider.accountId !== undefined
+      ? { accountId: provider.accountId }
+      : {}),
+    ...("env" in provider && provider.env !== undefined
+      ? { env: provider.env }
+      : {}),
+    ...("config" in provider && provider.config !== undefined
+      ? { config: provider.config }
+      : {}),
+    ...(provider.options ? { options: provider.options } : {}),
+    ...(provider.settings ? { settings: provider.settings } : {}),
+  };
+}
+
+function readOptionalString(
+  value: unknown,
+  source: string,
+  field: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string") {
+    throw new Error(`'${field}' in ${source} must be a string.`);
+  }
+  return value;
+}
+
+function readOptionalObject(
+  value: unknown,
+  source: string,
+  field: string,
+): Record<string, unknown> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireObject(value, `'${field}' in ${source} must be a JSON object.`);
+}
+
+function readOptionalStringMap(
+  value: unknown,
+  source: string,
+  field: string,
+): Record<string, string> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const map = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  for (const [key, entry] of Object.entries(map)) {
+    if (typeof entry !== "string") {
+      throw new Error(`'${field}.${key}' in ${source} must be a string.`);
+    }
+  }
+  return map as Record<string, string>;
+}
+
+function readOptionalNonEmptyStringArray(
+  value: unknown,
+  source: string,
+  field: string,
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.some(
+      (entry) => typeof entry !== "string" || entry.trim().length === 0,
+    )
+  ) {
+    throw new Error(
+      `'${field}' in ${source} must be a non-empty array of non-empty strings.`,
+    );
+  }
+  return value;
+}
+
+function parseOptionalPositiveInteger(
+  value: unknown,
+  source: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`'${field}' in ${source} must be a positive integer.`);
+  }
+  return value;
+}
+
+function parseOptionalNonNegativeInteger(
+  value: unknown,
+  source: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new Error(`'${field}' in ${source} must be a non-negative integer.`);
+  }
+  return value;
 }
 
 function parseOptionalLiteral<T extends readonly string[]>(
@@ -790,7 +751,9 @@ function parseOptionalLiteral<T extends readonly string[]>(
   field: string,
   allowed: T,
 ): T[number] | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) {
+    return undefined;
+  }
   if (typeof value !== "string" || !allowed.includes(value)) {
     throw new Error(
       `'${field}' in ${source} must be one of: ${allowed.join(", ")}.`,
@@ -874,6 +837,16 @@ function cleanupNestedEmptyObjects(value: Record<string, unknown>): void {
       delete value[key];
     }
   }
+}
+
+function requireObject(
+  value: unknown,
+  message: string,
+): Record<string, unknown> {
+  if (!isPlainObject(value)) {
+    throw new Error(message);
+  }
+  return value;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
