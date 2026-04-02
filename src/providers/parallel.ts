@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import ParallelClient from "parallel-web";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
@@ -9,8 +10,10 @@ import type {
   ProviderContext,
   ProviderRequest,
   SearchResponse,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -34,11 +37,47 @@ type ParallelAdapter = ProviderAdapter<Parallel> & {
   ): Promise<ContentsResponse>;
 };
 
+const parallelSearchOptionsSchema = Type.Object(
+  {
+    mode: Type.Optional(
+      literalUnion(["agentic", "one-shot"], {
+        description: "Parallel search mode.",
+      }),
+    ),
+  },
+  { description: "Parallel search options." },
+);
+
+const parallelExtractOptionsSchema = Type.Object(
+  {
+    excerpts: Type.Optional(
+      Type.Boolean({ description: "Include excerpts in extraction results." }),
+    ),
+    full_content: Type.Optional(
+      Type.Boolean({
+        description: "Include full page content in extraction results.",
+      }),
+    ),
+  },
+  { description: "Parallel extract options." },
+);
+
 export const parallelAdapter: ParallelAdapter = {
   id: "parallel",
   label: "Parallel",
   docsUrl: "https://github.com/parallel-web/parallel-sdk-typescript",
   tools: ["search", "contents"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return parallelSearchOptionsSchema;
+      case "contents":
+        return parallelExtractOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Parallel {
     return {

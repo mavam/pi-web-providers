@@ -1,4 +1,5 @@
 import PerplexityClient from "@perplexity-ai/perplexity_ai";
+import { type TObject, Type } from "@sinclair/typebox";
 import { resolveConfigValue } from "../config.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
@@ -8,9 +9,11 @@ import type {
   ProviderContext,
   ProviderRequest,
   SearchResponse,
+  Tool,
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { passthroughOptionsSchema } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_ANSWER_MODEL = "sonar";
@@ -50,11 +53,50 @@ type PerplexityAdapter = ProviderAdapter<Perplexity> & {
   ): Promise<ToolOutput>;
 };
 
+const perplexitySearchOptionsSchema = passthroughOptionsSchema(
+  "Perplexity search options passed through to the SDK.",
+);
+
+const perplexityAnswerOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(
+      Type.String({
+        description: "Perplexity model to use (e.g., 'sonar', 'sonar-pro').",
+      }),
+    ),
+  },
+  { description: "Perplexity answer options." },
+);
+
+const perplexityResearchOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(
+      Type.String({
+        description: "Perplexity model to use (e.g., 'sonar-deep-research').",
+      }),
+    ),
+  },
+  { description: "Perplexity research options." },
+);
+
 export const perplexityAdapter: PerplexityAdapter = {
   id: "perplexity",
   label: "Perplexity",
   docsUrl: "https://docs.perplexity.ai/docs/sdk/overview.md",
   tools: ["search", "answer", "research"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return perplexitySearchOptionsSchema;
+      case "answer":
+        return perplexityAnswerOptionsSchema;
+      case "research":
+        return perplexityResearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Perplexity {
     return {

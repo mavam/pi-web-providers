@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import {
   type FetchParams,
   LinkupClient,
@@ -15,8 +16,10 @@ import type {
   ProviderRequest,
   SearchResponse,
   SearchResult,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 type LinkupSearchOptions = {
@@ -59,11 +62,67 @@ type LinkupAdapter = ProviderAdapter<Linkup> & {
   ): Promise<ContentsResponse>;
 };
 
+const linkupSearchOptionsSchema = Type.Object(
+  {
+    depth: Type.Optional(
+      literalUnion(["standard", "deep"], {
+        description: "Search depth. 'deep' is slower but more thorough.",
+      }),
+    ),
+    includeImages: Type.Optional(
+      Type.Boolean({ description: "Include images in search results." }),
+    ),
+    includeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict results to these domains.",
+      }),
+    ),
+    excludeDomains: Type.Optional(
+      Type.Array(Type.String(), { description: "Exclude these domains." }),
+    ),
+    fromDate: Type.Optional(
+      Type.String({ description: "ISO date string for earliest result date." }),
+    ),
+    toDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest result date." }),
+    ),
+  },
+  { description: "Linkup search options." },
+);
+
+const linkupContentsOptionsSchema = Type.Object(
+  {
+    renderJs: Type.Optional(
+      Type.Boolean({
+        description: "Render JavaScript before extracting content.",
+      }),
+    ),
+    includeRawHtml: Type.Optional(
+      Type.Boolean({ description: "Include raw HTML in the response." }),
+    ),
+    extractImages: Type.Optional(
+      Type.Boolean({ description: "Extract images from the page." }),
+    ),
+  },
+  { description: "Linkup fetch options." },
+);
+
 export const linkupAdapter: LinkupAdapter = {
   id: "linkup",
   label: "Linkup",
   docsUrl: "https://docs.linkup.so/pages/sdk/js/js",
   tools: ["search", "contents"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return linkupSearchOptionsSchema;
+      case "contents":
+        return linkupContentsOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Linkup {
     return {

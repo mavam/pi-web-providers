@@ -2,6 +2,7 @@ import FirecrawlClient, {
   type Document,
   type SearchData,
 } from "@mendable/firecrawl-js";
+import { type TObject, Type } from "@sinclair/typebox";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
@@ -13,8 +14,10 @@ import type {
   ProviderRequest,
   SearchResponse,
   SearchResult,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 type FirecrawlAdapter = ProviderAdapter<Firecrawl> & {
@@ -33,11 +36,79 @@ type FirecrawlAdapter = ProviderAdapter<Firecrawl> & {
   ): Promise<ContentsResponse>;
 };
 
+const firecrawlSearchOptionsSchema = Type.Object(
+  {
+    lang: Type.Optional(
+      Type.String({
+        description: "Language code for search results (e.g., 'en').",
+      }),
+    ),
+    country: Type.Optional(
+      Type.String({
+        description: "Country code for search results (e.g., 'us').",
+      }),
+    ),
+    scrapeOptions: Type.Optional(
+      Type.Object(
+        {
+          formats: Type.Optional(
+            Type.Array(literalUnion(["markdown", "html", "rawHtml"]), {
+              description: "Output formats.",
+            }),
+          ),
+          onlyMainContent: Type.Optional(
+            Type.Boolean({ description: "Extract only the main content." }),
+          ),
+        },
+        { description: "Options for scraping each search result." },
+      ),
+    ),
+  },
+  { description: "Firecrawl search options." },
+);
+
+const firecrawlScrapeOptionsSchema = Type.Object(
+  {
+    formats: Type.Optional(
+      Type.Array(literalUnion(["markdown", "html", "rawHtml"]), {
+        description: "Output formats for scraping.",
+      }),
+    ),
+    onlyMainContent: Type.Optional(
+      Type.Boolean({ description: "Extract only the main content." }),
+    ),
+    includeTags: Type.Optional(
+      Type.Array(Type.String(), { description: "CSS selectors to include." }),
+    ),
+    excludeTags: Type.Optional(
+      Type.Array(Type.String(), { description: "CSS selectors to exclude." }),
+    ),
+    waitFor: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        description: "Milliseconds to wait before scraping.",
+      }),
+    ),
+  },
+  { description: "Firecrawl scrape options." },
+);
+
 export const firecrawlAdapter: FirecrawlAdapter = {
   id: "firecrawl",
   label: "Firecrawl",
   docsUrl: "https://docs.firecrawl.dev/sdks/node",
   tools: ["search", "contents"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return firecrawlSearchOptionsSchema;
+      case "contents":
+        return firecrawlScrapeOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Firecrawl {
     return {

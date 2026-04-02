@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { type TObject, Type } from "@sinclair/typebox";
 import { resolveConfigValue } from "../config.js";
 import { executeAsyncResearch } from "../execution-policy.js";
 import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
@@ -11,9 +12,11 @@ import type {
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
+  Tool,
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { passthroughOptionsSchema } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
@@ -55,11 +58,59 @@ type GeminiAdapter = ProviderAdapter<Gemini> & {
   createClient(config: Gemini): GoogleGenAI;
 };
 
+const geminiSearchOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(
+      Type.String({
+        description: "Gemini model for search (e.g., 'gemini-2.5-flash').",
+      }),
+    ),
+    generation_config: Type.Optional(
+      Type.Object(
+        {},
+        {
+          additionalProperties: true,
+          description: "Gemini generation config overrides.",
+        },
+      ),
+    ),
+  },
+  { description: "Gemini search options." },
+);
+
+const geminiAnswerOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(
+      Type.String({
+        description: "Gemini model for answers (e.g., 'gemini-2.5-flash').",
+      }),
+    ),
+  },
+  { description: "Gemini answer options." },
+);
+
+const geminiResearchOptionsSchema = passthroughOptionsSchema(
+  "Gemini research options passed through to the SDK.",
+);
+
 export const geminiAdapter: GeminiAdapter = {
   id: "gemini",
   label: "Gemini",
   docsUrl: "https://github.com/googleapis/js-genai",
   tools: ["search", "answer", "research"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return geminiSearchOptionsSchema;
+      case "answer":
+        return geminiAnswerOptionsSchema;
+      case "research":
+        return geminiResearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Gemini {
     return {

@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import {
   type TavilyClient,
   type TavilyExtractResponse,
@@ -14,8 +15,10 @@ import type {
   ProviderRequest,
   SearchResponse,
   Tavily,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 type TavilyAdapter = ProviderAdapter<Tavily> & {
@@ -34,11 +37,81 @@ type TavilyAdapter = ProviderAdapter<Tavily> & {
   ): Promise<ContentsResponse>;
 };
 
+const tavilySearchOptionsSchema = Type.Object(
+  {
+    topic: Type.Optional(
+      literalUnion(["general", "news", "finance"], {
+        description: "Category of the search query.",
+      }),
+    ),
+    searchDepth: Type.Optional(
+      literalUnion(["basic", "advanced"], {
+        description:
+          "Depth of the search. 'advanced' is slower but more thorough.",
+      }),
+    ),
+    includeAnswer: Type.Optional(
+      Type.Boolean({ description: "Include a short AI-generated answer." }),
+    ),
+    includeRawContent: Type.Optional(
+      Type.Boolean({ description: "Include raw page content in results." }),
+    ),
+    includeImages: Type.Optional(
+      Type.Boolean({ description: "Include related images." }),
+    ),
+    includeFavicon: Type.Optional(
+      Type.Boolean({ description: "Include favicon URLs." }),
+    ),
+    includeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict results to these domains.",
+      }),
+    ),
+    excludeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Exclude these domains from results.",
+      }),
+    ),
+    days: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: "Limit results to the last N days.",
+      }),
+    ),
+  },
+  { description: "Tavily search options." },
+);
+
+const tavilyExtractOptionsSchema = Type.Object(
+  {
+    format: Type.Optional(
+      literalUnion(["markdown", "text"], {
+        description: "Output format for extracted content.",
+      }),
+    ),
+    includeFavicon: Type.Optional(
+      Type.Boolean({ description: "Include favicon URLs." }),
+    ),
+  },
+  { description: "Tavily extract options." },
+);
+
 export const tavilyAdapter: TavilyAdapter = {
   id: "tavily",
   label: "Tavily",
   docsUrl: "https://docs.tavily.com/sdk/javascript/reference",
   tools: ["search", "contents"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return tavilySearchOptionsSchema;
+      case "contents":
+        return tavilyExtractOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Tavily {
     return {

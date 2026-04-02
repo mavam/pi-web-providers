@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import CloudflareClient from "cloudflare";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
@@ -8,8 +9,10 @@ import type {
   ProviderCapabilityStatus,
   ProviderContext,
   ProviderRequest,
+  Tool,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import { asJsonObject } from "./shared.js";
 
 type CloudflareAdapter = ProviderAdapter<Cloudflare> & {
@@ -21,12 +24,40 @@ type CloudflareAdapter = ProviderAdapter<Cloudflare> & {
   ): Promise<ContentsResponse>;
 };
 
+const cloudflareContentsOptionsSchema = Type.Object(
+  {
+    gotoOptions: Type.Optional(
+      Type.Object(
+        {
+          waitUntil: Type.Optional(
+            literalUnion(
+              ["load", "domcontentloaded", "networkidle0", "networkidle2"],
+              { description: "When to consider navigation complete." },
+            ),
+          ),
+        },
+        { description: "Navigation options." },
+      ),
+    ),
+  },
+  { description: "Cloudflare Browser Rendering options." },
+);
+
 export const cloudflareAdapter: CloudflareAdapter = {
   id: "cloudflare",
   label: "Cloudflare",
   docsUrl:
     "https://developers.cloudflare.com/browser-rendering/rest-api/markdown-endpoint/",
   tools: ["contents"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "contents":
+        return cloudflareContentsOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Cloudflare {
     return {

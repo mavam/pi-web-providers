@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import { Exa as ExaClient } from "exa-js";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
@@ -14,9 +15,11 @@ import type {
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
+  Tool,
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion, passthroughOptionsSchema } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -64,11 +67,97 @@ type ExaAdapter = ProviderAdapter<Exa> & {
   ): Promise<ResearchPollResult>;
 };
 
+const exaSearchOptionsSchema = Type.Object(
+  {
+    type: Type.Optional(
+      literalUnion(
+        [
+          "keyword",
+          "neural",
+          "auto",
+          "hybrid",
+          "fast",
+          "instant",
+          "deep",
+          "deep-reasoning",
+          "deep-max",
+        ],
+        { description: "Exa search mode." },
+      ),
+    ),
+    category: Type.Optional(
+      Type.String({
+        description: "Filter by category (e.g., 'company', 'research paper').",
+      }),
+    ),
+    includeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict results to these domains.",
+      }),
+    ),
+    excludeDomains: Type.Optional(
+      Type.Array(Type.String(), { description: "Exclude these domains." }),
+    ),
+    startPublishedDate: Type.Optional(
+      Type.String({
+        description: "ISO date string for earliest publish date.",
+      }),
+    ),
+    endPublishedDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest publish date." }),
+    ),
+    contents: Type.Optional(
+      Type.Object(
+        {
+          text: Type.Optional(
+            Type.Boolean({ description: "Include text content." }),
+          ),
+          highlights: Type.Optional(
+            Type.Boolean({ description: "Include highlighted excerpts." }),
+          ),
+          summary: Type.Optional(
+            Type.Boolean({ description: "Include AI-generated summary." }),
+          ),
+        },
+        { description: "What content to include in results." },
+      ),
+    ),
+  },
+  { description: "Exa search options." },
+);
+
+const exaContentsOptionsSchema = passthroughOptionsSchema(
+  "Exa contents options passed through to the SDK.",
+);
+
+const exaAnswerOptionsSchema = passthroughOptionsSchema(
+  "Exa answer options passed through to the SDK.",
+);
+
+const exaResearchOptionsSchema = passthroughOptionsSchema(
+  "Exa research options passed through to the SDK.",
+);
+
 export const exaAdapter: ExaAdapter = {
   id: "exa",
   label: "Exa",
   docsUrl: "https://exa.ai/docs/sdks/typescript-sdk-specification",
   tools: ["search", "contents", "answer", "research"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return exaSearchOptionsSchema;
+      case "contents":
+        return exaContentsOptionsSchema;
+      case "answer":
+        return exaAnswerOptionsSchema;
+      case "research":
+        return exaResearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Exa {
     return {

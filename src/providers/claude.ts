@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { query, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
+import { type TObject, Type } from "@sinclair/typebox";
 import type {
   Claude,
   ProviderAdapter,
@@ -7,9 +8,11 @@ import type {
   ProviderContext,
   ProviderRequest,
   SearchResponse,
+  Tool,
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion } from "./schema.js";
 import { trimSnippet } from "./shared.js";
 
 const SEARCH_OUTPUT_SCHEMA = {
@@ -94,11 +97,50 @@ type ClaudeAdapter = ProviderAdapter<Claude> & {
   }): Promise<T>;
 };
 
+const claudeOptionsSchema = Type.Object(
+  {
+    model: Type.Optional(
+      Type.String({ description: "Claude model override." }),
+    ),
+    effort: Type.Optional(
+      literalUnion(["low", "medium", "high", "max"], {
+        description: "How much effort Claude should use.",
+      }),
+    ),
+    maxTurns: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: "Maximum number of Claude turns.",
+      }),
+    ),
+    maxThinkingTokens: Type.Optional(
+      Type.Integer({ minimum: 0, description: "Maximum thinking tokens." }),
+    ),
+    maxBudgetUsd: Type.Optional(
+      Type.Number({
+        exclusiveMinimum: 0,
+        description: "Maximum budget in USD.",
+      }),
+    ),
+  },
+  { description: "Claude options." },
+);
+
 export const claudeAdapter: ClaudeAdapter = {
   id: "claude",
   label: "Claude",
   docsUrl: "https://github.com/anthropics/claude-agent-sdk-typescript",
   tools: ["search", "answer"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+      case "answer":
+        return claudeOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Claude {
     return {};

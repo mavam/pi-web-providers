@@ -1,3 +1,4 @@
+import { type TObject, Type } from "@sinclair/typebox";
 import { Valyu as ValyuClient } from "valyu-js";
 import { resolveConfigValue } from "../config.js";
 import type { ContentsResponse } from "../contents.js";
@@ -13,10 +14,12 @@ import type {
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
+  Tool,
   ToolOutput,
   Valyu,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
+import { literalUnion, passthroughOptionsSchema } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -64,11 +67,54 @@ type ValyuAdapter = ProviderAdapter<Valyu> & {
   ): Promise<ResearchPollResult>;
 };
 
+const valyuSearchOptionsSchema = Type.Object(
+  {
+    searchType: Type.Optional(
+      literalUnion(["all", "web", "proprietary", "news"], {
+        description: "Valyu search type.",
+      }),
+    ),
+    responseLength: Type.Optional(
+      literalUnion(["short", "medium", "large", "max"], {
+        description: "Response length.",
+      }),
+    ),
+  },
+  { description: "Valyu search options." },
+);
+
+const valyuContentsOptionsSchema = passthroughOptionsSchema(
+  "Valyu contents options passed through to the SDK.",
+);
+
+const valyuAnswerOptionsSchema = passthroughOptionsSchema(
+  "Valyu answer options passed through to the SDK.",
+);
+
+const valyuResearchOptionsSchema = passthroughOptionsSchema(
+  "Valyu deep research options passed through to the SDK.",
+);
+
 export const valyuAdapter: ValyuAdapter = {
   id: "valyu",
   label: "Valyu",
   docsUrl: "https://docs.valyu.ai/sdk/typescript-sdk",
   tools: ["search", "contents", "answer", "research"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return valyuSearchOptionsSchema;
+      case "contents":
+        return valyuContentsOptionsSchema;
+      case "answer":
+        return valyuAnswerOptionsSchema;
+      case "research":
+        return valyuResearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
 
   createTemplate(): Valyu {
     return {

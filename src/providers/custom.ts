@@ -13,6 +13,7 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 import { buildProviderPlan } from "./framework.js";
+import { passthroughOptionsSchema } from "./schema.js";
 
 type CustomAdapter = ProviderAdapter<Custom> & {
   search(
@@ -42,6 +43,10 @@ type CustomAdapter = ProviderAdapter<Custom> & {
   ): Promise<ToolOutput>;
 };
 
+const customToolOptionsSchema = passthroughOptionsSchema(
+  "Custom provider options passed through to the wrapped command.",
+);
+
 export const customAdapter: CustomAdapter = {
   id: "custom",
   label: "Custom",
@@ -49,7 +54,7 @@ export const customAdapter: CustomAdapter = {
   tools: ["search", "contents", "answer", "research"] as const,
 
   getToolOptionsSchema(_capability: Tool): TObject | undefined {
-    return undefined;
+    return customToolOptionsSchema;
   },
 
   createTemplate(): Custom {
