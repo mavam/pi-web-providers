@@ -14,10 +14,9 @@ describe("execution policy", () => {
       requestTimeoutMs: 45000,
       retryCount: 4,
       retryDelayMs: 3000,
-      pollIntervalMs: 5000,
-      timeoutMs: 7200000,
-      maxConsecutivePollErrors: 8,
-      resumeId: "job-1",
+      prefetch: {
+        provider: "exa",
+      },
     };
 
     expect(stripLocalExecutionOptions(options)).toEqual({

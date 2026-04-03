@@ -1023,10 +1023,14 @@ async function executeSingleSearchQuery({
     });
 
   onProgress?.(`Searching via ${provider.label}: ${query}`);
-  const result = await executeOperationPlan(plan, runtimeOptions, {
-    ...providerContext,
-    onProgress,
-  });
+  const result = await executeOperationPlan(
+    plan,
+    stripSearchContentsPrefetchOptions(runtimeOptions),
+    {
+      ...providerContext,
+      onProgress,
+    },
+  );
   if (!isSearchResponse(result)) {
     throw new Error(`${provider.label} search returned an invalid result.`);
   }
@@ -1535,9 +1539,6 @@ async function dispatchWebResearch({
     config,
     ctx: context,
     providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
     input: request.input,
   });
 }
@@ -1550,7 +1551,6 @@ async function dispatchWebResearchInternal({
   explicitProvider,
   ctx,
   providerOptions,
-  runtimeOptions,
   input,
   planOverride,
 }: {
@@ -1563,7 +1563,6 @@ async function dispatchWebResearchInternal({
   explicitProvider?: ProviderId;
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   input: string;
   planOverride?: ProviderPlan<ToolOutput>;
 }) {
@@ -1592,7 +1591,6 @@ async function dispatchWebResearchInternal({
       providerConfig: providerConfig as AnyProvider,
       ctx,
       options: providerOptions,
-      runtimeOptions,
       planOverride,
     }),
   );
@@ -1618,7 +1616,6 @@ async function runDispatchedWebResearch({
   providerConfig,
   ctx,
   options,
-  runtimeOptions,
   planOverride,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
@@ -1632,7 +1629,6 @@ async function runDispatchedWebResearch({
   providerConfig: AnyProvider;
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   planOverride?: ProviderPlan<ToolOutput>;
 }): Promise<void> {
   let result: WebResearchResult;
@@ -1647,7 +1643,6 @@ async function runDispatchedWebResearch({
       ctx,
       signal: undefined,
       options,
-      runtimeOptions,
       input: request.input,
       onProgress: (message) => {
         request.progress = summarizeWebResearchProgress(
@@ -4246,7 +4241,6 @@ export const __test__ = {
     explicitProvider,
     ctx,
     options,
-    runtimeOptions,
     input,
     planOverride,
   }: {
@@ -4259,7 +4253,6 @@ export const __test__ = {
     explicitProvider?: ProviderId;
     ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     input: string;
     planOverride?: ProviderPlan<ToolOutput>;
   }) =>
@@ -4271,7 +4264,6 @@ export const __test__ = {
       explicitProvider,
       ctx,
       providerOptions: options,
-      runtimeOptions,
       input,
       planOverride,
     }),

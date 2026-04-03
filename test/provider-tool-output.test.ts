@@ -957,7 +957,7 @@ describe("provider tool output", () => {
     }
   });
 
-  it("rejects local execution controls for research", async () => {
+  it("rejects runtime options for research", async () => {
     const config: WebProviders = {
       providers: {
         perplexity: {
@@ -977,14 +977,10 @@ describe("provider tool output", () => {
         options: undefined,
         runtimeOptions: {
           requestTimeoutMs: 1000,
-          resumeId: "job-1",
-          timeoutMs: 60000,
         },
         input: "Investigate the topic",
       }),
-    ).rejects.toThrow(
-      "Perplexity research is always async and does not accept local execution controls. Remove requestTimeoutMs, timeoutMs, resumeId from options.",
-    );
+    ).rejects.toThrow("Perplexity research does not accept options.runtime.");
   });
 
   it("rejects malformed local execution control fields", async () => {
@@ -1022,7 +1018,7 @@ describe("provider tool output", () => {
     ).rejects.toThrow("options.requestTimeoutMs must be a positive integer.");
   });
 
-  it("rejects research-only execution controls on non-research tools", async () => {
+  it("rejects unsupported runtime options on non-research tools", async () => {
     const config: WebProviders = {
       providers: {
         exa: {
@@ -1042,7 +1038,6 @@ describe("provider tool output", () => {
         options: undefined,
         runtimeOptions: {
           timeoutMs: 1000,
-          resumeId: "job-1",
         },
         urls: ["https://example.com"],
         planOverride: {
@@ -1055,9 +1050,7 @@ describe("provider tool output", () => {
           }),
         },
       }),
-    ).rejects.toThrow(
-      "These controls only apply to internal research execution and are not supported here: timeoutMs, resumeId.",
-    );
+    ).rejects.toThrow("Unsupported runtime options: timeoutMs.");
   });
 
   it("builds structured options schema with provider and runtime sub-objects", () => {
@@ -1119,31 +1112,12 @@ describe("provider tool output", () => {
     expect(valyuProvider?.properties ?? {}).toHaveProperty("countryCode");
   });
 
-  it("rejects removed resumeInteractionId compatibility for research", async () => {
-    const config: WebProviders = {
-      providers: {
-        gemini: {
-          apiKey: "literal-key",
-        },
-      },
-    };
+  it("omits runtime from the research tool schema", () => {
+    const schema = __test__.buildStructuredOptionsSchema("research", "gemini");
+    const inner = schema.anyOf?.[0] ?? schema;
+    const props = inner.properties ?? {};
 
-    await expect(
-      __test__.executeProviderTool({
-        capability: "research",
-        config,
-        explicitProvider: "gemini",
-        ctx: { cwd: process.cwd() },
-        signal: undefined,
-        onUpdate: undefined,
-        options: undefined,
-        runtimeOptions: {
-          resumeInteractionId: "job-1",
-        },
-        input: "Investigate the topic",
-      }),
-    ).rejects.toThrow(
-      "Gemini research is always async and does not accept local execution controls. Remove resumeInteractionId from options.",
-    );
+    expect(props).not.toHaveProperty("runtime");
+    expect(props).toHaveProperty("provider");
   });
 });

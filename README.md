@@ -88,11 +88,11 @@ results should arrive as soon as they are ready.
 | `options`    | object   | —        | `provider` settings exposed by the selected provider schema, plus local `runtime` settings |
 
 `web_search.options.runtime.prefetch` is local-only and is not forwarded to the
-provider SDK. It accepts `provider`, `maxUrls`, `ttlMs`, and
-`contentsOptions`, and starts a background page-extraction workflow only when
-`prefetch.provider` is set. `/web-providers` can also persist default search
-prefetch settings under `settings.search`. Per-call retry and timeout overrides
-also live under `web_search.options.runtime`.
+provider SDK. It accepts `provider`, `maxUrls`, and `ttlMs`, and starts a
+background page-extraction workflow only when `prefetch.provider` is set.
+`/web-providers` can also persist default search prefetch settings under
+`settings.search`. Per-call retry and timeout overrides also live under
+`web_search.options.runtime`.
 
 </details>
 

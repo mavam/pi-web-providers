@@ -65,7 +65,7 @@ function resolveExecutionPolicy(
   defaults: ExecutionSettings | undefined,
   options: Record<string, unknown> | undefined,
 ) {
-  rejectResearchOnlyExecutionControls(options);
+  validateRuntimeOptions(options);
   const localOptions = parseLocalExecutionOptions(options);
 
   return {
@@ -168,55 +168,32 @@ function rejectResearchExecutionControls(
   providerLabel: string,
   options: Record<string, unknown> | undefined,
 ): void {
-  if (!options) {
+  if (!options || Object.keys(options).length === 0) {
     return;
   }
 
-  const blockedKeys = [
-    "requestTimeoutMs",
-    "retryCount",
-    "retryDelayMs",
-    "pollIntervalMs",
-    "timeoutMs",
-    "maxConsecutivePollErrors",
-    "resumeId",
-    "resumeInteractionId",
-  ].filter((key) => options[key] !== undefined);
-
-  if (blockedKeys.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `${providerLabel} research is always async and does not accept local execution controls. Remove ${blockedKeys.join(", ")} from options.`,
-  );
+  throw new Error(`${providerLabel} research does not accept options.runtime.`);
 }
 
-function rejectResearchOnlyExecutionControls(
+function validateRuntimeOptions(
   options: Record<string, unknown> | undefined,
 ): void {
   if (!options) {
     return;
   }
 
-  if (options.resumeInteractionId !== undefined) {
-    throw new Error(
-      "resumeInteractionId is not supported. Use the async web_research workflow instead.",
-    );
-  }
+  const unsupportedKeys = Object.keys(options).filter(
+    (key) =>
+      key !== "requestTimeoutMs" &&
+      key !== "retryCount" &&
+      key !== "retryDelayMs",
+  );
 
-  const blockedKeys = [
-    "pollIntervalMs",
-    "timeoutMs",
-    "maxConsecutivePollErrors",
-    "resumeId",
-  ].filter((key) => options[key] !== undefined);
-
-  if (blockedKeys.length === 0) {
+  if (unsupportedKeys.length === 0) {
     return;
   }
 
   throw new Error(
-    `These controls only apply to internal research execution and are not supported here: ${blockedKeys.join(", ")}.`,
+    `Unsupported runtime options: ${unsupportedKeys.join(", ")}.`,
   );
 }

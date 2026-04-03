@@ -46,11 +46,7 @@ export function stripLocalExecutionOptions(
     requestTimeoutMs: _requestTimeoutMs,
     retryCount: _retryCount,
     retryDelayMs: _retryDelayMs,
-    pollIntervalMs: _pollIntervalMs,
-    timeoutMs: _timeoutMs,
-    maxConsecutivePollErrors: _maxConsecutivePollErrors,
-    resumeId: _resumeId,
-    resumeInteractionId: _resumeInteractionId,
+    prefetch: _prefetch,
     ...rest
   } = options;
 

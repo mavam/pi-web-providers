@@ -3,10 +3,6 @@ import { type Static, Type } from "@sinclair/typebox";
 import type { Tool } from "./types.js";
 import { PROVIDER_IDS } from "./types.js";
 
-export const providerOptionsSchema = Type.Object(
-  {},
-  { additionalProperties: true },
-);
 export type ProviderOptions = Record<string, unknown>;
 
 const runtimeOptionFields = {
@@ -59,16 +55,6 @@ export const searchPrefetchOptionsSchema = Type.Object(
           "How long prefetched contents stay reusable in the local cache, in milliseconds.",
       }),
     ),
-    contentsOptions: Type.Optional(
-      Type.Object(
-        {},
-        {
-          additionalProperties: true,
-          description:
-            "Options to pass to the contents provider during prefetch.",
-        },
-      ),
-    ),
   },
   {
     additionalProperties: false,
@@ -90,43 +76,39 @@ export const searchRuntimeOptionsSchema = Type.Object(
 );
 export type SearchRuntimeOptions = Static<typeof searchRuntimeOptionsSchema>;
 
-export const researchRuntimeOptionsSchema = Type.Object(
-  {},
-  {
-    additionalProperties: false,
-    description:
-      "Research runs asynchronously and does not accept runtime overrides.",
-  },
-);
-export type ResearchRuntimeOptions = Static<
-  typeof researchRuntimeOptionsSchema
->;
-
 export interface ToolRuntimeOptionsMap {
   search: SearchRuntimeOptions;
   contents: RuntimeOptions;
   answer: RuntimeOptions;
-  research: ResearchRuntimeOptions;
+  research: never;
 }
 
 export type RuntimeOptionsFor<TTool extends Tool> =
   ToolRuntimeOptionsMap[TTool];
 
-export interface ToolOptionsFor<
+type ToolOptionsBase<TProviderOptions extends ProviderOptions> = {
+  provider?: TProviderOptions;
+};
+
+export type ToolOptionsFor<
   TTool extends Tool,
   TProviderOptions extends ProviderOptions = ProviderOptions,
-> {
-  provider?: TProviderOptions;
-  runtime?: RuntimeOptionsFor<TTool>;
-}
+> = ToolRuntimeOptionsMap[TTool] extends never
+  ? ToolOptionsBase<TProviderOptions>
+  : ToolOptionsBase<TProviderOptions> & {
+      runtime?: ToolRuntimeOptionsMap[TTool];
+    };
 
 export function buildToolOptionsSchema(
   capability: Tool,
   providerSchema?: TObject,
 ) {
-  const properties: Record<string, ReturnType<typeof Type.Optional>> = {
-    runtime: Type.Optional(getRuntimeOptionsSchema(capability)),
-  };
+  const properties: Record<string, ReturnType<typeof Type.Optional>> = {};
+
+  const runtimeSchema = getRuntimeOptionsSchema(capability);
+  if (runtimeSchema) {
+    properties.runtime = Type.Optional(runtimeSchema);
+  }
 
   if (providerSchema) {
     properties.provider = Type.Optional(providerSchema);
@@ -146,24 +128,7 @@ function getRuntimeOptionsSchema(capability: Tool) {
     case "contents":
     case "answer":
       return runtimeOptionsSchema;
-    case "research":
-      return researchRuntimeOptionsSchema;
+    default:
+      return undefined;
   }
-}
-
-export type AnyToolOptions = {
-  provider?: Record<string, unknown>;
-  runtime?: Record<string, unknown>;
-};
-
-export function getToolOptionsProvider(
-  options: AnyToolOptions | undefined,
-): Record<string, unknown> | undefined {
-  return options?.provider;
-}
-
-export function getToolOptionsRuntime(
-  options: AnyToolOptions | undefined,
-): Record<string, unknown> | undefined {
-  return options?.runtime;
 }

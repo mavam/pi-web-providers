@@ -24,7 +24,6 @@ export interface SearchContentsPrefetchOptions {
   provider?: ProviderId | null;
   maxUrls?: number;
   ttlMs?: number;
-  contentsOptions?: Record<string, unknown>;
 }
 
 export interface PrefetchStartResult {
@@ -95,7 +94,7 @@ export async function startContentsPrefetch({
         providerId: provider.id,
         config,
         cwd,
-        options: options.contentsOptions,
+        options: undefined,
         ttlMs,
         onProgress,
         generation,
@@ -172,16 +171,10 @@ export function parseSearchContentsPrefetchOptions(
   const maxUrls = parseOptionalPositiveInteger(raw.maxUrls, "maxUrls");
   const provider = parseOptionalProviderId(raw.provider);
   const ttlMs = parseOptionalPositiveInteger(raw.ttlMs, "ttlMs");
-  const contentsOptions =
-    raw.contentsOptions === undefined
-      ? undefined
-      : assertJsonObject(raw.contentsOptions, "prefetch.contentsOptions");
-
   return {
     maxUrls,
     provider,
     ttlMs,
-    contentsOptions,
   };
 }
 
@@ -201,10 +194,6 @@ export function mergeSearchContentsPrefetchOptions(
     maxUrls:
       overrides?.maxUrls !== undefined ? overrides.maxUrls : defaults?.maxUrls,
     ttlMs: overrides?.ttlMs !== undefined ? overrides.ttlMs : defaults?.ttlMs,
-    contentsOptions:
-      overrides?.contentsOptions !== undefined
-        ? overrides.contentsOptions
-        : undefined,
   };
 }
 
@@ -697,16 +686,6 @@ function formatUnknownError(error: unknown): string {
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function assertJsonObject(
-  value: unknown,
-  field: string,
-): Record<string, unknown> {
-  if (!isJsonObject(value)) {
-    throw new Error(`${field} must be an object.`);
-  }
-  return value;
 }
 
 function parseOptionalPositiveInteger(
