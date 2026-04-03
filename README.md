@@ -1,7 +1,8 @@
 # 🌍 pi-web-providers
 
 A _meta_ web extension for [pi](https://pi.dev) that routes search, content
-extraction, answers, and research through configurable per-tool providers.
+extraction, answers, and research through configurable per-tool providers, with
+explicit provider-specific option schemas for each managed tool.
 
 ## Why?
 
@@ -14,6 +15,8 @@ off entirely.
 
 - **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
   Gemini, Linkup, Perplexity, Parallel, [Tavily](https://tavily.com), Valyu
+- **Explicit provider option schemas**: the registered tool schema exposes the
+  supported `options.provider` fields for the selected provider
 - **Batched search and answers**: run several related queries in a single
   `web_search` or `web_answer` call and get grouped results back in one response
 - **Async contents prefetch**: optionally start background `web_contents`
@@ -78,11 +81,11 @@ results should arrive as soon as they are ready.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter    | Type     | Default  | Description                                                                    |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------ |
-| `queries`    | string[] | required | One or more search queries to run (max 10)                                     |
-| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                                      |
-| `options`    | object   | —        | `provider` settings for the SDK and `runtime` settings for local orchestration |
+| Parameter    | Type     | Default  | Description                                                                                |
+| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------ |
+| `queries`    | string[] | required | One or more search queries to run (max 10)                                                 |
+| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                                                  |
+| `options`    | object   | —        | `provider` settings exposed by the selected provider schema, plus local `runtime` settings |
 
 `web_search.options.runtime.prefetch` is local-only and is not forwarded to the
 provider SDK. It accepts `provider`, `maxUrls`, `ttlMs`, and
@@ -103,10 +106,10 @@ each page can be acted on independently.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type     | Default  | Description                                                               |
-| --------- | -------- | -------- | ------------------------------------------------------------------------- |
-| `urls`    | string[] | required | One or more URLs to extract                                               |
-| `options` | object   | —        | `provider` settings for extraction and optional local `runtime` overrides |
+| Parameter | Type     | Default  | Description                                                                                                     |
+| --------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `urls`    | string[] | required | One or more URLs to extract                                                                                     |
+| `options` | object   | —        | `provider` extraction settings exposed by the selected provider schema, plus optional local `runtime` overrides |
 
 `web_contents` reuses any matching cached pages already present in the local
 in-memory cache—whether they came from prefetch or an earlier read—and only
@@ -124,10 +127,10 @@ calls when earlier independent answers can unblock the next step.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type     | Default  | Description                                                |
-| --------- | -------- | -------- | ---------------------------------------------------------- |
-| `queries` | string[] | required | One or more questions to answer in one call (max 10)       |
-| `options` | object   | —        | `provider` settings and optional local `runtime` overrides |
+| Parameter | Type     | Default  | Description                                                                                          |
+| --------- | -------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `queries` | string[] | required | One or more questions to answer in one call (max 10)                                                 |
+| `options` | object   | —        | `provider` settings exposed by the selected provider schema, plus optional local `runtime` overrides |
 
 Responses are grouped into per-question sections when more than one question is
 provided.
@@ -144,10 +147,10 @@ saved report path.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type   | Default  | Description                           |
-| --------- | ------ | -------- | ------------------------------------- |
-| `input`   | string | required | Research brief or question            |
-| `options` | object | —        | Provider-specific `provider` settings |
+| Parameter | Type   | Default  | Description                                                                   |
+| --------- | ------ | -------- | ----------------------------------------------------------------------------- |
+| `input`   | string | required | Research brief or question                                                    |
+| `options` | object | —        | Provider-specific `provider` settings exposed by the selected provider schema |
 
 `options.provider` is provider-specific. Equivalent concepts can use different
 field names across SDKs—for example Perplexity uses `country`, Exa uses
@@ -171,8 +174,8 @@ The built-in providers below are thin adapters around official SDKs.
 - SDK: `@anthropic-ai/claude-agent-sdk`
 - Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
   structured JSON adapter
-- Supports request-shaping `options` such as `model`, `thinking`, `effort`, and
-  `maxTurns`
+- Exposes `model`, `thinking`, `effort`, `maxThinkingTokens`, `maxTurns`, and
+  `maxBudgetUsd` as provider options for search and answer calls
 - Great for search plus grounded answers if you already use Claude Code locally
 
 </details>
@@ -185,8 +188,7 @@ The built-in providers below are thin adapters around official SDKs.
   endpoint
 - Good for JavaScript-heavy pages that need a real browser render before
   extraction
-- Supports provider-specific markdown options such as `gotoOptions`,
-  `waitForSelector`, `waitForTimeout`, `cacheTTL`, and request filtering
+- Exposes `gotoOptions.waitUntil` as the provider-specific contents option
 
 **Setup**
 
@@ -221,8 +223,8 @@ scope, or account ID is usually wrong.
 
 - SDK: `@openai/codex-sdk`
 - Runs in read-only mode with web search enabled
-- Supports request-shaping `web_search.options` such as `model`,
-  `modelReasoningEffort`, and `webSearchMode`
+- Exposes `model`, `modelReasoningEffort`, and `webSearchMode` as provider
+  options for `web_search`
 - Best if you already use the local Codex CLI and auth flow
 
 </details>
@@ -235,6 +237,10 @@ scope, or account ID is usually wrong.
 - `web_research` is exposed through pi's async research workflow
 - Neural, keyword, hybrid, and deep-research search modes
 - Inline text-content extraction on search results
+- Exposes search options such as `category`, `type`, date filters,
+  `includeDomains`, `excludeDomains`, `userLocation`, and `contents`
+- `web_contents`, `web_answer`, and `web_research` currently use fixed adapter
+  behavior with no extra per-call provider options
 
 </details>
 
@@ -245,11 +251,10 @@ scope, or account ID is usually wrong.
 - Supports `web_search` and `web_contents`
 - Search can optionally include Firecrawl scrape-backed result enrichment
 - Contents extraction uses Firecrawl scrape with markdown-first defaults
-- Supports provider-specific `options.search` such as `sources`, `categories`,
+- Exposes search options such as `lang`, `country`, `sources`, `categories`,
   `location`, `timeout`, and `scrapeOptions`
-- Supports provider-specific `options.scrape` such as `formats`,
-  `onlyMainContent`, `waitFor`, `headers`, `location`, `mobile`, `proxy`, and
-  cache controls
+- Exposes contents options such as `formats`, `onlyMainContent`, `includeTags`,
+  `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
 
 </details>
 
@@ -261,8 +266,9 @@ scope, or account ID is usually wrong.
 - `web_research` is exposed through pi's async research workflow
 - Google Search grounding for answers
 - Deep-research agents via Google's Gemini API
-- Supports provider-specific request options such as `model`, `config`,
-  `generation_config`, and `agent_config` depending on the tool
+- Exposes `model` and `generation_config` for search, `model` and `config`
+  for answers, and `agent_config`, `store`, `response_format`,
+  `response_modalities`, `system_instruction`, and `tools` for research
 
 </details>
 
@@ -272,10 +278,9 @@ scope, or account ID is usually wrong.
 - SDK: `linkup-sdk`
 - Supports `web_search` via Linkup Search with fixed `searchResults` output
 - Supports `web_contents` via Linkup Fetch and always returns markdown
-- Supports provider-specific `options.search` such as `depth`, domain filters,
-  image inclusion, and date filters
-- Supports provider-specific `options.fetch` such as `renderJs`,
-  `includeRawHtml`, and `extractImages`
+- Exposes search options `depth`, `includeImages`, `includeDomains`,
+  `excludeDomains`, `fromDate`, and `toDate`
+- Exposes contents options `renderJs`, `includeRawHtml`, and `extractImages`
 - Good fit for a simple search-plus-markdown setup without extra provider wiring
 
 </details>
@@ -288,8 +293,9 @@ scope, or account ID is usually wrong.
 - `web_research` is exposed through pi's async research workflow
 - Uses Perplexity Search for `web_search`
 - Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
-- Supports provider-specific `web_search.options` such as `country`,
-  `search_mode`, `search_domain_filter`, and `search_recency_filter`
+- Exposes search options `country`, `search_mode`,
+  `search_domain_filter`, and `search_recency_filter`
+- Exposes `model` for answer and research calls
 
 </details>
 
@@ -299,7 +305,8 @@ scope, or account ID is usually wrong.
 - SDK: `parallel-web`
 - Agentic and one-shot search modes
 - Page content extraction with excerpt and full-content toggles
-- Supports provider-specific search and extraction options from the Parallel SDK
+- Exposes search option `mode`
+- Exposes contents options `excerpts` and `full_content`
 
 </details>
 
@@ -310,12 +317,11 @@ scope, or account ID is usually wrong.
 - Supports `web_search` via Tavily Search
 - Supports `web_contents` via Tavily Extract
 - Good for pairing LLM-oriented web search with lightweight page extraction
-- Supports provider-specific `options.search` such as `searchDepth`, `topic`,
-  `timeRange`, `includeRawContent`, `includeDomains`, `excludeDomains`,
-  `country`, `exactMatch`, and `includeFavicon`
-- Supports provider-specific `options.extract` such as `extractDepth`,
-  `format`, `includeImages`, `query`, `chunksPerSource`, and
-  `includeFavicon`
+- Exposes search options `topic`, `searchDepth`, `timeRange`, `country`,
+  `exactMatch`, `includeAnswer`, `includeRawContent`, `includeImages`,
+  `includeFavicon`, `includeDomains`, `excludeDomains`, and `days`
+- Exposes contents options `extractDepth`, `format`, `includeImages`, `query`,
+  `chunksPerSource`, and `includeFavicon`
 
 </details>
 
@@ -326,9 +332,10 @@ scope, or account ID is usually wrong.
 - Supports `web_search`, `web_contents`, `web_answer`, and `web_research`
 - `web_research` is exposed through pi's async research workflow
 - Web, proprietary, and news search types
-- Supports provider-specific options such as `countryCode`, `responseLength`, and
-  search/source filters
-- Configurable response length for answers and research
+- Exposes search options `searchType`, `responseLength`, and `countryCode`
+- Exposes answer and research options `responseLength` and `countryCode`
+- `web_contents` currently uses fixed adapter behavior with no extra per-call
+  provider options
 
 </details>
 
@@ -337,6 +344,10 @@ scope, or account ID is usually wrong.
 The `custom` provider lets you bring your own wrapper command for any
 managed tool. Each capability can point at a different local command under
 `providers["custom"].options`.
+
+`custom` does not expose standard per-call `options.provider` fields. Put
+provider-specific behavior in the wrapper configuration or in the wrapper
+implementation.
 
 The repo includes actual wrapper examples under
 [`examples/custom/wrappers/`](examples/custom/wrappers/). They are
