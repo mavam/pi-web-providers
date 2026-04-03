@@ -13,7 +13,7 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 import { buildProviderPlan } from "./framework.js";
-import { passthroughOptionsSchema } from "./schema.js";
+import { emptyOptionsSchema } from "./schema.js";
 
 type CustomAdapter = ProviderAdapter<Custom> & {
   search(
@@ -43,8 +43,8 @@ type CustomAdapter = ProviderAdapter<Custom> & {
   ): Promise<ToolOutput>;
 };
 
-const customToolOptionsSchema = passthroughOptionsSchema(
-  "Custom provider options passed through to the wrapped command.",
+const customToolOptionsSchema = emptyOptionsSchema(
+  "Custom providers do not define standard per-call provider options.",
 );
 
 export const customAdapter: CustomAdapter = {

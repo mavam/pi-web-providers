@@ -122,6 +122,18 @@ const claudeOptionsSchema = Type.Object(
         description: "Maximum budget in USD.",
       }),
     ),
+    thinking: Type.Optional(
+      Type.Object(
+        {
+          type: Type.Optional(
+            Type.String({ description: "Claude thinking mode." }),
+          ),
+        },
+        {
+          description: "Claude thinking configuration.",
+        },
+      ),
+    ),
   },
   { description: "Claude options." },
 );

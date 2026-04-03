@@ -16,7 +16,7 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { passthroughOptionsSchema } from "./schema.js";
+import { literalUnion } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
@@ -58,22 +58,78 @@ type GeminiAdapter = ProviderAdapter<Gemini> & {
   createClient(config: Gemini): GoogleGenAI;
 };
 
+const geminiGenerationConfigSchema = Type.Object(
+  {
+    temperature: Type.Optional(
+      Type.Number({ description: "Sampling temperature." }),
+    ),
+    topP: Type.Optional(Type.Number({ description: "Top-p sampling value." })),
+    topK: Type.Optional(
+      Type.Integer({ minimum: 0, description: "Top-k sampling value." }),
+    ),
+    candidateCount: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: "Number of candidates to generate.",
+      }),
+    ),
+    maxOutputTokens: Type.Optional(
+      Type.Integer({ minimum: 1, description: "Maximum output tokens." }),
+    ),
+    tool_choice: Type.Optional(
+      literalUnion(["auto", "any", "none"], {
+        description: "Tool choice mode for Gemini search interactions.",
+      }),
+    ),
+  },
+  { description: "Gemini generation configuration." },
+);
+
+const geminiAnswerConfigSchema = Type.Object(
+  {
+    labels: Type.Optional(
+      Type.Record(Type.String(), Type.String(), {
+        description: "Request labels to attach to the Gemini call.",
+      }),
+    ),
+    temperature: Type.Optional(
+      Type.Number({ description: "Sampling temperature." }),
+    ),
+    topP: Type.Optional(Type.Number({ description: "Top-p sampling value." })),
+    topK: Type.Optional(
+      Type.Integer({ minimum: 0, description: "Top-k sampling value." }),
+    ),
+    candidateCount: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: "Number of candidates to generate.",
+      }),
+    ),
+    maxOutputTokens: Type.Optional(
+      Type.Integer({ minimum: 1, description: "Maximum output tokens." }),
+    ),
+  },
+  { description: "Gemini generate-content config overrides." },
+);
+
+const geminiAgentConfigSchema = Type.Object(
+  {
+    response_length: Type.Optional(
+      Type.String({ description: "Research response length hint." }),
+    ),
+  },
+  { description: "Gemini agent configuration." },
+);
+
 const geminiSearchOptionsSchema = Type.Object(
   {
     model: Type.Optional(
       Type.String({
-        description: "Gemini model for search (e.g., 'gemini-2.5-flash').",
+        description:
+          "Gemini model for search (for example 'gemini-2.5-flash').",
       }),
     ),
-    generation_config: Type.Optional(
-      Type.Object(
-        {},
-        {
-          additionalProperties: true,
-          description: "Gemini generation config overrides.",
-        },
-      ),
-    ),
+    generation_config: Type.Optional(geminiGenerationConfigSchema),
   },
   { description: "Gemini search options." },
 );
@@ -82,15 +138,61 @@ const geminiAnswerOptionsSchema = Type.Object(
   {
     model: Type.Optional(
       Type.String({
-        description: "Gemini model for answers (e.g., 'gemini-2.5-flash').",
+        description:
+          "Gemini model for answers (for example 'gemini-2.5-flash').",
       }),
     ),
+    config: Type.Optional(geminiAnswerConfigSchema),
   },
   { description: "Gemini answer options." },
 );
 
-const geminiResearchOptionsSchema = passthroughOptionsSchema(
-  "Gemini research options passed through to the SDK.",
+const geminiResearchOptionsSchema = Type.Object(
+  {
+    agent_config: Type.Optional(geminiAgentConfigSchema),
+    store: Type.Optional(
+      Type.Boolean({
+        description: "Store the interaction for later retrieval.",
+      }),
+    ),
+    response_format: Type.Optional(
+      Type.Object(
+        {
+          type: Type.Optional(
+            Type.String({ description: "Requested response format type." }),
+          ),
+        },
+        { description: "Response format overrides." },
+      ),
+    ),
+    response_modalities: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Response modalities to request from Gemini.",
+      }),
+    ),
+    system_instruction: Type.Optional(
+      Type.String({
+        description: "System instruction for the research agent.",
+      }),
+    ),
+    tools: Type.Optional(
+      Type.Array(
+        Type.Object(
+          {
+            urlContext: Type.Optional(
+              Type.Object({}, { description: "Enable URL context." }),
+            ),
+            googleSearch: Type.Optional(
+              Type.Object({}, { description: "Enable Google Search." }),
+            ),
+          },
+          { description: "Gemini tool configuration." },
+        ),
+        { description: "Tools available to the Gemini research run." },
+      ),
+    ),
+  },
+  { description: "Gemini research options." },
 );
 
 export const geminiAdapter: GeminiAdapter = {

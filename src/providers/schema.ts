@@ -10,6 +10,6 @@ export function literalUnion<const TValues extends readonly string[]>(
   );
 }
 
-export function passthroughOptionsSchema(description: string) {
-  return Type.Object({}, { additionalProperties: true, description });
+export function emptyOptionsSchema(description: string) {
+  return Type.Object({}, { description });
 }

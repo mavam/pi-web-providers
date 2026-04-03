@@ -13,7 +13,6 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { passthroughOptionsSchema } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_ANSWER_MODEL = "sonar";
@@ -53,15 +52,32 @@ type PerplexityAdapter = ProviderAdapter<Perplexity> & {
   ): Promise<ToolOutput>;
 };
 
-const perplexitySearchOptionsSchema = passthroughOptionsSchema(
-  "Perplexity search options passed through to the SDK.",
+const perplexitySearchOptionsSchema = Type.Object(
+  {
+    country: Type.Optional(
+      Type.String({ description: "Country hint for search results." }),
+    ),
+    search_mode: Type.Optional(
+      Type.String({ description: "Perplexity search mode." }),
+    ),
+    search_domain_filter: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict search results to these domains.",
+      }),
+    ),
+    search_recency_filter: Type.Optional(
+      Type.String({ description: "Recency filter for search results." }),
+    ),
+  },
+  { description: "Perplexity search options." },
 );
 
 const perplexityAnswerOptionsSchema = Type.Object(
   {
     model: Type.Optional(
       Type.String({
-        description: "Perplexity model to use (e.g., 'sonar', 'sonar-pro').",
+        description:
+          "Perplexity model to use (for example 'sonar' or 'sonar-pro').",
       }),
     ),
   },
@@ -72,7 +88,8 @@ const perplexityResearchOptionsSchema = Type.Object(
   {
     model: Type.Optional(
       Type.String({
-        description: "Perplexity model to use (e.g., 'sonar-deep-research').",
+        description:
+          "Perplexity model to use (for example 'sonar-deep-research').",
       }),
     ),
   },

@@ -50,6 +50,15 @@ const tavilySearchOptionsSchema = Type.Object(
           "Depth of the search. 'advanced' is slower but more thorough.",
       }),
     ),
+    timeRange: Type.Optional(
+      Type.String({ description: "Named time range filter." }),
+    ),
+    country: Type.Optional(
+      Type.String({ description: "Country hint for search results." }),
+    ),
+    exactMatch: Type.Optional(
+      Type.Boolean({ description: "Prefer exact matches." }),
+    ),
     includeAnswer: Type.Optional(
       Type.Boolean({ description: "Include a short AI-generated answer." }),
     ),
@@ -84,10 +93,22 @@ const tavilySearchOptionsSchema = Type.Object(
 
 const tavilyExtractOptionsSchema = Type.Object(
   {
+    extractDepth: Type.Optional(
+      Type.String({ description: "Depth setting for extraction." }),
+    ),
     format: Type.Optional(
       literalUnion(["markdown", "text"], {
         description: "Output format for extracted content.",
       }),
+    ),
+    includeImages: Type.Optional(
+      Type.Boolean({ description: "Include extracted images." }),
+    ),
+    query: Type.Optional(
+      Type.String({ description: "Optional query to focus extraction." }),
+    ),
+    chunksPerSource: Type.Optional(
+      Type.Integer({ minimum: 1, description: "Maximum chunks per source." }),
     ),
     includeFavicon: Type.Optional(
       Type.Boolean({ description: "Include favicon URLs." }),

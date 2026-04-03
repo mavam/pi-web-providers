@@ -36,11 +36,15 @@ const cloudflareContentsOptionsSchema = Type.Object(
             ),
           ),
         },
-        { description: "Navigation options." },
+        {
+          description: "Navigation options.",
+        },
       ),
     ),
   },
-  { description: "Cloudflare Browser Rendering options." },
+  {
+    description: "Cloudflare Browser Rendering options.",
+  },
 );
 
 export const cloudflareAdapter: CloudflareAdapter = {

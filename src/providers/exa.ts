@@ -19,7 +19,7 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { literalUnion, passthroughOptionsSchema } from "./schema.js";
+import { emptyOptionsSchema, literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -106,6 +106,29 @@ const exaSearchOptionsSchema = Type.Object(
     endPublishedDate: Type.Optional(
       Type.String({ description: "ISO date string for latest publish date." }),
     ),
+    userLocation: Type.Optional(
+      Type.Object(
+        {
+          country: Type.Optional(
+            Type.String({ description: "Country hint for the user location." }),
+          ),
+          region: Type.Optional(
+            Type.String({ description: "Region hint for the user location." }),
+          ),
+          city: Type.Optional(
+            Type.String({ description: "City hint for the user location." }),
+          ),
+          timezone: Type.Optional(
+            Type.String({
+              description: "Timezone hint for the user location.",
+            }),
+          ),
+        },
+        {
+          description: "User location hint passed through to the Exa SDK.",
+        },
+      ),
+    ),
     contents: Type.Optional(
       Type.Object(
         {
@@ -126,16 +149,16 @@ const exaSearchOptionsSchema = Type.Object(
   { description: "Exa search options." },
 );
 
-const exaContentsOptionsSchema = passthroughOptionsSchema(
-  "Exa contents options passed through to the SDK.",
+const exaContentsOptionsSchema = emptyOptionsSchema(
+  "Exa contents uses SDK defaults and does not expose extra provider options.",
 );
 
-const exaAnswerOptionsSchema = passthroughOptionsSchema(
-  "Exa answer options passed through to the SDK.",
+const exaAnswerOptionsSchema = emptyOptionsSchema(
+  "Exa answer uses SDK defaults and does not expose extra provider options.",
 );
 
-const exaResearchOptionsSchema = passthroughOptionsSchema(
-  "Exa research options passed through to the SDK.",
+const exaResearchOptionsSchema = emptyOptionsSchema(
+  "Exa research uses SDK defaults and does not expose extra provider options.",
 );
 
 export const exaAdapter: ExaAdapter = {

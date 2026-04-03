@@ -19,7 +19,7 @@ import type {
   Valyu,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { literalUnion, passthroughOptionsSchema } from "./schema.js";
+import { emptyOptionsSchema, literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -79,20 +79,43 @@ const valyuSearchOptionsSchema = Type.Object(
         description: "Response length.",
       }),
     ),
+    countryCode: Type.Optional(
+      Type.String({ description: "Country code to scope search results." }),
+    ),
   },
   { description: "Valyu search options." },
 );
 
-const valyuContentsOptionsSchema = passthroughOptionsSchema(
-  "Valyu contents options passed through to the SDK.",
+const valyuContentsOptionsSchema = emptyOptionsSchema(
+  "Valyu contents uses SDK defaults and does not expose extra provider options.",
 );
 
-const valyuAnswerOptionsSchema = passthroughOptionsSchema(
-  "Valyu answer options passed through to the SDK.",
+const valyuAnswerOptionsSchema = Type.Object(
+  {
+    responseLength: Type.Optional(
+      literalUnion(["short", "medium", "large", "max"], {
+        description: "Response length for answers.",
+      }),
+    ),
+    countryCode: Type.Optional(
+      Type.String({ description: "Country code to scope answer results." }),
+    ),
+  },
+  { description: "Valyu answer options." },
 );
 
-const valyuResearchOptionsSchema = passthroughOptionsSchema(
-  "Valyu deep research options passed through to the SDK.",
+const valyuResearchOptionsSchema = Type.Object(
+  {
+    responseLength: Type.Optional(
+      literalUnion(["short", "medium", "large", "max"], {
+        description: "Response length for research.",
+      }),
+    ),
+    countryCode: Type.Optional(
+      Type.String({ description: "Country code to scope research results." }),
+    ),
+  },
+  { description: "Valyu research options." },
 );
 
 export const valyuAdapter: ValyuAdapter = {

@@ -40,12 +40,38 @@ const firecrawlSearchOptionsSchema = Type.Object(
   {
     lang: Type.Optional(
       Type.String({
-        description: "Language code for search results (e.g., 'en').",
+        description: "Language code for search results (for example 'en').",
       }),
     ),
     country: Type.Optional(
       Type.String({
-        description: "Country code for search results (e.g., 'us').",
+        description: "Country code for search results (for example 'us').",
+      }),
+    ),
+    sources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Search source groups to include.",
+      }),
+    ),
+    categories: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Search categories to include.",
+      }),
+    ),
+    location: Type.Optional(
+      Type.Object(
+        {
+          country: Type.Optional(Type.String({ description: "Country hint." })),
+          region: Type.Optional(Type.String({ description: "Region hint." })),
+          city: Type.Optional(Type.String({ description: "City hint." })),
+        },
+        { description: "Location hint for search." },
+      ),
+    ),
+    timeout: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        description: "Request timeout in milliseconds.",
       }),
     ),
     scrapeOptions: Type.Optional(
@@ -60,7 +86,9 @@ const firecrawlSearchOptionsSchema = Type.Object(
             Type.Boolean({ description: "Extract only the main content." }),
           ),
         },
-        { description: "Options for scraping each search result." },
+        {
+          description: "Options for scraping each search result.",
+        },
       ),
     ),
   },
@@ -87,6 +115,29 @@ const firecrawlScrapeOptionsSchema = Type.Object(
       Type.Integer({
         minimum: 0,
         description: "Milliseconds to wait before scraping.",
+      }),
+    ),
+    headers: Type.Optional(
+      Type.Record(Type.String(), Type.String(), {
+        description: "Headers to send when scraping.",
+      }),
+    ),
+    location: Type.Optional(
+      Type.Object(
+        {
+          country: Type.Optional(Type.String({ description: "Country hint." })),
+          region: Type.Optional(Type.String({ description: "Region hint." })),
+          city: Type.Optional(Type.String({ description: "City hint." })),
+        },
+        { description: "Location hint for scraping." },
+      ),
+    ),
+    mobile: Type.Optional(
+      Type.Boolean({ description: "Use a mobile browser profile." }),
+    ),
+    proxy: Type.Optional(
+      Type.String({
+        description: "Proxy mode passed through to the Firecrawl SDK.",
       }),
     ),
   },

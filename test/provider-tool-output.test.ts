@@ -1090,6 +1090,35 @@ describe("provider tool output", () => {
     expect(runtimeProps).toHaveProperty("requestTimeoutMs");
   });
 
+  it("exposes provider-specific search knobs in provider schemas", () => {
+    const perplexity = __test__.buildStructuredOptionsSchema(
+      "search",
+      "perplexity",
+    );
+    const exa = __test__.buildStructuredOptionsSchema("search", "exa");
+    const tavily = __test__.buildStructuredOptionsSchema("search", "tavily");
+
+    const perplexityProvider = (perplexity.anyOf?.[0] ?? perplexity).properties
+      ?.provider;
+    const exaProvider = (exa.anyOf?.[0] ?? exa).properties?.provider;
+    const tavilyProvider = (tavily.anyOf?.[0] ?? tavily).properties?.provider;
+
+    expect(perplexityProvider?.properties ?? {}).toHaveProperty("country");
+    expect(exaProvider?.properties ?? {}).toHaveProperty("userLocation");
+    expect(tavilyProvider?.properties ?? {}).toHaveProperty("country");
+  });
+
+  it("exposes provider-specific research knobs in provider schemas", () => {
+    const gemini = __test__.buildStructuredOptionsSchema("research", "gemini");
+    const valyu = __test__.buildStructuredOptionsSchema("search", "valyu");
+
+    const geminiProvider = (gemini.anyOf?.[0] ?? gemini).properties?.provider;
+    const valyuProvider = (valyu.anyOf?.[0] ?? valyu).properties?.provider;
+
+    expect(geminiProvider?.properties ?? {}).toHaveProperty("agent_config");
+    expect(valyuProvider?.properties ?? {}).toHaveProperty("countryCode");
+  });
+
   it("rejects removed resumeInteractionId compatibility for research", async () => {
     const config: WebProviders = {
       providers: {
