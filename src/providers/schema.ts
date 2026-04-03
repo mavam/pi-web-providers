@@ -9,7 +9,3 @@ export function literalUnion<const TValues extends readonly string[]>(
     options,
   );
 }
-
-export function emptyOptionsSchema(description: string) {
-  return Type.Object({}, { description });
-}

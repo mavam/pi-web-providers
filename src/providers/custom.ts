@@ -13,7 +13,6 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 import { buildProviderPlan } from "./framework.js";
-import { emptyOptionsSchema } from "./schema.js";
 
 type CustomAdapter = ProviderAdapter<Custom> & {
   search(
@@ -43,10 +42,6 @@ type CustomAdapter = ProviderAdapter<Custom> & {
   ): Promise<ToolOutput>;
 };
 
-const customToolOptionsSchema = emptyOptionsSchema(
-  "Custom providers do not define standard per-call provider options.",
-);
-
 export const customAdapter: CustomAdapter = {
   id: "custom",
   label: "Custom",
@@ -54,11 +49,18 @@ export const customAdapter: CustomAdapter = {
   tools: ["search", "contents", "answer", "research"] as const,
 
   getToolOptionsSchema(_capability: Tool): TObject | undefined {
-    return customToolOptionsSchema;
+    return undefined;
   },
 
   createTemplate(): Custom {
     return {};
+  },
+
+  getConfigForCapability(capability: Tool, config: Custom): unknown {
+    return {
+      options: config.options?.[capability],
+      settings: config.settings,
+    };
   },
 
   getCapabilityStatus(

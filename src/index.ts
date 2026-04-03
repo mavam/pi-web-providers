@@ -317,7 +317,10 @@ function registerWebSearchTool(
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
-      options: buildStructuredOptionsSchema("search", selectedProviderId),
+      ...optionalField(
+        "options",
+        buildStructuredOptionsSchema("search", selectedProviderId),
+      ),
     }),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
@@ -326,7 +329,7 @@ function registerWebSearchTool(
         request: {
           queries: params.queries,
           maxResults: params.maxResults,
-          options: params.options as ToolOptionsFor<"search"> | undefined,
+          options: (params as SearchToolRequest).options,
         },
         context: {
           cwd: ctx.cwd,
@@ -376,7 +379,10 @@ function registerWebContentsTool(
         minItems: 1,
         description: "One or more URLs to extract",
       }),
-      options: buildStructuredOptionsSchema("contents", selectedProviderId),
+      ...optionalField(
+        "options",
+        buildStructuredOptionsSchema("contents", selectedProviderId),
+      ),
     }),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
@@ -384,7 +390,7 @@ function registerWebContentsTool(
         request: {
           capability: "contents",
           urls: params.urls,
-          options: params.options as ToolOptionsFor<"contents"> | undefined,
+          options: (params as ProviderToolRequest<"contents">).options,
         },
         context: {
           cwd: ctx.cwd,
@@ -434,7 +440,10 @@ function registerWebAnswerTool(
         maxItems: MAX_SEARCH_QUERIES,
         description: `One or more questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
       }),
-      options: buildStructuredOptionsSchema("answer", selectedProviderId),
+      ...optionalField(
+        "options",
+        buildStructuredOptionsSchema("answer", selectedProviderId),
+      ),
     }),
     promptGuidelines: [
       "Batch related questions when the answers belong together; use separate sibling web_answer calls when earlier independent answers can unblock the next step.",
@@ -444,7 +453,7 @@ function registerWebAnswerTool(
         config: await loadConfig(),
         request: {
           queries: params.queries,
-          options: params.options as ToolOptionsFor<"answer"> | undefined,
+          options: (params as AnswerToolRequest).options,
         },
         context: {
           cwd: ctx.cwd,
@@ -498,7 +507,10 @@ function registerWebResearchTool(
       "Start a long-running web research job. Returns immediately with a dispatch notice; the final report is saved to a file and posted later as a custom message.",
     parameters: Type.Object({
       input: Type.String({ description: "Research brief or question" }),
-      options: buildStructuredOptionsSchema("research", selectedProviderId),
+      ...optionalField(
+        "options",
+        buildStructuredOptionsSchema("research", selectedProviderId),
+      ),
     }),
     promptGuidelines: [
       "Use this tool for deep investigations that can finish asynchronously.",
@@ -513,7 +525,7 @@ function registerWebResearchTool(
         config: await loadConfig(),
         request: {
           input: params.input,
-          options: params.options as ToolOptionsFor<"research"> | undefined,
+          options: (params as ResearchToolRequest).options,
         },
         context: ctx,
       });
@@ -710,12 +722,20 @@ function getProviderIdsForCapability(capability: Tool): ProviderId[] {
   );
 }
 
+function optionalField(
+  name: string,
+  schema: ReturnType<typeof Type.Optional> | undefined,
+): Record<string, ReturnType<typeof Type.Optional>> {
+  return schema ? { [name]: schema } : {};
+}
+
 function buildStructuredOptionsSchema(
   capability: Tool,
   providerId: ProviderId | undefined,
 ) {
   const providerSchema = resolveProviderOptionsSchema(capability, providerId);
-  return Type.Optional(buildToolOptionsSchema(capability, providerSchema));
+  const schema = buildToolOptionsSchema(capability, providerSchema);
+  return schema ? Type.Optional(schema) : undefined;
 }
 
 function resolveProviderOptionsSchema(
@@ -3724,10 +3744,15 @@ function getContentsCacheInputs(config: WebProviders): Record<string, unknown> {
     if (!supportsTool(provider, "contents")) {
       continue;
     }
-    providers[provider.id] =
+
+    const providerConfig =
       config.providers?.[
         provider.id as keyof NonNullable<WebProviders["providers"]>
       ] ?? null;
+    providers[provider.id] =
+      providerConfig && provider.getConfigForCapability
+        ? provider.getConfigForCapability("contents", providerConfig as never)
+        : providerConfig;
   }
 
   return { providers: providers as Record<string, unknown> };

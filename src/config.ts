@@ -10,6 +10,7 @@ import type {
   Custom,
   CustomCommandConfig,
   Exa,
+  ExaOptions,
   Firecrawl,
   Gemini,
   Linkup,
@@ -22,6 +23,7 @@ import type {
   Tool,
   Tools,
   Valyu,
+  ValyuOptions,
   WebProviders,
 } from "./types.js";
 import { PROVIDER_IDS, TOOLS } from "./types.js";
@@ -266,11 +268,29 @@ function normalizeProvider(
         settings: parseOptionalExecutionSettings,
       });
     case "exa":
-    case "valyu":
-      return parseProviderWithShape<Exa | Valyu>(raw, source, providerId, {
+      return parseProviderWithShape<Exa>(raw, source, providerId, {
         apiKey: readOptionalString,
         baseUrl: readOptionalString,
-        options: readOptionalObject,
+        options: (value, innerSource, field) =>
+          parseOptionalCapabilityOptions<ExaOptions>(
+            value,
+            innerSource,
+            field,
+            ["search"],
+          ),
+        settings: parseOptionalExecutionSettings,
+      });
+    case "valyu":
+      return parseProviderWithShape<Valyu>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: (value, innerSource, field) =>
+          parseOptionalCapabilityOptions<ValyuOptions>(
+            value,
+            innerSource,
+            field,
+            ["search", "answer", "research"],
+          ),
         settings: parseOptionalExecutionSettings,
       });
     case "gemini":
@@ -362,6 +382,47 @@ function parseOptionalExecutionSettings(
   return value === undefined
     ? undefined
     : parseExecutionSettings(value, source, field, false);
+}
+
+function parseOptionalCapabilityOptions<TOptions>(
+  value: unknown,
+  source: string,
+  field: string,
+  allowedKeys: readonly string[],
+): TOptions | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const options = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  const unknownKeys = Object.keys(options).filter(
+    (key) => !allowedKeys.includes(key),
+  );
+  if (unknownKeys.length > 0) {
+    throw new Error(
+      `'${field}' in ${source} only supports these keys: ${allowedKeys.join(", ")}.`,
+    );
+  }
+
+  return Object.fromEntries(
+    allowedKeys.flatMap((key) => {
+      const entry = options[key];
+      return entry === undefined
+        ? []
+        : [
+            [
+              key,
+              requireObject(
+                entry,
+                `'${field}.${key}' in ${source} must be a JSON object.`,
+              ),
+            ],
+          ];
+    }),
+  ) as TOptions;
 }
 
 function parseExecutionSettings(

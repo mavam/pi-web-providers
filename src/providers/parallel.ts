@@ -94,6 +94,27 @@ export const parallelAdapter: ParallelAdapter = {
     };
   },
 
+  getConfigForCapability(capability: Tool, config: Parallel): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "contents":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.extract,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
   getCapabilityStatus(config: Parallel | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
   },

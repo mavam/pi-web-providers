@@ -19,7 +19,7 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { emptyOptionsSchema, literalUnion } from "./schema.js";
+import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -149,18 +149,6 @@ const exaSearchOptionsSchema = Type.Object(
   { description: "Exa search options." },
 );
 
-const exaContentsOptionsSchema = emptyOptionsSchema(
-  "Exa contents uses SDK defaults and does not expose extra provider options.",
-);
-
-const exaAnswerOptionsSchema = emptyOptionsSchema(
-  "Exa answer uses SDK defaults and does not expose extra provider options.",
-);
-
-const exaResearchOptionsSchema = emptyOptionsSchema(
-  "Exa research uses SDK defaults and does not expose extra provider options.",
-);
-
 export const exaAdapter: ExaAdapter = {
   id: "exa",
   label: "Exa",
@@ -171,12 +159,6 @@ export const exaAdapter: ExaAdapter = {
     switch (capability) {
       case "search":
         return exaSearchOptionsSchema;
-      case "contents":
-        return exaContentsOptionsSchema;
-      case "answer":
-        return exaAnswerOptionsSchema;
-      case "research":
-        return exaResearchOptionsSchema;
       default:
         return undefined;
     }
@@ -186,12 +168,36 @@ export const exaAdapter: ExaAdapter = {
     return {
       apiKey: "EXA_API_KEY",
       options: {
-        type: "auto",
-        contents: {
-          text: true,
+        search: {
+          type: "auto",
+          contents: {
+            text: true,
+          },
         },
       },
     };
+  },
+
+  getConfigForCapability(capability: Tool, config: Exa): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "contents":
+      case "answer":
+      case "research":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
   },
 
   getCapabilityStatus(config: Exa | undefined): ProviderCapabilityStatus {
@@ -270,9 +276,9 @@ export const exaAdapter: ExaAdapter = {
     searchOptions?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const providerOptions = config.options;
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(providerOptions)) ?? {}),
+      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
+        {}),
       ...(searchOptions ?? {}),
       numResults: maxResults,
     };

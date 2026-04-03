@@ -149,6 +149,27 @@ export const tavilyAdapter: TavilyAdapter = {
     };
   },
 
+  getConfigForCapability(capability: Tool, config: Tavily): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "contents":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.extract,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
   getCapabilityStatus(config: Tavily | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
   },

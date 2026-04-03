@@ -130,6 +130,27 @@ export const linkupAdapter: LinkupAdapter = {
     };
   },
 
+  getConfigForCapability(capability: Tool, config: Linkup): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "contents":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.fetch,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
   getCapabilityStatus(config: Linkup | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
   },

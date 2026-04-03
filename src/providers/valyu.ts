@@ -19,7 +19,7 @@ import type {
   Valyu,
 } from "../types.js";
 import { buildProviderPlan } from "./framework.js";
-import { emptyOptionsSchema, literalUnion } from "./schema.js";
+import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -86,10 +86,6 @@ const valyuSearchOptionsSchema = Type.Object(
   { description: "Valyu search options." },
 );
 
-const valyuContentsOptionsSchema = emptyOptionsSchema(
-  "Valyu contents uses SDK defaults and does not expose extra provider options.",
-);
-
 const valyuAnswerOptionsSchema = Type.Object(
   {
     responseLength: Type.Optional(
@@ -128,8 +124,6 @@ export const valyuAdapter: ValyuAdapter = {
     switch (capability) {
       case "search":
         return valyuSearchOptionsSchema;
-      case "contents":
-        return valyuContentsOptionsSchema;
       case "answer":
         return valyuAnswerOptionsSchema;
       case "research":
@@ -143,10 +137,46 @@ export const valyuAdapter: ValyuAdapter = {
     return {
       apiKey: "VALYU_API_KEY",
       options: {
-        searchType: "all",
-        responseLength: "short",
+        search: {
+          searchType: "all",
+          responseLength: "short",
+        },
       },
     };
+  },
+
+  getConfigForCapability(capability: Tool, config: Valyu): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "answer":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.answer,
+          settings: config.settings,
+        };
+      case "research":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.research,
+          settings: config.settings,
+        };
+      case "contents":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
   },
 
   getCapabilityStatus(config: Valyu | undefined): ProviderCapabilityStatus {
@@ -226,7 +256,8 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options)) ?? {}),
+      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
+        {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
@@ -312,6 +343,8 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<ToolOutput> {
     const client = createClient(config);
     const response = await client.answer(query, {
+      ...(stripLocalExecutionOptions(asJsonObject(config.options?.answer)) ??
+        {}),
       ...(options ?? {}),
       streaming: false,
     } as never);
@@ -374,6 +407,8 @@ export const valyuAdapter: ValyuAdapter = {
     const client = createClient(config);
     const task = await client.deepresearch.create({
       input,
+      ...(stripLocalExecutionOptions(asJsonObject(config.options?.research)) ??
+        {}),
       ...(options ?? {}),
     } as never);
 

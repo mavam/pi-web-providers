@@ -1054,7 +1054,7 @@ describe("provider tool output", () => {
   });
 
   it("builds structured options schema with provider and runtime sub-objects", () => {
-    const schema = __test__.buildStructuredOptionsSchema("search", "tavily");
+    const schema = __test__.buildStructuredOptionsSchema("search", "tavily")!;
     const inner = schema.anyOf?.[0] ?? schema;
     const props = inner.properties ?? {};
     expect(props).toHaveProperty("provider");
@@ -1066,7 +1066,7 @@ describe("provider tool output", () => {
   });
 
   it("omits provider sub-schema when provider has none", () => {
-    const schema = __test__.buildStructuredOptionsSchema("search", undefined);
+    const schema = __test__.buildStructuredOptionsSchema("search", undefined)!;
     const inner = schema.anyOf?.[0] ?? schema;
     const props = inner.properties ?? {};
     expect(props).not.toHaveProperty("provider");
@@ -1074,7 +1074,7 @@ describe("provider tool output", () => {
   });
 
   it("omits prefetch from runtime for non-search capabilities", () => {
-    const schema = __test__.buildStructuredOptionsSchema("contents", "tavily");
+    const schema = __test__.buildStructuredOptionsSchema("contents", "tavily")!;
     const inner = schema.anyOf?.[0] ?? schema;
     const runtimeInner =
       inner.properties?.runtime?.anyOf?.[0] ?? inner.properties?.runtime;
@@ -1082,14 +1082,45 @@ describe("provider tool output", () => {
     expect(runtimeProps).not.toHaveProperty("prefetch");
     expect(runtimeProps).toHaveProperty("requestTimeoutMs");
   });
+  it("omits provider options when a capability has no per-call provider schema", () => {
+    const exaContents = __test__.buildStructuredOptionsSchema(
+      "contents",
+      "exa",
+    )!;
+    const customSearch = __test__.buildStructuredOptionsSchema(
+      "search",
+      "custom",
+    )!;
+
+    const exaContentsProps =
+      (exaContents.anyOf?.[0] ?? exaContents).properties ?? {};
+    const customSearchProps =
+      (customSearch.anyOf?.[0] ?? customSearch).properties ?? {};
+
+    expect(exaContentsProps).not.toHaveProperty("provider");
+    expect(customSearchProps).not.toHaveProperty("provider");
+  });
+
+  it("does not leak Exa search options into the contents schema", () => {
+    const schema = __test__.buildStructuredOptionsSchema("contents", "exa")!;
+    const inner = schema.anyOf?.[0] ?? schema;
+    const props = inner.properties ?? {};
+
+    expect(props).not.toHaveProperty("provider");
+    expect(JSON.stringify(inner)).not.toContain("includeDomains");
+    expect(JSON.stringify(inner)).not.toContain("excludeDomains");
+    expect(JSON.stringify(inner)).not.toContain("startPublishedDate");
+    expect(JSON.stringify(inner)).not.toContain("endPublishedDate");
+    expect(JSON.stringify(inner)).not.toContain("userLocation");
+  });
 
   it("exposes provider-specific search knobs in provider schemas", () => {
     const perplexity = __test__.buildStructuredOptionsSchema(
       "search",
       "perplexity",
-    );
-    const exa = __test__.buildStructuredOptionsSchema("search", "exa");
-    const tavily = __test__.buildStructuredOptionsSchema("search", "tavily");
+    )!;
+    const exa = __test__.buildStructuredOptionsSchema("search", "exa")!;
+    const tavily = __test__.buildStructuredOptionsSchema("search", "tavily")!;
 
     const perplexityProvider = (perplexity.anyOf?.[0] ?? perplexity).properties
       ?.provider;
@@ -1102,8 +1133,8 @@ describe("provider tool output", () => {
   });
 
   it("exposes provider-specific research knobs in provider schemas", () => {
-    const gemini = __test__.buildStructuredOptionsSchema("research", "gemini");
-    const valyu = __test__.buildStructuredOptionsSchema("search", "valyu");
+    const gemini = __test__.buildStructuredOptionsSchema("research", "gemini")!;
+    const valyu = __test__.buildStructuredOptionsSchema("search", "valyu")!;
 
     const geminiProvider = (gemini.anyOf?.[0] ?? gemini).properties?.provider;
     const valyuProvider = (valyu.anyOf?.[0] ?? valyu).properties?.provider;
@@ -1113,7 +1144,7 @@ describe("provider tool output", () => {
   });
 
   it("omits runtime from the research tool schema", () => {
-    const schema = __test__.buildStructuredOptionsSchema("research", "gemini");
+    const schema = __test__.buildStructuredOptionsSchema("research", "gemini")!;
     const inner = schema.anyOf?.[0] ?? schema;
     const props = inner.properties ?? {};
 

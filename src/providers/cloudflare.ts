@@ -75,6 +75,20 @@ export const cloudflareAdapter: CloudflareAdapter = {
     };
   },
 
+  getConfigForCapability(capability: Tool, config: Cloudflare): unknown {
+    switch (capability) {
+      case "contents":
+        return {
+          apiToken: config.apiToken,
+          accountId: config.accountId,
+          options: config.options,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
   getCapabilityStatus(
     config: Cloudflare | undefined,
   ): ProviderCapabilityStatus {

@@ -190,6 +190,114 @@ describe("config parsing", () => {
     });
   });
 
+  it("parses capability-scoped Exa provider options", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          exa: {
+            apiKey: "EXA_API_KEY",
+            options: {
+              search: {
+                type: "auto",
+                contents: {
+                  text: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.exa).toEqual({
+      apiKey: "EXA_API_KEY",
+      options: {
+        search: {
+          type: "auto",
+          contents: {
+            text: true,
+          },
+        },
+      },
+    });
+  });
+
+  it("rejects legacy flat Exa provider options", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          providers: {
+            exa: {
+              apiKey: "EXA_API_KEY",
+              options: {
+                type: "auto",
+              },
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/providers\.exa\.options/);
+  });
+
+  it("parses capability-scoped Valyu provider options", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          valyu: {
+            apiKey: "VALYU_API_KEY",
+            options: {
+              search: {
+                searchType: "all",
+              },
+              answer: {
+                responseLength: "medium",
+              },
+              research: {
+                responseLength: "large",
+              },
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.valyu).toEqual({
+      apiKey: "VALYU_API_KEY",
+      options: {
+        search: {
+          searchType: "all",
+        },
+        answer: {
+          responseLength: "medium",
+        },
+        research: {
+          responseLength: "large",
+        },
+      },
+    });
+  });
+
+  it("rejects legacy flat Valyu provider options", () => {
+    expect(() =>
+      parseConfig(
+        JSON.stringify({
+          providers: {
+            valyu: {
+              apiKey: "VALYU_API_KEY",
+              options: {
+                searchType: "all",
+              },
+            },
+          },
+        }),
+        "test-config.json",
+      ),
+    ).toThrow(/providers\.valyu\.options/);
+  });
+
   it("rejects legacy provider-local tool toggles", () => {
     expect(() =>
       parseConfig(
@@ -352,7 +460,9 @@ describe("config parsing", () => {
     config.providers.exa = {
       apiKey: "EXA_API_KEY",
       options: {
-        type: "auto",
+        search: {
+          type: "auto",
+        },
       },
     };
     config.providers.parallel = {
@@ -431,6 +541,7 @@ describe("config parsing", () => {
     );
     expect(loaded.providers?.cloudflare?.options?.cacheTTL).toBe(0);
     expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
+    expect(loaded.providers?.exa?.options?.search?.type).toBe("auto");
     expect(loaded.providers?.gemini?.options?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.settings?.requestTimeoutMs).toBe(45000);
     expect(loaded.providers?.gemini?.settings?.retryCount).toBe(5);

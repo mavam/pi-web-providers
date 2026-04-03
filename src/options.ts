@@ -110,8 +110,12 @@ export function buildToolOptionsSchema(
     properties.runtime = Type.Optional(runtimeSchema);
   }
 
-  if (providerSchema) {
+  if (providerSchema && Object.keys(providerSchema.properties).length > 0) {
     properties.provider = Type.Optional(providerSchema);
+  }
+
+  if (Object.keys(properties).length === 0) {
+    return undefined;
   }
 
   return Type.Object(properties, {

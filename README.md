@@ -239,6 +239,7 @@ scope, or account ID is usually wrong.
 - Inline text-content extraction on search results
 - Exposes search options such as `category`, `type`, date filters,
   `includeDomains`, `excludeDomains`, `userLocation`, and `contents`
+- Persisted Exa defaults are scoped under `providers.exa.options.search`
 - `web_contents`, `web_answer`, and `web_research` currently use fixed adapter
   behavior with no extra per-call provider options
 
@@ -334,6 +335,8 @@ scope, or account ID is usually wrong.
 - Web, proprietary, and news search types
 - Exposes search options `searchType`, `responseLength`, and `countryCode`
 - Exposes answer and research options `responseLength` and `countryCode`
+- Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
+  `providers.valyu.options.answer`, and `providers.valyu.options.research`
 - `web_contents` currently uses fixed adapter behavior with no extra per-call
   provider options
 

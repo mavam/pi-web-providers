@@ -131,6 +131,10 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
+export interface ExaOptions {
+  search?: Record<string, unknown>;
+}
+
 export interface FirecrawlOptions {
   search?: Record<string, unknown>;
   scrape?: Record<string, unknown>;
@@ -139,6 +143,12 @@ export interface FirecrawlOptions {
 export interface TavilyOptions {
   search?: Record<string, unknown>;
   extract?: Record<string, unknown>;
+}
+
+export interface ValyuOptions {
+  search?: Record<string, unknown>;
+  answer?: Record<string, unknown>;
+  research?: Record<string, unknown>;
 }
 
 export interface CustomCommandConfig {
@@ -176,7 +186,7 @@ export interface Cloudflare extends Provider<Record<string, unknown>> {
   accountId?: string;
 }
 
-export interface Exa extends Provider<Record<string, unknown>> {
+export interface Exa extends Provider<ExaOptions> {
   apiKey?: string;
   baseUrl?: string;
 }
@@ -212,7 +222,7 @@ export interface Tavily extends Provider<TavilyOptions> {
   baseUrl?: string;
 }
 
-export interface Valyu extends Provider<Record<string, unknown>> {
+export interface Valyu extends Provider<ValyuOptions> {
   apiKey?: string;
   baseUrl?: string;
 }
@@ -352,4 +362,5 @@ export interface ProviderAdapter<TConfig> {
     config: TConfig,
   ): ProviderPlan<ProviderResult> | null;
   getToolOptionsSchema?(capability: Tool): ProviderOptionsSchema | undefined;
+  getConfigForCapability?(capability: Tool, config: TConfig): unknown;
 }

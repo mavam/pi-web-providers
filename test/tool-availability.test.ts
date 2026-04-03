@@ -368,15 +368,17 @@ describe("managed tool availability", () => {
     expect(partialContentsRender).toBeDefined();
   });
 
-  it("clears the contents cache when saved contents-capable provider settings change", () => {
+  it("keeps the contents cache when only Exa search defaults change", () => {
     const previous = createConfig({
       providers: {
         exa: {
           apiKey: "EXA_API_KEY",
           options: {
-            type: "auto",
-            contents: {
-              text: true,
+            search: {
+              type: "auto",
+              contents: {
+                text: true,
+              },
             },
           },
         },
@@ -388,9 +390,40 @@ describe("managed tool availability", () => {
         exa: {
           apiKey: "EXA_API_KEY",
           options: {
-            type: "auto",
-            contents: {
-              text: false,
+            search: {
+              type: "keyword",
+              contents: {
+                text: false,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(false);
+  });
+  it("clears the contents cache when saved contents extraction settings change", () => {
+    const previous = createConfig({
+      providers: {
+        parallel: {
+          apiKey: "PARALLEL_API_KEY",
+          options: {
+            extract: {
+              full_content: true,
+            },
+          },
+        },
+      },
+    });
+
+    const next = createConfig({
+      providers: {
+        parallel: {
+          apiKey: "PARALLEL_API_KEY",
+          options: {
+            extract: {
+              full_content: false,
             },
           },
         },

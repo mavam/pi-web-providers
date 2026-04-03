@@ -173,6 +173,27 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     };
   },
 
+  getConfigForCapability(capability: Tool, config: Firecrawl): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      case "contents":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.scrape,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
   getCapabilityStatus(config: Firecrawl | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
   },

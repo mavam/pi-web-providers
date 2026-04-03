@@ -8,6 +8,7 @@ import type {
   Custom,
   CustomOptions,
   Exa,
+  ExaOptions,
   ExecutionSettings,
   Firecrawl,
   Gemini,
@@ -19,6 +20,7 @@ import type {
   ProviderId,
   Tavily,
   Valyu,
+  ValyuOptions,
 } from "./types.js";
 
 export interface ProviderTextSettingDescriptor<TConfig> {
@@ -406,30 +408,30 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           "deep-max",
         ],
         getValue: (config) =>
-          readString(getExaOptions(config)?.type) ?? "default",
+          readString(getExaSearchOptions(config)?.type) ?? "default",
         setValue: (config, value) => {
-          const options = ensureExaOptions(config);
+          const options = ensureExaSearchOptions(config);
           if (value === "default") {
             delete options.type;
           } else {
             options.type = value;
           }
-          cleanupEmpty(config, "options");
+          cleanupCapabilityOptions(config, ["search"]);
         },
       }),
       valuesSetting<Exa>({
-        id: "exaTextContents",
-        label: "Text contents",
+        id: "exaSearchTextContents",
+        label: "Search text contents",
         help: "Whether Exa should include text contents in search results. 'default' uses the SDK default.",
         values: ["default", "true", "false"],
         getValue: (config) => {
-          const contents = asJsonObject(getExaOptions(config)?.contents);
+          const contents = asJsonObject(getExaSearchOptions(config)?.contents);
           return typeof contents?.text === "boolean"
             ? String(contents.text)
             : "default";
         },
         setValue: (config, value) => {
-          const options = ensureExaOptions(config);
+          const options = ensureExaSearchOptions(config);
           const contents = asJsonObject(options.contents) ?? {};
           if (value === "default") {
             delete contents.text;
@@ -441,7 +443,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           } else {
             options.contents = contents;
           }
-          cleanupEmpty(config, "options");
+          cleanupCapabilityOptions(config, ["search"]);
         },
       }),
     ],
@@ -611,32 +613,55 @@ export const PROVIDER_CONFIG_MANIFESTS = {
         help: "Valyu search type. 'default' uses the SDK default.",
         values: ["default", "all", "web", "proprietary", "news"],
         getValue: (config) =>
-          readString(getValyuOptions(config)?.searchType) ?? "default",
+          readString(getValyuCapabilityOptions(config, "search")?.searchType) ??
+          "default",
         setValue: (config, value) => {
-          const options = ensureValyuOptions(config);
+          const options = ensureValyuCapabilityOptions(config, "search");
           if (value === "default") {
             delete options.searchType;
           } else {
             options.searchType = value;
           }
-          cleanupEmpty(config, "options");
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
         },
       }),
       valuesSetting<Valyu>({
-        id: "valyuResponseLength",
-        label: "Response length",
-        help: "Valyu response length. 'default' uses the SDK default.",
+        id: "valyuSearchResponseLength",
+        label: "Search response length",
+        help: "Valyu search response length. 'default' uses the SDK default.",
         values: ["default", "short", "medium", "large", "max"],
         getValue: (config) =>
-          readString(getValyuOptions(config)?.responseLength) ?? "default",
+          readString(
+            getValyuCapabilityOptions(config, "search")?.responseLength,
+          ) ?? "default",
         setValue: (config, value) => {
-          const options = ensureValyuOptions(config);
-          if (value === "default") {
-            delete options.responseLength;
-          } else {
-            options.responseLength = value;
-          }
-          cleanupEmpty(config, "options");
+          setValyuResponseLength(config, "search", value);
+        },
+      }),
+      valuesSetting<Valyu>({
+        id: "valyuAnswerResponseLength",
+        label: "Answer response length",
+        help: "Valyu answer response length. 'default' uses the SDK default.",
+        values: ["default", "short", "medium", "large", "max"],
+        getValue: (config) =>
+          readString(
+            getValyuCapabilityOptions(config, "answer")?.responseLength,
+          ) ?? "default",
+        setValue: (config, value) => {
+          setValyuResponseLength(config, "answer", value);
+        },
+      }),
+      valuesSetting<Valyu>({
+        id: "valyuResearchResponseLength",
+        label: "Research response length",
+        help: "Valyu research response length. 'default' uses the SDK default.",
+        values: ["default", "short", "medium", "large", "max"],
+        getValue: (config) =>
+          readString(
+            getValyuCapabilityOptions(config, "research")?.responseLength,
+          ) ?? "default",
+        setValue: (config, value) => {
+          setValyuResponseLength(config, "research", value);
         },
       }),
     ],
@@ -1095,20 +1120,65 @@ function ensureParallelOptions(config: Parallel): ParallelOptions {
   return config.options;
 }
 
-function getExaOptions(config: Exa | undefined) {
-  return config?.options;
+function getExaSearchOptions(config: Exa | undefined) {
+  return config?.options?.search;
 }
 
-function ensureExaOptions(config: Exa): Record<string, unknown> {
-  config.options = { ...(config.options ?? {}) };
-  return config.options;
+function ensureExaSearchOptions(config: Exa): Record<string, unknown> {
+  config.options = {
+    ...(config.options ?? {}),
+    search: asJsonObject(config.options?.search) ?? {},
+  };
+  return config.options.search as Record<string, unknown>;
 }
 
-function getValyuOptions(config: Valyu | undefined) {
-  return config?.options;
+function getValyuCapabilityOptions(
+  config: Valyu | undefined,
+  capability: keyof ValyuOptions,
+) {
+  return config?.options?.[capability];
 }
 
-function ensureValyuOptions(config: Valyu): Record<string, unknown> {
-  config.options = { ...(config.options ?? {}) };
-  return config.options;
+function ensureValyuCapabilityOptions(
+  config: Valyu,
+  capability: keyof ValyuOptions,
+): Record<string, unknown> {
+  config.options = {
+    ...(config.options ?? {}),
+    [capability]: asJsonObject(config.options?.[capability]) ?? {},
+  };
+  return config.options[capability] as Record<string, unknown>;
+}
+
+function setValyuResponseLength(
+  config: Valyu,
+  capability: "search" | "answer" | "research",
+  value: string,
+): void {
+  const options = ensureValyuCapabilityOptions(config, capability);
+  if (value === "default") {
+    delete options.responseLength;
+  } else {
+    options.responseLength = value;
+  }
+  cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+}
+
+function cleanupCapabilityOptions<TConfig extends { options?: unknown }>(
+  config: TConfig,
+  keys: readonly string[],
+): void {
+  const options = asJsonObject(config.options);
+  if (!options) {
+    return;
+  }
+
+  for (const key of keys) {
+    const value = asJsonObject(options[key]);
+    if (value && Object.keys(value).length === 0) {
+      delete options[key];
+    }
+  }
+
+  cleanupEmpty(config, "options");
 }
