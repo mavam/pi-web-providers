@@ -13,6 +13,7 @@ export const PROVIDER_IDS = [
   "linkup",
   "perplexity",
   "parallel",
+  "serper",
   "tavily",
   "valyu",
 ] as const;
@@ -145,6 +146,10 @@ export interface TavilyOptions {
   extract?: Record<string, unknown>;
 }
 
+export interface SerperOptions {
+  search?: Record<string, unknown>;
+}
+
 export interface ValyuOptions {
   search?: Record<string, unknown>;
   answer?: Record<string, unknown>;
@@ -222,6 +227,11 @@ export interface Tavily extends Provider<TavilyOptions> {
   baseUrl?: string;
 }
 
+export interface Serper extends Provider<SerperOptions> {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface Valyu extends Provider<ValyuOptions> {
   apiKey?: string;
   baseUrl?: string;
@@ -242,6 +252,7 @@ export interface Providers {
   linkup?: Linkup;
   perplexity?: Perplexity;
   parallel?: Parallel;
+  serper?: Serper;
   tavily?: Tavily;
   valyu?: Valyu;
 }
@@ -257,6 +268,7 @@ export type AnyProvider =
   | Linkup
   | Perplexity
   | Parallel
+  | Serper
   | Tavily
   | Valyu;
 

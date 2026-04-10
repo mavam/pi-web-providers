@@ -3,7 +3,13 @@ import {
   getProviderConfigManifest,
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
-import type { Cloudflare, Custom, Linkup, Tavily } from "../src/types.js";
+import type {
+  Cloudflare,
+  Custom,
+  Linkup,
+  Serper,
+  Tavily,
+} from "../src/types.js";
 
 describe("provider config manifests", () => {
   it("exposes custom argv, cwd, env, and request settings", () => {
@@ -159,6 +165,56 @@ describe("provider config manifests", () => {
     expect(config).toEqual({
       apiKey: "LINKUP_API_KEY",
       baseUrl: "https://api.linkup.test/v1",
+    });
+  });
+
+  it("exposes Serper API key, base URL, and non-research execution settings", () => {
+    const manifest = getProviderConfigManifest("serper");
+    const ids = manifest.settings.map((setting) => setting.id);
+
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "apiKey",
+        "baseUrl",
+        "requestTimeoutMs",
+        "retryCount",
+        "retryDelayMs",
+      ]),
+    );
+    expect(ids).not.toContain("researchTimeoutMs");
+  });
+
+  it("round-trips Serper API key and base URL settings", () => {
+    const manifest = getProviderConfigManifest("serper");
+    const apiKeySetting = manifest.settings.find(
+      (setting) => setting.id === "apiKey",
+    );
+    const baseUrlSetting = manifest.settings.find(
+      (setting) => setting.id === "baseUrl",
+    );
+
+    if (
+      !apiKeySetting ||
+      apiKeySetting.kind !== "text" ||
+      !baseUrlSetting ||
+      baseUrlSetting.kind !== "text"
+    ) {
+      throw new Error("Missing Serper settings.");
+    }
+
+    const config: Serper = {};
+    (apiKeySetting as ProviderTextSettingDescriptor<Serper>).setValue(
+      config,
+      "SERPER_API_KEY",
+    );
+    (baseUrlSetting as ProviderTextSettingDescriptor<Serper>).setValue(
+      config,
+      "https://google.serper.test",
+    );
+
+    expect(config).toEqual({
+      apiKey: "SERPER_API_KEY",
+      baseUrl: "https://google.serper.test",
     });
   });
 

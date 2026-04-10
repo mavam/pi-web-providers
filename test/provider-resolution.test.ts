@@ -40,6 +40,7 @@ beforeEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
 });
@@ -53,6 +54,7 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
@@ -152,6 +154,23 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("uses the mapped Serper provider for search", () => {
+    process.env.SERPER_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        search: "serper",
+      },
+      providers: {
+        serper: {
+          apiKey: "SERPER_API_KEY",
+        },
+      },
+    });
+
+    expect(resolveSearchProvider(config, process.cwd()).id).toBe("serper");
   });
 
   it("uses the mapped Tavily provider for search and contents", () => {
