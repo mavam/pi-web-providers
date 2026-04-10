@@ -13,6 +13,9 @@ off entirely.
 
 ## ✨ Features
 
+- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
+  Gemini, Linkup, OpenAI, Perplexity, Parallel, Serper,
+  [Tavily](https://tavily.com), Valyu
 - **Provider-aware tool options**: pi only exposes the provider settings that
   actually apply to the backend you selected, so tool calls are easier to
   discover and harder to get wrong
@@ -61,6 +64,7 @@ Each tool can be routed to any compatible provider:
 | **OpenAI**     |   ✔    |          |   ✔    |    ✔     | `OPENAI_API_KEY`                                 |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
+| **Serper**     |   ✔    |          |        |          | `SERPER_API_KEY`                                 |
 | **Tavily**     |   ✔    |    ✔     |        |          | `TAVILY_API_KEY`                                 |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
 
@@ -374,6 +378,35 @@ call.
 - Page content extraction with excerpt and full-content toggles
 - Exposes search option `mode`
 - Exposes contents options `excerpts` and `full_content`
+
+</details>
+
+<details>
+<summary><strong>Serper</strong></summary>
+
+- API: Serper HTTP API
+- Supports `web_search` via Serper's Google search endpoint
+- Good fit for fast, straightforward Google-style organic search results
+- Exposes search options `gl`, `hl`, `location`, `page`, and `autocorrect`
+- Preserves rich metadata from Serper responses, including ranking position,
+  sitelinks, attributes, and top-level response context such as
+  `knowledgeGraph`, `answerBox`, `peopleAlsoAsk`, and `relatedSearches`
+- Optional `baseUrl` overrides are supported for proxies and testing
+
+Minimal config:
+
+```json
+{
+  "tools": {
+    "search": "serper"
+  },
+  "providers": {
+    "serper": {
+      "apiKey": "SERPER_API_KEY"
+    }
+  }
+}
+```
 
 </details>
 

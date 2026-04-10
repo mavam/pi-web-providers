@@ -36,6 +36,7 @@ beforeEach(() => {
   delete process.env.LINKUP_API_KEY;
   delete process.env.OPENAI_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
 });
@@ -46,6 +47,7 @@ afterEach(() => {
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.LINKUP_API_KEY;
   delete process.env.OPENAI_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   execFileSyncMock.mockReset();
   if (originalHome === undefined) {
@@ -486,6 +488,39 @@ describe("managed tool availability", () => {
         "research",
       ),
     ).toEqual(["perplexity"]);
+  });
+
+  it("surfaces mapped Serper search when Serper is available", () => {
+    process.env.SERPER_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        search: "serper",
+      },
+      providers: {
+        serper: {
+          apiKey: "SERPER_API_KEY",
+        },
+      },
+    });
+
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "search",
+      ),
+    ).toEqual(["serper"]);
+    expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "contents",
+      ),
+    ).toEqual([]);
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual(["web_search"]);
   });
 
   it("surfaces mapped Tavily tools when Tavily is available", () => {

@@ -30,6 +30,7 @@
     "openai",
     "parallel",
     "perplexity",
+    "serper",
     "tavily",
     "valyu"
   ],
