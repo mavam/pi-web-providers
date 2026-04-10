@@ -12,6 +12,7 @@ const PROVIDERS_BY_TOOL = {
     "gemini",
     "perplexity",
     "parallel",
+    "serper",
     "valyu",
   ],
   contents: ["custom", "exa", "parallel", "valyu"],

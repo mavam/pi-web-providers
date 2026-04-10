@@ -33,6 +33,7 @@ beforeEach(() => {
   cleanupDirs.push(home);
   process.env.HOME = home;
   delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
@@ -47,6 +48,7 @@ beforeEach(() => {
 
 afterEach(() => {
   delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
