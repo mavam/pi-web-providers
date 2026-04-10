@@ -1,0 +1,10 @@
+created: 2026-04-10
+title: Add Serper provider for web search
+intro: >-
+  The extension now supports Serper as a provider for web_search, exposing
+  Serper-specific search options and preserving rich Google SERP metadata such as
+  organic ranking, sitelinks, answer boxes, knowledge graph entries, and related
+  searches.
+source:
+  mode: sync-stable-queue
+  previous_stable: v2.2.0

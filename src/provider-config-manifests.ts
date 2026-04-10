@@ -18,6 +18,7 @@ import type {
   ParallelOptions,
   Perplexity,
   ProviderId,
+  Serper,
   Tavily,
   Valyu,
   ValyuOptions,
@@ -594,6 +595,13 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           cleanupNestedObjects(config);
         },
       }),
+    ],
+  },
+  serper: {
+    settings: [
+      apiKeySetting<Serper>(),
+      baseUrlSetting<Serper>(),
+      ...requestSettings<Serper>("serper"),
     ],
   },
   tavily: {

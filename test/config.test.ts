@@ -190,6 +190,37 @@ describe("config parsing", () => {
     });
   });
 
+  it("parses capability-scoped Serper provider options", () => {
+    const parsed = parseConfig(
+      JSON.stringify({
+        providers: {
+          serper: {
+            apiKey: "SERPER_API_KEY",
+            baseUrl: "https://google.serper.test",
+            options: {
+              search: {
+                gl: "us",
+                hl: "en",
+              },
+            },
+          },
+        },
+      }),
+      "test-config.json",
+    );
+
+    expect(parsed.providers?.serper).toEqual({
+      apiKey: "SERPER_API_KEY",
+      baseUrl: "https://google.serper.test",
+      options: {
+        search: {
+          gl: "us",
+          hl: "en",
+        },
+      },
+    });
+  });
+
   it("parses capability-scoped Exa provider options", () => {
     const parsed = parseConfig(
       JSON.stringify({
@@ -584,6 +615,10 @@ describe("config parsing", () => {
     expect(ADAPTERS_BY_ID.gemini.createTemplate().settings).toBeUndefined();
     expect(ADAPTERS_BY_ID.linkup.createTemplate()).toEqual({
       apiKey: "LINKUP_API_KEY",
+    });
+    expect(ADAPTERS_BY_ID.serper.createTemplate()).toEqual({
+      apiKey: "SERPER_API_KEY",
+      options: {},
     });
     expect(ADAPTERS_BY_ID.tavily.createTemplate().options).toEqual({
       search: {

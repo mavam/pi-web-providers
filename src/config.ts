@@ -19,6 +19,8 @@ import type {
   ProviderId,
   SearchSettings,
   Settings,
+  Serper,
+  SerperOptions,
   Tavily,
   Tool,
   Tools,
@@ -93,6 +95,7 @@ export function parseProviderConfig(
   | Linkup
   | Perplexity
   | Parallel
+  | Serper
   | Tavily
   | Valyu {
   const raw = parseJson(text, source);
@@ -241,6 +244,7 @@ function normalizeProvider(
   | Linkup
   | Parallel
   | Perplexity
+  | Serper
   | Tavily
   | Valyu {
   switch (providerId) {
@@ -303,10 +307,29 @@ function normalizeProvider(
     case "linkup":
     case "parallel":
     case "perplexity":
-    case "tavily":
       return parseProviderWithShape<
-        Firecrawl | Linkup | Parallel | Perplexity | Tavily
+        Firecrawl | Linkup | Parallel | Perplexity
       >(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "serper":
+      return parseProviderWithShape<Serper>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: (value, innerSource, field) =>
+          parseOptionalCapabilityOptions<SerperOptions>(
+            value,
+            innerSource,
+            field,
+            ["search"],
+          ),
+        settings: parseOptionalExecutionSettings,
+      });
+    case "tavily":
+      return parseProviderWithShape<Tavily>(raw, source, providerId, {
         apiKey: readOptionalString,
         baseUrl: readOptionalString,
         options: readOptionalObject,

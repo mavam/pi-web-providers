@@ -16,6 +16,7 @@ export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   linkup: ["search", "contents"],
   perplexity: ["search", "answer", "research"],
   parallel: ["search", "contents"],
+  serper: ["search"],
   tavily: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
 };
