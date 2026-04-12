@@ -13,14 +13,15 @@ off entirely.
 
 ## ✨ Features
 
-- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
-  Gemini, Linkup, Perplexity, Parallel, [Tavily](https://tavily.com), Valyu
-- **Explicit provider option schemas**: the registered tool schema exposes the
-  supported `options.provider` fields for the selected provider
-- **Batched search and answers**: run several related queries in a single
-  `web_search` or `web_answer` call and get grouped results back in one response
-- **Async contents prefetch**: optionally start background `web_contents`
-  extraction from `web_search` results and reuse the cached pages later
+- **Provider-aware tool options**: pi only exposes the provider settings that
+  actually apply to the backend you selected, so tool calls are easier to
+  discover and harder to get wrong
+- **Batched search and answers**: run several related queries or questions in a
+  single `web_search` or `web_answer` call and get grouped results back in one
+  response
+- **Background contents prefetch**: optionally start `web_contents`
+  extraction from `web_search` results in the background and reuse the cached
+  pages later for faster follow-up reads
 
 ## 📦 Install
 
@@ -41,17 +42,25 @@ settings UI mirrors the three sections below: tools, providers, and settings.
 
 Each tool can be routed to any compatible provider:
 
+**Built-in local providers**
+
+| Provider   | search | contents | answer | research | Auth                   |
+| ---------- | :----: | :------: | :----: | :------: | ---------------------- |
+| **Claude** |   ✔    |          |   ✔    |          | Local Claude Code auth |
+| **Codex**  |   ✔    |          |        |          | Local Codex CLI auth   |
+
+**API-backed providers**
+
 | Provider       | search | contents | answer | research | Auth                                             |
 | -------------- | :----: | :------: | :----: | :------: | ------------------------------------------------ |
-| **Claude**     |   ✔    |          |   ✔    |          | Local Claude Code auth                           |
 | **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
-| **Codex**      |   ✔    |          |        |          | Local Codex CLI auth                             |
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
 | **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
 | **Linkup**     |   ✔    |    ✔     |        |          | `LINKUP_API_KEY`                                 |
-| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
+| **OpenAI**     |   ✔    |          |   ✔    |    ✔     | `OPENAI_API_KEY`                                 |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
+| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
 | **Tavily**     |   ✔    |    ✔     |        |          | `TAVILY_API_KEY`                                 |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
 
@@ -283,6 +292,63 @@ scope, or account ID is usually wrong.
   `excludeDomains`, `fromDate`, and `toDate`
 - Exposes contents options `renderJs`, `includeRawHtml`, and `extractImages`
 - Good fit for a simple search-plus-markdown setup without extra provider wiring
+
+</details>
+
+<details>
+<summary><strong>OpenAI</strong></summary>
+
+- SDK: `openai`
+- Supports `web_search`, `web_answer`, and `web_research`
+- Uses the Responses API for structured web search, grounded answers, and
+  deep-research runs
+- Always enables OpenAI's built-in `web_search_preview` tool for search,
+  answer, and research calls
+- Exposes `model` and `instructions` for `web_search` and `web_answer`
+- Exposes `model`, `instructions`, and `max_tool_calls` for `web_research`
+- Good fit when you want official OpenAI web-grounded search, answers, and deep
+  research behind pi's managed tool abstractions
+
+**Setup**
+
+1. Create or reuse an OpenAI API key.
+2. Configure pi to route `web_search`, `web_answer`, `web_research`, or any
+   subset of them to `openai`.
+3. Optionally set default models under `providers.openai.options.search.model`,
+   `providers.openai.options.answer.model`, and
+   `providers.openai.options.research.model`.
+
+```json
+{
+  "tools": {
+    "search": "openai",
+    "answer": "openai",
+    "research": "openai"
+  },
+  "providers": {
+    "openai": {
+      "apiKey": "OPENAI_API_KEY",
+      "options": {
+        "search": {
+          "model": "gpt-4.1"
+        },
+        "answer": {
+          "model": "gpt-4.1"
+        },
+        "research": {
+          "model": "o4-mini-deep-research"
+        }
+      }
+    }
+  }
+}
+```
+
+You can also set `instructions` as a provider default under
+`providers.openai.options.search`, `providers.openai.options.answer`, or
+`providers.openai.options.research`, and set `max_tool_calls` under
+`providers.openai.options.research`. All of them can also be overridden per
+call.
 
 </details>
 

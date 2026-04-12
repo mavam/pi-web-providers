@@ -11,8 +11,9 @@ export const PROVIDER_IDS = [
   "firecrawl",
   "gemini",
   "linkup",
-  "perplexity",
+  "openai",
   "parallel",
+  "perplexity",
   "tavily",
   "valyu",
 ] as const;
@@ -131,6 +132,28 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
+export interface OpenAISearchOptions {
+  model?: string;
+  instructions?: string;
+}
+
+export interface OpenAIAnswerOptions {
+  model?: string;
+  instructions?: string;
+}
+
+export interface OpenAIResearchOptions {
+  model?: string;
+  instructions?: string;
+  max_tool_calls?: number;
+}
+
+export interface OpenAIOptions {
+  search?: OpenAISearchOptions;
+  answer?: OpenAIAnswerOptions;
+  research?: OpenAIResearchOptions;
+}
+
 export interface ExaOptions {
   search?: Record<string, unknown>;
 }
@@ -215,6 +238,11 @@ export interface Parallel extends Provider<ParallelOptions> {
   baseUrl?: string;
 }
 
+export interface OpenAI extends Provider<OpenAIOptions> {
+  apiKey?: string;
+  baseUrl?: string;
+}
+
 export interface Custom extends Provider<CustomOptions> {}
 
 export interface Tavily extends Provider<TavilyOptions> {
@@ -242,6 +270,7 @@ export interface Providers {
   linkup?: Linkup;
   perplexity?: Perplexity;
   parallel?: Parallel;
+  openai?: OpenAI;
   tavily?: Tavily;
   valyu?: Valyu;
 }
@@ -255,6 +284,7 @@ export type AnyProvider =
   | Firecrawl
   | Gemini
   | Linkup
+  | OpenAI
   | Perplexity
   | Parallel
   | Tavily

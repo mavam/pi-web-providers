@@ -7,6 +7,7 @@ import { exaAdapter } from "./exa.js";
 import { firecrawlAdapter } from "./firecrawl.js";
 import { geminiAdapter } from "./gemini.js";
 import { linkupAdapter } from "./linkup.js";
+import { openaiAdapter } from "./openai.js";
 import { parallelAdapter } from "./parallel.js";
 import { perplexityAdapter } from "./perplexity.js";
 import { tavilyAdapter } from "./tavily.js";
@@ -17,15 +18,16 @@ export const ADAPTERS_BY_ID: Record<
   ProviderAdapter<AnyProvider>
 > = {
   claude: claudeAdapter,
-  cloudflare: cloudflareAdapter,
   codex: codexAdapter,
+  cloudflare: cloudflareAdapter,
   custom: customAdapter,
   exa: exaAdapter,
   firecrawl: firecrawlAdapter,
   gemini: geminiAdapter,
   linkup: linkupAdapter,
-  perplexity: perplexityAdapter,
+  openai: openaiAdapter,
   parallel: parallelAdapter,
+  perplexity: perplexityAdapter,
   tavily: tavilyAdapter,
   valyu: valyuAdapter,
 };

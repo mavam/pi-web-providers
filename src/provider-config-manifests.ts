@@ -1,4 +1,3 @@
-import { supportsTool } from "./provider-tools.js";
 import type {
   Claude,
   ClaudeOptions,
@@ -9,11 +8,14 @@ import type {
   CustomOptions,
   Exa,
   ExaOptions,
-  ExecutionSettings,
   Firecrawl,
   Gemini,
   GeminiOptions,
   Linkup,
+  OpenAI,
+  OpenAIAnswerOptions,
+  OpenAIResearchOptions,
+  OpenAISearchOptions,
   Parallel,
   ParallelOptions,
   Perplexity,
@@ -384,7 +386,6 @@ export const PROVIDER_CONFIG_MANIFESTS = {
           setCustomEnv(config, "research", value);
         },
       }),
-      ...requestSettings<Custom>("custom"),
     ],
   },
   exa: {
@@ -515,10 +516,112 @@ export const PROVIDER_CONFIG_MANIFESTS = {
     ],
   },
   linkup: {
+    settings: [apiKeySetting<Linkup>(), baseUrlSetting<Linkup>()],
+  },
+  openai: {
     settings: [
-      apiKeySetting<Linkup>(),
-      baseUrlSetting<Linkup>(),
-      ...requestSettings<Linkup>("linkup"),
+      apiKeySetting<OpenAI>(),
+      baseUrlSetting<OpenAI>(),
+      stringSetting<OpenAI>({
+        id: "openaiSearchModel",
+        label: "Search model",
+        help: "Model used for OpenAI web search runs.",
+        getValue: (config) => getOpenAISearchOptions(config)?.model,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAISearchOptions(config),
+            "model",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiSearchInstructions",
+        label: "Search instructions",
+        help: "Optional default instructions for OpenAI web search runs.",
+        getValue: (config) => getOpenAISearchOptions(config)?.instructions,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAISearchOptions(config),
+            "instructions",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiAnswerModel",
+        label: "Answer model",
+        help: "Model used for OpenAI grounded answers.",
+        getValue: (config) => getOpenAIAnswerOptions(config)?.model,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAIAnswerOptions(config),
+            "model",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiAnswerInstructions",
+        label: "Answer instructions",
+        help: "Optional default instructions for OpenAI grounded answers.",
+        getValue: (config) => getOpenAIAnswerOptions(config)?.instructions,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAIAnswerOptions(config),
+            "instructions",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiResearchModel",
+        label: "Research model",
+        help: "Model used for OpenAI deep research runs.",
+        getValue: (config) => getOpenAIResearchOptions(config)?.model,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAIResearchOptions(config),
+            "model",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiResearchInstructions",
+        label: "Research instructions",
+        help: "Optional default instructions for OpenAI deep research runs.",
+        getValue: (config) => getOpenAIResearchOptions(config)?.instructions,
+        setValue: (config, value) => {
+          assignOptionalString(
+            ensureOpenAIResearchOptions(config),
+            "instructions",
+            value,
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
+      stringSetting<OpenAI>({
+        id: "openaiResearchMaxToolCalls",
+        label: "Research max tool calls",
+        help: "Optional default maximum number of built-in tool calls for OpenAI deep research runs.",
+        getValue: (config) =>
+          getIntegerString(getOpenAIResearchOptions(config)?.max_tool_calls),
+        setValue: (config, value) => {
+          assignOptionalInteger(
+            ensureOpenAIResearchOptions(config),
+            "max_tool_calls",
+            value,
+            "OpenAI research max tool calls must be a positive integer.",
+          );
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
+        },
+      }),
     ],
   },
   perplexity: {
@@ -597,11 +700,7 @@ export const PROVIDER_CONFIG_MANIFESTS = {
     ],
   },
   tavily: {
-    settings: [
-      apiKeySetting<Tavily>(),
-      baseUrlSetting<Tavily>(),
-      ...requestSettings<Tavily>("tavily"),
-    ],
+    settings: [apiKeySetting<Tavily>(), baseUrlSetting<Tavily>()],
   },
   valyu: {
     settings: [
@@ -729,112 +828,31 @@ function baseUrlSetting<TConfig extends { baseUrl?: string }>() {
   });
 }
 
-function requestSettings<TConfig extends { settings?: ExecutionSettings }>(
-  providerId: ProviderId,
-) {
-  const settings = [
-    stringSetting<TConfig>({
-      id: "requestTimeoutMs",
-      label: "Request timeout (ms)",
-      help: "Maximum time to wait for each command before failing that attempt for this provider. Leave empty to inherit the shared setting.",
-      getValue: (config) =>
-        getIntegerString(config?.settings?.requestTimeoutMs),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensureSettings(config),
-          "requestTimeoutMs",
-          value,
-          "Request timeout must be a positive integer.",
-        );
-        cleanupEmpty(config, "settings");
-      },
-    }),
-    stringSetting<TConfig>({
-      id: "retryCount",
-      label: "Retry count",
-      help: "How many times to retry transient command failures for this provider. Leave empty to inherit the shared setting.",
-      getValue: (config) => getIntegerString(config?.settings?.retryCount),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensureSettings(config),
-          "retryCount",
-          value,
-          "Retry count must be a non-negative integer.",
-          { allowZero: true },
-        );
-        cleanupEmpty(config, "settings");
-      },
-    }),
-    stringSetting<TConfig>({
-      id: "retryDelayMs",
-      label: "Retry delay (ms)",
-      help: "Initial delay before retrying command failures for this provider. Leave empty to inherit the shared setting.",
-      getValue: (config) => getIntegerString(config?.settings?.retryDelayMs),
-      setValue: (config, value) => {
-        assignOptionalInteger(
-          ensureSettings(config),
-          "retryDelayMs",
-          value,
-          "Retry delay must be a positive integer.",
-        );
-        cleanupEmpty(config, "settings");
-      },
-    }),
-  ];
-
-  if (supportsTool(providerId, "research")) {
-    settings.push(
-      stringSetting<TConfig>({
-        id: "researchTimeoutMs",
-        label: "Research timeout (ms)",
-        help: "Maximum total time to allow long-running web research for this provider before aborting it. Leave empty to inherit the shared setting.",
-        getValue: (config) =>
-          getIntegerString(config?.settings?.researchTimeoutMs),
-        setValue: (config, value) => {
-          assignOptionalInteger(
-            ensureSettings(config),
-            "researchTimeoutMs",
-            value,
-            "Research timeout must be a positive integer.",
-          );
-          cleanupEmpty(config, "settings");
-        },
-      }),
-    );
-  }
-
-  return settings;
-}
-
 function assignOptionalString(
-  target: Record<
-    string,
-    string | number | boolean | Record<string, unknown> | undefined
-  >,
+  target: object,
   key: string,
   value: string,
 ): void {
+  const record = target as Record<string, unknown>;
   const trimmed = value.trim();
   if (!trimmed) {
-    delete target[key];
+    delete record[key];
   } else {
-    target[key] = trimmed;
+    record[key] = trimmed;
   }
 }
 
 function assignOptionalInteger(
-  target: Record<
-    string,
-    string | number | boolean | Record<string, unknown> | undefined
-  >,
+  target: object,
   key: string,
   value: string,
   errorMessage: string,
   options?: { allowZero?: boolean },
 ): void {
+  const record = target as Record<string, unknown>;
   const trimmed = value.trim();
   if (!trimmed) {
-    delete target[key];
+    delete record[key];
     return;
   }
 
@@ -844,7 +862,7 @@ function assignOptionalInteger(
     throw new Error(errorMessage);
   }
 
-  target[key] = parsed;
+  record[key] = parsed;
 }
 
 function assignOptionalBoolean(
@@ -875,19 +893,6 @@ function asJsonObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function ensureSettings<TConfig extends { settings?: ExecutionSettings }>(
-  config: TConfig,
-): Record<
-  string,
-  string | number | boolean | Record<string, unknown> | undefined
-> {
-  config.settings = { ...(config.settings ?? {}) };
-  return config.settings as Record<
-    string,
-    string | number | boolean | Record<string, unknown> | undefined
-  >;
 }
 
 function cleanupEmpty<TConfig extends object>(
@@ -1130,6 +1135,42 @@ function ensureExaSearchOptions(config: Exa): Record<string, unknown> {
     search: asJsonObject(config.options?.search) ?? {},
   };
   return config.options.search as Record<string, unknown>;
+}
+
+function getOpenAISearchOptions(config: OpenAI | undefined) {
+  return config?.options?.search;
+}
+
+function ensureOpenAISearchOptions(config: OpenAI): OpenAISearchOptions {
+  config.options = {
+    ...(config.options ?? {}),
+    search: { ...(config.options?.search ?? {}) },
+  };
+  return config.options.search ?? (config.options.search = {});
+}
+
+function getOpenAIAnswerOptions(config: OpenAI | undefined) {
+  return config?.options?.answer;
+}
+
+function ensureOpenAIAnswerOptions(config: OpenAI): OpenAIAnswerOptions {
+  config.options = {
+    ...(config.options ?? {}),
+    answer: { ...(config.options?.answer ?? {}) },
+  };
+  return config.options.answer ?? (config.options.answer = {});
+}
+
+function getOpenAIResearchOptions(config: OpenAI | undefined) {
+  return config?.options?.research;
+}
+
+function ensureOpenAIResearchOptions(config: OpenAI): OpenAIResearchOptions {
+  config.options = {
+    ...(config.options ?? {}),
+    research: { ...(config.options?.research ?? {}) },
+  };
+  return config.options.research ?? (config.options.research = {});
 }
 
 function getValyuCapabilityOptions(

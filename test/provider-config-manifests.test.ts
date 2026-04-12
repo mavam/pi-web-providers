@@ -6,7 +6,7 @@ import {
 import type { Cloudflare, Custom, Linkup, Tavily } from "../src/types.js";
 
 describe("provider config manifests", () => {
-  it("exposes custom argv, cwd, env, and request settings", () => {
+  it("exposes only custom argv, cwd, and env settings", () => {
     const manifest = getProviderConfigManifest("custom");
     const ids = manifest.settings.map((setting) => setting.id);
 
@@ -24,10 +24,6 @@ describe("provider config manifests", () => {
         "customResearchArgv",
         "customResearchCwd",
         "customResearchEnv",
-        "requestTimeoutMs",
-        "retryCount",
-        "retryDelayMs",
-        "researchTimeoutMs",
       ]),
     );
     expect(ids).not.toContain("researchPollIntervalMs");
@@ -112,20 +108,11 @@ describe("provider config manifests", () => {
     });
   });
 
-  it("exposes Linkup API key, base URL, and non-research execution settings", () => {
+  it("exposes only Linkup API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("linkup");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(
-      expect.arrayContaining([
-        "apiKey",
-        "baseUrl",
-        "requestTimeoutMs",
-        "retryCount",
-        "retryDelayMs",
-      ]),
-    );
-    expect(ids).not.toContain("researchTimeoutMs");
+    expect(ids).toEqual(["apiKey", "baseUrl"]);
   });
 
   it("round-trips Linkup API key and base URL settings", () => {
@@ -162,20 +149,11 @@ describe("provider config manifests", () => {
     });
   });
 
-  it("exposes Tavily API key, base URL, and non-research execution settings", () => {
+  it("exposes only Tavily API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("tavily");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(
-      expect.arrayContaining([
-        "apiKey",
-        "baseUrl",
-        "requestTimeoutMs",
-        "retryCount",
-        "retryDelayMs",
-      ]),
-    );
-    expect(ids).not.toContain("researchTimeoutMs");
+    expect(ids).toEqual(["apiKey", "baseUrl"]);
   });
 
   it("round-trips Tavily API key and base URL settings", () => {

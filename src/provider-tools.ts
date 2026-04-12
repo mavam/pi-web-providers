@@ -14,8 +14,9 @@ export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   firecrawl: ["search", "contents"],
   gemini: ["search", "answer", "research"],
   linkup: ["search", "contents"],
-  perplexity: ["search", "answer", "research"],
+  openai: ["search", "answer", "research"],
   parallel: ["search", "contents"],
+  perplexity: ["search", "answer", "research"],
   tavily: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
 };

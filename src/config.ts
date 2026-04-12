@@ -14,6 +14,8 @@ import type {
   Firecrawl,
   Gemini,
   Linkup,
+  OpenAI,
+  OpenAIOptions,
   Parallel,
   Perplexity,
   ProviderId,
@@ -91,6 +93,7 @@ export function parseProviderConfig(
   | Firecrawl
   | Gemini
   | Linkup
+  | OpenAI
   | Perplexity
   | Parallel
   | Tavily
@@ -239,6 +242,7 @@ function normalizeProvider(
   | Firecrawl
   | Gemini
   | Linkup
+  | OpenAI
   | Parallel
   | Perplexity
   | Tavily
@@ -297,6 +301,19 @@ function normalizeProvider(
       return parseProviderWithShape<Gemini>(raw, source, providerId, {
         apiKey: readOptionalString,
         options: readOptionalObject,
+        settings: parseOptionalExecutionSettings,
+      });
+    case "openai":
+      return parseProviderWithShape<OpenAI>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: (value, innerSource, field) =>
+          parseOptionalCapabilityOptions<OpenAIOptions>(
+            value,
+            innerSource,
+            field,
+            ["search", "answer", "research"],
+          ),
         settings: parseOptionalExecutionSettings,
       });
     case "firecrawl":
