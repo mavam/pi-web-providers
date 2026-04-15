@@ -1,0 +1,319 @@
+import { type TObject, Type } from "@sinclair/typebox";
+import { resolveConfigValue } from "../config.js";
+import type {
+  ProviderAdapter,
+  ProviderCapabilityStatus,
+  ProviderContext,
+  ProviderRequest,
+  SearchResponse,
+  Serper,
+  Tool,
+} from "../types.js";
+import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { buildProviderPlan } from "./framework.js";
+import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
+
+const DEFAULT_BASE_URL = "https://google.serper.dev";
+
+const serperSearchOptionsSchema = Type.Object(
+  {
+    gl: Type.Optional(
+      Type.String({
+        description: "Country code hint for Google results (for example 'us').",
+      }),
+    ),
+    hl: Type.Optional(
+      Type.String({
+        description:
+          "Language code hint for Google results (for example 'en').",
+      }),
+    ),
+    location: Type.Optional(
+      Type.String({
+        description: "Geographic location hint for Google results.",
+      }),
+    ),
+    page: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        description: "1-based results page to request from Serper.",
+      }),
+    ),
+    autocorrect: Type.Optional(
+      Type.Boolean({
+        description: "Enable or disable Serper query autocorrection.",
+      }),
+    ),
+  },
+  { description: "Serper search options." },
+);
+
+export const serperAdapter: ProviderAdapter<Serper> & {
+  search(
+    query: string,
+    maxResults: number,
+    config: Serper,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+} = {
+  id: "serper",
+  label: "Serper",
+  docsUrl: "https://serper.dev/",
+  tools: ["search"] as const,
+
+  getToolOptionsSchema(capability: Tool): TObject | undefined {
+    switch (capability) {
+      case "search":
+        return serperSearchOptionsSchema;
+      default:
+        return undefined;
+    }
+  },
+
+  createTemplate(): Serper {
+    return {
+      apiKey: "SERPER_API_KEY",
+      options: {},
+    };
+  },
+
+  getConfigForCapability(capability: Tool, config: Serper): unknown {
+    switch (capability) {
+      case "search":
+        return {
+          apiKey: config.apiKey,
+          baseUrl: config.baseUrl,
+          options: config.options?.search,
+          settings: config.settings,
+        };
+      default:
+        return config;
+    }
+  },
+
+  getCapabilityStatus(config: Serper | undefined): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.apiKey);
+  },
+
+  buildPlan(request: ProviderRequest, config: Serper) {
+    return buildProviderPlan({
+      request,
+      config,
+      providerId: serperAdapter.id,
+      providerLabel: serperAdapter.label,
+      handlers: {
+        search: {
+          execute: (
+            searchRequest,
+            providerConfig: Serper,
+            context: ProviderContext,
+          ) =>
+            serperAdapter.search(
+              searchRequest.query,
+              searchRequest.maxResults,
+              providerConfig,
+              context,
+              searchRequest.options,
+            ),
+        },
+      },
+    });
+  },
+
+  async search(
+    query: string,
+    maxResults: number,
+    config: Serper,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse> {
+    const apiKey = resolveConfigValue(config.apiKey);
+    if (!apiKey) {
+      throw new Error("is missing an API key");
+    }
+
+    const defaults =
+      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const runtimeOptions = stripLocalExecutionOptions(asJsonObject(options));
+    const {
+      q: _ignoredQuery,
+      num: _ignoredNum,
+      ...providerOptions
+    } = {
+      ...defaults,
+      ...(runtimeOptions ?? {}),
+    };
+
+    const response = await fetch(joinUrl(resolveConfigValue(config.baseUrl)), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+      },
+      body: JSON.stringify({
+        q: query,
+        num: clampMaxResults(maxResults),
+        ...providerOptions,
+      }),
+      signal: context.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(await buildHttpError(response));
+    }
+
+    const payload = (await response.json()) as unknown;
+    const responseRecord = asRecord(payload) ?? {};
+    const organic = asArray(responseRecord.organic) ?? [];
+    const searchContext = buildSearchContext(responseRecord);
+
+    return {
+      provider: serperAdapter.id,
+      results: organic
+        .map((entry) => toSearchResult(entry, searchContext))
+        .filter(
+          (result): result is NonNullable<typeof result> => result !== null,
+        )
+        .slice(0, clampMaxResults(maxResults)),
+    };
+  },
+};
+
+function joinUrl(baseUrl: string | undefined): string {
+  const base = (baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  return `${base}/search`;
+}
+
+function clampMaxResults(value: number): number {
+  return Math.max(1, Math.min(20, Math.trunc(value || 0)));
+}
+
+async function buildHttpError(response: Response): Promise<string> {
+  const detail = await readErrorDetail(response);
+  const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+  return detail
+    ? `Serper API request failed (${status}): ${detail}`
+    : `Serper API request failed (${status}).`;
+}
+
+async function readErrorDetail(
+  response: Response,
+): Promise<string | undefined> {
+  const text = (await response.text()).trim();
+  if (!text) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    const record = asRecord(parsed);
+    const detail =
+      readString(record?.message) ??
+      readString(record?.error) ??
+      readString(record?.detail);
+    if (detail) {
+      return detail;
+    }
+    return JSON.stringify(parsed);
+  } catch {
+    return text;
+  }
+}
+
+function toSearchResult(
+  entry: unknown,
+  searchContext: Record<string, unknown> | undefined,
+) {
+  const record = asRecord(entry);
+  if (!record) {
+    return null;
+  }
+
+  const url = readString(record.link) ?? "";
+  const title = readString(record.title) || url || "Untitled";
+  const snippet = trimSnippet(
+    readString(record.snippet) ??
+      readString(record.richSnippet) ??
+      readString(record.date) ??
+      "",
+  );
+
+  const metadata = omitUndefined({
+    source: "organic",
+    position: readNumber(record.position),
+    date: readString(record.date),
+    attributes: asRecord(record.attributes),
+    sitelinks: asArray(record.sitelinks),
+    rating: readNumber(record.rating),
+    ratingCount: readNumber(record.ratingCount),
+    cid: readString(record.cid),
+    ...extractExtraMetadata(record, ["title", "link", "snippet"]),
+    ...(searchContext ? { searchContext } : {}),
+  });
+
+  return {
+    title,
+    url,
+    snippet,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+  };
+}
+
+function buildSearchContext(
+  response: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  const context = omitUndefined({
+    searchParameters: asRecord(response.searchParameters),
+    searchInformation: asRecord(response.searchInformation),
+    credits: readNumber(response.credits),
+    answerBox: asRecord(response.answerBox),
+    knowledgeGraph: asRecord(response.knowledgeGraph),
+    peopleAlsoAsk: asArray(response.peopleAlsoAsk),
+    relatedSearches: asArray(response.relatedSearches),
+    topStories: asArray(response.topStories),
+    news: asArray(response.news),
+    images: asArray(response.images),
+    videos: asArray(response.videos),
+    places: asArray(response.places),
+  });
+
+  return Object.keys(context).length > 0 ? context : undefined;
+}
+
+function extractExtraMetadata(
+  record: Record<string, unknown>,
+  ignoredKeys: string[],
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(record).filter(
+      ([key, value]) => !ignoredKeys.includes(key) && value !== undefined,
+    ),
+  );
+}
+
+function omitUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as T;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function asArray(value: unknown): unknown[] | undefined {
+  return Array.isArray(value) ? value : undefined;
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function readNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}

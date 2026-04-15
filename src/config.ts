@@ -21,6 +21,8 @@ import type {
   ProviderId,
   SearchSettings,
   Settings,
+  Serper,
+  SerperOptions,
   Tavily,
   Tool,
   Tools,
@@ -96,6 +98,7 @@ export function parseProviderConfig(
   | OpenAI
   | Perplexity
   | Parallel
+  | Serper
   | Tavily
   | Valyu {
   const raw = parseJson(text, source);
@@ -245,6 +248,7 @@ function normalizeProvider(
   | OpenAI
   | Parallel
   | Perplexity
+  | Serper
   | Tavily
   | Valyu {
   switch (providerId) {
@@ -320,10 +324,32 @@ function normalizeProvider(
     case "linkup":
     case "parallel":
     case "perplexity":
+      return parseProviderWithShape<Firecrawl | Linkup | Parallel | Perplexity>(
+        raw,
+        source,
+        providerId,
+        {
+          apiKey: readOptionalString,
+          baseUrl: readOptionalString,
+          options: readOptionalObject,
+          settings: parseOptionalExecutionSettings,
+        },
+      );
+    case "serper":
+      return parseProviderWithShape<Serper>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
+        options: (value, innerSource, field) =>
+          parseOptionalCapabilityOptions<SerperOptions>(
+            value,
+            innerSource,
+            field,
+            ["search"],
+          ),
+        settings: parseOptionalExecutionSettings,
+      });
     case "tavily":
-      return parseProviderWithShape<
-        Firecrawl | Linkup | Parallel | Perplexity | Tavily
-      >(raw, source, providerId, {
+      return parseProviderWithShape<Tavily>(raw, source, providerId, {
         apiKey: readOptionalString,
         baseUrl: readOptionalString,
         options: readOptionalObject,
@@ -690,8 +716,10 @@ function toPublicProviderConfig(
     | Firecrawl
     | Gemini
     | Linkup
+    | OpenAI
     | Parallel
     | Perplexity
+    | Serper
     | Tavily
     | Valyu,
 ): Record<string, unknown> {

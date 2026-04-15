@@ -1120,15 +1120,19 @@ describe("provider tool output", () => {
       "perplexity",
     )!;
     const exa = __test__.buildStructuredOptionsSchema("search", "exa")!;
+    const serper = __test__.buildStructuredOptionsSchema("search", "serper")!;
     const tavily = __test__.buildStructuredOptionsSchema("search", "tavily")!;
 
     const perplexityProvider = (perplexity.anyOf?.[0] ?? perplexity).properties
       ?.provider;
     const exaProvider = (exa.anyOf?.[0] ?? exa).properties?.provider;
+    const serperProvider = (serper.anyOf?.[0] ?? serper).properties?.provider;
     const tavilyProvider = (tavily.anyOf?.[0] ?? tavily).properties?.provider;
 
     expect(perplexityProvider?.properties ?? {}).toHaveProperty("country");
     expect(exaProvider?.properties ?? {}).toHaveProperty("userLocation");
+    expect(serperProvider?.properties ?? {}).toHaveProperty("gl");
+    expect(serperProvider?.properties ?? {}).toHaveProperty("location");
     expect(tavilyProvider?.properties ?? {}).toHaveProperty("country");
   });
 

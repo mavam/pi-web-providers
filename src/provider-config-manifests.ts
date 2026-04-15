@@ -20,6 +20,7 @@ import type {
   ParallelOptions,
   Perplexity,
   ProviderId,
+  Serper,
   Tavily,
   Valyu,
   ValyuOptions,
@@ -698,6 +699,9 @@ export const PROVIDER_CONFIG_MANIFESTS = {
         },
       }),
     ],
+  },
+  serper: {
+    settings: [apiKeySetting<Serper>(), baseUrlSetting<Serper>()],
   },
   tavily: {
     settings: [apiKeySetting<Tavily>(), baseUrlSetting<Tavily>()],

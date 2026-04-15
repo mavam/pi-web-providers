@@ -17,6 +17,7 @@ export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
   openai: ["search", "answer", "research"],
   parallel: ["search", "contents"],
   perplexity: ["search", "answer", "research"],
+  serper: ["search"],
   tavily: ["search", "contents"],
   valyu: ["search", "contents", "answer", "research"],
 };

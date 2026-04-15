@@ -33,6 +33,7 @@ beforeEach(() => {
   cleanupDirs.push(home);
   process.env.HOME = home;
   delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
@@ -40,12 +41,14 @@ beforeEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
 });
 
 afterEach(() => {
   delete process.env.CLOUDFLARE_API_TOKEN;
+  delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.GOOGLE_API_KEY;
@@ -53,6 +56,7 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.PARALLEL_API_KEY;
+  delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
   delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
@@ -152,6 +156,23 @@ describe("provider resolution", () => {
 
     const provider = resolveProviderForTool(config, process.cwd(), "contents");
     expect(provider.id).toBe("parallel");
+  });
+
+  it("uses the mapped Serper provider for search", () => {
+    process.env.SERPER_API_KEY = "test-key";
+
+    const config = createConfig({
+      tools: {
+        search: "serper",
+      },
+      providers: {
+        serper: {
+          apiKey: "SERPER_API_KEY",
+        },
+      },
+    });
+
+    expect(resolveSearchProvider(config, process.cwd()).id).toBe("serper");
   });
 
   it("uses the mapped Tavily provider for search and contents", () => {
