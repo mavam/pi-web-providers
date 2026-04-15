@@ -172,7 +172,9 @@ export const serperAdapter: ProviderAdapter<Serper> & {
       provider: serperAdapter.id,
       results: organic
         .map((entry) => toSearchResult(entry, searchContext))
-        .filter((result): result is NonNullable<typeof result> => result !== null)
+        .filter(
+          (result): result is NonNullable<typeof result> => result !== null,
+        )
         .slice(0, clampMaxResults(maxResults)),
     };
   },
@@ -195,7 +197,9 @@ async function buildHttpError(response: Response): Promise<string> {
     : `Serper API request failed (${status}).`;
 }
 
-async function readErrorDetail(response: Response): Promise<string | undefined> {
+async function readErrorDetail(
+  response: Response,
+): Promise<string | undefined> {
   const text = (await response.text()).trim();
   if (!text) {
     return undefined;
@@ -309,5 +313,7 @@ function readString(value: unknown): string | undefined {
 }
 
 function readNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }

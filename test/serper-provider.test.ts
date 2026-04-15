@@ -81,22 +81,25 @@ describe("serperAdapter", () => {
       },
     );
 
-    expect(fetchMock).toHaveBeenCalledWith("https://google.serper.test/search", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": "test-key",
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://google.serper.test/search",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "test-key",
+        },
+        body: JSON.stringify({
+          q: "serper api",
+          num: 20,
+          gl: "de",
+          autocorrect: false,
+          hl: "en",
+          location: "Berlin, Berlin, Germany",
+        }),
+        signal: undefined,
       },
-      body: JSON.stringify({
-        q: "serper api",
-        num: 20,
-        gl: "de",
-        autocorrect: false,
-        hl: "en",
-        location: "Berlin, Berlin, Germany",
-      }),
-      signal: undefined,
-    });
+    );
     expect(response).toEqual({
       provider: "serper",
       results: [
@@ -147,9 +150,11 @@ describe("serperAdapter", () => {
   });
 
   it("returns an empty result set when Serper has no organic matches", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ peopleAlsoAsk: [] }), { status: 200 }),
-    ) as typeof fetch;
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ peopleAlsoAsk: [] }), { status: 200 }),
+      ) as typeof fetch;
 
     const response = await serperAdapter.search(
       "serper",
@@ -183,7 +188,9 @@ describe("serperAdapter", () => {
         },
         { cwd: process.cwd() },
       ),
-    ).rejects.toThrow(/Serper API request failed \(401 Unauthorized\): invalid key/);
+    ).rejects.toThrow(
+      /Serper API request failed \(401 Unauthorized\): invalid key/,
+    );
   });
 
   it("requires an API key", async () => {

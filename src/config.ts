@@ -324,14 +324,17 @@ function normalizeProvider(
     case "linkup":
     case "parallel":
     case "perplexity":
-      return parseProviderWithShape<
-        Firecrawl | Linkup | Parallel | Perplexity
-      >(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
+      return parseProviderWithShape<Firecrawl | Linkup | Parallel | Perplexity>(
+        raw,
+        source,
+        providerId,
+        {
+          apiKey: readOptionalString,
+          baseUrl: readOptionalString,
+          options: readOptionalObject,
+          settings: parseOptionalExecutionSettings,
+        },
+      );
     case "serper":
       return parseProviderWithShape<Serper>(raw, source, providerId, {
         apiKey: readOptionalString,
