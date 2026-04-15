@@ -1,0 +1,10 @@
+created: 2026-04-15
+title: Serper provider for web search
+intro: >-
+  This release adds a Serper provider for `web_search`, giving you a fast Google-style
+  search backend that you can configure with a `SERPER_API_KEY`. Serper also preserves
+  rich search context such as sitelinks, answer boxes, knowledge graph data, and related
+  searches for better follow-up analysis.
+source:
+  mode: sync-stable-queue
+  previous_stable: v2.3.0
