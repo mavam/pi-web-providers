@@ -118,6 +118,27 @@ describe("CodexAdapter", () => {
       webSearchMode: "cached",
       workingDirectory: "/repo",
     });
+
+    const outputSchema = runStreamedMock.mock.calls[0]?.[1]?.outputSchema;
+    expect(outputSchema).toMatchObject({
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        sources: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              title: { type: "string" },
+              url: { type: "string" },
+              snippet: { type: "string" },
+            },
+          },
+        },
+      },
+    });
+
     expect(response.results).toEqual([
       {
         title: "Official docs",
