@@ -13,7 +13,7 @@ import type {
 } from "./types.js";
 
 export function supportsTool(provider: ProviderAdapter, tool: Tool): boolean {
-  return provider.tools.includes(tool);
+  return typeof provider[tool] === "function";
 }
 
 export function resolveSearchProvider(

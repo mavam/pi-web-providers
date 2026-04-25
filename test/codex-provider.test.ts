@@ -23,34 +23,6 @@ afterEach(() => {
 });
 
 describe("CodexAdapter", () => {
-  it("attaches config settings to Codex operation plans", () => {
-    const provider = codexAdapter;
-    const plan = provider.buildPlan(
-      {
-        capability: "search",
-        query: "latest docs",
-        maxResults: 5,
-      },
-      {
-        settings: {
-          requestTimeoutMs: 1500,
-          retryCount: 2,
-          retryDelayMs: 250,
-        },
-      },
-    );
-
-    expect(plan).toMatchObject({
-      traits: {
-        settings: {
-          requestTimeoutMs: 1500,
-          retryCount: 2,
-          retryDelayMs: 250,
-        },
-      },
-    });
-  });
-
   it("forwards only user-facing search options and keeps managed thread settings fixed", async () => {
     startThreadMock.mockReturnValue({
       runStreamed: runStreamedMock.mockResolvedValue({

@@ -6,12 +6,10 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { trimSnippet } from "./shared.js";
 
@@ -142,7 +140,6 @@ export const claudeAdapter: ClaudeAdapter = {
   id: "claude",
   label: "Claude",
   docsUrl: "https://github.com/anthropics/claude-agent-sdk-typescript",
-  tools: ["search", "answer"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -167,44 +164,6 @@ export const claudeAdapter: ClaudeAdapter = {
       return { state: "missing_executable" };
     }
     return { state: "ready" };
-  },
-
-  buildPlan(request: ProviderRequest, config: Claude) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: this.id,
-      providerLabel: this.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Claude,
-            context: ProviderContext,
-          ) =>
-            this.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Claude,
-            context: ProviderContext,
-          ) =>
-            this.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

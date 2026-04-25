@@ -1,30 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
-import { executeOperationPlan } from "../src/provider-runtime.js";
-import type {
-  ProviderContext,
-  ProviderPlan,
-  ToolOutput,
-} from "../src/types.js";
+import {
+  executeProviderExecution,
+  type ProviderExecution,
+} from "../src/provider-runtime.js";
+import type { ProviderContext, ToolOutput } from "../src/types.js";
 
-describe("executeOperationPlan research timeouts", () => {
-  it("applies the configured research timeout to research plans", async () => {
+describe("executeProviderExecution research timeouts", () => {
+  it("applies the configured research timeout to research operations", async () => {
     vi.useFakeTimers();
 
     try {
-      const plan: ProviderPlan<"research"> = {
+      const operation: ProviderExecution<"research"> = {
         capability: "research",
-        providerId: "gemini",
         providerLabel: "Gemini",
-        traits: {
-          settings: {
-            researchTimeoutMs: 10,
-          },
+        settings: {
+          researchTimeoutMs: 10,
         },
         execute: async (_context: ProviderContext) =>
           await new Promise<ToolOutput>(() => {}),
       };
 
-      const promise = executeOperationPlan(plan, undefined, {
+      const promise = executeProviderExecution(operation, undefined, {
         cwd: process.cwd(),
       });
 

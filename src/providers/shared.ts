@@ -1,4 +1,4 @@
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ProviderCapabilityStatus } from "../types.js";
 
 export function trimSnippet(

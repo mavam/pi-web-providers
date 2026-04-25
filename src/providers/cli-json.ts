@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { isAbsolute, resolve } from "node:path";
-import { resolveEnvMap } from "../config.js";
+import { resolveEnvMap } from "../config-values.js";
 import type { CustomCommandConfig, ProviderContext } from "../types.js";
 
 export async function runCliJsonCommand<TOutput>({

@@ -1,6 +1,6 @@
 import { type TObject, Type } from "typebox";
 import ParallelClient from "parallel-web";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
@@ -8,11 +8,9 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -66,7 +64,6 @@ export const parallelAdapter: ParallelAdapter = {
   id: "parallel",
   label: "Parallel",
   docsUrl: "https://github.com/parallel-web/parallel-sdk-typescript",
-  tools: ["search", "contents"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -94,67 +91,8 @@ export const parallelAdapter: ParallelAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Parallel): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "contents":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.extract,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Parallel | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Parallel) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: parallelAdapter.id,
-      providerLabel: parallelAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Parallel,
-            context: ProviderContext,
-          ) =>
-            parallelAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Parallel,
-            context: ProviderContext,
-          ) =>
-            parallelAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

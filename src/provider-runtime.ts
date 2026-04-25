@@ -7,23 +7,56 @@ import {
 import { formatProviderDiagnostic } from "./provider-diagnostics.js";
 import type {
   ExecutionSettings,
+  ProviderAdapter,
+  ProviderConfig,
   ProviderContext,
-  ProviderPlan,
+  ProviderRequest,
   ProviderResult,
   Tool,
 } from "./types.js";
 
-export async function executeOperationPlan<TTool extends Tool>(
-  plan: ProviderPlan<TTool>,
+interface ConfigWithSettings {
+  settings?: ExecutionSettings;
+}
+
+export interface ProviderExecution<TTool extends Tool = Tool> {
+  capability: TTool;
+  providerLabel: string;
+  settings?: ExecutionSettings;
+  execute: (context: ProviderContext) => Promise<ProviderResult<TTool>>;
+}
+
+export async function executeProviderRequest<TTool extends Tool>(
+  provider: ProviderAdapter,
+  config: ProviderConfig,
+  request: ProviderRequest<TTool>,
   options: Record<string, unknown> | undefined,
   context: ProviderContext,
 ): Promise<ProviderResult<TTool>> {
-  if (plan.capability === "research") {
-    rejectResearchExecutionControls(plan.providerLabel, options);
+  return (await executeProviderExecution(
+    {
+      capability: request.capability,
+      providerLabel: provider.label,
+      settings: (config as ConfigWithSettings).settings,
+      execute: (executionContext) =>
+        executeProviderHandler(provider, config, request, executionContext),
+    },
+    options,
+    context,
+  )) as ProviderResult<TTool>;
+}
+
+export async function executeProviderExecution<TTool extends Tool>(
+  execution: ProviderExecution<TTool>,
+  options: Record<string, unknown> | undefined,
+  context: ProviderContext,
+): Promise<ProviderResult<TTool>> {
+  if (execution.capability === "research") {
+    rejectResearchExecutionControls(execution.providerLabel, options);
     const deadline = createResearchDeadlineSignal(
       context.signal,
-      plan.providerLabel,
-      plan.traits?.settings?.researchTimeoutMs,
+      execution.providerLabel,
+      execution.settings?.researchTimeoutMs,
     );
 
     try {
@@ -31,31 +64,96 @@ export async function executeOperationPlan<TTool extends Tool>(
         ? { ...context, signal: deadline.signal }
         : context;
       return await withAbortSignal(
-        plan.execute(researchContext),
+        execution.execute(researchContext),
         researchContext.signal,
       );
     } catch (error) {
       throw new Error(
-        formatProviderDiagnostic(plan.providerLabel, formatErrorMessage(error)),
+        formatProviderDiagnostic(
+          execution.providerLabel,
+          formatErrorMessage(error),
+        ),
       );
     } finally {
       deadline?.cleanup();
     }
   }
 
-  const requestPolicy = resolveExecutionPolicy(plan.traits?.settings, options);
+  const requestPolicy = resolveExecutionPolicy(execution.settings, options);
   try {
     return await runWithExecutionPolicy(
-      `${plan.providerLabel} ${plan.capability} request`,
-      plan.execute,
+      `${execution.providerLabel} ${execution.capability} request`,
+      execution.execute,
       requestPolicy,
       context,
     );
   } catch (error) {
     throw new Error(
-      formatProviderDiagnostic(plan.providerLabel, formatErrorMessage(error)),
+      formatProviderDiagnostic(
+        execution.providerLabel,
+        formatErrorMessage(error),
+      ),
     );
   }
+}
+
+async function executeProviderHandler<TTool extends Tool>(
+  provider: ProviderAdapter,
+  config: ProviderConfig,
+  request: ProviderRequest<TTool>,
+  context: ProviderContext,
+): Promise<ProviderResult<TTool>> {
+  switch (request.capability) {
+    case "search": {
+      if (!provider.search) {
+        throw unsupportedProviderTool(provider, request.capability);
+      }
+      return (await provider.search(
+        request.query,
+        request.maxResults,
+        config as never,
+        context,
+        request.options,
+      )) as ProviderResult<TTool>;
+    }
+    case "contents": {
+      if (!provider.contents) {
+        throw unsupportedProviderTool(provider, request.capability);
+      }
+      return (await provider.contents(
+        request.urls,
+        config as never,
+        context,
+        request.options,
+      )) as ProviderResult<TTool>;
+    }
+    case "answer": {
+      if (!provider.answer) {
+        throw unsupportedProviderTool(provider, request.capability);
+      }
+      return (await provider.answer(
+        request.query,
+        config as never,
+        context,
+        request.options,
+      )) as ProviderResult<TTool>;
+    }
+    case "research": {
+      if (!provider.research) {
+        throw unsupportedProviderTool(provider, request.capability);
+      }
+      return (await provider.research(
+        request.input,
+        config as never,
+        context,
+        request.options,
+      )) as ProviderResult<TTool>;
+    }
+  }
+}
+
+function unsupportedProviderTool(provider: ProviderAdapter, tool: Tool): Error {
+  return new Error(`Provider '${provider.id}' does not support '${tool}'.`);
 }
 
 function resolveExecutionPolicy(

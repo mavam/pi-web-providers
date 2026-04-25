@@ -476,18 +476,8 @@ describe("GeminiAdapter answer", () => {
   });
 });
 
-it("does not build a contents plan", () => {
-  const provider = geminiAdapter;
-
-  expect(
-    provider.buildPlan(
-      {
-        capability: "contents",
-        urls: ["https://example.com"],
-      },
-      createConfig(),
-    ),
-  ).toBeNull();
+it("does not expose a contents handler", () => {
+  expect(geminiAdapter.contents).toBeUndefined();
 });
 
 describe("GeminiAdapter research", () => {

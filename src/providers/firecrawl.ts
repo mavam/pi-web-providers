@@ -3,7 +3,7 @@ import FirecrawlClient, {
   type SearchData,
 } from "@mendable/firecrawl-js";
 import { type TObject, Type } from "typebox";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
@@ -11,12 +11,10 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   SearchResult,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
@@ -148,7 +146,6 @@ export const firecrawlAdapter: FirecrawlAdapter = {
   id: "firecrawl",
   label: "Firecrawl",
   docsUrl: "https://docs.firecrawl.dev/sdks/node",
-  tools: ["search", "contents"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -173,67 +170,8 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Firecrawl): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "contents":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.scrape,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Firecrawl | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Firecrawl) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: firecrawlAdapter.id,
-      providerLabel: firecrawlAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Firecrawl,
-            context: ProviderContext,
-          ) =>
-            firecrawlAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Firecrawl,
-            context: ProviderContext,
-          ) =>
-            firecrawlAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

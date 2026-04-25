@@ -5,7 +5,8 @@ import {
   getProviderCapabilityStatus,
   isProviderCapabilityReady,
 } from "./provider-resolution.js";
-import { executeOperationPlan } from "./provider-runtime.js";
+import { executeProviderRequest } from "./provider-runtime.js";
+import { supportsTool } from "./provider-tools.js";
 import { ADAPTERS_BY_ID } from "./providers/index.js";
 import {
   PROVIDER_IDS,
@@ -447,25 +448,21 @@ async function fetchContentsViaProvider({
   onProgress?.(
     `Fetching contents via ${provider.label} for ${urls.length} URL(s)`,
   );
-  const plan = provider.buildPlan(
+  const result = await executeProviderRequest(
+    provider,
+    providerConfig,
     {
       capability: "contents",
       urls,
       options,
     },
-    providerConfig as never,
+    runtimeOptions,
+    {
+      cwd,
+      signal,
+      onProgress,
+    },
   );
-  if (!plan) {
-    throw new Error(
-      `Provider '${providerId}' could not build a contents plan.`,
-    );
-  }
-
-  const result = await executeOperationPlan(plan, runtimeOptions, {
-    cwd,
-    signal,
-    onProgress,
-  });
   if (!isContentsResponse(result)) {
     throw new Error(`${provider.label} contents returned an invalid result.`);
   }
@@ -597,7 +594,7 @@ function resolveContentsProvider(
   }
 
   const provider = ADAPTERS_BY_ID[explicitProvider];
-  if (!provider.tools.includes("contents")) {
+  if (!supportsTool(explicitProvider, "contents")) {
     return undefined;
   }
 

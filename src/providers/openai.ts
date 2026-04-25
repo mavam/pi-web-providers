@@ -1,6 +1,6 @@
 import { type TObject, Type } from "typebox";
 import OpenAI from "openai";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   OpenAIAnswerOptions,
@@ -10,14 +10,12 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
@@ -174,7 +172,6 @@ export const openaiAdapter: OpenAIAdapter = {
   id: "openai",
   label: "OpenAI",
   docsUrl: "https://platform.openai.com/docs/guides/deep-research",
-  tools: ["search", "answer", "research"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -206,89 +203,10 @@ export const openaiAdapter: OpenAIAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: OpenAIConfig): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "answer":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.answer,
-          settings: config.settings,
-        };
-      case "research":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.research,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(
     config: OpenAIConfig | undefined,
   ): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: OpenAIConfig) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: openaiAdapter.id,
-      providerLabel: openaiAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: OpenAIConfig,
-            context: ProviderContext,
-          ) =>
-            openaiAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: OpenAIConfig,
-            context: ProviderContext,
-          ) =>
-            openaiAdapter.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: OpenAIConfig,
-            context: ProviderContext,
-          ) =>
-            openaiAdapter.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

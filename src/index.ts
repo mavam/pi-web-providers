@@ -60,8 +60,16 @@ import {
   resolveSearchProvider,
   supportsTool,
 } from "./provider-resolution.js";
-import { executeOperationPlan } from "./provider-runtime.js";
-import { getCompatibleProviders, TOOL_INFO } from "./provider-tools.js";
+import {
+  executeProviderExecution,
+  executeProviderRequest,
+  type ProviderExecution,
+} from "./provider-runtime.js";
+import {
+  getCompatibleProviders,
+  getProviderTools,
+  TOOL_INFO,
+} from "./provider-tools.js";
 import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
 import type {
   Claude,
@@ -72,7 +80,6 @@ import type {
   Parallel,
   ProviderConfig,
   ProviderId,
-  ProviderPlan,
   ProviderRequest,
   SearchResponse,
   SearchSettings,
@@ -776,7 +783,7 @@ async function executeSearchToolInternal({
   runtimeOptions,
   maxResults,
   queries,
-  planOverrides,
+  executionOverrides,
 }: {
   config: WebProviders;
   explicitProvider?: ProviderId;
@@ -787,7 +794,7 @@ async function executeSearchToolInternal({
   runtimeOptions?: Record<string, unknown> | undefined;
   maxResults?: number;
   queries: string[];
-  planOverrides?: ProviderPlan<"search">[];
+  executionOverrides?: ProviderExecution<"search">[];
 }) {
   await cleanupContentStore();
 
@@ -800,11 +807,11 @@ async function executeSearchToolInternal({
   );
   const searchQueries = resolveSearchQueries(queries);
   if (
-    planOverrides !== undefined &&
-    planOverrides.length !== searchQueries.length
+    executionOverrides !== undefined &&
+    executionOverrides.length !== searchQueries.length
   ) {
     throw new Error(
-      "planOverrides length must match the number of search queries.",
+      "executionOverrides length must match the number of search queries.",
     );
   }
 
@@ -843,7 +850,7 @@ async function executeSearchToolInternal({
           providerContext,
           onProgress:
             searchQueries.length > 1 ? undefined : progressReporter.report,
-          planOverride: planOverrides?.[index],
+          executionOverride: executionOverrides?.[index],
         }).then(
           (value) => {
             batchProgress?.markCompleted();
@@ -873,7 +880,7 @@ async function executeSearchToolInternal({
   }
 
   const prefetch =
-    prefetchOptions !== undefined && planOverrides === undefined
+    prefetchOptions !== undefined && executionOverrides === undefined
       ? await startContentsPrefetch({
           config,
           cwd: ctx.cwd,
@@ -1015,7 +1022,7 @@ async function executeSingleSearchQuery({
   runtimeOptions,
   providerContext,
   onProgress,
-  planOverride,
+  executionOverride,
 }: {
   provider: (typeof ADAPTERS)[number];
   providerConfig: ProviderConfig;
@@ -1025,26 +1032,35 @@ async function executeSingleSearchQuery({
   runtimeOptions?: Record<string, unknown> | undefined;
   providerContext: { cwd: string; signal?: AbortSignal };
   onProgress?: (message: string) => void;
-  planOverride?: ProviderPlan<"search">;
+  executionOverride?: ProviderExecution<"search">;
 }): Promise<SearchResponse> {
-  const plan =
-    planOverride ??
-    buildProviderPlan(provider, providerConfig, {
-      capability: "search",
-      query,
-      maxResults,
-      options,
-    });
+  const request: ProviderRequest<"search"> = {
+    capability: "search",
+    query,
+    maxResults,
+    options,
+  };
 
   onProgress?.(`Searching via ${provider.label}: ${query}`);
-  const result = await executeOperationPlan(
-    plan,
-    stripSearchContentsPrefetchOptions(runtimeOptions),
-    {
-      ...providerContext,
-      onProgress,
-    },
-  );
+  const result = executionOverride
+    ? await executeProviderExecution(
+        executionOverride,
+        stripSearchContentsPrefetchOptions(runtimeOptions),
+        {
+          ...providerContext,
+          onProgress,
+        },
+      )
+    : await executeProviderRequest(
+        provider,
+        providerConfig,
+        request,
+        stripSearchContentsPrefetchOptions(runtimeOptions),
+        {
+          ...providerContext,
+          onProgress,
+        },
+      );
   if (!isSearchResponse(result)) {
     throw new Error(`${provider.label} search returned an invalid result.`);
   }
@@ -1086,7 +1102,7 @@ async function executeAnswerToolInternal({
   providerOptions,
   runtimeOptions,
   queries,
-  planOverrides,
+  executionOverrides,
 }: {
   config: WebProviders;
   explicitProvider?: ProviderId;
@@ -1096,7 +1112,7 @@ async function executeAnswerToolInternal({
   providerOptions: Record<string, unknown> | undefined;
   runtimeOptions?: Record<string, unknown> | undefined;
   queries: string[];
-  planOverrides?: ProviderPlan<"answer">[];
+  executionOverrides?: ProviderExecution<"answer">[];
 }) {
   const provider = resolveProviderForTool(
     config,
@@ -1108,11 +1124,11 @@ async function executeAnswerToolInternal({
 
   const answerQueries = resolveAnswerQueries(queries);
   if (
-    planOverrides !== undefined &&
-    planOverrides.length !== answerQueries.length
+    executionOverrides !== undefined &&
+    executionOverrides.length !== answerQueries.length
   ) {
     throw new Error(
-      "planOverrides length must match the number of answer queries.",
+      "executionOverrides length must match the number of answer queries.",
     );
   }
 
@@ -1147,7 +1163,7 @@ async function executeAnswerToolInternal({
           query: answerQuery,
           onProgress:
             answerQueries.length > 1 ? undefined : progressReporter.report,
-          planOverride: planOverrides?.[index],
+          executionOverride: executionOverrides?.[index],
         }).then(
           (value) => {
             batchProgress?.markCompleted();
@@ -1263,7 +1279,7 @@ async function executeProviderOperation({
   runtimeOptions,
   urls,
   onProgress,
-  planOverride,
+  executionOverride,
 }: {
   capability: "contents";
   config: WebProviders;
@@ -1275,7 +1291,7 @@ async function executeProviderOperation({
   runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   onProgress?: (message: string) => void;
-  planOverride?: ProviderPlan<"contents">;
+  executionOverride?: ProviderExecution<"contents">;
 }): Promise<ContentsResponse>;
 async function executeProviderOperation({
   capability,
@@ -1289,7 +1305,7 @@ async function executeProviderOperation({
   query,
   input,
   onProgress,
-  planOverride,
+  executionOverride,
 }: {
   capability: Exclude<Tool, "search" | "contents">;
   config: WebProviders;
@@ -1302,7 +1318,7 @@ async function executeProviderOperation({
   query?: string;
   input?: string;
   onProgress?: (message: string) => void;
-  planOverride?: ProviderPlan<Exclude<Tool, "search" | "contents">>;
+  executionOverride?: ProviderExecution<Exclude<Tool, "search" | "contents">>;
 }): Promise<ToolOutput>;
 async function executeProviderOperation({
   capability,
@@ -1317,7 +1333,7 @@ async function executeProviderOperation({
   query,
   input,
   onProgress,
-  planOverride,
+  executionOverride,
 }: {
   capability: Exclude<Tool, "search">;
   config: WebProviders;
@@ -1331,26 +1347,20 @@ async function executeProviderOperation({
   query?: string;
   input?: string;
   onProgress?: (message: string) => void;
-  planOverride?: ProviderPlan<Exclude<Tool, "search">>;
+  executionOverride?: ProviderExecution<Exclude<Tool, "search">>;
 }): Promise<ContentsResponse | ToolOutput> {
-  const plan =
-    planOverride ??
-    buildProviderPlan(
-      provider,
-      providerConfig,
-      buildOperationRequest(capability, {
-        urls,
-        query,
-        input,
-        options,
-      }),
-    );
+  const request = buildOperationRequest(capability, {
+    urls,
+    query,
+    input,
+    options,
+  });
 
   // Route contents requests through the local in-memory cache whenever we can
   // reuse an exact batch hit or at least one per-URL cache entry. Exact cache
   // hits are served immediately, and partial cache hits fetch only missing or
   // stale URLs.
-  if (capability === "contents" && planOverride === undefined) {
+  if (capability === "contents" && executionOverride === undefined) {
     return await resolveContentsFromStore({
       urls: urls ?? [],
       providerId: provider.id,
@@ -1373,11 +1383,23 @@ async function executeProviderOperation({
     onProgress?.(`Researching via ${provider.label}`);
   }
 
-  const result = await executeOperationPlan(plan, runtimeOptions, {
-    cwd: ctx.cwd,
-    signal: signal ?? undefined,
-    onProgress,
-  });
+  const result = executionOverride
+    ? await executeProviderExecution(executionOverride, runtimeOptions, {
+        cwd: ctx.cwd,
+        signal: signal ?? undefined,
+        onProgress,
+      })
+    : await executeProviderRequest(
+        provider,
+        providerConfig,
+        request,
+        runtimeOptions,
+        {
+          cwd: ctx.cwd,
+          signal: signal ?? undefined,
+          onProgress,
+        },
+      );
   if (isSearchResponse(result)) {
     throw new Error(
       `${provider.label} ${capability} returned an invalid result.`,
@@ -1423,8 +1445,8 @@ async function executeProviderToolInternal({
   urls,
   query,
   input,
-  planOverride,
-  planOverrides,
+  executionOverride,
+  executionOverrides,
 }: {
   capability: Exclude<Tool, "search">;
   config: WebProviders;
@@ -1437,8 +1459,8 @@ async function executeProviderToolInternal({
   urls?: string[];
   query?: string;
   input?: string;
-  planOverride?: ProviderPlan<Exclude<Tool, "search">>;
-  planOverrides?: ProviderPlan<"contents">[];
+  executionOverride?: ProviderExecution<Exclude<Tool, "search">>;
+  executionOverrides?: ProviderExecution<"contents">[];
 }) {
   await cleanupContentStore();
 
@@ -1460,8 +1482,8 @@ async function executeProviderToolInternal({
   try {
     if (capability === "contents") {
       response =
-        planOverrides !== undefined ||
-        (planOverride === undefined && (urls?.length ?? 0) > 1)
+        executionOverrides !== undefined ||
+        (executionOverride === undefined && (urls?.length ?? 0) > 1)
           ? await executeBatchedContentsTool({
               config,
               provider,
@@ -1472,7 +1494,7 @@ async function executeProviderToolInternal({
               runtimeOptions,
               urls: urls ?? [],
               progressReport: progressReporter.report,
-              planOverrides,
+              executionOverrides,
             })
           : await executeProviderOperation({
               capability,
@@ -1485,8 +1507,8 @@ async function executeProviderToolInternal({
               runtimeOptions,
               urls,
               onProgress: progressReporter.report,
-              planOverride: planOverride as
-                | ProviderPlan<"contents">
+              executionOverride: executionOverride as
+                | ProviderExecution<"contents">
                 | undefined,
             });
     } else {
@@ -1502,8 +1524,8 @@ async function executeProviderToolInternal({
         query,
         input,
         onProgress: progressReporter.report,
-        planOverride: planOverride as
-          | ProviderPlan<Exclude<Tool, "search" | "contents">>
+        executionOverride: executionOverride as
+          | ProviderExecution<Exclude<Tool, "search" | "contents">>
           | undefined,
       });
     }
@@ -1568,7 +1590,7 @@ async function dispatchWebResearchInternal({
   ctx,
   providerOptions,
   input,
-  planOverride,
+  executionOverride,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
   activeWebResearchRequests: Map<string, WebResearchRequest>;
@@ -1580,7 +1602,7 @@ async function dispatchWebResearchInternal({
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   providerOptions: Record<string, unknown> | undefined;
   input: string;
-  planOverride?: ProviderPlan<"research">;
+  executionOverride?: ProviderExecution<"research">;
 }) {
   await cleanupContentStore();
 
@@ -1607,7 +1629,7 @@ async function dispatchWebResearchInternal({
       providerConfig,
       ctx,
       options: providerOptions,
-      planOverride,
+      executionOverride,
     }),
   );
 
@@ -1632,7 +1654,7 @@ async function runDispatchedWebResearch({
   providerConfig,
   ctx,
   options,
-  planOverride,
+  executionOverride,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
   activeWebResearchRequests: Map<string, WebResearchRequest>;
@@ -1645,7 +1667,7 @@ async function runDispatchedWebResearch({
   providerConfig: ProviderConfig;
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   options: Record<string, unknown> | undefined;
-  planOverride?: ProviderPlan<"research">;
+  executionOverride?: ProviderExecution<"research">;
 }): Promise<void> {
   let result: WebResearchResult;
   let reportText = "";
@@ -1667,7 +1689,7 @@ async function runDispatchedWebResearch({
         );
         updateWebResearchWidget();
       },
-      planOverride,
+      executionOverride,
     });
     const completedAt = new Date().toISOString();
     result = {
@@ -1936,7 +1958,7 @@ async function executeBatchedContentsTool({
   runtimeOptions,
   urls,
   progressReport,
-  planOverrides,
+  executionOverrides,
 }: {
   config: WebProviders;
   provider: (typeof ADAPTERS)[number];
@@ -1947,11 +1969,14 @@ async function executeBatchedContentsTool({
   runtimeOptions?: Record<string, unknown> | undefined;
   urls: string[];
   progressReport: ((message: string) => void) | undefined;
-  planOverrides?: ProviderPlan<"contents">[];
+  executionOverrides?: ProviderExecution<"contents">[];
 }): Promise<ContentsResponse> {
-  if (planOverrides !== undefined && planOverrides.length !== urls.length) {
+  if (
+    executionOverrides !== undefined &&
+    executionOverrides.length !== urls.length
+  ) {
     throw new Error(
-      "planOverrides length must match the number of contents URLs.",
+      "executionOverrides length must match the number of contents URLs.",
     );
   }
 
@@ -1976,7 +2001,7 @@ async function executeBatchedContentsTool({
         runtimeOptions,
         urls: [url],
         onProgress: undefined,
-        planOverride: planOverrides?.[index],
+        executionOverride: executionOverrides?.[index],
       }).then(
         (value) => {
           batchProgress.markCompleted();
@@ -2096,20 +2121,6 @@ function buildOperationRequest(
     input: args.input ?? "",
     options: args.options,
   };
-}
-
-function buildProviderPlan(
-  provider: (typeof ADAPTERS)[number],
-  providerConfig: ProviderConfig,
-  request: ProviderRequest,
-) {
-  const plan = provider.buildPlan(request, providerConfig as never);
-  if (!plan) {
-    throw new Error(
-      `Provider '${provider.id}' could not build a plan for '${request.capability}'.`,
-    );
-  }
-  return plan;
 }
 
 function isSearchResponse(
@@ -3741,14 +3752,7 @@ function getContentsCacheInputs(config: WebProviders): Record<string, unknown> {
       continue;
     }
 
-    const providerConfig =
-      config.providers?.[
-        provider.id as keyof NonNullable<WebProviders["providers"]>
-      ] ?? null;
-    providers[provider.id] =
-      providerConfig && provider.getConfigForCapability
-        ? provider.getConfigForCapability("contents", providerConfig as never)
-        : providerConfig;
+    providers[provider.id] = getEffectiveProviderConfig(config, provider.id);
   }
 
   return { providers: providers as Record<string, unknown> };
@@ -3791,18 +3795,14 @@ function getProviderReadinessSummary(
   cwd: string,
   providerId: ProviderId,
 ): string {
-  const provider = ADAPTERS_BY_ID[providerId];
-  const statuses = provider.tools.map((tool) =>
+  const tools = getProviderTools(providerId);
+  const statuses = tools.map((tool) =>
     getProviderCapabilityStatus(config, cwd, providerId, tool),
   );
   if (statuses.some((status) => status.state === "ready")) {
     return "Ready";
   }
-  return formatProviderCapabilityStatus(
-    statuses[0],
-    providerId,
-    provider.tools[0],
-  );
+  return formatProviderCapabilityStatus(statuses[0], providerId, tools[0]);
 }
 
 function getProviderReadinessSummaryForProviderConfig(
@@ -4267,7 +4267,7 @@ export const __test__ = {
     ctx,
     options,
     input,
-    planOverride,
+    executionOverride,
   }: {
     pi: Pick<ExtensionAPI, "sendMessage">;
     activeWebResearchRequests: Map<string, WebResearchRequest>;
@@ -4279,7 +4279,7 @@ export const __test__ = {
     ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
     options: Record<string, unknown> | undefined;
     input: string;
-    planOverride?: ProviderPlan<"research">;
+    executionOverride?: ProviderExecution<"research">;
   }) =>
     dispatchWebResearchInternal({
       pi,
@@ -4290,7 +4290,7 @@ export const __test__ = {
       ctx,
       providerOptions: options,
       input,
-      planOverride,
+      executionOverride,
     }),
   executeAnswerTool: ({
     config,
@@ -4301,7 +4301,7 @@ export const __test__ = {
     options,
     runtimeOptions,
     queries,
-    planOverrides,
+    executionOverrides,
   }: {
     config: WebProviders;
     explicitProvider?: ProviderId;
@@ -4311,7 +4311,7 @@ export const __test__ = {
     options: Record<string, unknown> | undefined;
     runtimeOptions?: Record<string, unknown> | undefined;
     queries: string[];
-    planOverrides?: ProviderPlan<"answer">[];
+    executionOverrides?: ProviderExecution<"answer">[];
   }) =>
     executeAnswerToolInternal({
       config,
@@ -4322,7 +4322,7 @@ export const __test__ = {
       providerOptions: options,
       runtimeOptions,
       queries,
-      planOverrides,
+      executionOverrides,
     }),
   executeRawProviderRequest,
   executeProviderTool: ({
@@ -4337,8 +4337,8 @@ export const __test__ = {
     urls,
     query,
     input,
-    planOverride,
-    planOverrides,
+    executionOverride,
+    executionOverrides,
   }: {
     capability: Exclude<Tool, "search">;
     config: WebProviders;
@@ -4351,8 +4351,8 @@ export const __test__ = {
     urls?: string[];
     query?: string;
     input?: string;
-    planOverride?: ProviderPlan<Exclude<Tool, "search">>;
-    planOverrides?: ProviderPlan<"contents">[];
+    executionOverride?: ProviderExecution<Exclude<Tool, "search">>;
+    executionOverrides?: ProviderExecution<"contents">[];
   }) =>
     executeProviderToolInternal({
       capability,
@@ -4366,8 +4366,8 @@ export const __test__ = {
       urls,
       query,
       input,
-      planOverride,
-      planOverrides,
+      executionOverride,
+      executionOverrides,
     }),
   executeSearchTool: ({
     config,
@@ -4379,7 +4379,7 @@ export const __test__ = {
     runtimeOptions,
     maxResults,
     queries,
-    planOverrides,
+    executionOverrides,
   }: {
     config: WebProviders;
     explicitProvider?: ProviderId;
@@ -4390,7 +4390,7 @@ export const __test__ = {
     runtimeOptions?: Record<string, unknown> | undefined;
     maxResults?: number;
     queries: string[];
-    planOverrides?: ProviderPlan<"search">[];
+    executionOverrides?: ProviderExecution<"search">[];
   }) =>
     executeSearchToolInternal({
       config,
@@ -4402,7 +4402,7 @@ export const __test__ = {
       runtimeOptions,
       maxResults,
       queries,
-      planOverrides,
+      executionOverrides,
     }),
   extractTextContent,
   formatWebResearchResultMessage,

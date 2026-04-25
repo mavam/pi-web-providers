@@ -1,16 +1,14 @@
 import { type TObject, Type } from "typebox";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Serper,
   Tool,
 } from "../types.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
-import { buildProviderPlan } from "./framework.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://google.serper.dev";
@@ -60,7 +58,6 @@ export const serperAdapter: ProviderAdapter<"serper"> & {
   id: "serper",
   label: "Serper",
   docsUrl: "https://serper.dev/",
-  tools: ["search"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -78,47 +75,8 @@ export const serperAdapter: ProviderAdapter<"serper"> & {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Serper): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Serper | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Serper) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: serperAdapter.id,
-      providerLabel: serperAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Serper,
-            context: ProviderContext,
-          ) =>
-            serperAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

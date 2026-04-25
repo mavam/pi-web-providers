@@ -47,10 +47,9 @@ describe("provider tool output", () => {
       options: undefined,
       maxResults: 3,
       queries: ["exa sdk", "exa pricing"],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -65,7 +64,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -121,10 +119,9 @@ describe("provider tool output", () => {
       options: undefined,
       maxResults: 3,
       queries: ["exa sdk", "exa pricing"],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -139,7 +136,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => {
             throw new Error("rate limited");
@@ -189,10 +185,9 @@ describe("provider tool output", () => {
       options: undefined,
       maxResults: 3,
       queries: ["exa sdk", "exa pricing"],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -201,7 +196,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "search",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -237,10 +231,9 @@ describe("provider tool output", () => {
         options: undefined,
         maxResults: 3,
         queries: ["exa sdk", "exa pricing"],
-        planOverrides: [
+        executionOverrides: [
           {
             capability: "search",
-            providerId: "exa",
             providerLabel: "Exa",
             execute: async () => {
               throw new Error("timeout");
@@ -248,7 +241,6 @@ describe("provider tool output", () => {
           },
           {
             capability: "search",
-            providerId: "exa",
             providerLabel: "Exa",
             execute: async () => {
               throw new Error("rate limited");
@@ -327,10 +319,9 @@ describe("provider tool output", () => {
         "What are common ACME platform use cases?",
         "How can an ACME platform help with tool migration?",
       ],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -339,7 +330,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -390,10 +380,9 @@ describe("provider tool output", () => {
         "What are common ACME platform use cases?",
         "How can an ACME platform help with tool migration?",
       ],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -402,7 +391,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => {
             throw new Error("rate limited");
@@ -450,10 +438,9 @@ describe("provider tool output", () => {
           "What are common ACME platform use cases?",
           "How can an ACME platform help with tool migration?",
         ],
-        planOverrides: [
+        executionOverrides: [
           {
             capability: "answer",
-            providerId: "gemini",
             providerLabel: "Gemini",
             execute: async () => {
               throw new Error("timeout");
@@ -461,7 +448,6 @@ describe("provider tool output", () => {
           },
           {
             capability: "answer",
-            providerId: "gemini",
             providerLabel: "Gemini",
             execute: async () => {
               throw new Error("rate limited");
@@ -491,10 +477,9 @@ describe("provider tool output", () => {
       onUpdate: undefined,
       options: undefined,
       queries: ["What are common ACME platform use cases?"],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -543,10 +528,9 @@ describe("provider tool output", () => {
         "What are common ACME platform use cases?",
         "How can an ACME platform help with tool migration?",
       ],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -555,7 +539,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "answer",
-          providerId: "gemini",
           providerLabel: "Gemini",
           execute: async () => ({
             provider: "gemini",
@@ -596,10 +579,9 @@ describe("provider tool output", () => {
       },
       options: undefined,
       urls: ["https://slow.example", "https://fast.example"],
-      planOverrides: [
+      executionOverrides: [
         {
           capability: "contents",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => {
             await new Promise((resolve) => setTimeout(resolve, 25));
@@ -616,7 +598,6 @@ describe("provider tool output", () => {
         },
         {
           capability: "contents",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => {
             await new Promise((resolve) => setTimeout(resolve, 5));
@@ -664,9 +645,8 @@ describe("provider tool output", () => {
       onUpdate: undefined,
       options: undefined,
       urls: ["https://example.com"],
-      planOverride: {
+      executionOverride: {
         capability: "contents",
-        providerId: "exa",
         providerLabel: "Exa",
         execute: async () => ({
           provider: "exa",
@@ -736,9 +716,8 @@ describe("provider tool output", () => {
       } as any,
       options: undefined,
       input: "Investigate the topic",
-      planOverride: {
+      executionOverride: {
         capability: "research",
-        providerId: "gemini",
         providerLabel: "Gemini",
         execute: async () => ({
           provider: "gemini",
@@ -820,9 +799,8 @@ describe("provider tool output", () => {
       } as any,
       options: undefined,
       input: "Investigate the topic",
-      planOverride: {
+      executionOverride: {
         capability: "research",
-        providerId: "gemini",
         providerLabel: "Gemini",
         execute: async () => {
           throw new Error("Gemini: rate limited.");
@@ -899,9 +877,8 @@ describe("provider tool output", () => {
       } as any,
       options: undefined,
       input: "Investigate the topic",
-      planOverride: {
+      executionOverride: {
         capability: "research",
-        providerId: "gemini",
         providerLabel: "Gemini",
         execute: async () => ({
           provider: "gemini",
@@ -943,9 +920,8 @@ describe("provider tool output", () => {
         },
         options: undefined,
         input: "Investigate the topic",
-        planOverride: {
+        executionOverride: {
           capability: "research",
-          providerId: "perplexity",
           providerLabel: "Perplexity",
           execute: async () => {
             await new Promise((resolve) => setTimeout(resolve, 20000));
@@ -1016,9 +992,8 @@ describe("provider tool output", () => {
           requestTimeoutMs: "1000" as never,
         },
         urls: ["https://example.com"],
-        planOverride: {
+        executionOverride: {
           capability: "contents",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",
@@ -1051,9 +1026,8 @@ describe("provider tool output", () => {
           timeoutMs: 1000,
         },
         urls: ["https://example.com"],
-        planOverride: {
+        executionOverride: {
           capability: "contents",
-          providerId: "exa",
           providerLabel: "Exa",
           execute: async () => ({
             provider: "exa",

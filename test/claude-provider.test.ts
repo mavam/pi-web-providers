@@ -45,34 +45,6 @@ describe("claudeAdapter", () => {
     });
   });
 
-  it("attaches config settings to Claude operation plans", () => {
-    const provider = claudeAdapter;
-    const plan = provider.buildPlan(
-      {
-        capability: "search",
-        query: "latest Claude docs",
-        maxResults: 5,
-      },
-      {
-        settings: {
-          requestTimeoutMs: 1500,
-          retryCount: 2,
-          retryDelayMs: 250,
-        },
-      },
-    );
-
-    expect(plan).toMatchObject({
-      traits: {
-        settings: {
-          requestTimeoutMs: 1500,
-          retryCount: 2,
-          retryDelayMs: 250,
-        },
-      },
-    });
-  });
-
   it("disables Claude session persistence for provider queries", async () => {
     queryMock.mockImplementation(() => ({
       async *[Symbol.asyncIterator]() {

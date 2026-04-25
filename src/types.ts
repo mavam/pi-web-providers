@@ -364,10 +364,6 @@ export const EXECUTION_CONTROL_KEYS = [
 
 export type ExecutionControlKey = (typeof EXECUTION_CONTROL_KEYS)[number];
 
-export interface ProviderPlanTraits {
-  settings?: ExecutionSettings;
-}
-
 export interface ProviderResultMap {
   search: SearchResponse;
   contents: ContentsResponse;
@@ -378,21 +374,12 @@ export interface ProviderResultMap {
 export type ProviderResult<TTool extends Tool = Tool> =
   ProviderResultMap[TTool];
 
-export interface ProviderPlan<TTool extends Tool = Tool> {
-  capability: TTool;
-  providerId: ProviderId;
-  providerLabel: string;
-  traits?: ProviderPlanTraits;
-  execute: (context: ProviderContext) => Promise<ProviderResult<TTool>>;
-}
-
 export type ProviderOptionsSchema = TObject;
 
 export interface ProviderAdapter<TProviderId extends ProviderId = ProviderId> {
   readonly id: TProviderId;
   readonly label: string;
   readonly docsUrl: string;
-  readonly tools: readonly Tool[];
 
   createTemplate(): ProviderConfig<TProviderId>;
   getCapabilityStatus(
@@ -400,15 +387,33 @@ export interface ProviderAdapter<TProviderId extends ProviderId = ProviderId> {
     cwd: string,
     tool?: Tool,
   ): ProviderCapabilityStatus;
-  buildPlan(
-    request: ProviderRequest,
-    config: ProviderConfig<TProviderId>,
-  ): ProviderPlan | null;
   getToolOptionsSchema?(capability: Tool): ProviderOptionsSchema | undefined;
-  getConfigForCapability?(
-    capability: Tool,
+
+  search?(
+    query: string,
+    maxResults: number,
     config: ProviderConfig<TProviderId>,
-  ): unknown;
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse>;
+  contents?(
+    urls: string[],
+    config: ProviderConfig<TProviderId>,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ContentsResponse>;
+  answer?(
+    query: string,
+    config: ProviderConfig<TProviderId>,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
+  research?(
+    input: string,
+    config: ProviderConfig<TProviderId>,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput>;
 }
 
 export type ProviderAdaptersById = {

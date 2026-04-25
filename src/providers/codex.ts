@@ -1,16 +1,14 @@
 import { Codex as CodexClient } from "@openai/codex-sdk";
 import { type Static, type TObject, Type } from "typebox";
-import { resolveConfigValue, resolveEnvMap } from "../config.js";
+import { resolveConfigValue, resolveEnvMap } from "../config-values.js";
 import type {
   Codex,
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { trimSnippet } from "./shared.js";
 
 const codexOutputSchema = Type.Object({
@@ -68,7 +66,6 @@ export const codexAdapter: CodexAdapter = {
   id: "codex",
   label: "Codex",
   docsUrl: "https://github.com/openai/codex/tree/main/sdk/typescript",
-  tools: ["search"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -106,31 +103,6 @@ export const codexAdapter: CodexAdapter = {
       };
     }
     return { state: "ready" };
-  },
-
-  buildPlan(request: ProviderRequest, config: Codex) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: codexAdapter.id,
-      providerLabel: codexAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Codex,
-            context: ProviderContext,
-          ) =>
-            codexAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

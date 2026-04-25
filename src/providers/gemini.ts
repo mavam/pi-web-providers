@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { type TObject, Type } from "typebox";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import { executeAsyncResearch } from "../execution-policy.js";
 import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
 import type {
@@ -8,14 +8,12 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
@@ -164,7 +162,6 @@ export const geminiAdapter: GeminiAdapter = {
   id: "gemini",
   label: "Gemini",
   docsUrl: "https://github.com/googleapis/js-genai",
-  tools: ["search", "answer", "research"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -192,60 +189,6 @@ export const geminiAdapter: GeminiAdapter = {
 
   getCapabilityStatus(config: Gemini | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Gemini) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: this.id,
-      providerLabel: this.label,
-      resolvePlanConfig: (providerConfig) => ({
-        settings: providerConfig.settings,
-      }),
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Gemini,
-            context: ProviderContext,
-          ) =>
-            this.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Gemini,
-            context: ProviderContext,
-          ) =>
-            this.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: Gemini,
-            context: ProviderContext,
-          ) =>
-            this.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

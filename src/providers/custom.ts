@@ -6,13 +6,11 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
-import { buildProviderPlan } from "./framework.js";
 
 type CustomAdapter = ProviderAdapter<"custom"> & {
   search(
@@ -46,7 +44,6 @@ export const customAdapter: CustomAdapter = {
   id: "custom",
   label: "Custom",
   docsUrl: "https://github.com/mavam/pi-web-providers#custom-provider",
-  tools: ["search", "contents", "answer", "research"] as const,
 
   getToolOptionsSchema(_capability: Tool): TObject | undefined {
     return undefined;
@@ -54,13 +51,6 @@ export const customAdapter: CustomAdapter = {
 
   createTemplate(): Custom {
     return {};
-  },
-
-  getConfigForCapability(capability: Tool, config: Custom): unknown {
-    return {
-      options: config.options?.[capability],
-      settings: config.settings,
-    };
   },
 
   getCapabilityStatus(
@@ -77,70 +67,6 @@ export const customAdapter: CustomAdapter = {
     return hasAnyCommand(config)
       ? { state: "ready" }
       : { state: "missing_command" };
-  },
-
-  buildPlan(request: ProviderRequest, config: Custom) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: customAdapter.id,
-      providerLabel: customAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Custom,
-            context: ProviderContext,
-          ) =>
-            customAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Custom,
-            context: ProviderContext,
-          ) =>
-            customAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Custom,
-            context: ProviderContext,
-          ) =>
-            customAdapter.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: Custom,
-            context: ProviderContext,
-          ) =>
-            customAdapter.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

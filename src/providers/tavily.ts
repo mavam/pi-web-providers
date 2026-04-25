@@ -5,19 +5,17 @@ import {
   type TavilySearchResponse,
   tavily,
 } from "@tavily/core";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tavily,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
@@ -121,7 +119,6 @@ export const tavilyAdapter: TavilyAdapter = {
   id: "tavily",
   label: "Tavily",
   docsUrl: "https://docs.tavily.com/sdk/javascript/reference",
-  tools: ["search", "contents"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -149,67 +146,8 @@ export const tavilyAdapter: TavilyAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Tavily): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "contents":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.extract,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Tavily | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Tavily) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: tavilyAdapter.id,
-      providerLabel: tavilyAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Tavily,
-            context: ProviderContext,
-          ) =>
-            tavilyAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Tavily,
-            context: ProviderContext,
-          ) =>
-            tavilyAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

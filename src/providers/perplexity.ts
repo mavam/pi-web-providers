@@ -1,18 +1,16 @@
 import PerplexityClient from "@perplexity-ai/perplexity_ai";
 import { type TObject, Type } from "typebox";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Perplexity,
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_ANSWER_MODEL = "sonar";
@@ -100,7 +98,6 @@ export const perplexityAdapter: PerplexityAdapter = {
   id: "perplexity",
   label: "Perplexity",
   docsUrl: "https://docs.perplexity.ai/docs/sdk/overview.md",
-  tools: ["search", "answer", "research"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -133,57 +130,6 @@ export const perplexityAdapter: PerplexityAdapter = {
     config: Perplexity | undefined,
   ): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Perplexity) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: perplexityAdapter.id,
-      providerLabel: perplexityAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Perplexity,
-            context: ProviderContext,
-          ) =>
-            perplexityAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Perplexity,
-            context: ProviderContext,
-          ) =>
-            perplexityAdapter.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: Perplexity,
-            context: ProviderContext,
-          ) =>
-            perplexityAdapter.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

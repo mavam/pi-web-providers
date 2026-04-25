@@ -370,7 +370,7 @@ describe("managed tool availability", () => {
     expect(partialContentsRender).toBeDefined();
   });
 
-  it("keeps the contents cache when only Exa search defaults change", () => {
+  it("clears the contents cache when provider config changes", () => {
     const previous = createConfig({
       providers: {
         exa: {
@@ -403,7 +403,7 @@ describe("managed tool availability", () => {
       },
     });
 
-    expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(false);
+    expect(__test__.didContentsCacheInputsChange(previous, next)).toBe(true);
   });
   it("clears the contents cache when saved contents extraction settings change", () => {
     const previous = createConfig({

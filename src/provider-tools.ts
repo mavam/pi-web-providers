@@ -1,26 +1,10 @@
+import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
 import {
   type ProviderId,
   TOOLS,
   type Tool,
   type WebProviders,
 } from "./types.js";
-
-export const PROVIDER_TOOLS_BY_ID: Record<ProviderId, readonly Tool[]> = {
-  claude: ["search", "answer"],
-  cloudflare: ["contents"],
-  codex: ["search"],
-  custom: ["search", "contents", "answer", "research"],
-  exa: ["search", "contents", "answer", "research"],
-  firecrawl: ["search", "contents"],
-  gemini: ["search", "answer", "research"],
-  linkup: ["search", "contents"],
-  openai: ["search", "answer", "research"],
-  parallel: ["search", "contents"],
-  perplexity: ["search", "answer", "research"],
-  serper: ["search"],
-  tavily: ["search", "contents"],
-  valyu: ["search", "contents", "answer", "research"],
-};
 
 export const TOOL_INFO: Record<Tool, { label: string; help: string }> = {
   search: {
@@ -42,12 +26,17 @@ export const TOOL_INFO: Record<Tool, { label: string; help: string }> = {
 };
 
 export function supportsTool(providerId: ProviderId, toolId: Tool): boolean {
-  return PROVIDER_TOOLS_BY_ID[providerId].includes(toolId);
+  return typeof ADAPTERS_BY_ID[providerId][toolId] === "function";
+}
+
+export function getProviderTools(providerId: ProviderId): Tool[] {
+  const provider = ADAPTERS_BY_ID[providerId];
+  return TOOLS.filter((tool) => typeof provider[tool] === "function");
 }
 
 export function getCompatibleProviders(toolId: Tool): ProviderId[] {
-  return (Object.keys(PROVIDER_TOOLS_BY_ID) as ProviderId[]).filter(
-    (providerId) => supportsTool(providerId, toolId),
+  return ADAPTERS.filter((provider) => supportsTool(provider.id, toolId)).map(
+    (provider) => provider.id,
   );
 }
 

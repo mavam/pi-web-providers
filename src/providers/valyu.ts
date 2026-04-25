@@ -1,6 +1,6 @@
 import { type TObject, Type } from "typebox";
 import { Valyu as ValyuClient } from "valyu-js";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import {
   executeAsyncResearch,
@@ -10,7 +10,6 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
@@ -18,7 +17,6 @@ import type {
   ToolOutput,
   Valyu,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -118,7 +116,6 @@ export const valyuAdapter: ValyuAdapter = {
   id: "valyu",
   label: "Valyu",
   docsUrl: "https://docs.valyu.ai/sdk/typescript-sdk",
-  tools: ["search", "contents", "answer", "research"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -145,106 +142,8 @@ export const valyuAdapter: ValyuAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Valyu): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "answer":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.answer,
-          settings: config.settings,
-        };
-      case "research":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.research,
-          settings: config.settings,
-        };
-      case "contents":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Valyu | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Valyu) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: valyuAdapter.id,
-      providerLabel: valyuAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Valyu,
-            context: ProviderContext,
-          ) =>
-            valyuAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Valyu,
-            context: ProviderContext,
-          ) =>
-            valyuAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Valyu,
-            context: ProviderContext,
-          ) =>
-            valyuAdapter.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: Valyu,
-            context: ProviderContext,
-          ) =>
-            valyuAdapter.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

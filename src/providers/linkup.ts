@@ -5,7 +5,7 @@ import {
   type SearchDepth,
   type SearchParams,
 } from "linkup-sdk";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
@@ -13,12 +13,10 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   SearchResponse,
   SearchResult,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
@@ -111,7 +109,6 @@ export const linkupAdapter: LinkupAdapter = {
   id: "linkup",
   label: "Linkup",
   docsUrl: "https://docs.linkup.so/pages/sdk/js/js",
-  tools: ["search", "contents"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -130,67 +127,8 @@ export const linkupAdapter: LinkupAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Linkup): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "contents":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.fetch,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Linkup | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Linkup) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: linkupAdapter.id,
-      providerLabel: linkupAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Linkup,
-            context: ProviderContext,
-          ) =>
-            linkupAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Linkup,
-            context: ProviderContext,
-          ) =>
-            linkupAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

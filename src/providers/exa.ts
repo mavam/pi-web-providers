@@ -1,6 +1,6 @@
 import { type TObject, Type } from "typebox";
 import { Exa as ExaClient } from "exa-js";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import {
   executeAsyncResearch,
@@ -11,14 +11,12 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   ResearchJob,
   ResearchPollResult,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -153,7 +151,6 @@ export const exaAdapter: ExaAdapter = {
   id: "exa",
   label: "Exa",
   docsUrl: "https://exa.ai/docs/sdks/typescript-sdk-specification",
-  tools: ["search", "contents", "answer", "research"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -178,94 +175,8 @@ export const exaAdapter: ExaAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Exa): unknown {
-    switch (capability) {
-      case "search":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          options: config.options?.search,
-          settings: config.settings,
-        };
-      case "contents":
-      case "answer":
-      case "research":
-        return {
-          apiKey: config.apiKey,
-          baseUrl: config.baseUrl,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(config: Exa | undefined): ProviderCapabilityStatus {
     return getApiKeyStatus(config?.apiKey);
-  },
-
-  buildPlan(request: ProviderRequest, config: Exa) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: exaAdapter.id,
-      providerLabel: exaAdapter.label,
-      handlers: {
-        search: {
-          execute: (
-            searchRequest,
-            providerConfig: Exa,
-            context: ProviderContext,
-          ) =>
-            exaAdapter.search(
-              searchRequest.query,
-              searchRequest.maxResults,
-              providerConfig,
-              context,
-              searchRequest.options,
-            ),
-        },
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Exa,
-            context: ProviderContext,
-          ) =>
-            exaAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-        answer: {
-          execute: (
-            answerRequest,
-            providerConfig: Exa,
-            context: ProviderContext,
-          ) =>
-            exaAdapter.answer(
-              answerRequest.query,
-              providerConfig,
-              context,
-              answerRequest.options,
-            ),
-        },
-        research: {
-          execute: (
-            researchRequest,
-            providerConfig: Exa,
-            context: ProviderContext,
-          ) =>
-            exaAdapter.research(
-              researchRequest.input,
-              providerConfig,
-              context,
-              researchRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async search(

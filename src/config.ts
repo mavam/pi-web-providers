@@ -1,7 +1,10 @@
-import { execSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import { resolveConfigValue, resolveEnvMap } from "./config-values.js";
+
+export { resolveConfigValue, resolveEnvMap } from "./config-values.js";
+
 import { supportsTool } from "./provider-tools.js";
 import type {
   Claude,
@@ -20,9 +23,9 @@ import type {
   Perplexity,
   ProviderId,
   SearchSettings,
-  Settings,
   Serper,
   SerperOptions,
+  Settings,
   Tavily,
   Tool,
   Tools,
@@ -33,10 +36,6 @@ import type {
 import { PROVIDER_IDS, TOOLS } from "./types.js";
 
 const CONFIG_FILE_NAME = "web-providers.json";
-const commandValueCache = new Map<
-  string,
-  { value?: string; errorMessage?: string }
->();
 
 export function getConfigPath(): string {
   return join(getAgentDir(), CONFIG_FILE_NAME);
@@ -124,57 +123,6 @@ export function parseProviderConfig(
 
 export function serializeConfig(config: WebProviders): string {
   return `${JSON.stringify(toPublicConfig(config), null, 2)}\n`;
-}
-
-export function resolveConfigValue(
-  reference: string | undefined,
-): string | undefined {
-  if (!reference) return undefined;
-  if (reference.startsWith("!")) {
-    const cached = commandValueCache.get(reference);
-    if (cached) {
-      if (cached.errorMessage) {
-        throw new Error(cached.errorMessage);
-      }
-      return cached.value;
-    }
-
-    try {
-      const output = execSync(reference.slice(1), {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "pipe"],
-      }).trim();
-      const value = output.length > 0 ? output : undefined;
-      commandValueCache.set(reference, { value });
-      return value;
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      commandValueCache.set(reference, { errorMessage });
-      throw error;
-    }
-  }
-  const envValue = process.env[reference];
-  if (envValue !== undefined) {
-    return envValue;
-  }
-  if (/^[A-Z][A-Z0-9_]*$/.test(reference)) {
-    return undefined;
-  }
-  return reference;
-}
-
-export function resolveEnvMap(
-  envMap: Record<string, string> | undefined,
-): Record<string, string> | undefined {
-  if (!envMap) return undefined;
-  const resolved = Object.fromEntries(
-    Object.entries(envMap)
-      .map(([key, value]) => [key, resolveConfigValue(value)])
-      .filter(
-        (entry): entry is [string, string] => typeof entry[1] === "string",
-      ),
-  );
-  return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
 function parseJson(text: string, source: string): unknown {

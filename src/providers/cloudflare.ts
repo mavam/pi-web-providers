@@ -1,6 +1,6 @@
 import { type TObject, Type } from "typebox";
 import CloudflareClient from "cloudflare";
-import { resolveConfigValue } from "../config.js";
+import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
@@ -8,10 +8,8 @@ import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
-  ProviderRequest,
   Tool,
 } from "../types.js";
-import { buildProviderPlan } from "./framework.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject } from "./shared.js";
 
@@ -52,7 +50,6 @@ export const cloudflareAdapter: CloudflareAdapter = {
   label: "Cloudflare",
   docsUrl:
     "https://developers.cloudflare.com/browser-rendering/rest-api/markdown-endpoint/",
-  tools: ["contents"] as const,
 
   getToolOptionsSchema(capability: Tool): TObject | undefined {
     switch (capability) {
@@ -75,20 +72,6 @@ export const cloudflareAdapter: CloudflareAdapter = {
     };
   },
 
-  getConfigForCapability(capability: Tool, config: Cloudflare): unknown {
-    switch (capability) {
-      case "contents":
-        return {
-          apiToken: config.apiToken,
-          accountId: config.accountId,
-          options: config.options,
-          settings: config.settings,
-        };
-      default:
-        return config;
-    }
-  },
-
   getCapabilityStatus(
     config: Cloudflare | undefined,
   ): ProviderCapabilityStatus {
@@ -99,30 +82,6 @@ export const cloudflareAdapter: CloudflareAdapter = {
       return { state: "invalid_config", detail: "Missing account ID" };
     }
     return { state: "ready" };
-  },
-
-  buildPlan(request: ProviderRequest, config: Cloudflare) {
-    return buildProviderPlan({
-      request,
-      config,
-      providerId: cloudflareAdapter.id,
-      providerLabel: cloudflareAdapter.label,
-      handlers: {
-        contents: {
-          execute: (
-            contentsRequest,
-            providerConfig: Cloudflare,
-            context: ProviderContext,
-          ) =>
-            cloudflareAdapter.contents(
-              contentsRequest.urls,
-              providerConfig,
-              context,
-              contentsRequest.options,
-            ),
-        },
-      },
-    });
   },
 
   async contents(
