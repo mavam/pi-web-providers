@@ -322,7 +322,7 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("○ start: 2026-03-31T12:00:00.000Z");
     expect(rendered).toContain("◴ duration: 5m");
     expect(rendered).toContain(
-      "▸ file: /tmp/project/.pi/artifacts/research/report.md",
+      "↳ file: /tmp/project/.pi/artifacts/research/report.md",
     );
     expect(rendered).toContain("ctrl+o to expand");
     expect(rendered).not.toContain("# Web research report");

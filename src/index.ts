@@ -2401,7 +2401,7 @@ function buildWebResearchResultSummaryLines(
   lines.push(
     theme.fg("muted", `○ start: ${result.startedAt}`),
     theme.fg("muted", `◴ duration: ${formatElapsed(result.elapsedMs)}`),
-    theme.fg("muted", `▸ file: ${result.outputPath}`),
+    theme.fg("muted", `↳ file: ${result.outputPath}`),
   );
   if (result.error) {
     lines.push(theme.fg("muted", `✕ error: ${result.error}`));
