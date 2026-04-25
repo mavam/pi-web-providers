@@ -103,7 +103,7 @@ describe("managed tool availability", () => {
     );
     expect(webContents?.description).toContain("use separate sibling calls");
     expect(webAnswer?.description).toBe(
-      "Answer one or more questions using web-grounded evidence (up to 10 per call).",
+      "Answer one or more simple factual questions using web-grounded evidence (up to 10 per call). Prefer web_search plus web_contents when source selection matters, and web_research for multi-step investigations.",
     );
     expect(webAnswer?.parameters?.properties).not.toHaveProperty("query");
     expect(webAnswer?.parameters?.properties).toHaveProperty("queries");

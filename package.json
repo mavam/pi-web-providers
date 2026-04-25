@@ -1,7 +1,7 @@
 {
   "name": "pi-web-providers",
   "version": "2.4.2",
-  "description": "Configurable web access extension for pi with per-tool provider routing and explicit provider option schemas for search, contents, answers, and research.",
+  "description": "Configurable web access extension for pi with per-tool provider routing and explicit provider option schemas for search, contents, quick grounded answers, and research.",
   "type": "module",
   "files": [
     "dist",

@@ -1,15 +1,16 @@
 # 🌍 pi-web-providers
 
 A _meta_ web extension for [pi](https://pi.dev) that routes search, content
-extraction, answers, and research through configurable per-tool providers, with
-explicit provider-specific option schemas for each managed tool.
+extraction, quick grounded answers, and research through configurable per-tool
+providers, with explicit provider-specific option schemas for each managed tool.
 
 ## Why?
 
 Most web extensions hard-wire a single backend. **pi-web-providers** lets you
 mix and match providers per tool instead, so `web_search`, `web_contents`,
 `web_answer`, and `web_research` can each use a different backend or be turned
-off entirely.
+off entirely. Treat `web_answer` as a fast path for simple grounded questions,
+not as a replacement for source inspection or deeper research.
 
 ## ✨ Features
 
@@ -132,10 +133,16 @@ fetches missing or stale URLs.
 
 #### `web_answer`
 
-Answer one or more questions using web-grounded evidence. When you ask more
-than one question, the response is grouped into per-question sections. Batch
-related questions when the answers belong together; split them into sibling
-calls when earlier independent answers can unblock the next step.
+Answer one or more simple factual questions using web-grounded evidence. Use it
+as a lightweight shortcut when you want a concise grounded answer without
+manually selecting and reading sources. Prefer `web_search` plus `web_contents`
+when source selection matters or you need to inspect primary sources directly;
+prefer `web_research` for open-ended, controversial, or multi-step
+investigations.
+
+When you ask more than one question, the response is grouped into per-question
+sections. Batch related questions when the answers belong together; split them
+into sibling calls when earlier independent answers can unblock the next step.
 
 <details>
 <summary><strong>Parameters and behavior</strong></summary>

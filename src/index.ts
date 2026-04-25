@@ -434,12 +434,12 @@ function registerWebAnswerTool(
   pi.registerTool({
     name: "web_answer",
     label: "Web Answer",
-    description: `Answer one or more questions using web-grounded evidence (up to ${MAX_SEARCH_QUERIES} per call).`,
+    description: `Answer one or more simple factual questions using web-grounded evidence (up to ${MAX_SEARCH_QUERIES} per call). Prefer web_search plus web_contents when source selection matters, and web_research for multi-step investigations.`,
     parameters: Type.Object({
       queries: Type.Array(Type.String({ minLength: 1 }), {
         minItems: 1,
         maxItems: MAX_SEARCH_QUERIES,
-        description: `One or more questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
+        description: `One or more simple factual questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
       }),
       ...optionalField(
         "options",
@@ -447,6 +447,8 @@ function registerWebAnswerTool(
       ),
     }),
     promptGuidelines: [
+      "Use web_answer as a quick grounded-answer shortcut for simple factual questions, not as a replacement for inspecting sources or doing deeper research.",
+      "Prefer web_search plus web_contents when source selection matters or primary sources need direct inspection; prefer web_research for open-ended, controversial, or multi-step investigations.",
       "Batch related questions when the answers belong together; use separate sibling web_answer calls when earlier independent answers can unblock the next step.",
     ],
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
