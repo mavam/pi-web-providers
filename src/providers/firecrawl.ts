@@ -7,7 +7,6 @@ import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
   Firecrawl,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -18,21 +17,6 @@ import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
-type FirecrawlAdapter = ProviderAdapter<"firecrawl"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Firecrawl,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Firecrawl,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
 
 const firecrawlSearchOptionsSchema = Type.Object(
   {
@@ -142,8 +126,8 @@ const firecrawlScrapeOptionsSchema = Type.Object(
   { description: "Firecrawl scrape options." },
 );
 
-export const firecrawlAdapter: FirecrawlAdapter = {
-  id: "firecrawl",
+const firecrawlImplementation = {
+  id: "firecrawl" as const,
   label: "Firecrawl",
   docsUrl: "https://docs.firecrawl.dev/sdks/node",
 
@@ -190,7 +174,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     });
 
     return {
-      provider: firecrawlAdapter.id,
+      provider: firecrawlImplementation.id,
       results: flattenSearchResults(response).slice(0, maxResults),
     };
   },
@@ -211,7 +195,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     };
 
     return {
-      provider: firecrawlAdapter.id,
+      provider: firecrawlImplementation.id,
       answers: await Promise.all(
         urls.map(async (url) => {
           try {
@@ -330,25 +314,25 @@ function readString(value: unknown): string | undefined {
 }
 
 export const firecrawlProvider = defineProvider({
-  id: firecrawlAdapter.id,
-  label: firecrawlAdapter.label,
-  docsUrl: firecrawlAdapter.docsUrl,
+  id: "firecrawl" as const,
+  label: firecrawlImplementation.label,
+  docsUrl: firecrawlImplementation.docsUrl,
   config: {
-    createTemplate: () => firecrawlAdapter.createTemplate(),
+    createTemplate: () => firecrawlImplementation.createTemplate(),
     fields: ["apiKey", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    firecrawlAdapter.getCapabilityStatus(
+    (firecrawlImplementation.getCapabilityStatus as any)(
       config as Firecrawl | undefined,
       cwd,
       tool,
     ),
   capabilities: {
     search: defineCapability({
-      options: firecrawlAdapter.getToolOptionsSchema?.("search"),
+      options: firecrawlImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await firecrawlAdapter.search!(
+        return await firecrawlImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -358,9 +342,9 @@ export const firecrawlProvider = defineProvider({
       },
     }),
     contents: defineCapability({
-      options: firecrawlAdapter.getToolOptionsSchema?.("contents"),
+      options: firecrawlImplementation.getToolOptionsSchema?.("contents"),
       async execute(input: any, ctx) {
-        return await firecrawlAdapter.contents!(
+        return await firecrawlImplementation.contents!(
           input.urls,
           ctx.config as never,
           ctx,

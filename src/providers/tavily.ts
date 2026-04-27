@@ -8,7 +8,6 @@ import {
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -19,21 +18,6 @@ import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
-type TavilyAdapter = ProviderAdapter<"tavily"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Tavily,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Tavily,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
 
 const tavilySearchOptionsSchema = Type.Object(
   {
@@ -115,8 +99,8 @@ const tavilyExtractOptionsSchema = Type.Object(
   { description: "Tavily extract options." },
 );
 
-export const tavilyAdapter: TavilyAdapter = {
-  id: "tavily",
+const tavilyImplementation = {
+  id: "tavily" as const,
   label: "Tavily",
   docsUrl: "https://docs.tavily.com/sdk/javascript/reference",
 
@@ -167,7 +151,7 @@ export const tavilyAdapter: TavilyAdapter = {
     });
 
     return {
-      provider: tavilyAdapter.id,
+      provider: tavilyImplementation.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title || result.url || "Untitled",
         url: result.url || "",
@@ -200,7 +184,7 @@ export const tavilyAdapter: TavilyAdapter = {
     );
 
     return {
-      provider: tavilyAdapter.id,
+      provider: tavilyImplementation.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (result) {
@@ -277,21 +261,25 @@ function buildExtractMetadata(
 }
 
 export const tavilyProvider = defineProvider({
-  id: tavilyAdapter.id,
-  label: tavilyAdapter.label,
-  docsUrl: tavilyAdapter.docsUrl,
+  id: "tavily" as const,
+  label: tavilyImplementation.label,
+  docsUrl: tavilyImplementation.docsUrl,
   config: {
-    createTemplate: () => tavilyAdapter.createTemplate(),
+    createTemplate: () => tavilyImplementation.createTemplate(),
     fields: ["apiKey", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    tavilyAdapter.getCapabilityStatus(config as Tavily | undefined, cwd, tool),
+    (tavilyImplementation.getCapabilityStatus as any)(
+      config as Tavily | undefined,
+      cwd,
+      tool,
+    ),
   capabilities: {
     search: defineCapability({
-      options: tavilyAdapter.getToolOptionsSchema?.("search"),
+      options: tavilyImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await tavilyAdapter.search!(
+        return await tavilyImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -301,9 +289,9 @@ export const tavilyProvider = defineProvider({
       },
     }),
     contents: defineCapability({
-      options: tavilyAdapter.getToolOptionsSchema?.("contents"),
+      options: tavilyImplementation.getToolOptionsSchema?.("contents"),
       async execute(input: any, ctx) {
-        return await tavilyAdapter.contents!(
+        return await tavilyImplementation.contents!(
           input.urls,
           ctx.config as never,
           ctx,

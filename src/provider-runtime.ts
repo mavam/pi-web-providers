@@ -4,8 +4,8 @@ import {
   runWithExecutionPolicy,
 } from "./execution-policy.js";
 import { formatProviderDiagnostic } from "./provider-diagnostics.js";
-import { executeProviderCapability } from "./providers/definition.js";
 import type { ProviderDefinition } from "./providers/definition.js";
+import { executeProviderCapability } from "./providers/definition.js";
 import type {
   ExecutionSettings,
   ProviderConfig,

@@ -4,7 +4,6 @@ import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
   Cloudflare,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   Tool,
@@ -13,14 +12,6 @@ import { literalUnion } from "./schema.js";
 import { asJsonObject } from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
-type CloudflareAdapter = ProviderAdapter<"cloudflare"> & {
-  contents(
-    urls: string[],
-    config: Cloudflare,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
 
 const cloudflareContentsOptionsSchema = Type.Object(
   {
@@ -45,8 +36,8 @@ const cloudflareContentsOptionsSchema = Type.Object(
   },
 );
 
-export const cloudflareAdapter: CloudflareAdapter = {
-  id: "cloudflare",
+const cloudflareImplementation = {
+  id: "cloudflare" as const,
   label: "Cloudflare",
   docsUrl:
     "https://developers.cloudflare.com/browser-rendering/rest-api/markdown-endpoint/",
@@ -125,7 +116,7 @@ export const cloudflareAdapter: CloudflareAdapter = {
     );
 
     return {
-      provider: cloudflareAdapter.id,
+      provider: cloudflareImplementation.id,
       answers,
     };
   },
@@ -149,24 +140,24 @@ function buildRequestOptions(
 }
 
 export const cloudflareProvider = defineProvider({
-  id: cloudflareAdapter.id,
-  label: cloudflareAdapter.label,
-  docsUrl: cloudflareAdapter.docsUrl,
+  id: "cloudflare" as const,
+  label: cloudflareImplementation.label,
+  docsUrl: cloudflareImplementation.docsUrl,
   config: {
-    createTemplate: () => cloudflareAdapter.createTemplate(),
+    createTemplate: () => cloudflareImplementation.createTemplate(),
     fields: ["apiToken", "accountId", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    cloudflareAdapter.getCapabilityStatus(
+    (cloudflareImplementation.getCapabilityStatus as any)(
       config as Cloudflare | undefined,
       cwd,
       tool,
     ),
   capabilities: {
     contents: defineCapability({
-      options: cloudflareAdapter.getToolOptionsSchema?.("contents"),
+      options: cloudflareImplementation.getToolOptionsSchema?.("contents"),
       async execute(input: any, ctx) {
-        return await cloudflareAdapter.contents!(
+        return await cloudflareImplementation.contents!(
           input.urls,
           ctx.config as never,
           ctx,

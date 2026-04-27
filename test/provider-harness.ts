@@ -1,5 +1,5 @@
-import { executeProviderCapability } from "../src/providers/definition.js";
 import type { ProviderDefinition } from "../src/providers/definition.js";
+import { executeProviderCapability } from "../src/providers/definition.js";
 import type {
   ProviderConfig,
   ProviderContext,

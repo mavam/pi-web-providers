@@ -1,5 +1,4 @@
 import type { ModelReasoningEffort, WebSearchMode } from "@openai/codex-sdk";
-import type { TObject } from "typebox";
 import type { ContentsResponse } from "./contents.js";
 
 export const PROVIDER_IDS = [
@@ -380,49 +379,3 @@ export interface ProviderResultMap {
 
 export type ProviderResult<TTool extends Tool = Tool> =
   ProviderResultMap[TTool];
-
-export type ProviderOptionsSchema = TObject;
-
-export interface ProviderAdapter<TProviderId extends ProviderId = ProviderId> {
-  readonly id: TProviderId;
-  readonly label: string;
-  readonly docsUrl: string;
-
-  createTemplate(): ProviderConfig<TProviderId>;
-  getCapabilityStatus(
-    config: ProviderConfig<TProviderId> | undefined,
-    cwd: string,
-    tool?: Tool,
-  ): ProviderCapabilityStatus;
-  getToolOptionsSchema?(capability: Tool): ProviderOptionsSchema | undefined;
-
-  search?(
-    query: string,
-    maxResults: number,
-    config: ProviderConfig<TProviderId>,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents?(
-    urls: string[],
-    config: ProviderConfig<TProviderId>,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-  answer?(
-    query: string,
-    config: ProviderConfig<TProviderId>,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research?(
-    input: string,
-    config: ProviderConfig<TProviderId>,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-}
-
-export type ProviderAdaptersById = {
-  [TProviderId in ProviderId]: ProviderAdapter<TProviderId>;
-};

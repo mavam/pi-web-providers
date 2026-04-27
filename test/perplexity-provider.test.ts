@@ -33,7 +33,7 @@ afterEach(() => {
   perplexityCtorMock.mockClear();
 });
 
-describe("PerplexityAdapter", () => {
+describe("Perplexity provider", () => {
   it("forwards merged search options and preserves date metadata", async () => {
     process.env.PERPLEXITY_API_KEY = "test-key";
     searchCreateMock.mockResolvedValue({

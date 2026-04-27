@@ -23,7 +23,7 @@ afterEach(() => {
   runStreamedMock.mockReset();
 });
 
-describe("CodexAdapter", () => {
+describe("Codex provider", () => {
   it("forwards only user-facing search options and keeps managed thread settings fixed", async () => {
     startThreadMock.mockReturnValue({
       runStreamed: runStreamedMock.mockResolvedValue({

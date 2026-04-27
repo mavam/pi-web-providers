@@ -69,9 +69,9 @@ import {
   TOOL_INFO,
 } from "./provider-tools.js";
 import {
+  PROVIDER_IDS,
   PROVIDER_LIST,
   PROVIDERS_BY_ID,
-  PROVIDER_IDS,
 } from "./providers/index.js";
 import type {
   Claude,

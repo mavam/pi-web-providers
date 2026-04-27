@@ -4,7 +4,6 @@ import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
   Parallel,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -19,21 +18,6 @@ import {
 } from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
-type ParallelAdapter = ProviderAdapter<"parallel"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Parallel,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Parallel,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
 
 const parallelSearchOptionsSchema = Type.Object(
   {
@@ -60,8 +44,8 @@ const parallelExtractOptionsSchema = Type.Object(
   { description: "Parallel extract options." },
 );
 
-export const parallelAdapter: ParallelAdapter = {
-  id: "parallel",
+const parallelImplementation = {
+  id: "parallel" as const,
   label: "Parallel",
   docsUrl: "https://github.com/parallel-web/parallel-sdk-typescript",
 
@@ -116,7 +100,7 @@ export const parallelAdapter: ParallelAdapter = {
     );
 
     return {
-      provider: parallelAdapter.id,
+      provider: parallelImplementation.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title ?? result.url,
         url: result.url,
@@ -151,7 +135,7 @@ export const parallelAdapter: ParallelAdapter = {
     );
 
     return {
-      provider: parallelAdapter.id,
+      provider: parallelImplementation.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (result) {
@@ -197,25 +181,25 @@ function buildRequestOptions(
 }
 
 export const parallelProvider = defineProvider({
-  id: parallelAdapter.id,
-  label: parallelAdapter.label,
-  docsUrl: parallelAdapter.docsUrl,
+  id: "parallel" as const,
+  label: parallelImplementation.label,
+  docsUrl: parallelImplementation.docsUrl,
   config: {
-    createTemplate: () => parallelAdapter.createTemplate(),
+    createTemplate: () => parallelImplementation.createTemplate(),
     fields: ["apiKey", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    parallelAdapter.getCapabilityStatus(
+    (parallelImplementation.getCapabilityStatus as any)(
       config as Parallel | undefined,
       cwd,
       tool,
     ),
   capabilities: {
     search: defineCapability({
-      options: parallelAdapter.getToolOptionsSchema?.("search"),
+      options: parallelImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await parallelAdapter.search!(
+        return await parallelImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -225,9 +209,9 @@ export const parallelProvider = defineProvider({
       },
     }),
     contents: defineCapability({
-      options: parallelAdapter.getToolOptionsSchema?.("contents"),
+      options: parallelImplementation.getToolOptionsSchema?.("contents"),
       async execute(input: any, ctx) {
-        return await parallelAdapter.contents!(
+        return await parallelImplementation.contents!(
           input.urls,
           ctx.config as never,
           ctx,

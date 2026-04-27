@@ -584,12 +584,12 @@ Add:
 - `ProviderDefinition`
 - `ProviderRegistry`
 
-Initially, wrap existing adapters so behavior stays stable.
+Existing providers should expose provider definitions directly, without a central compatibility layer.
 
 Acceptance criteria:
 
 - New providers can be authored using the new shape.
-- Existing providers continue to work through a compatibility wrapper.
+- Existing providers expose provider definitions directly.
 - Registry derives provider IDs and supported tools.
 
 ### Phase 4: Move config parsing to provider definitions
@@ -648,8 +648,7 @@ Recommended migration order:
    - [x] Cloudflare
    - [x] Custom
 
-Each migration should reduce legacy adapter surface instead of adding parallel
-complexity.
+Each migration should reduce legacy provider implementation surface instead of adding parallel complexity.
 
 ## End-state new provider checklist
 

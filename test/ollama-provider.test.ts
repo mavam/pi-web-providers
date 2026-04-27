@@ -1,14 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConfig } from "../src/config.js";
+import type { ContentsResponse } from "../src/contents.js";
 import {
   getProviderConfigManifest,
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
 import { executeProviderCapability } from "../src/providers/definition.js";
 import { ollamaProvider } from "../src/providers/ollama.js";
-import type { ContentsResponse } from "../src/contents.js";
-import type { SearchResponse } from "../src/types.js";
-import type { Ollama, ProviderContext } from "../src/types.js";
+import type { Ollama, ProviderContext, SearchResponse } from "../src/types.js";
 
 const originalFetch = globalThis.fetch;
 

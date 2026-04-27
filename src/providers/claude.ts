@@ -3,7 +3,6 @@ import { query, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { type TObject, Type } from "typebox";
 import type {
   Claude,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -72,30 +71,6 @@ interface ClaudeAnswerOutput {
   }>;
 }
 
-type ClaudeAdapter = ProviderAdapter<"claude"> & {
-  search(
-    queryText: string,
-    maxResults: number,
-    config: Claude,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  answer(
-    queryText: string,
-    config: Claude,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  runStructuredQuery<T>(args: {
-    prompt: string;
-    schema: Record<string, unknown>;
-    tools: string[];
-    config: Claude;
-    context: ProviderContext;
-    options: Record<string, unknown> | undefined;
-  }): Promise<T>;
-};
-
 const claudeOptionsSchema = Type.Object(
   {
     model: Type.Optional(
@@ -137,8 +112,8 @@ const claudeOptionsSchema = Type.Object(
   { description: "Claude options." },
 );
 
-export const claudeAdapter: ClaudeAdapter = {
-  id: "claude",
+const claudeImplementation = {
+  id: "claude" as const,
   label: "Claude",
   docsUrl: "https://github.com/anthropics/claude-agent-sdk-typescript",
 
@@ -456,21 +431,25 @@ function readString(value: unknown, key: string): string {
 }
 
 export const claudeProvider = defineProvider({
-  id: claudeAdapter.id,
-  label: claudeAdapter.label,
-  docsUrl: claudeAdapter.docsUrl,
+  id: "claude" as const,
+  label: claudeImplementation.label,
+  docsUrl: claudeImplementation.docsUrl,
   config: {
-    createTemplate: () => claudeAdapter.createTemplate(),
+    createTemplate: () => claudeImplementation.createTemplate(),
     fields: ["pathToClaudeCodeExecutable", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    claudeAdapter.getCapabilityStatus(config as Claude | undefined, cwd, tool),
+    (claudeImplementation.getCapabilityStatus as any)(
+      config as Claude | undefined,
+      cwd,
+      tool,
+    ),
   capabilities: {
     search: defineCapability({
-      options: claudeAdapter.getToolOptionsSchema?.("search"),
+      options: claudeImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await claudeAdapter.search!(
+        return await claudeImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -480,9 +459,9 @@ export const claudeProvider = defineProvider({
       },
     }),
     answer: defineCapability({
-      options: claudeAdapter.getToolOptionsSchema?.("answer"),
+      options: claudeImplementation.getToolOptionsSchema?.("answer"),
       async execute(input: any, ctx) {
-        return await claudeAdapter.answer!(
+        return await claudeImplementation.answer!(
           input.query,
           ctx.config as never,
           ctx,

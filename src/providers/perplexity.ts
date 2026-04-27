@@ -3,7 +3,6 @@ import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type {
   Perplexity,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -26,28 +25,6 @@ type PerplexityForegroundChunk = {
     url?: string | null;
   }> | null;
   citations?: Array<string | null> | null;
-};
-
-type PerplexityAdapter = ProviderAdapter<"perplexity"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  answer(
-    query: string,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
 };
 
 const perplexitySearchOptionsSchema = Type.Object(
@@ -94,8 +71,8 @@ const perplexityResearchOptionsSchema = Type.Object(
   { description: "Perplexity research options." },
 );
 
-export const perplexityAdapter: PerplexityAdapter = {
-  id: "perplexity",
+const perplexityImplementation = {
+  id: "perplexity" as const,
   label: "Perplexity",
   docsUrl: "https://docs.perplexity.ai/docs/sdk/overview.md",
 
@@ -153,7 +130,7 @@ export const perplexityAdapter: PerplexityAdapter = {
     );
 
     return {
-      provider: perplexityAdapter.id,
+      provider: perplexityImplementation.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title,
         url: result.url,
@@ -248,7 +225,7 @@ async function runSilentForegroundChatTool(
   }
 
   return {
-    provider: perplexityAdapter.id,
+    provider: perplexityImplementation.id,
     text: lines.join("\n").trimEnd(),
     itemCount: sources.length,
   };
@@ -309,7 +286,7 @@ async function runStreamingForegroundChatTool(
   }
 
   return {
-    provider: perplexityAdapter.id,
+    provider: perplexityImplementation.id,
     text: lines.join("\n").trimEnd(),
     itemCount: dedupedSources.length,
   };
@@ -446,25 +423,25 @@ function buildRequestOptions(
 }
 
 export const perplexityProvider = defineProvider({
-  id: perplexityAdapter.id,
-  label: perplexityAdapter.label,
-  docsUrl: perplexityAdapter.docsUrl,
+  id: "perplexity" as const,
+  label: perplexityImplementation.label,
+  docsUrl: perplexityImplementation.docsUrl,
   config: {
-    createTemplate: () => perplexityAdapter.createTemplate(),
+    createTemplate: () => perplexityImplementation.createTemplate(),
     fields: ["apiKey", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    perplexityAdapter.getCapabilityStatus(
+    (perplexityImplementation.getCapabilityStatus as any)(
       config as Perplexity | undefined,
       cwd,
       tool,
     ),
   capabilities: {
     search: defineCapability({
-      options: perplexityAdapter.getToolOptionsSchema?.("search"),
+      options: perplexityImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await perplexityAdapter.search!(
+        return await perplexityImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -474,9 +451,9 @@ export const perplexityProvider = defineProvider({
       },
     }),
     answer: defineCapability({
-      options: perplexityAdapter.getToolOptionsSchema?.("answer"),
+      options: perplexityImplementation.getToolOptionsSchema?.("answer"),
       async execute(input: any, ctx) {
-        return await perplexityAdapter.answer!(
+        return await perplexityImplementation.answer!(
           input.query,
           ctx.config as never,
           ctx,
@@ -485,9 +462,9 @@ export const perplexityProvider = defineProvider({
       },
     }),
     research: defineCapability({
-      options: perplexityAdapter.getToolOptionsSchema?.("research"),
+      options: perplexityImplementation.getToolOptionsSchema?.("research"),
       async execute(input: any, ctx) {
-        return await perplexityAdapter.research!(
+        return await perplexityImplementation.research!(
           input.input,
           ctx.config as never,
           ctx,

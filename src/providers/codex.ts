@@ -3,7 +3,6 @@ import { type Static, type TObject, Type } from "typebox";
 import { resolveConfigValue, resolveEnvMap } from "../config-values.js";
 import type {
   Codex,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -29,16 +28,6 @@ const codexOutputSchema = Type.Object(
 );
 
 type CodexOutput = Static<typeof codexOutputSchema>;
-
-type CodexAdapter = ProviderAdapter<"codex"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Codex,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-};
 
 const codexSearchOptionsSchema = Type.Object(
   {
@@ -69,8 +58,8 @@ const codexSearchOptionsSchema = Type.Object(
   { description: "Codex search options." },
 );
 
-export const codexAdapter: CodexAdapter = {
-  id: "codex",
+const codexImplementation = {
+  id: "codex" as const,
   label: "Codex",
   docsUrl: "https://github.com/openai/codex/tree/main/sdk/typescript",
 
@@ -97,7 +86,7 @@ export const codexAdapter: CodexAdapter = {
     config: Codex | undefined,
     _cwd: string,
   ): ProviderCapabilityStatus {
-    const effectiveConfig = config ?? codexAdapter.createTemplate();
+    const effectiveConfig = config ?? codexImplementation.createTemplate();
     try {
       new CodexClient({
         codexPathOverride: effectiveConfig.codexPath,
@@ -164,7 +153,7 @@ export const codexAdapter: CodexAdapter = {
     const parsed = parseOutput(finalResponse);
 
     return {
-      provider: codexAdapter.id,
+      provider: codexImplementation.id,
       results: parsed.sources.slice(0, maxResults).map((source) => ({
         title: source.title.trim(),
         url: source.url.trim(),
@@ -289,11 +278,11 @@ function extractJsonObject(raw: string): unknown {
 }
 
 export const codexProvider = defineProvider({
-  id: codexAdapter.id,
-  label: codexAdapter.label,
-  docsUrl: codexAdapter.docsUrl,
+  id: "codex" as const,
+  label: codexImplementation.label,
+  docsUrl: codexImplementation.docsUrl,
   config: {
-    createTemplate: () => codexAdapter.createTemplate(),
+    createTemplate: () => codexImplementation.createTemplate(),
     fields: [
       "codexPath",
       "baseUrl",
@@ -305,13 +294,17 @@ export const codexProvider = defineProvider({
     ],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    codexAdapter.getCapabilityStatus(config as Codex | undefined, cwd, tool),
+    (codexImplementation.getCapabilityStatus as any)(
+      config as Codex | undefined,
+      cwd,
+      tool,
+    ),
   capabilities: {
     search: defineCapability({
-      options: codexAdapter.getToolOptionsSchema?.("search"),
+      options: codexImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await codexAdapter.search!(
+        return await codexImplementation.search!(
           query,
           maxResults,
           ctx.config as never,

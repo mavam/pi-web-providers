@@ -70,9 +70,8 @@ Each tool can be routed to any compatible provider:
 | **Tavily**     |   ✔    |    ✔     |        |          | `TAVILY_API_KEY`                                 |
 | **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
 
-Advanced option: `custom` is a configurable adapter provider that can route
-any managed tool through a local wrapper command using a JSON stdin/stdout
-contract.
+Advanced option: `custom` can route any managed tool through a local wrapper
+command using a JSON stdin/stdout contract.
 
 See [`example-config.json`](example-config.json) for the minimal default
 configuration.
@@ -185,14 +184,13 @@ report under `.pi/artifacts/research/`.
 
 ### Providers
 
-The built-in providers below are thin adapters around official SDKs.
+The built-in providers below integrate with official SDKs or documented APIs.
 
 <details>
 <summary><strong>Claude</strong></summary>
 
 - SDK: `@anthropic-ai/claude-agent-sdk`
-- Uses Claude Code's built-in `WebSearch` and `WebFetch` tools behind a
-  structured JSON adapter
+- Uses Claude Code's built-in `WebSearch` and `WebFetch` tools with structured JSON output
 - Exposes `model`, `thinking`, `effort`, `maxThinkingTokens`, `maxTurns`, and
   `maxBudgetUsd` as provider options for search and answer calls
 - Great for search plus grounded answers if you already use Claude Code locally
@@ -259,8 +257,7 @@ scope, or account ID is usually wrong.
 - Exposes search options such as `category`, `type`, date filters,
   `includeDomains`, `excludeDomains`, `userLocation`, and `contents`
 - Persisted Exa defaults are scoped under `providers.exa.options.search`
-- `web_contents`, `web_answer`, and `web_research` currently use fixed adapter
-  behavior with no extra per-call provider options
+- `web_contents`, `web_answer`, and `web_research` currently use fixed provider behavior with no extra per-call provider options
 
 </details>
 
@@ -475,7 +472,7 @@ Minimal config:
 - Exposes answer and research options `responseLength` and `countryCode`
 - Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
   `providers.valyu.options.answer`, and `providers.valyu.options.research`
-- `web_contents` currently uses fixed adapter behavior with no extra per-call
+- `web_contents` currently uses fixed provider behavior with no extra per-call
   provider options
 
 </details>

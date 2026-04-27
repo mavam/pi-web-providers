@@ -3,7 +3,6 @@ import type { ContentsAnswer, ContentsResponse } from "../contents.js";
 import type {
   Custom,
   CustomCommandConfig,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -13,36 +12,9 @@ import type {
 import { runCliJsonCommand } from "./cli-json.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
-type CustomAdapter = ProviderAdapter<"custom"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Custom,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Custom,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-  answer(
-    query: string,
-    config: Custom,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Custom,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-};
 
-export const customAdapter: CustomAdapter = {
-  id: "custom",
+const customImplementation = {
+  id: "custom" as const,
   label: "Custom",
   docsUrl: "https://github.com/mavam/pi-web-providers#custom-provider",
 
@@ -89,7 +61,7 @@ export const customAdapter: CustomAdapter = {
       context,
     });
 
-    return parseSearchResponse(output, customAdapter.id);
+    return parseSearchResponse(output, customImplementation.id);
   },
 
   async contents(
@@ -109,7 +81,7 @@ export const customAdapter: CustomAdapter = {
       context,
     });
 
-    return parseContentsResponse(output, customAdapter.id);
+    return parseContentsResponse(output, customImplementation.id);
   },
 
   async answer(
@@ -129,7 +101,7 @@ export const customAdapter: CustomAdapter = {
       context,
     });
 
-    return parseToolOutput(output, customAdapter.id);
+    return parseToolOutput(output, customImplementation.id);
   },
 
   async research(
@@ -149,7 +121,7 @@ export const customAdapter: CustomAdapter = {
       context,
     });
 
-    return parseToolOutput(output, customAdapter.id);
+    return parseToolOutput(output, customImplementation.id);
   },
 };
 
@@ -364,21 +336,25 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
 }
 
 export const customProvider = defineProvider({
-  id: customAdapter.id,
-  label: customAdapter.label,
-  docsUrl: customAdapter.docsUrl,
+  id: "custom" as const,
+  label: customImplementation.label,
+  docsUrl: customImplementation.docsUrl,
   config: {
-    createTemplate: () => customAdapter.createTemplate(),
+    createTemplate: () => customImplementation.createTemplate(),
     fields: ["customOptions", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    customAdapter.getCapabilityStatus(config as Custom | undefined, cwd, tool),
+    (customImplementation.getCapabilityStatus as any)(
+      config as Custom | undefined,
+      cwd,
+      tool,
+    ),
   capabilities: {
     search: defineCapability({
-      options: customAdapter.getToolOptionsSchema?.("search"),
+      options: customImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await customAdapter.search!(
+        return await customImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -388,9 +364,9 @@ export const customProvider = defineProvider({
       },
     }),
     contents: defineCapability({
-      options: customAdapter.getToolOptionsSchema?.("contents"),
+      options: customImplementation.getToolOptionsSchema?.("contents"),
       async execute(input: any, ctx) {
-        return await customAdapter.contents!(
+        return await customImplementation.contents!(
           input.urls,
           ctx.config as never,
           ctx,
@@ -399,9 +375,9 @@ export const customProvider = defineProvider({
       },
     }),
     answer: defineCapability({
-      options: customAdapter.getToolOptionsSchema?.("answer"),
+      options: customImplementation.getToolOptionsSchema?.("answer"),
       async execute(input: any, ctx) {
-        return await customAdapter.answer!(
+        return await customImplementation.answer!(
           input.query,
           ctx.config as never,
           ctx,
@@ -410,9 +386,9 @@ export const customProvider = defineProvider({
       },
     }),
     research: defineCapability({
-      options: customAdapter.getToolOptionsSchema?.("research"),
+      options: customImplementation.getToolOptionsSchema?.("research"),
       async execute(input: any, ctx) {
-        return await customAdapter.research!(
+        return await customImplementation.research!(
           input.input,
           ctx.config as never,
           ctx,

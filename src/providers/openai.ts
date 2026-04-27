@@ -7,7 +7,6 @@ import type {
   OpenAI as OpenAIConfig,
   OpenAIResearchOptions,
   OpenAISearchOptions,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   ResearchJob,
@@ -135,42 +134,8 @@ interface OpenAIResponseLike {
   }>;
 }
 
-type OpenAIAdapter = ProviderAdapter<"openai"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: OpenAIConfig,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  answer(
-    query: string,
-    config: OpenAIConfig,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: OpenAIConfig,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  startResearch(
-    input: string,
-    config: OpenAIConfig,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchJob>;
-  pollResearch(
-    id: string,
-    config: OpenAIConfig,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchPollResult>;
-};
-
-export const openaiAdapter: OpenAIAdapter = {
-  id: "openai",
+const openaiImplementation = {
+  id: "openai" as const,
   label: "OpenAI",
   docsUrl: "https://platform.openai.com/docs/guides/deep-research",
 
@@ -248,13 +213,18 @@ export const openaiAdapter: OpenAIAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
     return await executeAsyncResearch({
-      providerLabel: openaiAdapter.label,
-      providerId: openaiAdapter.id,
+      providerLabel: openaiImplementation.label,
+      providerId: openaiImplementation.id,
       context,
       start: (researchContext) =>
-        openaiAdapter.startResearch(input, config, researchContext, options),
+        openaiImplementation.startResearch(
+          input,
+          config,
+          researchContext,
+          options,
+        ),
       poll: (id, researchContext) =>
-        openaiAdapter.pollResearch(id, config, researchContext, options),
+        openaiImplementation.pollResearch(id, config, researchContext, options),
     });
   },
 
@@ -501,7 +471,7 @@ function parseSearchResponse(
 
   const payload = parseSearchPayload(response.output_text);
   return {
-    provider: openaiAdapter.id,
+    provider: openaiImplementation.id,
     results: payload.sources.slice(0, maxResults).map((source) => ({
       title: source.title.trim(),
       url: source.url.trim(),
@@ -556,7 +526,7 @@ function formatResponseOutput(
   }
 
   return {
-    provider: openaiAdapter.id,
+    provider: openaiImplementation.id,
     text: lines.join("\n").trimEnd(),
     itemCount: citations.length,
     metadata: {
@@ -709,22 +679,26 @@ function readInteger(value: unknown): number | undefined {
 }
 
 export const openaiProvider = defineProvider({
-  id: openaiAdapter.id,
-  label: openaiAdapter.label,
-  docsUrl: openaiAdapter.docsUrl,
+  id: "openai" as const,
+  label: openaiImplementation.label,
+  docsUrl: openaiImplementation.docsUrl,
   config: {
-    createTemplate: () => openaiAdapter.createTemplate(),
+    createTemplate: () => openaiImplementation.createTemplate(),
     fields: ["apiKey", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
-    openaiAdapter.getCapabilityStatus(config as OpenAI | undefined, cwd, tool),
+    (openaiImplementation.getCapabilityStatus as any)(
+      config as OpenAI | undefined,
+      cwd,
+      tool,
+    ),
   capabilities: {
     search: defineCapability({
-      options: openaiAdapter.getToolOptionsSchema?.("search"),
+      options: openaiImplementation.getToolOptionsSchema?.("search"),
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
-        return await openaiAdapter.search!(
+        return await openaiImplementation.search!(
           query,
           maxResults,
           ctx.config as never,
@@ -734,9 +708,9 @@ export const openaiProvider = defineProvider({
       },
     }),
     answer: defineCapability({
-      options: openaiAdapter.getToolOptionsSchema?.("answer"),
+      options: openaiImplementation.getToolOptionsSchema?.("answer"),
       async execute(input: any, ctx) {
-        return await openaiAdapter.answer!(
+        return await openaiImplementation.answer!(
           input.query,
           ctx.config as never,
           ctx,
@@ -745,9 +719,9 @@ export const openaiProvider = defineProvider({
       },
     }),
     research: defineCapability({
-      options: openaiAdapter.getToolOptionsSchema?.("research"),
+      options: openaiImplementation.getToolOptionsSchema?.("research"),
       async execute(input: any, ctx) {
-        return await openaiAdapter.research!(
+        return await openaiImplementation.research!(
           input.input,
           ctx.config as never,
           ctx,

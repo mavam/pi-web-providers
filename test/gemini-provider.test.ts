@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { geminiAdapter } from "../src/providers/gemini.js";
+import { geminiImplementation } from "../src/providers/gemini.js";
 import type { Gemini, ProviderContext } from "../src/types.js";
 
 afterEach(() => {
@@ -7,7 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("GeminiAdapter search", () => {
+describe("Gemini provider search", () => {
   it("forces Google Search via interactions and returns search results", async () => {
     const create = vi.fn().mockResolvedValue({
       outputs: [
@@ -392,7 +392,7 @@ describe("GeminiAdapter search", () => {
   });
 });
 
-describe("GeminiAdapter answer", () => {
+describe("Gemini provider answer", () => {
   it("supports provider-specific request options for answers while keeping Google Search grounding enabled", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Grounded answer",
@@ -477,10 +477,10 @@ describe("GeminiAdapter answer", () => {
 });
 
 it("does not expose a contents handler", () => {
-  expect(geminiAdapter.contents).toBeUndefined();
+  expect("contents" in geminiImplementation).toBe(false);
 });
 
-describe("GeminiAdapter research", () => {
+describe("Gemini provider research", () => {
   it("starts Gemini deep research with supported request options", async () => {
     const create = vi.fn().mockResolvedValue({ id: "research-1" });
 
@@ -720,9 +720,9 @@ describe("GeminiAdapter research", () => {
 
 function createProvider(client: unknown) {
   return {
-    ...geminiAdapter,
+    ...geminiImplementation,
     createClient: () => client,
-  } as typeof geminiAdapter;
+  } as typeof geminiImplementation;
 }
 
 function createConfig(): Gemini {
