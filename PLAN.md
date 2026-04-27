@@ -6,7 +6,7 @@
 - [x] Phase 2: Make tool registration provider-bound.
 - [x] Phase 3: Introduce `defineProvider`.
 - [x] Phase 4: Move config parsing to provider definitions.
-- [ ] Phase 5: Move UI manifests into provider definitions.
+- [x] Phase 5: Move UI manifests into provider definitions.
 - [x] Phase 6: Migrate providers one group at a time.
 
 ## Goal
