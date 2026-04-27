@@ -18,7 +18,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type TavilyAdapter = ProviderAdapter<"tavily"> & {
   search(
     query: string,
@@ -276,6 +276,40 @@ function buildExtractMetadata(
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
-export const tavilyProvider = wrapAdapter(tavilyAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
+export const tavilyProvider = defineProvider({
+  id: tavilyAdapter.id,
+  label: tavilyAdapter.label,
+  docsUrl: tavilyAdapter.docsUrl,
+  config: {
+    createTemplate: () => tavilyAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    tavilyAdapter.getCapabilityStatus(config as Tavily | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: tavilyAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await tavilyAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: tavilyAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await tavilyAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

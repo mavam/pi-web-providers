@@ -13,7 +13,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const SEARCH_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -455,6 +455,40 @@ function readString(value: unknown, key: string): string {
   return entry;
 }
 
-export const claudeProvider = wrapAdapter(claudeAdapter, {
-  fields: ["pathToClaudeCodeExecutable", "options", "settings"],
+export const claudeProvider = defineProvider({
+  id: claudeAdapter.id,
+  label: claudeAdapter.label,
+  docsUrl: claudeAdapter.docsUrl,
+  config: {
+    createTemplate: () => claudeAdapter.createTemplate(),
+    fields: ["pathToClaudeCodeExecutable", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    claudeAdapter.getCapabilityStatus(config as Claude | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: claudeAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await claudeAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: claudeAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await claudeAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

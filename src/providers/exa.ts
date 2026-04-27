@@ -22,7 +22,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type ExaAdapter = ProviderAdapter<"exa"> & {
   search(
     query: string,
@@ -365,7 +365,63 @@ function createClient(config: Exa): ExaClient {
   return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));
 }
 
-export const exaProvider = wrapAdapter(exaAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
-  optionCapabilities: ["search"],
+export const exaProvider = defineProvider({
+  id: exaAdapter.id,
+  label: exaAdapter.label,
+  docsUrl: exaAdapter.docsUrl,
+  config: {
+    createTemplate: () => exaAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    exaAdapter.getCapabilityStatus(config as Exa | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: exaAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await exaAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: exaAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await exaAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: exaAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await exaAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: exaAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await exaAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

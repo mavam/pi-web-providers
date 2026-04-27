@@ -28,7 +28,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
-import { Type } from "typebox";
+import { type TObject, Type } from "typebox";
 import { getConfigPath, loadConfig, writeConfigFile } from "./config.js";
 import { type ContentsResponse, renderContentsAnswers } from "./contents.js";
 import { formatElapsed, formatErrorMessage } from "./execution-policy.js";
@@ -738,8 +738,10 @@ function resolveProviderOptionsSchema(
   if (!providerId) {
     return undefined;
   }
-  const adapter = ADAPTERS_BY_ID[providerId];
-  return adapter.getToolOptionsSchema?.(capability);
+  const provider = ADAPTERS_BY_ID[providerId];
+  return (
+    provider.capabilities as Partial<Record<Tool, { options?: TObject }>>
+  )[capability]?.options;
 }
 
 async function executeSearchTool({
@@ -3754,7 +3756,8 @@ function getProviderReadinessSummaryForProviderConfig(
   providerConfig: ProviderConfig | undefined,
 ): string {
   const status = ADAPTERS_BY_ID[providerId].getCapabilityStatus(
-    (providerConfig ?? ADAPTERS_BY_ID[providerId].createTemplate()) as never,
+    (providerConfig ??
+      ADAPTERS_BY_ID[providerId].config.createTemplate()) as never,
     "",
   );
   return formatProviderCapabilityStatus(status, providerId);

@@ -12,7 +12,7 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type CustomAdapter = ProviderAdapter<"custom"> & {
   search(
     query: string,
@@ -363,6 +363,62 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export const customProvider = wrapAdapter(customAdapter, {
-  fields: ["customOptions", "settings"],
+export const customProvider = defineProvider({
+  id: customAdapter.id,
+  label: customAdapter.label,
+  docsUrl: customAdapter.docsUrl,
+  config: {
+    createTemplate: () => customAdapter.createTemplate(),
+    fields: ["customOptions", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    customAdapter.getCapabilityStatus(config as Custom | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: customAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await customAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: customAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await customAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: customAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await customAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: customAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await customAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

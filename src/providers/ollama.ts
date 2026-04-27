@@ -1,16 +1,7 @@
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import type {
-  Ollama,
-  ProviderAdapter,
-  ProviderContext,
-  SearchResponse,
-} from "../types.js";
-import {
-  adapterFromProvider,
-  defineCapability,
-  defineProvider,
-} from "./definition.js";
+import type { Ollama, ProviderContext, SearchResponse } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import {
   getApiKeyStatus,
   normalizeContentText,
@@ -60,13 +51,6 @@ export const ollamaProvider = defineProvider({
     }),
   },
 });
-
-export const ollamaAdapter = adapterFromProvider(
-  ollamaProvider,
-) as ProviderAdapter<"ollama"> & {
-  search: NonNullable<ProviderAdapter<"ollama">["search"]>;
-  contents: NonNullable<ProviderAdapter<"ollama">["contents"]>;
-};
 
 async function searchOllama(
   query: string,

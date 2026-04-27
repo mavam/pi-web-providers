@@ -19,7 +19,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type LinkupSearchOptions = {
   depth?: SearchDepth;
   includeImages?: boolean;
@@ -333,6 +333,40 @@ function toDate(value: string | number | Date, name: string): Date {
   return date;
 }
 
-export const linkupProvider = wrapAdapter(linkupAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
+export const linkupProvider = defineProvider({
+  id: linkupAdapter.id,
+  label: linkupAdapter.label,
+  docsUrl: linkupAdapter.docsUrl,
+  config: {
+    createTemplate: () => linkupAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    linkupAdapter.getCapabilityStatus(config as Linkup | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: linkupAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await linkupAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: linkupAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await linkupAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

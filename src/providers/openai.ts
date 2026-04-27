@@ -18,7 +18,7 @@ import type {
 } from "../types.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
 const DEFAULT_ANSWER_MODEL = "gpt-4.1";
 const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
@@ -708,7 +708,52 @@ function readInteger(value: unknown): number | undefined {
     : undefined;
 }
 
-export const openaiProvider = wrapAdapter(openaiAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
-  optionCapabilities: ["search", "answer", "research"],
+export const openaiProvider = defineProvider({
+  id: openaiAdapter.id,
+  label: openaiAdapter.label,
+  docsUrl: openaiAdapter.docsUrl,
+  config: {
+    createTemplate: () => openaiAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search", "answer", "research"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    openaiAdapter.getCapabilityStatus(config as OpenAI | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: openaiAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await openaiAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: openaiAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await openaiAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: openaiAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await openaiAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

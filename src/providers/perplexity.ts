@@ -12,7 +12,7 @@ import type {
 } from "../types.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 
@@ -445,6 +445,55 @@ function buildRequestOptions(
   return context.signal ? { signal: context.signal } : undefined;
 }
 
-export const perplexityProvider = wrapAdapter(perplexityAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
+export const perplexityProvider = defineProvider({
+  id: perplexityAdapter.id,
+  label: perplexityAdapter.label,
+  docsUrl: perplexityAdapter.docsUrl,
+  config: {
+    createTemplate: () => perplexityAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    perplexityAdapter.getCapabilityStatus(
+      config as Perplexity | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: perplexityAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await perplexityAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: perplexityAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await perplexityAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: perplexityAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await perplexityAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

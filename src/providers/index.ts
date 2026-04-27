@@ -1,9 +1,8 @@
-import type { ProviderAdaptersById } from "../types.js";
 import { claudeProvider } from "./claude.js";
 import { cloudflareProvider } from "./cloudflare.js";
 import { codexProvider } from "./codex.js";
 import { customProvider } from "./custom.js";
-import { adapterFromProvider, defineProviders } from "./definition.js";
+import { defineProviders } from "./definition.js";
 import { exaProvider } from "./exa.js";
 import { firecrawlProvider } from "./firecrawl.js";
 import { geminiProvider } from "./gemini.js";
@@ -34,14 +33,8 @@ export const PROVIDERS = defineProviders({
   valyu: valyuProvider,
 });
 
-export const ADAPTERS_BY_ID = Object.fromEntries(
-  Object.entries(PROVIDERS).map(([id, provider]) => [
-    id,
-    provider.adapter ?? adapterFromProvider(provider),
-  ]),
-) as ProviderAdaptersById;
-
-export const ADAPTERS = Object.values(ADAPTERS_BY_ID);
+export const ADAPTERS_BY_ID = PROVIDERS;
+export const ADAPTERS = Object.values(PROVIDERS);
 export const PROVIDER_IDS = Object.keys(PROVIDERS) as Array<
   keyof typeof PROVIDERS
 >;

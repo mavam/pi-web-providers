@@ -12,7 +12,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type CloudflareAdapter = ProviderAdapter<"cloudflare"> & {
   contents(
     urls: string[],
@@ -148,6 +148,31 @@ function buildRequestOptions(
   return context.signal ? { signal: context.signal } : undefined;
 }
 
-export const cloudflareProvider = wrapAdapter(cloudflareAdapter, {
-  fields: ["apiToken", "accountId", "options", "settings"],
+export const cloudflareProvider = defineProvider({
+  id: cloudflareAdapter.id,
+  label: cloudflareAdapter.label,
+  docsUrl: cloudflareAdapter.docsUrl,
+  config: {
+    createTemplate: () => cloudflareAdapter.createTemplate(),
+    fields: ["apiToken", "accountId", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    cloudflareAdapter.getCapabilityStatus(
+      config as Cloudflare | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    contents: defineCapability({
+      options: cloudflareAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await cloudflareAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

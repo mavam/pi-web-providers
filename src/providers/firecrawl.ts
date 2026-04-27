@@ -17,7 +17,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type FirecrawlAdapter = ProviderAdapter<"firecrawl"> & {
   search(
     query: string,
@@ -329,6 +329,44 @@ function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-export const firecrawlProvider = wrapAdapter(firecrawlAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
+export const firecrawlProvider = defineProvider({
+  id: firecrawlAdapter.id,
+  label: firecrawlAdapter.label,
+  docsUrl: firecrawlAdapter.docsUrl,
+  config: {
+    createTemplate: () => firecrawlAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    firecrawlAdapter.getCapabilityStatus(
+      config as Firecrawl | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: firecrawlAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await firecrawlAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: firecrawlAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await firecrawlAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

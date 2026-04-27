@@ -17,7 +17,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
@@ -1113,6 +1113,51 @@ function readNonEmptyString(value: unknown): string | undefined {
     : undefined;
 }
 
-export const geminiProvider = wrapAdapter(geminiAdapter, {
-  fields: ["apiKey", "options", "settings"],
+export const geminiProvider = defineProvider({
+  id: geminiAdapter.id,
+  label: geminiAdapter.label,
+  docsUrl: geminiAdapter.docsUrl,
+  config: {
+    createTemplate: () => geminiAdapter.createTemplate(),
+    fields: ["apiKey", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    geminiAdapter.getCapabilityStatus(config as Gemini | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: geminiAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await geminiAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: geminiAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await geminiAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: geminiAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await geminiAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

@@ -4,11 +4,13 @@ import {
   runWithExecutionPolicy,
 } from "./execution-policy.js";
 import { formatProviderDiagnostic } from "./provider-diagnostics.js";
+import { executeProviderCapability } from "./providers/definition.js";
+import type { ProviderDefinition } from "./providers/definition.js";
 import type {
   ExecutionSettings,
-  ProviderAdapter,
   ProviderConfig,
   ProviderContext,
+  ProviderId,
   ProviderRequest,
   ProviderResult,
   Tool,
@@ -26,7 +28,11 @@ export interface ProviderExecution<TTool extends Tool = Tool> {
 }
 
 export async function executeProviderRequest<TTool extends Tool>(
-  provider: ProviderAdapter,
+  provider: ProviderDefinition<
+    ProviderId,
+    ProviderConfig,
+    Partial<Record<Tool, any>>
+  >,
   config: ProviderConfig,
   request: ProviderRequest<TTool>,
   context: ProviderContext,
@@ -37,7 +43,15 @@ export async function executeProviderRequest<TTool extends Tool>(
       providerLabel: provider.label,
       settings: (config as ConfigWithSettings).settings,
       execute: (executionContext) =>
-        executeProviderHandler(provider, config, request, executionContext),
+        executeProviderCapability(
+          provider,
+          request.capability,
+          providerInputFromRequest(request),
+          {
+            ...executionContext,
+            config,
+          },
+        ),
     },
     context,
   )) as ProviderResult<TTool>;
@@ -92,63 +106,30 @@ export async function executeProviderExecution<TTool extends Tool>(
   }
 }
 
-async function executeProviderHandler<TTool extends Tool>(
-  provider: ProviderAdapter,
-  config: ProviderConfig,
-  request: ProviderRequest<TTool>,
-  context: ProviderContext,
-): Promise<ProviderResult<TTool>> {
+function providerInputFromRequest(request: ProviderRequest): object {
   switch (request.capability) {
-    case "search": {
-      if (!provider.search) {
-        throw unsupportedProviderTool(provider, request.capability);
-      }
-      return (await provider.search(
-        request.query,
-        request.maxResults,
-        config as never,
-        context,
-        request.options,
-      )) as ProviderResult<TTool>;
-    }
-    case "contents": {
-      if (!provider.contents) {
-        throw unsupportedProviderTool(provider, request.capability);
-      }
-      return (await provider.contents(
-        request.urls,
-        config as never,
-        context,
-        request.options,
-      )) as ProviderResult<TTool>;
-    }
-    case "answer": {
-      if (!provider.answer) {
-        throw unsupportedProviderTool(provider, request.capability);
-      }
-      return (await provider.answer(
-        request.query,
-        config as never,
-        context,
-        request.options,
-      )) as ProviderResult<TTool>;
-    }
-    case "research": {
-      if (!provider.research) {
-        throw unsupportedProviderTool(provider, request.capability);
-      }
-      return (await provider.research(
-        request.input,
-        config as never,
-        context,
-        request.options,
-      )) as ProviderResult<TTool>;
-    }
+    case "search":
+      return {
+        query: request.query,
+        maxResults: request.maxResults,
+        options: request.options,
+      };
+    case "contents":
+      return {
+        urls: request.urls,
+        options: request.options,
+      };
+    case "answer":
+      return {
+        query: request.query,
+        options: request.options,
+      };
+    case "research":
+      return {
+        input: request.input,
+        options: request.options,
+      };
   }
-}
-
-function unsupportedProviderTool(provider: ProviderAdapter, tool: Tool): Error {
-  return new Error(`Provider '${provider.id}' does not support '${tool}'.`);
 }
 
 function resolveExecutionPolicy(defaults: ExecutionSettings | undefined) {

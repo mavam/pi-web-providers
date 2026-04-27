@@ -18,7 +18,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type ParallelAdapter = ProviderAdapter<"parallel"> & {
   search(
     query: string,
@@ -196,6 +196,44 @@ function buildRequestOptions(
   return context.signal ? { signal: context.signal } : undefined;
 }
 
-export const parallelProvider = wrapAdapter(parallelAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
+export const parallelProvider = defineProvider({
+  id: parallelAdapter.id,
+  label: parallelAdapter.label,
+  docsUrl: parallelAdapter.docsUrl,
+  config: {
+    createTemplate: () => parallelAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    parallelAdapter.getCapabilityStatus(
+      config as Parallel | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: parallelAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await parallelAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: parallelAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await parallelAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });

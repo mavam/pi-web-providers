@@ -10,7 +10,7 @@ import type {
 } from "../types.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_BASE_URL = "https://google.serper.dev";
 
 const serperSearchOptionsSchema = Type.Object(
@@ -275,7 +275,30 @@ function readNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-export const serperProvider = wrapAdapter(serperAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
-  optionCapabilities: ["search"],
+export const serperProvider = defineProvider({
+  id: serperAdapter.id,
+  label: serperAdapter.label,
+  docsUrl: serperAdapter.docsUrl,
+  config: {
+    createTemplate: () => serperAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    serperAdapter.getCapabilityStatus(config as Serper | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: serperAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await serperAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+  },
 });

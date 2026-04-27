@@ -11,7 +11,7 @@ import type {
 } from "../types.js";
 import { trimSnippet } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 const codexOutputSchema = Type.Object(
   {
     sources: Type.Array(
@@ -288,14 +288,37 @@ function extractJsonObject(raw: string): unknown {
   }
 }
 
-export const codexProvider = wrapAdapter(codexAdapter, {
-  fields: [
-    "codexPath",
-    "baseUrl",
-    "apiKey",
-    "env",
-    "config",
-    "options",
-    "settings",
-  ],
+export const codexProvider = defineProvider({
+  id: codexAdapter.id,
+  label: codexAdapter.label,
+  docsUrl: codexAdapter.docsUrl,
+  config: {
+    createTemplate: () => codexAdapter.createTemplate(),
+    fields: [
+      "codexPath",
+      "baseUrl",
+      "apiKey",
+      "env",
+      "config",
+      "options",
+      "settings",
+    ],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    codexAdapter.getCapabilityStatus(config as Codex | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: codexAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await codexAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+  },
 });

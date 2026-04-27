@@ -1,9 +1,8 @@
 import { createDefaultExecutionSettings } from "./execution-policy-defaults.js";
 import { getMappedProviderForTool } from "./provider-tools.js";
-import { ADAPTERS_BY_ID } from "./providers/index.js";
+import { PROVIDERS } from "./providers/index.js";
 import type {
   ExecutionSettings,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderConfig,
   ProviderId,
@@ -12,8 +11,14 @@ import type {
   WebProviders,
 } from "./types.js";
 
-export function supportsTool(provider: ProviderAdapter, tool: Tool): boolean {
-  return typeof provider[tool] === "function";
+export function supportsTool(
+  provider: (typeof PROVIDERS)[ProviderId],
+  tool: Tool,
+): boolean {
+  return (
+    (provider.capabilities as Partial<Record<Tool, unknown>>)[tool] !==
+    undefined
+  );
 }
 
 export function resolveSearchProvider(
@@ -37,7 +42,7 @@ export function getEffectiveProviderConfig<TProviderId extends ProviderId>(
   config: WebProviders,
   providerId: TProviderId,
 ): ProviderConfig<TProviderId> {
-  const defaults = ADAPTERS_BY_ID[providerId].createTemplate();
+  const defaults = PROVIDERS[providerId].config.createTemplate();
   const overrides =
     config.providers?.[providerId] ??
     ({} as Partial<ProviderConfig<TProviderId>>);
@@ -46,11 +51,11 @@ export function getEffectiveProviderConfig<TProviderId extends ProviderId>(
     overrides.settings,
   );
 
-  const resolved: ProviderConfig<TProviderId> = {
+  const resolved = {
     ...defaults,
     ...overrides,
     options: mergeNestedObjects(defaults.options, overrides.options),
-  };
+  } as ProviderConfig<TProviderId>;
 
   const effectiveSettings = mergeExecutionSettings(
     config.settings,
@@ -123,9 +128,9 @@ export function getProviderCapabilityStatus<TProviderId extends ProviderId>(
   providerId: TProviderId,
   tool?: Tool,
 ): ProviderCapabilityStatus {
-  const provider = ADAPTERS_BY_ID[providerId];
+  const provider = PROVIDERS[providerId];
   return provider.getCapabilityStatus(
-    getEffectiveProviderConfig(config, providerId),
+    getEffectiveProviderConfig(config, providerId) as never,
     cwd,
     tool,
   );
@@ -202,7 +207,7 @@ export function resolveProviderForTool(
     );
   }
 
-  const provider = ADAPTERS_BY_ID[providerId];
+  const provider = PROVIDERS[providerId];
   if (!supportsTool(provider, tool)) {
     throw new Error(`Provider '${providerId}' does not support '${tool}'.`);
   }

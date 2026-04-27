@@ -22,7 +22,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-import { wrapAdapter } from "./definition.js";
+import { defineCapability, defineProvider } from "./definition.js";
 type ValyuAdapter = ProviderAdapter<"valyu"> & {
   search(
     query: string,
@@ -383,7 +383,63 @@ function createClient(config: Valyu): ValyuClient {
   return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));
 }
 
-export const valyuProvider = wrapAdapter(valyuAdapter, {
-  fields: ["apiKey", "baseUrl", "options", "settings"],
-  optionCapabilities: ["search", "answer", "research"],
+export const valyuProvider = defineProvider({
+  id: valyuAdapter.id,
+  label: valyuAdapter.label,
+  docsUrl: valyuAdapter.docsUrl,
+  config: {
+    createTemplate: () => valyuAdapter.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search", "answer", "research"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    valyuAdapter.getCapabilityStatus(config as Valyu | undefined, cwd, tool),
+  capabilities: {
+    search: defineCapability({
+      options: valyuAdapter.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await valyuAdapter.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: valyuAdapter.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await valyuAdapter.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: valyuAdapter.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await valyuAdapter.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: valyuAdapter.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await valyuAdapter.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
 });
