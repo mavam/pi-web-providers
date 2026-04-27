@@ -1,8 +1,4 @@
-import {
-  PROVIDER_LIST,
-  PROVIDERS_BY_ID,
-  PROVIDERS,
-} from "./providers/index.js";
+import { PROVIDER_LIST, PROVIDERS } from "./providers/index.js";
 import {
   type ProviderId,
   TOOLS,
@@ -51,8 +47,4 @@ export function getMappedProviderForTool(
   tool: Tool,
 ): ProviderId | undefined {
   return config.tools?.[tool];
-}
-
-export function getProviderAdapter(providerId: ProviderId) {
-  return PROVIDERS_BY_ID[providerId];
 }
