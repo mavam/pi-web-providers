@@ -1,0 +1,10 @@
+created: 2026-04-27
+title: Ollama web provider support
+intro: >-
+  This release adds Ollama as a provider for web search and page fetching, giving
+  pi another API-backed option for search-plus-content workflows. It also makes provider
+  behavior more predictable by aligning tool options, timeout and retry settings,
+  and prefetch behavior with saved extension settings.
+source:
+  mode: sync-stable-queue
+  previous_stable: v2.4.2
