@@ -6,8 +6,8 @@ import { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 export { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 
 import { supportsTool } from "./provider-tools.js";
-import { PROVIDERS, PROVIDER_IDS } from "./providers/index.js";
 import type { ProviderConfigField } from "./providers/definition.js";
+import { PROVIDER_IDS, PROVIDERS } from "./providers/index.js";
 import type {
   Claude,
   Cloudflare,

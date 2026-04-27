@@ -1,10 +1,10 @@
-import { type TObject, Type } from "typebox";
 import {
   type FetchParams,
   LinkupClient,
   type SearchDepth,
   type SearchParams,
 } from "linkup-sdk";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {

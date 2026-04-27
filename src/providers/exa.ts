@@ -1,5 +1,5 @@
-import { type TObject, Type } from "typebox";
 import { Exa as ExaClient } from "exa-js";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import { executeAsyncResearch } from "../execution-policy.js";
