@@ -30,6 +30,7 @@ afterEach(async () => {
   delete process.env.CLOUDFLARE_ACCOUNT_ID;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.LINKUP_API_KEY;
+  delete process.env.OLLAMA_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.TAVILY_API_KEY;
@@ -615,6 +616,9 @@ describe("config parsing", () => {
     expect(ADAPTERS_BY_ID.gemini.createTemplate().settings).toBeUndefined();
     expect(ADAPTERS_BY_ID.linkup.createTemplate()).toEqual({
       apiKey: "LINKUP_API_KEY",
+    });
+    expect(ADAPTERS_BY_ID.ollama.createTemplate()).toEqual({
+      apiKey: "OLLAMA_API_KEY",
     });
     expect(ADAPTERS_BY_ID.serper.createTemplate()).toEqual({
       apiKey: "SERPER_API_KEY",

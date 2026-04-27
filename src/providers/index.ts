@@ -7,6 +7,7 @@ import { exaAdapter } from "./exa.js";
 import { firecrawlAdapter } from "./firecrawl.js";
 import { geminiAdapter } from "./gemini.js";
 import { linkupAdapter } from "./linkup.js";
+import { ollamaAdapter } from "./ollama.js";
 import { openaiAdapter } from "./openai.js";
 import { parallelAdapter } from "./parallel.js";
 import { perplexityAdapter } from "./perplexity.js";
@@ -23,6 +24,7 @@ export const ADAPTERS_BY_ID: ProviderAdaptersById = {
   firecrawl: firecrawlAdapter,
   gemini: geminiAdapter,
   linkup: linkupAdapter,
+  ollama: ollamaAdapter,
   openai: openaiAdapter,
   parallel: parallelAdapter,
   perplexity: perplexityAdapter,

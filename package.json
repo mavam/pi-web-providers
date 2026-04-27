@@ -27,6 +27,7 @@
     "firecrawl",
     "gemini",
     "linkup",
+    "ollama",
     "openai",
     "parallel",
     "perplexity",

@@ -17,6 +17,7 @@ import type {
   Firecrawl,
   Gemini,
   Linkup,
+  Ollama,
   OpenAI,
   OpenAIOptions,
   Parallel,
@@ -94,6 +95,7 @@ export function parseProviderConfig(
   | Firecrawl
   | Gemini
   | Linkup
+  | Ollama
   | OpenAI
   | Perplexity
   | Parallel
@@ -193,6 +195,7 @@ function normalizeProvider(
   | Firecrawl
   | Gemini
   | Linkup
+  | Ollama
   | OpenAI
   | Parallel
   | Perplexity
@@ -266,6 +269,12 @@ function normalizeProvider(
             field,
             ["search", "answer", "research"],
           ),
+        settings: parseOptionalExecutionSettings,
+      });
+    case "ollama":
+      return parseProviderWithShape<Ollama>(raw, source, providerId, {
+        apiKey: readOptionalString,
+        baseUrl: readOptionalString,
         settings: parseOptionalExecutionSettings,
       });
     case "firecrawl":

@@ -15,7 +15,7 @@ not as a replacement for source inspection or deeper research.
 ## ✨ Features
 
 - **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
-  Gemini, Linkup, OpenAI, Perplexity, Parallel, Serper,
+  Gemini, Linkup, Ollama, OpenAI, Perplexity, Parallel, Serper,
   [Tavily](https://tavily.com), Valyu
 - **Provider-aware tool options**: pi only exposes the provider settings that
   actually apply to the backend you selected, so tool calls are easier to
@@ -62,6 +62,7 @@ Each tool can be routed to any compatible provider:
 | **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
 | **Linkup**     |   ✔    |    ✔     |        |          | `LINKUP_API_KEY`                                 |
+| **Ollama**     |   ✔    |    ✔     |        |          | `OLLAMA_API_KEY`                                 |
 | **OpenAI**     |   ✔    |          |   ✔    |    ✔     | `OPENAI_API_KEY`                                 |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
 | **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
@@ -306,6 +307,36 @@ scope, or account ID is usually wrong.
   `excludeDomains`, `fromDate`, and `toDate`
 - Exposes contents options `renderJs`, `includeRawHtml`, and `extractImages`
 - Good fit for a simple search-plus-markdown setup without extra provider wiring
+
+</details>
+
+<details>
+<summary><strong>Ollama</strong></summary>
+
+- API: [Ollama Web Search and Fetch API](https://docs.ollama.com/capabilities/web-search)
+- Supports `web_search` via Ollama's `POST /api/web_search` endpoint
+- Supports `web_contents` via Ollama's `POST /api/web_fetch` endpoint
+- Authenticates with an Ollama API key using `OLLAMA_API_KEY` by default
+- Optional `baseUrl` overrides the default `https://ollama.com` API host for
+  proxies or compatible endpoints
+- Ollama caps search requests at 10 results, so `web_search.maxResults` is
+  clamped to `1–10` for this provider
+
+Minimal config:
+
+```json
+{
+  "tools": {
+    "search": "ollama",
+    "contents": "ollama"
+  },
+  "providers": {
+    "ollama": {
+      "apiKey": "OLLAMA_API_KEY"
+    }
+  }
+}
+```
 
 </details>
 

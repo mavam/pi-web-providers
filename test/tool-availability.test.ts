@@ -34,6 +34,7 @@ beforeEach(() => {
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.LINKUP_API_KEY;
+  delete process.env.OLLAMA_API_KEY;
   delete process.env.OPENAI_API_KEY;
   delete process.env.PARALLEL_API_KEY;
   delete process.env.SERPER_API_KEY;
@@ -46,6 +47,7 @@ afterEach(() => {
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.LINKUP_API_KEY;
+  delete process.env.OLLAMA_API_KEY;
   delete process.env.OPENAI_API_KEY;
   delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
