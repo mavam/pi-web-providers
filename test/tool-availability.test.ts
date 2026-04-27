@@ -66,7 +66,21 @@ afterEach(() => {
 });
 
 describe("managed tool availability", () => {
-  it("keeps tool descriptions concise and capability-specific", () => {
+  it("keeps tool descriptions concise and capability-specific", async () => {
+    process.env.EXA_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "exa",
+        contents: "exa",
+        answer: "exa",
+        research: "exa",
+      },
+      providers: {
+        exa: {
+          apiKey: "EXA_API_KEY",
+        },
+      },
+    });
     const tools: Array<{
       name: string;
       description: string;
@@ -74,18 +88,33 @@ describe("managed tool availability", () => {
       renderResult?: (...args: any[]) => unknown;
     }> = [];
 
+    const handlers = new Map<string, Function>();
+
     webProvidersExtension({
       registerTool(tool: { name: string; description: string }) {
         tools.push(tool);
       },
       registerCommand() {},
       registerMessageRenderer() {},
-      on() {},
+      on(event: string, handler: Function) {
+        handlers.set(event, handler);
+      },
       getActiveTools() {
         return [];
       },
       setActiveTools() {},
     } as unknown as ExtensionAPI);
+
+    await handlers.get("session_start")?.(
+      {},
+      {
+        cwd: process.cwd(),
+        hasUI: false,
+        ui: {
+          setWidget() {},
+        },
+      },
+    );
 
     const webSearch = tools.find((tool) => tool.name === "web_search");
     const webContents = tools.find((tool) => tool.name === "web_contents");
@@ -98,7 +127,7 @@ describe("managed tool availability", () => {
     expect(webSearch?.description).toContain("titles, URLs, and snippets");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("query");
     expect(webSearch?.parameters?.properties).toHaveProperty("queries");
-    expect(webSearch?.parameters?.properties).not.toHaveProperty("options");
+    expect(webSearch?.parameters?.properties).toHaveProperty("options");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("provider");
     expect(webContents?.description).toContain(
       "Read and extract the main contents of one or more web pages.",
@@ -117,6 +146,56 @@ describe("managed tool availability", () => {
       "Returns immediately with a dispatch notice",
     );
     expect(webResearch?.parameters?.properties).not.toHaveProperty("provider");
+  });
+
+  it("registers provider-bound search schemas from configuration", async () => {
+    process.env.OLLAMA_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "ollama",
+      },
+      providers: {
+        ollama: {
+          apiKey: "OLLAMA_API_KEY",
+        },
+      },
+    });
+
+    let tools = await captureRegisteredTools();
+    let webSearch = tools.find((tool) => tool.name === "web_search");
+
+    expect(webSearch?.parameters?.properties).not.toHaveProperty("options");
+    expect(
+      (webSearch?.parameters?.properties?.maxResults as { maximum?: number })
+        ?.maximum,
+    ).toBe(10);
+
+    process.env.EXA_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "exa",
+      },
+      providers: {
+        exa: {
+          apiKey: "EXA_API_KEY",
+        },
+      },
+    });
+
+    tools = await captureRegisteredTools();
+    webSearch = tools.find((tool) => tool.name === "web_search");
+
+    expect(webSearch?.parameters?.properties).toHaveProperty("options");
+    expect(
+      JSON.stringify(webSearch?.parameters?.properties?.options),
+    ).toContain("includeDomains");
+    expect(
+      JSON.stringify(webSearch?.parameters?.properties?.options),
+    ).not.toContain("gl");
+    expect(
+      (webSearch?.parameters?.properties?.maxResults as { maximum?: number })
+        ?.maximum,
+    ).toBe(20);
   });
 
   it("treats mapped Codex search as available without preflighting auth", () => {
@@ -321,8 +400,19 @@ describe("managed tool availability", () => {
     expect(setActiveTools).toHaveBeenCalledWith(["shell"]);
   });
 
-  it("shows partial foreground tool text in the pending tool box", () => {
+  it("shows partial foreground tool text in the pending tool box", async () => {
     process.env.EXA_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "exa",
+        contents: "exa",
+      },
+      providers: {
+        exa: {
+          apiKey: "EXA_API_KEY",
+        },
+      },
+    });
 
     const tools: Array<{
       name: string;
@@ -330,6 +420,8 @@ describe("managed tool availability", () => {
       parameters?: { properties?: Record<string, unknown> };
       renderResult?: (...args: any[]) => unknown;
     }> = [];
+
+    const handlers = new Map<string, Function>();
 
     webProvidersExtension({
       registerTool(tool: {
@@ -341,12 +433,25 @@ describe("managed tool availability", () => {
       },
       registerCommand() {},
       registerMessageRenderer() {},
-      on() {},
+      on(event: string, handler: Function) {
+        handlers.set(event, handler);
+      },
       getActiveTools() {
         return [];
       },
       setActiveTools() {},
     } as unknown as ExtensionAPI);
+
+    await handlers.get("session_start")?.(
+      {},
+      {
+        cwd: process.cwd(),
+        hasUI: false,
+        ui: {
+          setWidget() {},
+        },
+      },
+    );
 
     const webSearch = tools.find((tool) => tool.name === "web_search");
     const webContents = tools.find((tool) => tool.name === "web_contents");
@@ -599,6 +704,62 @@ function createConfig(overrides: Partial<WebProviders> = {}): WebProviders {
     tools: overrides.tools,
     providers: overrides.providers,
   };
+}
+
+function writeConfig(config: WebProviders): void {
+  const agentDir = join(process.env.HOME!, ".pi", "agent");
+  mkdirSync(agentDir, { recursive: true });
+  writeFileSync(join(agentDir, "web-providers.json"), JSON.stringify(config));
+}
+
+async function captureRegisteredTools(): Promise<
+  Array<{
+    name: string;
+    description: string;
+    parameters?: { properties?: Record<string, unknown> };
+    renderResult?: (...args: any[]) => unknown;
+  }>
+> {
+  const tools: Array<{
+    name: string;
+    description: string;
+    parameters?: { properties?: Record<string, unknown> };
+    renderResult?: (...args: any[]) => unknown;
+  }> = [];
+  const handlers = new Map<string, Function>();
+
+  webProvidersExtension({
+    registerTool(tool: {
+      name: string;
+      description: string;
+      parameters?: { properties?: Record<string, unknown> };
+      renderResult?: (...args: any[]) => unknown;
+    }) {
+      tools.push(tool);
+    },
+    registerCommand() {},
+    registerMessageRenderer() {},
+    on(event: string, handler: Function) {
+      handlers.set(event, handler);
+    },
+    getActiveTools() {
+      return [];
+    },
+    setActiveTools() {},
+  } as unknown as ExtensionAPI);
+
+  await handlers.get("session_start")?.(
+    {},
+    {
+      cwd: process.cwd(),
+      hasUI: false,
+      ui: {
+        setWidget() {},
+      },
+    },
+  );
+
+  return tools;
 }
 
 function createTheme(): Theme {

@@ -199,10 +199,6 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     );
   };
 
-  registerManagedTools(pi, {
-    activeWebResearchRequests,
-    updateWebResearchWidget,
-  });
   if ("registerMessageRenderer" in pi) {
     pi.registerMessageRenderer(
       WEB_RESEARCH_RESULT_MESSAGE_TYPE,
@@ -254,11 +250,6 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     stopWebResearchWidgetTimer();
     latestWidgetContext?.ui.setWidget(WEB_RESEARCH_WIDGET_KEY, undefined);
   });
-
-  registerManagedTools(pi, {
-    activeWebResearchRequests,
-    updateWebResearchWidget,
-  });
 }
 
 function registerManagedTools(
@@ -271,19 +262,13 @@ function registerManagedTools(
   },
   providerIdsByCapability: Partial<Record<Tool, ProviderId[]>> = {},
 ): void {
-  registerWebSearchTool(pi, providerIdsByCapability.search ?? PROVIDER_IDS);
-  registerWebContentsTool(
-    pi,
-    providerIdsByCapability.contents ?? getProviderIdsForCapability("contents"),
-  );
-  registerWebAnswerTool(
-    pi,
-    providerIdsByCapability.answer ?? getProviderIdsForCapability("answer"),
-  );
+  registerWebSearchTool(pi, providerIdsByCapability.search ?? []);
+  registerWebContentsTool(pi, providerIdsByCapability.contents ?? []);
+  registerWebAnswerTool(pi, providerIdsByCapability.answer ?? []);
   registerWebResearchTool(
     pi,
     webResearchLifecycle,
-    providerIdsByCapability.research ?? getProviderIdsForCapability("research"),
+    providerIdsByCapability.research ?? [],
   );
 }
 
@@ -291,8 +276,10 @@ function registerWebSearchTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  if (providerIds.length !== 1) return;
+
+  const selectedProviderId = providerIds[0];
+  const maxAllowedResults = getSearchMaxResultsLimit(selectedProviderId);
 
   pi.registerTool({
     name: "web_search",
@@ -312,7 +299,7 @@ function registerWebSearchTool(
       maxResults: Type.Optional(
         Type.Integer({
           minimum: 1,
-          maximum: MAX_ALLOWED_RESULTS,
+          maximum: maxAllowedResults,
           description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
         }),
       ),
@@ -363,10 +350,9 @@ function registerWebContentsTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_contents",
@@ -424,10 +410,9 @@ function registerWebAnswerTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_answer",
@@ -496,10 +481,9 @@ function registerWebResearchTool(
   },
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_research",
@@ -723,6 +707,15 @@ function getProviderIdsForCapability(capability: Tool): ProviderId[] {
   );
 }
 
+const SEARCH_MAX_RESULTS_BY_PROVIDER: Partial<Record<ProviderId, number>> = {
+  ollama: 10,
+  serper: 20,
+};
+
+function getSearchMaxResultsLimit(providerId: ProviderId): number {
+  return SEARCH_MAX_RESULTS_BY_PROVIDER[providerId] ?? MAX_ALLOWED_RESULTS;
+}
+
 function optionalField(
   name: string,
   schema: ReturnType<typeof Type.Optional> | undefined,
@@ -828,7 +821,10 @@ async function executeSearchToolInternal({
     cwd: ctx.cwd,
     signal: signal ?? undefined,
   };
-  const clampedMaxResults = clampResults(maxResults);
+  const clampedMaxResults = clampResults(
+    maxResults,
+    getSearchMaxResultsLimit(provider.id),
+  );
 
   let outcomes: SearchQueryOutcome[];
   try {
@@ -925,7 +921,10 @@ async function executeRawProviderRequest({
       provider,
       providerConfig,
       query: query ?? "",
-      maxResults: clampResults(maxResults),
+      maxResults: clampResults(
+        maxResults,
+        getSearchMaxResultsLimit(provider.id),
+      ),
       options,
       providerContext: {
         cwd: ctx.cwd,
@@ -3779,9 +3778,9 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function clampResults(value?: number): number {
-  if (value === undefined) return DEFAULT_MAX_RESULTS;
-  return Math.min(Math.max(Math.trunc(value), 1), MAX_ALLOWED_RESULTS);
+function clampResults(value?: number, maximum = MAX_ALLOWED_RESULTS): number {
+  if (value === undefined) return Math.min(DEFAULT_MAX_RESULTS, maximum);
+  return Math.min(Math.max(Math.trunc(value), 1), maximum);
 }
 
 function resolveSearchQueries(queries: string[]): string[] {
