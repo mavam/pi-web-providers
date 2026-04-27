@@ -2,10 +2,7 @@ import { type TObject, Type } from "typebox";
 import { Exa as ExaClient } from "exa-js";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import {
-  executeAsyncResearch,
-  stripLocalExecutionOptions,
-} from "../execution-policy.js";
+import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   Exa,
   ProviderAdapter,
@@ -188,8 +185,7 @@ export const exaAdapter: ExaAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(searchOptions ?? {}),
       numResults: maxResults,
     };

@@ -29,59 +29,6 @@ class RequestTimeoutError extends Error {
   override name = "RequestTimeoutError";
 }
 
-export interface LocalExecutionOptions {
-  requestTimeoutMs?: number;
-  retryCount?: number;
-  retryDelayMs?: number;
-}
-
-export function stripLocalExecutionOptions(
-  options: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!options) {
-    return undefined;
-  }
-
-  const {
-    requestTimeoutMs: _requestTimeoutMs,
-    retryCount: _retryCount,
-    retryDelayMs: _retryDelayMs,
-    prefetch: _prefetch,
-    ...rest
-  } = options;
-
-  return Object.keys(rest).length > 0
-    ? (rest as Record<string, unknown>)
-    : undefined;
-}
-
-export function parseLocalExecutionOptions(
-  options: Record<string, unknown> | undefined,
-): LocalExecutionOptions {
-  return {
-    requestTimeoutMs: parseOptionalPositiveIntegerOption(
-      options,
-      "requestTimeoutMs",
-    ),
-    retryCount: parseOptionalNonNegativeIntegerOption(options, "retryCount"),
-    retryDelayMs: parseOptionalPositiveIntegerOption(options, "retryDelayMs"),
-  };
-}
-
-export function resolveRequestExecutionPolicy(
-  options: Record<string, unknown> | undefined,
-  defaults: ExecutionSettings | undefined,
-): RequestExecutionPolicy {
-  const localOptions = parseLocalExecutionOptions(options);
-
-  return {
-    requestTimeoutMs:
-      localOptions.requestTimeoutMs ?? defaults?.requestTimeoutMs,
-    retryCount: localOptions.retryCount ?? defaults?.retryCount ?? 0,
-    retryDelayMs: localOptions.retryDelayMs ?? defaults?.retryDelayMs ?? 2000,
-  };
-}
-
 export async function runWithExecutionPolicy<T>(
   label: string,
   operation: (context: ProviderContext) => Promise<T>,
@@ -501,36 +448,4 @@ function createDeadlineSignal(
 
 function normalizeError(error: unknown): Error {
   return error instanceof Error ? error : new Error(formatErrorMessage(error));
-}
-
-function parseOptionalPositiveIntegerOption(
-  options: Record<string, unknown> | undefined,
-  key: keyof Pick<LocalExecutionOptions, "requestTimeoutMs" | "retryDelayMs">,
-): number | undefined {
-  const value = options?.[key];
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
-    throw new Error(`options.${key} must be a positive integer.`);
-  }
-
-  return value;
-}
-
-function parseOptionalNonNegativeIntegerOption(
-  options: Record<string, unknown> | undefined,
-  key: "retryCount",
-): number | undefined {
-  const value = options?.[key];
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error(`options.${key} must be a non-negative integer.`);
-  }
-
-  return value;
 }

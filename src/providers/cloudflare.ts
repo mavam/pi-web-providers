@@ -2,7 +2,6 @@ import { type TObject, Type } from "typebox";
 import CloudflareClient from "cloudflare";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Cloudflare,
   ProviderAdapter,
@@ -96,7 +95,7 @@ export const cloudflareAdapter: CloudflareAdapter = {
       throw new Error("is missing an account ID");
     }
 
-    const defaults = stripLocalExecutionOptions(asJsonObject(config.options));
+    const defaults = asJsonObject(config.options);
 
     const answers = await Promise.all(
       urls.map(async (url) => {

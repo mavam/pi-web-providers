@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe("firecrawlAdapter", () => {
-  it("merges search options, strips local execution settings, and maps results", async () => {
+  it("merges search options and maps results", async () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
 
     firecrawlSearchMock.mockResolvedValue({
@@ -73,7 +73,6 @@ describe("firecrawlAdapter", () => {
           search: {
             sources: ["web", "news"],
             timeout: 15,
-            requestTimeoutMs: 999,
           },
         },
       },
@@ -175,7 +174,6 @@ describe("firecrawlAdapter", () => {
           scrape: {
             formats: ["markdown"],
             waitFor: 500,
-            requestTimeoutMs: 999,
           },
         },
       },

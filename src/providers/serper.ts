@@ -8,7 +8,6 @@ import type {
   Serper,
   Tool,
 } from "../types.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://google.serper.dev";
@@ -91,9 +90,8 @@ export const serperAdapter: ProviderAdapter<"serper"> & {
       throw new Error("is missing an API key");
     }
 
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
-    const runtimeOptions = stripLocalExecutionOptions(asJsonObject(options));
+    const defaults = asJsonObject(config.options?.search) ?? {};
+    const runtimeOptions = asJsonObject(options);
     const {
       q: _ignoredQuery,
       num: _ignoredNum,

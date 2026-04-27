@@ -7,7 +7,6 @@ import {
 } from "linkup-sdk";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Linkup,
   ProviderAdapter,
@@ -139,12 +138,11 @@ export const linkupAdapter: LinkupAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
     const response = await client.search(
       buildSearchParams(query, maxResults, {
         ...defaults,
-        ...(stripLocalExecutionOptions(options) ?? {}),
+        ...(options ?? {}),
       }),
     );
 
@@ -164,8 +162,7 @@ export const linkupAdapter: LinkupAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.fetch)) ?? {};
+    const defaults = asJsonObject(config.options?.fetch) ?? {};
 
     return {
       provider: linkupAdapter.id,
@@ -175,7 +172,7 @@ export const linkupAdapter: LinkupAdapter = {
             const response = await client.fetch(
               buildFetchParams(url, {
                 ...defaults,
-                ...(stripLocalExecutionOptions(options) ?? {}),
+                ...(options ?? {}),
               }),
             );
 

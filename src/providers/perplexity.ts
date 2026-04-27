@@ -1,7 +1,6 @@
 import PerplexityClient from "@perplexity-ai/perplexity_ai";
 import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Perplexity,
   ProviderAdapter,
@@ -141,8 +140,7 @@ export const perplexityAdapter: PerplexityAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const request = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(options ?? {}),
       query,
       max_results: maxResults,
@@ -216,11 +214,9 @@ async function runSilentForegroundChatTool(
 ): Promise<ToolOutput> {
   const client = createClient(config);
   const defaults =
-    stripLocalExecutionOptions(
-      isResearch
-        ? asJsonObject(config.options?.research)
-        : asJsonObject(config.options?.answer),
-    ) ?? {};
+    (isResearch
+      ? asJsonObject(config.options?.research)
+      : asJsonObject(config.options?.answer)) ?? {};
   const request = {
     ...defaults,
     ...(options ?? {}),
@@ -266,8 +262,7 @@ async function runStreamingForegroundChatTool(
   options?: Record<string, unknown>,
 ): Promise<ToolOutput> {
   const client = createClient(config);
-  const defaults =
-    stripLocalExecutionOptions(asJsonObject(config.options?.research)) ?? {};
+  const defaults = asJsonObject(config.options?.research) ?? {};
   const request = {
     ...defaults,
     ...(options ?? {}),

@@ -2,10 +2,7 @@ import { type TObject, Type } from "typebox";
 import { Valyu as ValyuClient } from "valyu-js";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import {
-  executeAsyncResearch,
-  stripLocalExecutionOptions,
-} from "../execution-policy.js";
+import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
@@ -155,8 +152,7 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
@@ -242,8 +238,7 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<ToolOutput> {
     const client = createClient(config);
     const response = await client.answer(query, {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.answer)) ??
-        {}),
+      ...(asJsonObject(config.options?.answer) ?? {}),
       ...(options ?? {}),
       streaming: false,
     } as never);
@@ -306,8 +301,7 @@ export const valyuAdapter: ValyuAdapter = {
     const client = createClient(config);
     const task = await client.deepresearch.create({
       input,
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.research)) ??
-        {}),
+      ...(asJsonObject(config.options?.research) ?? {}),
       ...(options ?? {}),
     } as never);
 

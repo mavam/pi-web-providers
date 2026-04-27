@@ -7,7 +7,6 @@ import {
 } from "@tavily/core";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   ProviderAdapter,
   ProviderCapabilityStatus,
@@ -158,8 +157,7 @@ export const tavilyAdapter: TavilyAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
 
     const response = await client.search(query, {
       ...defaults,
@@ -186,8 +184,7 @@ export const tavilyAdapter: TavilyAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.extract)) ?? {};
+    const defaults = asJsonObject(config.options?.extract) ?? {};
 
     const response = await client.extract(urls, {
       ...defaults,

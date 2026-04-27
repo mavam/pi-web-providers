@@ -77,7 +77,6 @@ describe("serperAdapter", () => {
       {
         hl: "en",
         location: "Berlin, Berlin, Germany",
-        requestTimeoutMs: 1000,
       },
     );
 

@@ -60,7 +60,6 @@ describe("tavilyAdapter", () => {
         options: {
           search: {
             topic: "news",
-            requestTimeoutMs: 999,
           },
         },
       },
@@ -125,7 +124,6 @@ describe("tavilyAdapter", () => {
         options: {
           extract: {
             format: "markdown",
-            requestTimeoutMs: 999,
           },
         },
       },

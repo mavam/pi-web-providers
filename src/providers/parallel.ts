@@ -2,7 +2,6 @@ import { type TObject, Type } from "typebox";
 import ParallelClient from "parallel-web";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Parallel,
   ProviderAdapter,
@@ -103,8 +102,7 @@ export const parallelAdapter: ParallelAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
 
     const response = await client.beta.search(
       {
@@ -133,8 +131,7 @@ export const parallelAdapter: ParallelAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.extract)) ?? {};
+    const defaults = asJsonObject(config.options?.extract) ?? {};
 
     const response = await client.beta.extract(
       {
