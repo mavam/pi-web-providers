@@ -6,32 +6,20 @@ import { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 export { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 
 import { supportsTool } from "./provider-tools.js";
+import { PROVIDERS } from "./providers/index.js";
+import type { ProviderConfigField } from "./providers/definition.js";
 import type {
   Claude,
   Cloudflare,
   Codex,
   Custom,
   CustomCommandConfig,
-  Exa,
-  ExaOptions,
-  Firecrawl,
-  Gemini,
-  Linkup,
-  Ollama,
-  OpenAI,
-  OpenAIOptions,
-  Parallel,
-  Perplexity,
+  ProviderConfig,
   ProviderId,
   SearchSettings,
-  Serper,
-  SerperOptions,
   Settings,
-  Tavily,
   Tool,
   Tools,
-  Valyu,
-  ValyuOptions,
   WebProviders,
 } from "./types.js";
 import { PROVIDER_IDS, TOOLS } from "./types.js";
@@ -86,22 +74,7 @@ export function parseProviderConfig(
   providerId: ProviderId,
   text: string,
   source = CONFIG_FILE_NAME,
-):
-  | Claude
-  | Codex
-  | Cloudflare
-  | Custom
-  | Exa
-  | Firecrawl
-  | Gemini
-  | Linkup
-  | Ollama
-  | OpenAI
-  | Perplexity
-  | Parallel
-  | Serper
-  | Tavily
-  | Valyu {
+): ProviderConfig {
   const raw = parseJson(text, source);
   if (!isPlainObject(raw)) {
     throw new Error(`Provider config in ${source} must be a JSON object.`);
@@ -186,137 +159,65 @@ function normalizeProvider(
   providerId: ProviderId,
   raw: unknown,
   source: string,
-):
-  | Claude
-  | Cloudflare
-  | Codex
-  | Custom
-  | Exa
-  | Firecrawl
-  | Gemini
-  | Linkup
-  | Ollama
-  | OpenAI
-  | Parallel
-  | Perplexity
-  | Serper
-  | Tavily
-  | Valyu {
-  switch (providerId) {
-    case "claude":
-      return parseProviderWithShape<Claude>(raw, source, providerId, {
-        pathToClaudeCodeExecutable: readOptionalString,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "cloudflare":
-      return parseProviderWithShape<Cloudflare>(raw, source, providerId, {
-        apiToken: readOptionalString,
-        accountId: readOptionalString,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "codex":
-      return parseProviderWithShape<Codex>(raw, source, providerId, {
-        codexPath: readOptionalString,
-        baseUrl: readOptionalString,
-        apiKey: readOptionalString,
-        env: readOptionalStringMap,
-        config: readOptionalObject,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "exa":
-      return parseProviderWithShape<Exa>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: (value, innerSource, field) =>
-          parseOptionalCapabilityOptions<ExaOptions>(
-            value,
-            innerSource,
-            field,
-            ["search"],
-          ),
-        settings: parseOptionalExecutionSettings,
-      });
-    case "valyu":
-      return parseProviderWithShape<Valyu>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: (value, innerSource, field) =>
-          parseOptionalCapabilityOptions<ValyuOptions>(
-            value,
-            innerSource,
-            field,
-            ["search", "answer", "research"],
-          ),
-        settings: parseOptionalExecutionSettings,
-      });
-    case "gemini":
-      return parseProviderWithShape<Gemini>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "openai":
-      return parseProviderWithShape<OpenAI>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: (value, innerSource, field) =>
-          parseOptionalCapabilityOptions<OpenAIOptions>(
-            value,
-            innerSource,
-            field,
-            ["search", "answer", "research"],
-          ),
-        settings: parseOptionalExecutionSettings,
-      });
-    case "ollama":
-      return parseProviderWithShape<Ollama>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "firecrawl":
-    case "linkup":
-    case "parallel":
-    case "perplexity":
-      return parseProviderWithShape<Firecrawl | Linkup | Parallel | Perplexity>(
-        raw,
-        source,
-        providerId,
-        {
-          apiKey: readOptionalString,
-          baseUrl: readOptionalString,
-          options: readOptionalObject,
-          settings: parseOptionalExecutionSettings,
-        },
-      );
-    case "serper":
-      return parseProviderWithShape<Serper>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: (value, innerSource, field) =>
-          parseOptionalCapabilityOptions<SerperOptions>(
-            value,
-            innerSource,
-            field,
-            ["search"],
-          ),
-        settings: parseOptionalExecutionSettings,
-      });
-    case "tavily":
-      return parseProviderWithShape<Tavily>(raw, source, providerId, {
-        apiKey: readOptionalString,
-        baseUrl: readOptionalString,
-        options: readOptionalObject,
-        settings: parseOptionalExecutionSettings,
-      });
-    case "custom":
-      return parseProviderWithShape<Custom>(raw, source, providerId, {
-        options: parseOptionalCustomProviderOptions,
-        settings: parseOptionalExecutionSettings,
-      });
+): ProviderConfig {
+  const definition = PROVIDERS[providerId];
+  return parseProviderWithShape<ProviderConfig>(
+    raw,
+    source,
+    providerId,
+    buildProviderConfigShape(
+      definition.config.fields,
+      definition.config.optionCapabilities,
+    ),
+  );
+}
+
+function buildProviderConfigShape(
+  fields: readonly ProviderConfigField[],
+  optionCapabilities: readonly Tool[] | undefined,
+): Record<string, (value: unknown, source: string, field: string) => unknown> {
+  return Object.fromEntries(
+    fields.map((field) => [
+      toProviderConfigKey(field),
+      getProviderConfigFieldParser(field, optionCapabilities),
+    ]),
+  );
+}
+
+function toProviderConfigKey(field: ProviderConfigField): string {
+  return field === "customOptions" ? "options" : field;
+}
+
+function getProviderConfigFieldParser(
+  field: ProviderConfigField,
+  optionCapabilities: readonly Tool[] | undefined,
+): (value: unknown, source: string, field: string) => unknown {
+  switch (field) {
+    case "accountId":
+    case "apiKey":
+    case "apiToken":
+    case "baseUrl":
+    case "codexPath":
+    case "pathToClaudeCodeExecutable":
+      return readOptionalString;
+    case "config":
+      return readOptionalObject;
+    case "customOptions":
+      return parseOptionalCustomProviderOptions;
+    case "env":
+      return readOptionalStringMap;
+    case "options":
+      return optionCapabilities
+        ? (value, source, field) =>
+            parseOptionalCapabilityOptions(
+              value,
+              source,
+              field,
+              optionCapabilities,
+            )
+        : readOptionalObject;
+    case "settings":
+      return parseOptionalExecutionSettings;
   }
 }
 
@@ -664,21 +565,7 @@ function toPublicConfig(config: WebProviders): Record<string, unknown> {
 }
 
 function toPublicProviderConfig(
-  provider:
-    | Claude
-    | Cloudflare
-    | Codex
-    | Custom
-    | Exa
-    | Firecrawl
-    | Gemini
-    | Linkup
-    | OpenAI
-    | Parallel
-    | Perplexity
-    | Serper
-    | Tavily
-    | Valyu,
+  provider: ProviderConfig,
 ): Record<string, unknown> {
   return {
     ...("pathToClaudeCodeExecutable" in provider &&

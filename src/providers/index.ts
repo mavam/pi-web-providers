@@ -17,21 +17,63 @@ import { tavilyAdapter } from "./tavily.js";
 import { valyuAdapter } from "./valyu.js";
 
 export const PROVIDERS = defineProviders({
-  claude: wrapAdapter(claudeAdapter),
-  codex: wrapAdapter(codexAdapter),
-  cloudflare: wrapAdapter(cloudflareAdapter),
-  custom: wrapAdapter(customAdapter),
-  exa: wrapAdapter(exaAdapter),
-  firecrawl: wrapAdapter(firecrawlAdapter),
-  gemini: wrapAdapter(geminiAdapter),
-  linkup: wrapAdapter(linkupAdapter),
-  ollama: wrapAdapter(ollamaAdapter),
-  openai: wrapAdapter(openaiAdapter),
-  parallel: wrapAdapter(parallelAdapter),
-  perplexity: wrapAdapter(perplexityAdapter),
-  serper: wrapAdapter(serperAdapter),
-  tavily: wrapAdapter(tavilyAdapter),
-  valyu: wrapAdapter(valyuAdapter),
+  claude: wrapAdapter(claudeAdapter, {
+    fields: ["pathToClaudeCodeExecutable", "options", "settings"],
+  }),
+  codex: wrapAdapter(codexAdapter, {
+    fields: [
+      "codexPath",
+      "baseUrl",
+      "apiKey",
+      "env",
+      "config",
+      "options",
+      "settings",
+    ],
+  }),
+  cloudflare: wrapAdapter(cloudflareAdapter, {
+    fields: ["apiToken", "accountId", "options", "settings"],
+  }),
+  custom: wrapAdapter(customAdapter, {
+    fields: ["customOptions", "settings"],
+  }),
+  exa: wrapAdapter(exaAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  }),
+  firecrawl: wrapAdapter(firecrawlAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  }),
+  gemini: wrapAdapter(geminiAdapter, {
+    fields: ["apiKey", "options", "settings"],
+  }),
+  linkup: wrapAdapter(linkupAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  }),
+  ollama: wrapAdapter(ollamaAdapter, {
+    fields: ["apiKey", "baseUrl", "settings"],
+  }),
+  openai: wrapAdapter(openaiAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search", "answer", "research"],
+  }),
+  parallel: wrapAdapter(parallelAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  }),
+  perplexity: wrapAdapter(perplexityAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  }),
+  serper: wrapAdapter(serperAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  }),
+  tavily: wrapAdapter(tavilyAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  }),
+  valyu: wrapAdapter(valyuAdapter, {
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search", "answer", "research"],
+  }),
 });
 
 export const ADAPTERS_BY_ID = Object.fromEntries(

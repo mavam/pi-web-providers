@@ -49,8 +49,23 @@ export interface ProviderExecutionContext extends ProviderContext {
   config: ProviderConfig;
 }
 
+export type ProviderConfigField =
+  | "accountId"
+  | "apiKey"
+  | "apiToken"
+  | "baseUrl"
+  | "codexPath"
+  | "config"
+  | "customOptions"
+  | "env"
+  | "options"
+  | "pathToClaudeCodeExecutable"
+  | "settings";
+
 export interface ProviderConfigDefinition<TConfig> {
   createTemplate: () => TConfig;
+  fields: readonly ProviderConfigField[];
+  optionCapabilities?: readonly Tool[];
 }
 
 export interface ProviderDefinition<
@@ -105,6 +120,10 @@ export function defineProviders<const TProviders extends ProviderRegistry>(
 
 export function wrapAdapter<TProviderId extends ProviderId>(
   adapter: ProviderAdapter<TProviderId>,
+  config: Pick<
+    ProviderConfigDefinition<ProviderConfig<TProviderId>>,
+    "fields" | "optionCapabilities"
+  >,
 ): ProviderDefinition<
   TProviderId,
   ProviderConfig<TProviderId>,
@@ -116,6 +135,8 @@ export function wrapAdapter<TProviderId extends ProviderId>(
     docsUrl: adapter.docsUrl,
     config: {
       createTemplate: () => adapter.createTemplate(),
+      fields: config.fields,
+      optionCapabilities: config.optionCapabilities,
     },
     capabilities: buildAdapterCapabilities(adapter),
     adapter,

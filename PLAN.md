@@ -5,7 +5,7 @@
 - [x] Phase 1: Remove model-facing runtime options.
 - [x] Phase 2: Make tool registration provider-bound.
 - [x] Phase 3: Introduce `defineProvider`.
-- [ ] Phase 4: Move config parsing to provider definitions.
+- [x] Phase 4: Move config parsing to provider definitions.
 - [ ] Phase 5: Move UI manifests into provider definitions.
 - [ ] Phase 6: Migrate providers one group at a time.
 
