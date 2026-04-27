@@ -12,6 +12,7 @@ import type {
 } from "../types.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 
@@ -443,3 +444,7 @@ function buildRequestOptions(
 ): { signal: AbortSignal } | undefined {
   return context.signal ? { signal: context.signal } : undefined;
 }
+
+export const perplexityProvider = wrapAdapter(perplexityAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+});

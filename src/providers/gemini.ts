@@ -17,6 +17,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
@@ -1111,3 +1112,7 @@ function readNonEmptyString(value: unknown): string | undefined {
     ? value
     : undefined;
 }
+
+export const geminiProvider = wrapAdapter(geminiAdapter, {
+  fields: ["apiKey", "options", "settings"],
+});

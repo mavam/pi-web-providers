@@ -12,6 +12,7 @@ import type {
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
 
+import { wrapAdapter } from "./definition.js";
 type CustomAdapter = ProviderAdapter<"custom"> & {
   search(
     query: string,
@@ -361,3 +362,7 @@ function requireObject(
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+export const customProvider = wrapAdapter(customAdapter, {
+  fields: ["customOptions", "settings"],
+});

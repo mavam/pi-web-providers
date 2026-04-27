@@ -12,6 +12,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type CloudflareAdapter = ProviderAdapter<"cloudflare"> & {
   contents(
     urls: string[],
@@ -146,3 +147,7 @@ function buildRequestOptions(
 ): { signal: AbortSignal } | undefined {
   return context.signal ? { signal: context.signal } : undefined;
 }
+
+export const cloudflareProvider = wrapAdapter(cloudflareAdapter, {
+  fields: ["apiToken", "accountId", "options", "settings"],
+});

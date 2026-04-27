@@ -18,6 +18,7 @@ import type {
 } from "../types.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
 const DEFAULT_ANSWER_MODEL = "gpt-4.1";
 const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
@@ -706,3 +707,8 @@ function readInteger(value: unknown): number | undefined {
     ? value
     : undefined;
 }
+
+export const openaiProvider = wrapAdapter(openaiAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+  optionCapabilities: ["search", "answer", "research"],
+});

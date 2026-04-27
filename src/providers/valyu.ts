@@ -22,6 +22,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type ValyuAdapter = ProviderAdapter<"valyu"> & {
   search(
     query: string,
@@ -381,3 +382,8 @@ function createClient(config: Valyu): ValyuClient {
 
   return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));
 }
+
+export const valyuProvider = wrapAdapter(valyuAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+  optionCapabilities: ["search", "answer", "research"],
+});

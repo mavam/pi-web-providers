@@ -10,6 +10,7 @@ import type {
 } from "../types.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const DEFAULT_BASE_URL = "https://google.serper.dev";
 
 const serperSearchOptionsSchema = Type.Object(
@@ -273,3 +274,8 @@ function readNumber(value: unknown): number | undefined {
     ? value
     : undefined;
 }
+
+export const serperProvider = wrapAdapter(serperAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+  optionCapabilities: ["search"],
+});

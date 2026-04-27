@@ -18,6 +18,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type TavilyAdapter = ProviderAdapter<"tavily"> & {
   search(
     query: string,
@@ -274,3 +275,7 @@ function buildExtractMetadata(
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
+
+export const tavilyProvider = wrapAdapter(tavilyAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+});

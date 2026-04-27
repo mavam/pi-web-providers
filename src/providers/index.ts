@@ -1,81 +1,37 @@
 import type { ProviderAdaptersById } from "../types.js";
-import { claudeAdapter } from "./claude.js";
-import { cloudflareAdapter } from "./cloudflare.js";
-import { codexAdapter } from "./codex.js";
-import { customAdapter } from "./custom.js";
-import {
-  adapterFromProvider,
-  defineProviders,
-  wrapAdapter,
-} from "./definition.js";
-import { exaAdapter } from "./exa.js";
-import { firecrawlAdapter } from "./firecrawl.js";
-import { geminiAdapter } from "./gemini.js";
-import { linkupAdapter } from "./linkup.js";
+import { claudeProvider } from "./claude.js";
+import { cloudflareProvider } from "./cloudflare.js";
+import { codexProvider } from "./codex.js";
+import { customProvider } from "./custom.js";
+import { adapterFromProvider, defineProviders } from "./definition.js";
+import { exaProvider } from "./exa.js";
+import { firecrawlProvider } from "./firecrawl.js";
+import { geminiProvider } from "./gemini.js";
+import { linkupProvider } from "./linkup.js";
 import { ollamaProvider } from "./ollama.js";
-import { openaiAdapter } from "./openai.js";
-import { parallelAdapter } from "./parallel.js";
-import { perplexityAdapter } from "./perplexity.js";
-import { serperAdapter } from "./serper.js";
-import { tavilyAdapter } from "./tavily.js";
-import { valyuAdapter } from "./valyu.js";
+import { openaiProvider } from "./openai.js";
+import { parallelProvider } from "./parallel.js";
+import { perplexityProvider } from "./perplexity.js";
+import { serperProvider } from "./serper.js";
+import { tavilyProvider } from "./tavily.js";
+import { valyuProvider } from "./valyu.js";
 
 export const PROVIDERS = defineProviders({
-  claude: wrapAdapter(claudeAdapter, {
-    fields: ["pathToClaudeCodeExecutable", "options", "settings"],
-  }),
-  codex: wrapAdapter(codexAdapter, {
-    fields: [
-      "codexPath",
-      "baseUrl",
-      "apiKey",
-      "env",
-      "config",
-      "options",
-      "settings",
-    ],
-  }),
-  cloudflare: wrapAdapter(cloudflareAdapter, {
-    fields: ["apiToken", "accountId", "options", "settings"],
-  }),
-  custom: wrapAdapter(customAdapter, {
-    fields: ["customOptions", "settings"],
-  }),
-  exa: wrapAdapter(exaAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-    optionCapabilities: ["search"],
-  }),
-  firecrawl: wrapAdapter(firecrawlAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-  }),
-  gemini: wrapAdapter(geminiAdapter, {
-    fields: ["apiKey", "options", "settings"],
-  }),
-  linkup: wrapAdapter(linkupAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-  }),
+  claude: claudeProvider,
+  codex: codexProvider,
+  cloudflare: cloudflareProvider,
+  custom: customProvider,
+  exa: exaProvider,
+  firecrawl: firecrawlProvider,
+  gemini: geminiProvider,
+  linkup: linkupProvider,
   ollama: ollamaProvider,
-  openai: wrapAdapter(openaiAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-    optionCapabilities: ["search", "answer", "research"],
-  }),
-  parallel: wrapAdapter(parallelAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-  }),
-  perplexity: wrapAdapter(perplexityAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-  }),
-  serper: wrapAdapter(serperAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-    optionCapabilities: ["search"],
-  }),
-  tavily: wrapAdapter(tavilyAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-  }),
-  valyu: wrapAdapter(valyuAdapter, {
-    fields: ["apiKey", "baseUrl", "options", "settings"],
-    optionCapabilities: ["search", "answer", "research"],
-  }),
+  openai: openaiProvider,
+  parallel: parallelProvider,
+  perplexity: perplexityProvider,
+  serper: serperProvider,
+  tavily: tavilyProvider,
+  valyu: valyuProvider,
 });
 
 export const ADAPTERS_BY_ID = Object.fromEntries(

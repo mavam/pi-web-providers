@@ -19,6 +19,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type LinkupSearchOptions = {
   depth?: SearchDepth;
   includeImages?: boolean;
@@ -331,3 +332,7 @@ function toDate(value: string | number | Date, name: string): Date {
   }
   return date;
 }
+
+export const linkupProvider = wrapAdapter(linkupAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+});

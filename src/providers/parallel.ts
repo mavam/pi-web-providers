@@ -18,6 +18,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type ParallelAdapter = ProviderAdapter<"parallel"> & {
   search(
     query: string,
@@ -194,3 +195,7 @@ function buildRequestOptions(
 ): { signal: AbortSignal } | undefined {
   return context.signal ? { signal: context.signal } : undefined;
 }
+
+export const parallelProvider = wrapAdapter(parallelAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+});

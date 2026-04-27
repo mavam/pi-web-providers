@@ -17,6 +17,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type FirecrawlAdapter = ProviderAdapter<"firecrawl"> & {
   search(
     query: string,
@@ -327,3 +328,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
+
+export const firecrawlProvider = wrapAdapter(firecrawlAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+});

@@ -11,6 +11,7 @@ import type {
 } from "../types.js";
 import { trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const codexOutputSchema = Type.Object(
   {
     sources: Type.Array(
@@ -286,3 +287,15 @@ function extractJsonObject(raw: string): unknown {
     }
   }
 }
+
+export const codexProvider = wrapAdapter(codexAdapter, {
+  fields: [
+    "codexPath",
+    "baseUrl",
+    "apiKey",
+    "env",
+    "config",
+    "options",
+    "settings",
+  ],
+});

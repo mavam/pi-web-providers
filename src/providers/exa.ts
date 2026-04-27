@@ -22,6 +22,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 type ExaAdapter = ProviderAdapter<"exa"> & {
   search(
     query: string,
@@ -363,3 +364,8 @@ function createClient(config: Exa): ExaClient {
 
   return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));
 }
+
+export const exaProvider = wrapAdapter(exaAdapter, {
+  fields: ["apiKey", "baseUrl", "options", "settings"],
+  optionCapabilities: ["search"],
+});

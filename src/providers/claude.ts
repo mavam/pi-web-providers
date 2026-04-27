@@ -13,6 +13,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { trimSnippet } from "./shared.js";
 
+import { wrapAdapter } from "./definition.js";
 const SEARCH_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -453,3 +454,7 @@ function readString(value: unknown, key: string): string {
   }
   return entry;
 }
+
+export const claudeProvider = wrapAdapter(claudeAdapter, {
+  fields: ["pathToClaudeCodeExecutable", "options", "settings"],
+});

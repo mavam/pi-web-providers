@@ -7,7 +7,7 @@
 - [x] Phase 3: Introduce `defineProvider`.
 - [x] Phase 4: Move config parsing to provider definitions.
 - [ ] Phase 5: Move UI manifests into provider definitions.
-- [ ] Phase 6: Migrate providers one group at a time.
+- [x] Phase 6: Migrate providers one group at a time.
 
 ## Goal
 
@@ -630,23 +630,23 @@ Recommended migration order:
 
 1. Simple REST/search providers:
    - [x] Ollama
-   - [ ] Serper
-   - [ ] Exa search path
+   - [x] Serper
+   - [x] Exa search path
 2. Search + contents providers:
-   - Linkup
-   - Firecrawl
-   - Tavily
-   - Parallel
+   - [x] Linkup
+   - [x] Firecrawl
+   - [x] Tavily
+   - [x] Parallel
 3. Answer/research providers:
-   - OpenAI
-   - Gemini
-   - Perplexity
-   - Valyu
+   - [x] OpenAI
+   - [x] Gemini
+   - [x] Perplexity
+   - [x] Valyu
 4. Special providers:
-   - Claude
-   - Codex
-   - Cloudflare
-   - Custom
+   - [x] Claude
+   - [x] Codex
+   - [x] Cloudflare
+   - [x] Custom
 
 Each migration should reduce legacy adapter surface instead of adding parallel
 complexity.
