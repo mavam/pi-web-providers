@@ -68,7 +68,7 @@ import {
   getProviderTools,
   TOOL_INFO,
 } from "./provider-tools.js";
-import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
+import { ADAPTERS, ADAPTERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
 import type {
   Claude,
   Codex,
@@ -91,7 +91,6 @@ import type {
   WebResearchResult,
   WebSearchDetails,
 } from "./types.js";
-import { PROVIDER_IDS } from "./types.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;

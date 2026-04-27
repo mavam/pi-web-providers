@@ -7,13 +7,8 @@ import {
 } from "./provider-resolution.js";
 import { executeProviderRequest } from "./provider-runtime.js";
 import { supportsTool } from "./provider-tools.js";
-import { ADAPTERS_BY_ID } from "./providers/index.js";
-import {
-  PROVIDER_IDS,
-  type ProviderId,
-  type SearchSettings,
-  type WebProviders,
-} from "./types.js";
+import { ADAPTERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
+import type { ProviderId, SearchSettings, WebProviders } from "./types.js";
 
 const CONTENT_CACHE_VERSION = 2;
 

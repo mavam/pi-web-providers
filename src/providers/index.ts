@@ -86,3 +86,6 @@ export const ADAPTERS_BY_ID = Object.fromEntries(
 ) as ProviderAdaptersById;
 
 export const ADAPTERS = Object.values(ADAPTERS_BY_ID);
+export const PROVIDER_IDS = Object.keys(PROVIDERS) as Array<
+  keyof typeof PROVIDERS
+>;

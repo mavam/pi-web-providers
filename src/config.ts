@@ -6,7 +6,7 @@ import { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 export { resolveConfigValue, resolveEnvMap } from "./config-values.js";
 
 import { supportsTool } from "./provider-tools.js";
-import { PROVIDERS } from "./providers/index.js";
+import { PROVIDERS, PROVIDER_IDS } from "./providers/index.js";
 import type { ProviderConfigField } from "./providers/definition.js";
 import type {
   Claude,
@@ -22,7 +22,7 @@ import type {
   Tools,
   WebProviders,
 } from "./types.js";
-import { PROVIDER_IDS, TOOLS } from "./types.js";
+import { TOOLS } from "./types.js";
 
 const CONFIG_FILE_NAME = "web-providers.json";
 
