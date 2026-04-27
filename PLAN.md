@@ -629,9 +629,9 @@ Acceptance criteria:
 Recommended migration order:
 
 1. Simple REST/search providers:
-   - Ollama
-   - Serper
-   - Exa search path
+   - [x] Ollama
+   - [ ] Serper
+   - [ ] Exa search path
 2. Search + contents providers:
    - Linkup
    - Firecrawl

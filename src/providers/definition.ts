@@ -1,11 +1,15 @@
 import type { TObject } from "typebox";
+import type { ContentsResponse } from "../contents.js";
 import type {
   ProviderAdapter,
+  ProviderCapabilityStatus,
   ProviderConfig,
   ProviderContext,
   ProviderId,
   ProviderResult,
+  SearchResponse,
   Tool,
+  ToolOutput,
 } from "../types.js";
 
 export type SearchInput = {
@@ -78,6 +82,11 @@ export interface ProviderDefinition<
   docsUrl: string;
   config: ProviderConfigDefinition<TConfig>;
   capabilities: TCapabilities;
+  getCapabilityStatus(
+    config: TConfig | undefined,
+    cwd: string,
+    tool?: Tool,
+  ): ProviderCapabilityStatus;
   adapter?: ProviderAdapter;
 }
 
@@ -139,6 +148,8 @@ export function wrapAdapter<TProviderId extends ProviderId>(
       optionCapabilities: config.optionCapabilities,
     },
     capabilities: buildAdapterCapabilities(adapter),
+    getCapabilityStatus: (config, cwd, tool) =>
+      adapter.getCapabilityStatus(config as never, cwd, tool),
     adapter,
   });
 }
@@ -218,6 +229,68 @@ function buildAdapterCapabilities(
   }
 
   return capabilities;
+}
+
+export function adapterFromProvider<TProviderId extends ProviderId>(
+  definition: ProviderDefinition<
+    TProviderId,
+    ProviderConfig<TProviderId>,
+    Partial<Record<Tool, CapabilityDefinition<object>>>
+  >,
+): ProviderAdapter<TProviderId> {
+  return {
+    id: definition.id,
+    label: definition.label,
+    docsUrl: definition.docsUrl,
+    createTemplate: definition.config.createTemplate,
+    getCapabilityStatus: definition.getCapabilityStatus,
+    getToolOptionsSchema: (capability) =>
+      definition.capabilities[capability]?.options,
+    ...(definition.capabilities.search
+      ? {
+          search: async (query, maxResults, config, context, options) =>
+            (await executeProviderCapability(
+              definition,
+              "search",
+              { query, maxResults, options },
+              { ...context, config },
+            )) as SearchResponse,
+        }
+      : {}),
+    ...(definition.capabilities.contents
+      ? {
+          contents: async (urls, config, context, options) =>
+            (await executeProviderCapability(
+              definition,
+              "contents",
+              { urls, options },
+              { ...context, config },
+            )) as ContentsResponse,
+        }
+      : {}),
+    ...(definition.capabilities.answer
+      ? {
+          answer: async (query, config, context, options) =>
+            (await executeProviderCapability(
+              definition,
+              "answer",
+              { query, options },
+              { ...context, config },
+            )) as ToolOutput,
+        }
+      : {}),
+    ...(definition.capabilities.research
+      ? {
+          research: async (input, config, context, options) =>
+            (await executeProviderCapability(
+              definition,
+              "research",
+              { input, options },
+              { ...context, config },
+            )) as ToolOutput,
+        }
+      : {}),
+  };
 }
 
 export async function executeProviderCapability<TTool extends Tool>(

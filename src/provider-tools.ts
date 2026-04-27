@@ -26,7 +26,10 @@ export const TOOL_INFO: Record<Tool, { label: string; help: string }> = {
 };
 
 export function supportsTool(providerId: ProviderId, toolId: Tool): boolean {
-  return PROVIDERS[providerId].capabilities[toolId] !== undefined;
+  const capabilities = PROVIDERS[providerId].capabilities as Partial<
+    Record<Tool, unknown>
+  >;
+  return capabilities[toolId] !== undefined;
 }
 
 export function getProviderTools(providerId: ProviderId): Tool[] {

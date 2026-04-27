@@ -3,12 +3,16 @@ import { claudeAdapter } from "./claude.js";
 import { cloudflareAdapter } from "./cloudflare.js";
 import { codexAdapter } from "./codex.js";
 import { customAdapter } from "./custom.js";
-import { defineProviders, wrapAdapter } from "./definition.js";
+import {
+  adapterFromProvider,
+  defineProviders,
+  wrapAdapter,
+} from "./definition.js";
 import { exaAdapter } from "./exa.js";
 import { firecrawlAdapter } from "./firecrawl.js";
 import { geminiAdapter } from "./gemini.js";
 import { linkupAdapter } from "./linkup.js";
-import { ollamaAdapter } from "./ollama.js";
+import { ollamaProvider } from "./ollama.js";
 import { openaiAdapter } from "./openai.js";
 import { parallelAdapter } from "./parallel.js";
 import { perplexityAdapter } from "./perplexity.js";
@@ -50,9 +54,7 @@ export const PROVIDERS = defineProviders({
   linkup: wrapAdapter(linkupAdapter, {
     fields: ["apiKey", "baseUrl", "options", "settings"],
   }),
-  ollama: wrapAdapter(ollamaAdapter, {
-    fields: ["apiKey", "baseUrl", "settings"],
-  }),
+  ollama: ollamaProvider,
   openai: wrapAdapter(openaiAdapter, {
     fields: ["apiKey", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
@@ -77,7 +79,10 @@ export const PROVIDERS = defineProviders({
 });
 
 export const ADAPTERS_BY_ID = Object.fromEntries(
-  Object.entries(PROVIDERS).map(([id, provider]) => [id, provider.adapter]),
+  Object.entries(PROVIDERS).map(([id, provider]) => [
+    id,
+    provider.adapter ?? adapterFromProvider(provider),
+  ]),
 ) as ProviderAdaptersById;
 
 export const ADAPTERS = Object.values(ADAPTERS_BY_ID);
