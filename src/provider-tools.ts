@@ -1,4 +1,4 @@
-import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
+import { ADAPTERS, ADAPTERS_BY_ID, PROVIDERS } from "./providers/index.js";
 import {
   type ProviderId,
   TOOLS,
@@ -26,12 +26,11 @@ export const TOOL_INFO: Record<Tool, { label: string; help: string }> = {
 };
 
 export function supportsTool(providerId: ProviderId, toolId: Tool): boolean {
-  return typeof ADAPTERS_BY_ID[providerId][toolId] === "function";
+  return PROVIDERS[providerId].capabilities[toolId] !== undefined;
 }
 
 export function getProviderTools(providerId: ProviderId): Tool[] {
-  const provider = ADAPTERS_BY_ID[providerId];
-  return TOOLS.filter((tool) => typeof provider[tool] === "function");
+  return TOOLS.filter((tool) => supportsTool(providerId, tool));
 }
 
 export function getCompatibleProviders(toolId: Tool): ProviderId[] {
@@ -45,4 +44,8 @@ export function getMappedProviderForTool(
   tool: Tool,
 ): ProviderId | undefined {
   return config.tools?.[tool];
+}
+
+export function getProviderAdapter(providerId: ProviderId) {
+  return ADAPTERS_BY_ID[providerId];
 }
