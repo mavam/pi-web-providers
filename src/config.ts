@@ -348,41 +348,52 @@ function parseExecutionSettings(
     throw new Error(`'${field}' in ${source} must be a JSON object.`);
   }
 
-  const parsed: Settings = {
-    requestTimeoutMs: parseOptionalPositiveInteger(
-      settings.requestTimeoutMs,
-      source,
-      `${field}.requestTimeoutMs`,
-    ),
-    retryCount: parseOptionalNonNegativeInteger(
-      settings.retryCount,
-      source,
-      `${field}.retryCount`,
-    ),
-    retryDelayMs: parseOptionalPositiveInteger(
-      settings.retryDelayMs,
-      source,
-      `${field}.retryDelayMs`,
-    ),
-    researchTimeoutMs: parseOptionalPositiveInteger(
-      settings.researchTimeoutMs,
-      source,
-      `${field}.researchTimeoutMs`,
-    ),
-    ...(allowSearch && settings.search !== undefined
-      ? {
-          search: parseSearchSettings(
-            settings.search,
-            source,
-            `${field}.search`,
-          ),
-        }
-      : {}),
-  };
+  const parsed: Settings = {};
+  const requestTimeoutMs = parseOptionalPositiveInteger(
+    settings.requestTimeoutMs,
+    source,
+    `${field}.requestTimeoutMs`,
+  );
+  if (requestTimeoutMs !== undefined) {
+    parsed.requestTimeoutMs = requestTimeoutMs;
+  }
 
-  return Object.values(parsed).some((entry) => entry !== undefined)
-    ? parsed
-    : {};
+  const retryCount = parseOptionalNonNegativeInteger(
+    settings.retryCount,
+    source,
+    `${field}.retryCount`,
+  );
+  if (retryCount !== undefined) {
+    parsed.retryCount = retryCount;
+  }
+
+  const retryDelayMs = parseOptionalPositiveInteger(
+    settings.retryDelayMs,
+    source,
+    `${field}.retryDelayMs`,
+  );
+  if (retryDelayMs !== undefined) {
+    parsed.retryDelayMs = retryDelayMs;
+  }
+
+  const researchTimeoutMs = parseOptionalPositiveInteger(
+    settings.researchTimeoutMs,
+    source,
+    `${field}.researchTimeoutMs`,
+  );
+  if (researchTimeoutMs !== undefined) {
+    parsed.researchTimeoutMs = researchTimeoutMs;
+  }
+
+  if (allowSearch && settings.search !== undefined) {
+    parsed.search = parseSearchSettings(
+      settings.search,
+      source,
+      `${field}.search`,
+    );
+  }
+
+  return parsed;
 }
 
 function parseToolProviderMapping(

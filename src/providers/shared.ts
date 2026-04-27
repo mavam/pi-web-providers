@@ -47,7 +47,21 @@ export function formatJson(value: unknown): string {
 export function getApiKeyStatus(
   apiKeyReference: string | undefined,
 ): ProviderCapabilityStatus {
-  return resolveConfigValue(apiKeyReference)
-    ? { state: "ready" }
-    : { state: "missing_api_key" };
+  try {
+    return resolveConfigValue(apiKeyReference)
+      ? { state: "ready" }
+      : { state: "missing_api_key" };
+  } catch (error) {
+    return {
+      state: "invalid_config",
+      detail: formatConfigValueError(error),
+    };
+  }
+}
+
+export function formatConfigValueError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    message.replace(/\s+/g, " ").trim() || "Failed to resolve config value"
+  );
 }

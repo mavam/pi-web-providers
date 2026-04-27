@@ -32,10 +32,10 @@ export function resolveSearchProvider(
 export function getEffectiveSharedSettings(
   config: WebProviders,
 ): ExecutionSettings {
-  return {
-    ...createDefaultExecutionSettings(),
-    ...(config.settings ?? {}),
-  };
+  return (
+    mergeExecutionSettings(createDefaultExecutionSettings(), config.settings) ??
+    createDefaultExecutionSettings()
+  );
 }
 
 export function getEffectiveProviderConfig<TProviderId extends ProviderId>(

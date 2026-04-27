@@ -1,5 +1,5 @@
-import { type TObject, Type } from "typebox";
 import CloudflareClient from "cloudflare";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
@@ -8,10 +8,13 @@ import type {
   ProviderContext,
   Tool,
 } from "../types.js";
-import { literalUnion } from "./schema.js";
-import { asJsonObject } from "./shared.js";
-
 import { defineCapability, defineProvider } from "./definition.js";
+import { literalUnion } from "./schema.js";
+import {
+  asJsonObject,
+  formatConfigValueError,
+  getApiKeyStatus,
+} from "./shared.js";
 
 const cloudflareContentsOptionsSchema = Type.Object(
   {
@@ -66,12 +69,22 @@ const cloudflareImplementation = {
   getCapabilityStatus(
     config: Cloudflare | undefined,
   ): ProviderCapabilityStatus {
-    if (!resolveConfigValue(config?.apiToken)) {
-      return { state: "missing_api_key" };
+    const apiTokenStatus = getApiKeyStatus(config?.apiToken);
+    if (apiTokenStatus.state !== "ready") {
+      return apiTokenStatus;
     }
-    if (!resolveConfigValue(config?.accountId)) {
-      return { state: "invalid_config", detail: "Missing account ID" };
+
+    try {
+      if (!resolveConfigValue(config?.accountId)) {
+        return { state: "invalid_config", detail: "Missing account ID" };
+      }
+    } catch (error) {
+      return {
+        state: "invalid_config",
+        detail: formatConfigValueError(error),
+      };
     }
+
     return { state: "ready" };
   },
 

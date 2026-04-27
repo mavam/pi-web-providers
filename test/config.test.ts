@@ -361,10 +361,12 @@ describe("config parsing", () => {
       "test-config.json",
     );
 
-    expect(parsed.settings?.search).toEqual({
-      provider: "exa",
-      maxUrls: 3,
-      ttlMs: 60000,
+    expect(parsed.settings).toEqual({
+      search: {
+        provider: "exa",
+        maxUrls: 3,
+        ttlMs: 60000,
+      },
     });
   });
 
