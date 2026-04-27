@@ -68,7 +68,11 @@ import {
   getProviderTools,
   TOOL_INFO,
 } from "./provider-tools.js";
-import { ADAPTERS, ADAPTERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
+import {
+  PROVIDER_LIST,
+  PROVIDERS_BY_ID,
+  PROVIDER_IDS,
+} from "./providers/index.js";
 import type {
   Claude,
   Codex,
@@ -701,9 +705,9 @@ async function syncManagedToolAvailability(
 }
 
 function getProviderIdsForCapability(capability: Tool): ProviderId[] {
-  return ADAPTERS.filter((provider) => supportsTool(provider, capability)).map(
-    (provider) => provider.id,
-  );
+  return PROVIDER_LIST.filter((provider) =>
+    supportsTool(provider, capability),
+  ).map((provider) => provider.id);
 }
 
 const SEARCH_MAX_RESULTS_BY_PROVIDER: Partial<Record<ProviderId, number>> = {
@@ -738,7 +742,7 @@ function resolveProviderOptionsSchema(
   if (!providerId) {
     return undefined;
   }
-  const provider = ADAPTERS_BY_ID[providerId];
+  const provider = PROVIDERS_BY_ID[providerId];
   return (
     provider.capabilities as Partial<Record<Tool, { options?: TObject }>>
   )[capability]?.options;
@@ -1011,7 +1015,7 @@ async function executeSingleSearchQuery({
   onProgress,
   executionOverride,
 }: {
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   query: string;
   maxResults: number;
@@ -1252,7 +1256,7 @@ async function executeProviderOperation({
 }: {
   capability: "contents";
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
@@ -1276,7 +1280,7 @@ async function executeProviderOperation({
 }: {
   capability: Exclude<Tool, "search" | "contents">;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
@@ -1302,7 +1306,7 @@ async function executeProviderOperation({
 }: {
   capability: Exclude<Tool, "search">;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
@@ -1612,7 +1616,7 @@ async function runDispatchedWebResearch({
   ) => void;
   request: WebResearchRequest;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   options: Record<string, unknown> | undefined;
@@ -1730,7 +1734,7 @@ function buildWebResearchWidgetLines(
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
     .slice(0, 3)) {
     const providerLabel =
-      ADAPTERS_BY_ID[request.provider]?.label ?? request.provider;
+      PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
     const icon = getWebResearchWidgetIcon(request, now);
     lines.push(
@@ -1850,7 +1854,7 @@ function formatWebResearchArtifact(
   reportText: string,
 ): string {
   const providerLabel =
-    ADAPTERS_BY_ID[result.provider]?.label ?? result.provider;
+    PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
   const lines = [
     "# Web research report",
     "",
@@ -1909,7 +1913,7 @@ async function executeBatchedContentsTool({
   executionOverrides,
 }: {
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
@@ -2122,7 +2126,7 @@ function createToolProgressReporter(
         return;
       }
 
-      const providerLabel = ADAPTERS_BY_ID[providerId]?.label ?? providerId;
+      const providerLabel = PROVIDERS_BY_ID[providerId]?.label ?? providerId;
       const elapsed = formatElapsed(Date.now() - startedAt);
       emit(`Researching via ${providerLabel} (${elapsed} elapsed)`);
       lastUpdateAt = Date.now();
@@ -2287,7 +2291,7 @@ function renderWebResearchDispatchResult(
   }
 
   const summary = details
-    ? `Started web research via ${ADAPTERS_BY_ID[details.provider]?.label ?? details.provider}`
+    ? `Started web research via ${PROVIDERS_BY_ID[details.provider]?.label ?? details.provider}`
     : text;
   let summaryText = theme.fg("success", summary);
   summaryText += theme.fg("muted", ` (${getExpandHint()})`);
@@ -2335,7 +2339,7 @@ function buildWebResearchResultSummaryLines(
   theme: Pick<Theme, "fg">,
 ): string[] {
   const providerLabel =
-    ADAPTERS_BY_ID[result.provider]?.label ?? result.provider;
+    PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
   const statusLine =
     result.status === "completed"
       ? `Web research completed via ${providerLabel}`
@@ -2425,7 +2429,7 @@ function renderCollapsedProviderToolSummary(
     details.queryCount > 1
   ) {
     const providerLabel =
-      ADAPTERS_BY_ID[details.provider]?.label ?? details.provider;
+      PROVIDERS_BY_ID[details.provider]?.label ?? details.provider;
     const failureSuffix =
       details.failedQueryCount && details.failedQueryCount > 0
         ? `, ${details.failedQueryCount} failed`
@@ -2556,7 +2560,7 @@ function formatProviderCapabilityChecks(
 ): string {
   return (["search", "contents", "answer", "research"] as const)
     .map((tool) =>
-      supportsTool(ADAPTERS_BY_ID[providerId], tool)
+      supportsTool(PROVIDERS_BY_ID[providerId], tool)
         ? theme.fg("success", "✔")
         : " ",
     )
@@ -2568,7 +2572,7 @@ function resolveProviderSelectionValue(
   value: string,
 ): ProviderId | undefined {
   return providerIds.find(
-    (candidate) => ADAPTERS_BY_ID[candidate].label === value,
+    (candidate) => PROVIDERS_BY_ID[candidate].label === value,
   );
 }
 
@@ -2590,7 +2594,7 @@ function sortProviderIdsForSettings(
   providerIds: readonly ProviderId[],
 ): ProviderId[] {
   const displayOrder = new Map(
-    ADAPTERS.map((provider, index) => [provider.id, index] as const),
+    PROVIDER_LIST.map((provider, index) => [provider.id, index] as const),
   );
   return [...providerIds].sort(
     (left, right) =>
@@ -2748,7 +2752,7 @@ class WebProvidersSettingsView implements Component {
     this.activeProvider = initialProvider;
     this.selection.provider = Math.max(
       0,
-      ADAPTERS.findIndex((provider) => provider.id === initialProvider),
+      PROVIDER_LIST.findIndex((provider) => provider.id === initialProvider),
     );
   }
 
@@ -2833,7 +2837,7 @@ class WebProvidersSettingsView implements Component {
   }
 
   private buildProviderSectionItems(): SettingsEntry[] {
-    return ADAPTERS.map((provider) => {
+    return PROVIDER_LIST.map((provider) => {
       const setupState = getProviderSetupState(this.config, provider.id);
       const statusSummary = getProviderReadinessSummary(
         this.config,
@@ -2864,10 +2868,10 @@ class WebProvidersSettingsView implements Component {
       const mappedProviderId = getMappedProviderIdForTool(this.config, toolId);
       const currentValue =
         mappedProviderId && readyCompatibleProviders.includes(mappedProviderId)
-          ? ADAPTERS_BY_ID[mappedProviderId].label
+          ? PROVIDERS_BY_ID[mappedProviderId].label
           : "off";
       const compatibleLabels = readyCompatibleProviders.map(
-        (providerId) => ADAPTERS_BY_ID[providerId].label,
+        (providerId) => PROVIDERS_BY_ID[providerId].label,
       );
       return {
         id: `tool:${toolId}`,
@@ -2973,7 +2977,7 @@ class WebProvidersSettingsView implements Component {
     if (this.activeSection !== "provider") {
       return;
     }
-    const provider = ADAPTERS[this.selection.provider];
+    const provider = PROVIDER_LIST[this.selection.provider];
     if (!provider) {
       return;
     }
@@ -3245,11 +3249,13 @@ class ToolSettingsSubmenu implements Component {
     );
     const providerValues = [
       "off",
-      ...readyProviderIds.map((providerId) => ADAPTERS_BY_ID[providerId].label),
+      ...readyProviderIds.map(
+        (providerId) => PROVIDERS_BY_ID[providerId].label,
+      ),
     ];
     const currentProviderValue =
       mappedProviderId && readyProviderIds.includes(mappedProviderId)
-        ? ADAPTERS_BY_ID[mappedProviderId].label
+        ? PROVIDERS_BY_ID[mappedProviderId].label
         : "off";
 
     const entries: SettingsEntry[] = [
@@ -3274,12 +3280,12 @@ class ToolSettingsSubmenu implements Component {
       const prefetchValues = [
         "off",
         ...prefetchProviderIds.map(
-          (providerId) => ADAPTERS_BY_ID[providerId].label,
+          (providerId) => PROVIDERS_BY_ID[providerId].label,
         ),
       ];
       const currentPrefetchProviderValue =
         prefetch?.provider && prefetchProviderIds.includes(prefetch.provider)
-          ? ADAPTERS_BY_ID[prefetch.provider].label
+          ? PROVIDERS_BY_ID[prefetch.provider].label
           : "off";
 
       entries.push(
@@ -3434,7 +3440,7 @@ class ProviderSettingsSubmenu implements Component {
       return this.submenu.render(width);
     }
 
-    const provider = ADAPTERS_BY_ID[this.providerId];
+    const provider = PROVIDERS_BY_ID[this.providerId];
     const providerConfig = this.getProviderConfig();
     const entries = this.getEntries();
     const lines = [
@@ -3693,7 +3699,7 @@ function didContentsCacheInputsChange(
 function getContentsCacheInputs(config: WebProviders): Record<string, unknown> {
   const providers: Record<string, unknown> = {};
 
-  for (const provider of ADAPTERS) {
+  for (const provider of PROVIDER_LIST) {
     if (!supportsTool(provider, "contents")) {
       continue;
     }
@@ -3755,9 +3761,9 @@ function getProviderReadinessSummaryForProviderConfig(
   providerId: ProviderId,
   providerConfig: ProviderConfig | undefined,
 ): string {
-  const status = ADAPTERS_BY_ID[providerId].getCapabilityStatus(
+  const status = PROVIDERS_BY_ID[providerId].getCapabilityStatus(
     (providerConfig ??
-      ADAPTERS_BY_ID[providerId].config.createTemplate()) as never,
+      PROVIDERS_BY_ID[providerId].config.createTemplate()) as never,
     "",
   );
   return formatProviderCapabilityStatus(status, providerId);
@@ -3970,7 +3976,7 @@ function renderCollapsedSearchSummary(
       : inferSearchFailureCount(text);
   const providerLabel =
     typeof details?.provider === "string"
-      ? (ADAPTERS_BY_ID[details.provider]?.label ?? details.provider)
+      ? (PROVIDERS_BY_ID[details.provider]?.label ?? details.provider)
       : undefined;
 
   let base = buildSearchSummaryText({
@@ -4042,7 +4048,7 @@ function inferSearchFailureCount(text: string | undefined): number | undefined {
 }
 
 function appendProviderSummary(summary: string, provider: ProviderId): string {
-  const providerLabel = ADAPTERS_BY_ID[provider]?.label ?? provider;
+  const providerLabel = PROVIDERS_BY_ID[provider]?.label ?? provider;
   const providerSuffix = `via ${providerLabel}`;
   return summary.toLowerCase().includes(providerSuffix.toLowerCase())
     ? summary

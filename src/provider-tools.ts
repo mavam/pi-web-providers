@@ -1,4 +1,8 @@
-import { ADAPTERS, ADAPTERS_BY_ID, PROVIDERS } from "./providers/index.js";
+import {
+  PROVIDER_LIST,
+  PROVIDERS_BY_ID,
+  PROVIDERS,
+} from "./providers/index.js";
 import {
   type ProviderId,
   TOOLS,
@@ -37,9 +41,9 @@ export function getProviderTools(providerId: ProviderId): Tool[] {
 }
 
 export function getCompatibleProviders(toolId: Tool): ProviderId[] {
-  return ADAPTERS.filter((provider) => supportsTool(provider.id, toolId)).map(
-    (provider) => provider.id,
-  );
+  return PROVIDER_LIST.filter((provider) =>
+    supportsTool(provider.id, toolId),
+  ).map((provider) => provider.id);
 }
 
 export function getMappedProviderForTool(
@@ -50,5 +54,5 @@ export function getMappedProviderForTool(
 }
 
 export function getProviderAdapter(providerId: ProviderId) {
-  return ADAPTERS_BY_ID[providerId];
+  return PROVIDERS_BY_ID[providerId];
 }

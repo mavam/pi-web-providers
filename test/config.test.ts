@@ -11,7 +11,7 @@ import {
   resolveConfigValue,
   serializeConfig,
 } from "../src/config.js";
-import { ADAPTERS_BY_ID } from "../src/providers/index.js";
+import { PROVIDERS_BY_ID } from "../src/providers/index.js";
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -607,26 +607,26 @@ describe("config parsing", () => {
     const config = createDefaultConfig();
 
     expect(config.providers).toBeUndefined();
-    expect(ADAPTERS_BY_ID.claude.config.createTemplate()).toEqual({});
-    expect(ADAPTERS_BY_ID.codex.config.createTemplate().options).toEqual({
+    expect(PROVIDERS_BY_ID.claude.config.createTemplate()).toEqual({});
+    expect(PROVIDERS_BY_ID.codex.config.createTemplate().options).toEqual({
       networkAccessEnabled: true,
       webSearchEnabled: true,
       webSearchMode: "live",
     });
     expect(
-      ADAPTERS_BY_ID.gemini.config.createTemplate().settings,
+      PROVIDERS_BY_ID.gemini.config.createTemplate().settings,
     ).toBeUndefined();
-    expect(ADAPTERS_BY_ID.linkup.config.createTemplate()).toEqual({
+    expect(PROVIDERS_BY_ID.linkup.config.createTemplate()).toEqual({
       apiKey: "LINKUP_API_KEY",
     });
-    expect(ADAPTERS_BY_ID.ollama.config.createTemplate()).toEqual({
+    expect(PROVIDERS_BY_ID.ollama.config.createTemplate()).toEqual({
       apiKey: "OLLAMA_API_KEY",
     });
-    expect(ADAPTERS_BY_ID.serper.config.createTemplate()).toEqual({
+    expect(PROVIDERS_BY_ID.serper.config.createTemplate()).toEqual({
       apiKey: "SERPER_API_KEY",
       options: {},
     });
-    expect(ADAPTERS_BY_ID.tavily.config.createTemplate().options).toEqual({
+    expect(PROVIDERS_BY_ID.tavily.config.createTemplate().options).toEqual({
       search: {
         includeFavicon: true,
       },

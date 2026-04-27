@@ -33,8 +33,8 @@ export const PROVIDERS = defineProviders({
   valyu: valyuProvider,
 });
 
-export const ADAPTERS_BY_ID = PROVIDERS;
-export const ADAPTERS = Object.values(PROVIDERS);
+export const PROVIDERS_BY_ID = PROVIDERS;
+export const PROVIDER_LIST = Object.values(PROVIDERS);
 export const PROVIDER_IDS = Object.keys(PROVIDERS) as Array<
   keyof typeof PROVIDERS
 >;

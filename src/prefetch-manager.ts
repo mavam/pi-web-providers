@@ -7,7 +7,7 @@ import {
 } from "./provider-resolution.js";
 import { executeProviderRequest } from "./provider-runtime.js";
 import { supportsTool } from "./provider-tools.js";
-import { ADAPTERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
+import { PROVIDERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
 import type { ProviderId, SearchSettings, WebProviders } from "./types.js";
 
 const CONTENT_CACHE_VERSION = 2;
@@ -388,7 +388,7 @@ async function fetchContentsViaProvider({
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<ContentsResponse> {
-  const provider = ADAPTERS_BY_ID[providerId];
+  const provider = PROVIDERS_BY_ID[providerId];
   const providerConfig = getEffectiveProviderConfig(config, providerId);
 
   onProgress?.(
@@ -538,7 +538,7 @@ function resolveContentsProvider(
     return undefined;
   }
 
-  const provider = ADAPTERS_BY_ID[explicitProvider];
+  const provider = PROVIDERS_BY_ID[explicitProvider];
   if (!supportsTool(explicitProvider, "contents")) {
     return undefined;
   }
