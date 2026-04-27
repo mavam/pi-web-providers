@@ -293,24 +293,27 @@ function registerWebSearchTool(
     promptGuidelines: [
       "Batch related searches when grouped comparison matters; use separate sibling web_search calls when independent results should surface as soon as they are ready.",
     ],
-    parameters: Type.Object({
-      queries: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        maxItems: MAX_SEARCH_QUERIES,
-        description: `One or more search queries to run in one call (max ${MAX_SEARCH_QUERIES})`,
-      }),
-      maxResults: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: maxAllowedResults,
-          description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
+    parameters: Type.Object(
+      {
+        queries: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          maxItems: MAX_SEARCH_QUERIES,
+          description: `One or more search queries to run in one call (max ${MAX_SEARCH_QUERIES})`,
         }),
-      ),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("search", selectedProviderId),
-      ),
-    }),
+        maxResults: Type.Optional(
+          Type.Integer({
+            minimum: 1,
+            maximum: maxAllowedResults,
+            description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
+          }),
+        ),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("search", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeSearchTool({
@@ -362,16 +365,19 @@ function registerWebContentsTool(
     label: "Web Contents",
     description:
       "Read and extract the main contents of one or more web pages. Batch related pages together, or use separate sibling calls when each page can be acted on independently.",
-    parameters: Type.Object({
-      urls: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        description: "One or more URLs to extract",
-      }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("contents", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        urls: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          description: "One or more URLs to extract",
+        }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("contents", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         config: await loadConfig(),
@@ -421,17 +427,20 @@ function registerWebAnswerTool(
     name: "web_answer",
     label: "Web Answer",
     description: `Answer one or more simple factual questions using web-grounded evidence (up to ${MAX_SEARCH_QUERIES} per call). Prefer web_search plus web_contents when source selection matters, and web_research for multi-step investigations.`,
-    parameters: Type.Object({
-      queries: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        maxItems: MAX_SEARCH_QUERIES,
-        description: `One or more simple factual questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
-      }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("answer", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        queries: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          maxItems: MAX_SEARCH_QUERIES,
+          description: `One or more simple factual questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
+        }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("answer", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     promptGuidelines: [
       "Use web_answer as a quick grounded-answer shortcut for simple factual questions, not as a replacement for inspecting sources or doing deeper research.",
       "Prefer web_search plus web_contents when source selection matters or primary sources need direct inspection; prefer web_research for open-ended, controversial, or multi-step investigations.",
@@ -493,13 +502,16 @@ function registerWebResearchTool(
     label: "Web Research",
     description:
       "Start a long-running web research job. Returns immediately with a dispatch notice; the final report is saved to a file and posted later as a custom message.",
-    parameters: Type.Object({
-      input: Type.String({ description: "Research brief or question" }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("research", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        input: Type.String({ description: "Research brief or question" }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("research", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     promptGuidelines: [
       "Use this tool for deep investigations that can finish asynchronously.",
       "Do not expect the final report in the same turn; tell the user that web research has started and wait for the completion message with the saved report path.",
@@ -704,19 +716,11 @@ async function syncManagedToolAvailability(
   }
 }
 
-function getProviderIdsForCapability(capability: Tool): ProviderId[] {
-  return PROVIDER_LIST.filter((provider) =>
-    supportsTool(provider, capability),
-  ).map((provider) => provider.id);
-}
-
-const SEARCH_MAX_RESULTS_BY_PROVIDER: Partial<Record<ProviderId, number>> = {
-  ollama: 10,
-  serper: 20,
-};
-
 function getSearchMaxResultsLimit(providerId: ProviderId): number {
-  return SEARCH_MAX_RESULTS_BY_PROVIDER[providerId] ?? MAX_ALLOWED_RESULTS;
+  const capabilities = PROVIDERS_BY_ID[providerId].capabilities as Partial<
+    Record<Tool, { limits?: { maxResults?: number } }>
+  >;
+  return capabilities.search?.limits?.maxResults ?? MAX_ALLOWED_RESULTS;
 }
 
 function optionalField(

@@ -84,7 +84,10 @@ describe("managed tool availability", () => {
     const tools: Array<{
       name: string;
       description: string;
-      parameters?: { properties?: Record<string, unknown> };
+      parameters?: {
+        additionalProperties?: boolean;
+        properties?: Record<string, unknown>;
+      };
       renderResult?: (...args: any[]) => unknown;
     }> = [];
 
@@ -164,6 +167,7 @@ describe("managed tool availability", () => {
     let tools = await captureRegisteredTools();
     let webSearch = tools.find((tool) => tool.name === "web_search");
 
+    expect(webSearch?.parameters?.additionalProperties).toBe(false);
     expect(webSearch?.parameters?.properties).not.toHaveProperty("options");
     expect(
       (webSearch?.parameters?.properties?.maxResults as { maximum?: number })
@@ -185,13 +189,20 @@ describe("managed tool availability", () => {
     tools = await captureRegisteredTools();
     webSearch = tools.find((tool) => tool.name === "web_search");
 
+    expect(webSearch?.parameters?.additionalProperties).toBe(false);
     expect(webSearch?.parameters?.properties).toHaveProperty("options");
-    expect(
-      JSON.stringify(webSearch?.parameters?.properties?.options),
-    ).toContain("includeDomains");
-    expect(
-      JSON.stringify(webSearch?.parameters?.properties?.options),
-    ).not.toContain("gl");
+    const exaOptions = webSearch?.parameters?.properties?.options as {
+      additionalProperties?: boolean;
+      properties?: Record<string, { additionalProperties?: boolean }>;
+    };
+    expect(exaOptions.additionalProperties).toBe(false);
+    expect(exaOptions.properties).not.toHaveProperty("provider");
+    expect(exaOptions.properties).not.toHaveProperty("runtime");
+    expect(exaOptions.properties?.userLocation?.additionalProperties).toBe(
+      false,
+    );
+    expect(JSON.stringify(exaOptions)).toContain("includeDomains");
+    expect(JSON.stringify(exaOptions)).not.toContain("gl");
     expect(
       (webSearch?.parameters?.properties?.maxResults as { maximum?: number })
         ?.maximum,
@@ -417,7 +428,10 @@ describe("managed tool availability", () => {
     const tools: Array<{
       name: string;
       description: string;
-      parameters?: { properties?: Record<string, unknown> };
+      parameters?: {
+        additionalProperties?: boolean;
+        properties?: Record<string, unknown>;
+      };
       renderResult?: (...args: any[]) => unknown;
     }> = [];
 
@@ -716,14 +730,20 @@ async function captureRegisteredTools(): Promise<
   Array<{
     name: string;
     description: string;
-    parameters?: { properties?: Record<string, unknown> };
+    parameters?: {
+      additionalProperties?: boolean;
+      properties?: Record<string, unknown>;
+    };
     renderResult?: (...args: any[]) => unknown;
   }>
 > {
   const tools: Array<{
     name: string;
     description: string;
-    parameters?: { properties?: Record<string, unknown> };
+    parameters?: {
+      additionalProperties?: boolean;
+      properties?: Record<string, unknown>;
+    };
     renderResult?: (...args: any[]) => unknown;
   }> = [];
   const handlers = new Map<string, Function>();
@@ -732,7 +752,10 @@ async function captureRegisteredTools(): Promise<
     registerTool(tool: {
       name: string;
       description: string;
-      parameters?: { properties?: Record<string, unknown> };
+      parameters?: {
+        additionalProperties?: boolean;
+        properties?: Record<string, unknown>;
+      };
       renderResult?: (...args: any[]) => unknown;
     }) {
       tools.push(tool);

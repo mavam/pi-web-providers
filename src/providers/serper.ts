@@ -7,9 +7,9 @@ import type {
   Serper,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_BASE_URL = "https://google.serper.dev";
 
 const serperSearchOptionsSchema = Type.Object(
@@ -83,14 +83,14 @@ const serperImplementation = {
     }
 
     const defaults = asJsonObject(config.options?.search) ?? {};
-    const runtimeOptions = asJsonObject(options);
+    const callOptions = asJsonObject(options);
     const {
       q: _ignoredQuery,
       num: _ignoredNum,
       ...providerOptions
     } = {
       ...defaults,
-      ...(runtimeOptions ?? {}),
+      ...(callOptions ?? {}),
     };
 
     const response = await fetch(joinUrl(resolveConfigValue(config.baseUrl)), {

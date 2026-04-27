@@ -8,9 +8,9 @@ import type {
   SearchResponse,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const codexOutputSchema = Type.Object(
   {
     sources: Type.Array(
@@ -168,27 +168,26 @@ function buildCodexSearchThreadOptions(
   cwd: string,
   options: Record<string, unknown> | undefined,
 ) {
-  const runtimeOptions = getCodexSearchRuntimeOptions(options);
+  const callOptions = getCodexSearchCallOptions(options);
   const providerOptions = config.options;
 
   return {
     additionalDirectories: providerOptions?.additionalDirectories,
     approvalPolicy: "never" as const,
-    model: runtimeOptions.model ?? providerOptions?.model,
+    model: callOptions.model ?? providerOptions?.model,
     modelReasoningEffort:
-      runtimeOptions.modelReasoningEffort ??
-      providerOptions?.modelReasoningEffort,
+      callOptions.modelReasoningEffort ?? providerOptions?.modelReasoningEffort,
     networkAccessEnabled: providerOptions?.networkAccessEnabled ?? true,
     sandboxMode: "read-only" as const,
     skipGitRepoCheck: true,
     webSearchEnabled: providerOptions?.webSearchEnabled ?? true,
     webSearchMode:
-      runtimeOptions.webSearchMode ?? providerOptions?.webSearchMode ?? "live",
+      callOptions.webSearchMode ?? providerOptions?.webSearchMode ?? "live",
     workingDirectory: cwd,
   };
 }
 
-function getCodexSearchRuntimeOptions(
+function getCodexSearchCallOptions(
   options: Record<string, unknown> | undefined,
 ): {
   model?: string;

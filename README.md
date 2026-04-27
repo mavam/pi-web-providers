@@ -83,7 +83,8 @@ Removing a tool mapping turns that tool off. A tool is only exposed when it is
 mapped to a compatible provider and that provider is currently available.
 Shared defaults and tool-specific settings live under `settings`; search-specific
 settings live under `settings.search`, and async research uses
-`settings.researchTimeoutMs`.
+`settings.researchTimeoutMs`. Provider option schemas are strict: only the keys
+shown for the active provider are accepted.
 
 #### `web_search`
 

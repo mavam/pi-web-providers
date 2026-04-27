@@ -361,15 +361,6 @@ export interface ProviderRequestMap {
 export type ProviderRequest<TTool extends Tool = Tool> =
   ProviderRequestMap[TTool];
 
-export const EXECUTION_CONTROL_KEYS = [
-  "requestTimeoutMs",
-  "retryCount",
-  "retryDelayMs",
-  "researchTimeoutMs",
-] as const;
-
-export type ExecutionControlKey = (typeof EXECUTION_CONTROL_KEYS)[number];
-
 export interface ProviderResultMap {
   search: SearchResponse;
   contents: ContentsResponse;
