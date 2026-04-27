@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { providerHarness } from "./provider-harness.js";
 
 const {
   cloudflareCtorMock,
@@ -81,9 +82,10 @@ afterEach(() => {
 
 describe("contents providers", () => {
   it("renders contents via Cloudflare Browser Rendering markdown", async () => {
-    const { cloudflareAdapter: provider } = await import(
+    const { cloudflareProvider } = await import(
       "../src/providers/cloudflare.js"
     );
+    const provider = providerHarness(cloudflareProvider);
 
     cloudflareMarkdownCreateMock.mockResolvedValue(
       "# Cloudflare Docs\n\nRendered content",
@@ -127,7 +129,8 @@ describe("contents providers", () => {
   });
 
   it("keeps full Exa page text instead of collapsing to a snippet", async () => {
-    const { exaAdapter: provider } = await import("../src/providers/exa.js");
+    const { exaProvider } = await import("../src/providers/exa.js");
+    const provider = providerHarness(exaProvider);
     const longParagraph = "x".repeat(420);
 
     exaGetContentsMock.mockResolvedValue({
@@ -165,9 +168,8 @@ describe("contents providers", () => {
   });
 
   it("requests full Parallel page contents by default and prefers full_content", async () => {
-    const { parallelAdapter: provider } = await import(
-      "../src/providers/parallel.js"
-    );
+    const { parallelProvider } = await import("../src/providers/parallel.js");
+    const provider = providerHarness(parallelProvider);
     const config = provider.createTemplate();
     config.apiKey = "literal-key";
 
@@ -211,9 +213,8 @@ describe("contents providers", () => {
   });
 
   it("prefers Valyu content over summaries and preserves line breaks", async () => {
-    const { valyuAdapter: provider } = await import(
-      "../src/providers/valyu.js"
-    );
+    const { valyuProvider } = await import("../src/providers/valyu.js");
+    const provider = providerHarness(valyuProvider);
 
     valyuContentsMock.mockResolvedValue({
       success: true,

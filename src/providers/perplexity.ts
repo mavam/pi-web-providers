@@ -1,10 +1,8 @@
 import PerplexityClient from "@perplexity-ai/perplexity_ai";
 import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Perplexity,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -13,6 +11,7 @@ import type {
 } from "../types.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 
@@ -26,28 +25,6 @@ type PerplexityForegroundChunk = {
     url?: string | null;
   }> | null;
   citations?: Array<string | null> | null;
-};
-
-type PerplexityAdapter = ProviderAdapter<"perplexity"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  answer(
-    query: string,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Perplexity,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
 };
 
 const perplexitySearchOptionsSchema = Type.Object(
@@ -94,8 +71,8 @@ const perplexityResearchOptionsSchema = Type.Object(
   { description: "Perplexity research options." },
 );
 
-export const perplexityAdapter: PerplexityAdapter = {
-  id: "perplexity",
+const perplexityImplementation = {
+  id: "perplexity" as const,
   label: "Perplexity",
   docsUrl: "https://docs.perplexity.ai/docs/sdk/overview.md",
 
@@ -141,8 +118,7 @@ export const perplexityAdapter: PerplexityAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const request = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(options ?? {}),
       query,
       max_results: maxResults,
@@ -154,7 +130,7 @@ export const perplexityAdapter: PerplexityAdapter = {
     );
 
     return {
-      provider: perplexityAdapter.id,
+      provider: perplexityImplementation.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title,
         url: result.url,
@@ -216,11 +192,9 @@ async function runSilentForegroundChatTool(
 ): Promise<ToolOutput> {
   const client = createClient(config);
   const defaults =
-    stripLocalExecutionOptions(
-      isResearch
-        ? asJsonObject(config.options?.research)
-        : asJsonObject(config.options?.answer),
-    ) ?? {};
+    (isResearch
+      ? asJsonObject(config.options?.research)
+      : asJsonObject(config.options?.answer)) ?? {};
   const request = {
     ...defaults,
     ...(options ?? {}),
@@ -251,7 +225,7 @@ async function runSilentForegroundChatTool(
   }
 
   return {
-    provider: perplexityAdapter.id,
+    provider: perplexityImplementation.id,
     text: lines.join("\n").trimEnd(),
     itemCount: sources.length,
   };
@@ -266,8 +240,7 @@ async function runStreamingForegroundChatTool(
   options?: Record<string, unknown>,
 ): Promise<ToolOutput> {
   const client = createClient(config);
-  const defaults =
-    stripLocalExecutionOptions(asJsonObject(config.options?.research)) ?? {};
+  const defaults = asJsonObject(config.options?.research) ?? {};
   const request = {
     ...defaults,
     ...(options ?? {}),
@@ -313,7 +286,7 @@ async function runStreamingForegroundChatTool(
   }
 
   return {
-    provider: perplexityAdapter.id,
+    provider: perplexityImplementation.id,
     text: lines.join("\n").trimEnd(),
     itemCount: dedupedSources.length,
   };
@@ -448,3 +421,56 @@ function buildRequestOptions(
 ): { signal: AbortSignal } | undefined {
   return context.signal ? { signal: context.signal } : undefined;
 }
+
+export const perplexityProvider = defineProvider({
+  id: "perplexity" as const,
+  label: perplexityImplementation.label,
+  docsUrl: perplexityImplementation.docsUrl,
+  config: {
+    createTemplate: () => perplexityImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (perplexityImplementation.getCapabilityStatus as any)(
+      config as Perplexity | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: perplexityImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await perplexityImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: perplexityImplementation.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await perplexityImplementation.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: perplexityImplementation.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await perplexityImplementation.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

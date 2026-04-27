@@ -1,46 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   executeAsyncResearch,
-  resolveRequestExecutionPolicy,
   runWithExecutionPolicy,
-  stripLocalExecutionOptions,
 } from "../src/execution-policy.js";
-import type { Gemini, ProviderContext } from "../src/types.js";
+import type { ProviderContext } from "../src/types.js";
 
 describe("execution policy", () => {
-  it("strips local execution control fields before calling providers", () => {
-    const options: Record<string, unknown> = {
-      model: "gemini-2.5-pro",
-      requestTimeoutMs: 45000,
-      retryCount: 4,
-      retryDelayMs: 3000,
-      prefetch: {
-        provider: "exa",
-      },
-    };
-
-    expect(stripLocalExecutionOptions(options)).toEqual({
-      model: "gemini-2.5-pro",
-    });
-  });
-
-  it("uses config defaults for request execution", () => {
-    const config: Gemini = {
-      apiKey: "literal-key",
-      settings: {
-        requestTimeoutMs: 45000,
-        retryCount: 5,
-        retryDelayMs: 4000,
-      },
-    };
-
-    expect(resolveRequestExecutionPolicy(undefined, config.settings)).toEqual({
-      requestTimeoutMs: 45000,
-      retryCount: 5,
-      retryDelayMs: 4000,
-    });
-  });
-
   it("retries transient failures in the parent execution wrapper", async () => {
     const operation = vi
       .fn<(context: ProviderContext) => Promise<string>>()

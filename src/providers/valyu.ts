@@ -2,12 +2,8 @@ import { type TObject, Type } from "typebox";
 import { Valyu as ValyuClient } from "valyu-js";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import {
-  executeAsyncResearch,
-  stripLocalExecutionOptions,
-} from "../execution-policy.js";
+import { executeAsyncResearch } from "../execution-policy.js";
 import type {
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   ResearchJob,
@@ -25,45 +21,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-type ValyuAdapter = ProviderAdapter<"valyu"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Valyu,
-    context: ProviderContext,
-    searchOptions?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Valyu,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-  answer(
-    query: string,
-    config: Valyu,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Valyu,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  startResearch(
-    input: string,
-    config: Valyu,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchJob>;
-  pollResearch(
-    id: string,
-    config: Valyu,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchPollResult>;
-};
+import { defineCapability, defineProvider } from "./definition.js";
 
 const valyuSearchOptionsSchema = Type.Object(
   {
@@ -112,8 +70,8 @@ const valyuResearchOptionsSchema = Type.Object(
   { description: "Valyu research options." },
 );
 
-export const valyuAdapter: ValyuAdapter = {
-  id: "valyu",
+const valyuImplementation = {
+  id: "valyu" as const,
   label: "Valyu",
   docsUrl: "https://docs.valyu.ai/sdk/typescript-sdk",
 
@@ -155,8 +113,7 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(searchOptions ?? {}),
       maxNumResults: maxResults,
     };
@@ -167,7 +124,7 @@ export const valyuAdapter: ValyuAdapter = {
     }
 
     return {
-      provider: valyuAdapter.id,
+      provider: valyuImplementation.id,
       results: (response.results ?? []).slice(0, maxResults).map((result) => ({
         title: result.title,
         url: result.url,
@@ -204,7 +161,7 @@ export const valyuAdapter: ValyuAdapter = {
     );
 
     return {
-      provider: valyuAdapter.id,
+      provider: valyuImplementation.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (!result) {
@@ -242,8 +199,7 @@ export const valyuAdapter: ValyuAdapter = {
   ): Promise<ToolOutput> {
     const client = createClient(config);
     const response = await client.answer(query, {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.answer)) ??
-        {}),
+      ...(asJsonObject(config.options?.answer) ?? {}),
       ...(options ?? {}),
       streaming: false,
     } as never);
@@ -274,7 +230,7 @@ export const valyuAdapter: ValyuAdapter = {
     }
 
     return {
-      provider: valyuAdapter.id,
+      provider: valyuImplementation.id,
       text: lines.join("\n").trimEnd(),
       itemCount: sources.length,
     };
@@ -287,13 +243,18 @@ export const valyuAdapter: ValyuAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
     return await executeAsyncResearch({
-      providerLabel: valyuAdapter.label,
-      providerId: valyuAdapter.id,
+      providerLabel: valyuImplementation.label,
+      providerId: valyuImplementation.id,
       context,
       start: (researchContext) =>
-        valyuAdapter.startResearch(input, config, researchContext, options),
+        valyuImplementation.startResearch(
+          input,
+          config,
+          researchContext,
+          options,
+        ),
       poll: (id, researchContext) =>
-        valyuAdapter.pollResearch(id, config, researchContext, options),
+        valyuImplementation.pollResearch(id, config, researchContext, options),
     });
   },
 
@@ -306,8 +267,7 @@ export const valyuAdapter: ValyuAdapter = {
     const client = createClient(config);
     const task = await client.deepresearch.create({
       input,
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.research)) ??
-        {}),
+      ...(asJsonObject(config.options?.research) ?? {}),
       ...(options ?? {}),
     } as never);
 
@@ -354,7 +314,7 @@ export const valyuAdapter: ValyuAdapter = {
       return {
         status: "completed",
         output: {
-          provider: valyuAdapter.id,
+          provider: valyuImplementation.id,
           text: lines.join("\n").trimEnd(),
           itemCount: sources.length,
         },
@@ -387,3 +347,68 @@ function createClient(config: Valyu): ValyuClient {
 
   return new ValyuClient(apiKey, resolveConfigValue(config.baseUrl));
 }
+
+export const valyuProvider = defineProvider({
+  id: "valyu" as const,
+  label: valyuImplementation.label,
+  docsUrl: valyuImplementation.docsUrl,
+  config: {
+    createTemplate: () => valyuImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search", "answer", "research"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (valyuImplementation.getCapabilityStatus as any)(
+      config as Valyu | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: valyuImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await valyuImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: valyuImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await valyuImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: valyuImplementation.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await valyuImplementation.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: valyuImplementation.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await valyuImplementation.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

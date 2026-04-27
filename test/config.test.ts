@@ -11,7 +11,7 @@ import {
   resolveConfigValue,
   serializeConfig,
 } from "../src/config.js";
-import { ADAPTERS_BY_ID } from "../src/providers/index.js";
+import { PROVIDERS_BY_ID } from "../src/providers/index.js";
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -361,10 +361,12 @@ describe("config parsing", () => {
       "test-config.json",
     );
 
-    expect(parsed.settings?.search).toEqual({
-      provider: "exa",
-      maxUrls: 3,
-      ttlMs: 60000,
+    expect(parsed.settings).toEqual({
+      search: {
+        provider: "exa",
+        maxUrls: 3,
+        ttlMs: 60000,
+      },
     });
   });
 
@@ -607,24 +609,26 @@ describe("config parsing", () => {
     const config = createDefaultConfig();
 
     expect(config.providers).toBeUndefined();
-    expect(ADAPTERS_BY_ID.claude.createTemplate()).toEqual({});
-    expect(ADAPTERS_BY_ID.codex.createTemplate().options).toEqual({
+    expect(PROVIDERS_BY_ID.claude.config.createTemplate()).toEqual({});
+    expect(PROVIDERS_BY_ID.codex.config.createTemplate().options).toEqual({
       networkAccessEnabled: true,
       webSearchEnabled: true,
       webSearchMode: "live",
     });
-    expect(ADAPTERS_BY_ID.gemini.createTemplate().settings).toBeUndefined();
-    expect(ADAPTERS_BY_ID.linkup.createTemplate()).toEqual({
+    expect(
+      PROVIDERS_BY_ID.gemini.config.createTemplate().settings,
+    ).toBeUndefined();
+    expect(PROVIDERS_BY_ID.linkup.config.createTemplate()).toEqual({
       apiKey: "LINKUP_API_KEY",
     });
-    expect(ADAPTERS_BY_ID.ollama.createTemplate()).toEqual({
+    expect(PROVIDERS_BY_ID.ollama.config.createTemplate()).toEqual({
       apiKey: "OLLAMA_API_KEY",
     });
-    expect(ADAPTERS_BY_ID.serper.createTemplate()).toEqual({
+    expect(PROVIDERS_BY_ID.serper.config.createTemplate()).toEqual({
       apiKey: "SERPER_API_KEY",
       options: {},
     });
-    expect(ADAPTERS_BY_ID.tavily.createTemplate().options).toEqual({
+    expect(PROVIDERS_BY_ID.tavily.config.createTemplate().options).toEqual({
       search: {
         includeFavicon: true,
       },

@@ -3,12 +3,12 @@ import { type Static, type TObject, Type } from "typebox";
 import { resolveConfigValue, resolveEnvMap } from "../config-values.js";
 import type {
   Codex,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { trimSnippet } from "./shared.js";
 
 const codexOutputSchema = Type.Object(
@@ -28,16 +28,6 @@ const codexOutputSchema = Type.Object(
 );
 
 type CodexOutput = Static<typeof codexOutputSchema>;
-
-type CodexAdapter = ProviderAdapter<"codex"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Codex,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-};
 
 const codexSearchOptionsSchema = Type.Object(
   {
@@ -68,8 +58,8 @@ const codexSearchOptionsSchema = Type.Object(
   { description: "Codex search options." },
 );
 
-export const codexAdapter: CodexAdapter = {
-  id: "codex",
+const codexImplementation = {
+  id: "codex" as const,
   label: "Codex",
   docsUrl: "https://github.com/openai/codex/tree/main/sdk/typescript",
 
@@ -96,7 +86,7 @@ export const codexAdapter: CodexAdapter = {
     config: Codex | undefined,
     _cwd: string,
   ): ProviderCapabilityStatus {
-    const effectiveConfig = config ?? codexAdapter.createTemplate();
+    const effectiveConfig = config ?? codexImplementation.createTemplate();
     try {
       new CodexClient({
         codexPathOverride: effectiveConfig.codexPath,
@@ -163,7 +153,7 @@ export const codexAdapter: CodexAdapter = {
     const parsed = parseOutput(finalResponse);
 
     return {
-      provider: codexAdapter.id,
+      provider: codexImplementation.id,
       results: parsed.sources.slice(0, maxResults).map((source) => ({
         title: source.title.trim(),
         url: source.url.trim(),
@@ -178,27 +168,26 @@ function buildCodexSearchThreadOptions(
   cwd: string,
   options: Record<string, unknown> | undefined,
 ) {
-  const runtimeOptions = getCodexSearchRuntimeOptions(options);
+  const callOptions = getCodexSearchCallOptions(options);
   const providerOptions = config.options;
 
   return {
     additionalDirectories: providerOptions?.additionalDirectories,
     approvalPolicy: "never" as const,
-    model: runtimeOptions.model ?? providerOptions?.model,
+    model: callOptions.model ?? providerOptions?.model,
     modelReasoningEffort:
-      runtimeOptions.modelReasoningEffort ??
-      providerOptions?.modelReasoningEffort,
+      callOptions.modelReasoningEffort ?? providerOptions?.modelReasoningEffort,
     networkAccessEnabled: providerOptions?.networkAccessEnabled ?? true,
     sandboxMode: "read-only" as const,
     skipGitRepoCheck: true,
     webSearchEnabled: providerOptions?.webSearchEnabled ?? true,
     webSearchMode:
-      runtimeOptions.webSearchMode ?? providerOptions?.webSearchMode ?? "live",
+      callOptions.webSearchMode ?? providerOptions?.webSearchMode ?? "live",
     workingDirectory: cwd,
   };
 }
 
-function getCodexSearchRuntimeOptions(
+function getCodexSearchCallOptions(
   options: Record<string, unknown> | undefined,
 ): {
   model?: string;
@@ -286,3 +275,42 @@ function extractJsonObject(raw: string): unknown {
     }
   }
 }
+
+export const codexProvider = defineProvider({
+  id: "codex" as const,
+  label: codexImplementation.label,
+  docsUrl: codexImplementation.docsUrl,
+  config: {
+    createTemplate: () => codexImplementation.createTemplate(),
+    fields: [
+      "codexPath",
+      "baseUrl",
+      "apiKey",
+      "env",
+      "config",
+      "options",
+      "settings",
+    ],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (codexImplementation.getCapabilityStatus as any)(
+      config as Codex | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: codexImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await codexImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+  },
+});

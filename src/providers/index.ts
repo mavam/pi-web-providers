@@ -1,36 +1,40 @@
-import type { ProviderAdaptersById } from "../types.js";
-import { claudeAdapter } from "./claude.js";
-import { cloudflareAdapter } from "./cloudflare.js";
-import { codexAdapter } from "./codex.js";
-import { customAdapter } from "./custom.js";
-import { exaAdapter } from "./exa.js";
-import { firecrawlAdapter } from "./firecrawl.js";
-import { geminiAdapter } from "./gemini.js";
-import { linkupAdapter } from "./linkup.js";
-import { ollamaAdapter } from "./ollama.js";
-import { openaiAdapter } from "./openai.js";
-import { parallelAdapter } from "./parallel.js";
-import { perplexityAdapter } from "./perplexity.js";
-import { serperAdapter } from "./serper.js";
-import { tavilyAdapter } from "./tavily.js";
-import { valyuAdapter } from "./valyu.js";
+import { claudeProvider } from "./claude.js";
+import { cloudflareProvider } from "./cloudflare.js";
+import { codexProvider } from "./codex.js";
+import { customProvider } from "./custom.js";
+import { defineProviders } from "./definition.js";
+import { exaProvider } from "./exa.js";
+import { firecrawlProvider } from "./firecrawl.js";
+import { geminiProvider } from "./gemini.js";
+import { linkupProvider } from "./linkup.js";
+import { ollamaProvider } from "./ollama.js";
+import { openaiProvider } from "./openai.js";
+import { parallelProvider } from "./parallel.js";
+import { perplexityProvider } from "./perplexity.js";
+import { serperProvider } from "./serper.js";
+import { tavilyProvider } from "./tavily.js";
+import { valyuProvider } from "./valyu.js";
 
-export const ADAPTERS_BY_ID: ProviderAdaptersById = {
-  claude: claudeAdapter,
-  codex: codexAdapter,
-  cloudflare: cloudflareAdapter,
-  custom: customAdapter,
-  exa: exaAdapter,
-  firecrawl: firecrawlAdapter,
-  gemini: geminiAdapter,
-  linkup: linkupAdapter,
-  ollama: ollamaAdapter,
-  openai: openaiAdapter,
-  parallel: parallelAdapter,
-  perplexity: perplexityAdapter,
-  serper: serperAdapter,
-  tavily: tavilyAdapter,
-  valyu: valyuAdapter,
-};
+export const PROVIDERS = defineProviders({
+  claude: claudeProvider,
+  codex: codexProvider,
+  cloudflare: cloudflareProvider,
+  custom: customProvider,
+  exa: exaProvider,
+  firecrawl: firecrawlProvider,
+  gemini: geminiProvider,
+  linkup: linkupProvider,
+  ollama: ollamaProvider,
+  openai: openaiProvider,
+  parallel: parallelProvider,
+  perplexity: perplexityProvider,
+  serper: serperProvider,
+  tavily: tavilyProvider,
+  valyu: valyuProvider,
+});
 
-export const ADAPTERS = Object.values(ADAPTERS_BY_ID);
+export const PROVIDERS_BY_ID = PROVIDERS;
+export const PROVIDER_LIST = Object.values(PROVIDERS);
+export const PROVIDER_IDS = Object.keys(PROVIDERS) as Array<
+  keyof typeof PROVIDERS
+>;

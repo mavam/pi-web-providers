@@ -1,26 +1,20 @@
-import { type TObject, Type } from "typebox";
 import CloudflareClient from "cloudflare";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Cloudflare,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
-import { asJsonObject } from "./shared.js";
-
-type CloudflareAdapter = ProviderAdapter<"cloudflare"> & {
-  contents(
-    urls: string[],
-    config: Cloudflare,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
+import {
+  asJsonObject,
+  formatConfigValueError,
+  getApiKeyStatus,
+} from "./shared.js";
 
 const cloudflareContentsOptionsSchema = Type.Object(
   {
@@ -45,8 +39,8 @@ const cloudflareContentsOptionsSchema = Type.Object(
   },
 );
 
-export const cloudflareAdapter: CloudflareAdapter = {
-  id: "cloudflare",
+const cloudflareImplementation = {
+  id: "cloudflare" as const,
   label: "Cloudflare",
   docsUrl:
     "https://developers.cloudflare.com/browser-rendering/rest-api/markdown-endpoint/",
@@ -75,12 +69,22 @@ export const cloudflareAdapter: CloudflareAdapter = {
   getCapabilityStatus(
     config: Cloudflare | undefined,
   ): ProviderCapabilityStatus {
-    if (!resolveConfigValue(config?.apiToken)) {
-      return { state: "missing_api_key" };
+    const apiTokenStatus = getApiKeyStatus(config?.apiToken);
+    if (apiTokenStatus.state !== "ready") {
+      return apiTokenStatus;
     }
-    if (!resolveConfigValue(config?.accountId)) {
-      return { state: "invalid_config", detail: "Missing account ID" };
+
+    try {
+      if (!resolveConfigValue(config?.accountId)) {
+        return { state: "invalid_config", detail: "Missing account ID" };
+      }
+    } catch (error) {
+      return {
+        state: "invalid_config",
+        detail: formatConfigValueError(error),
+      };
     }
+
     return { state: "ready" };
   },
 
@@ -96,7 +100,7 @@ export const cloudflareAdapter: CloudflareAdapter = {
       throw new Error("is missing an account ID");
     }
 
-    const defaults = stripLocalExecutionOptions(asJsonObject(config.options));
+    const defaults = asJsonObject(config.options);
 
     const answers = await Promise.all(
       urls.map(async (url) => {
@@ -125,7 +129,7 @@ export const cloudflareAdapter: CloudflareAdapter = {
     );
 
     return {
-      provider: cloudflareAdapter.id,
+      provider: cloudflareImplementation.id,
       answers,
     };
   },
@@ -147,3 +151,32 @@ function buildRequestOptions(
 ): { signal: AbortSignal } | undefined {
   return context.signal ? { signal: context.signal } : undefined;
 }
+
+export const cloudflareProvider = defineProvider({
+  id: "cloudflare" as const,
+  label: cloudflareImplementation.label,
+  docsUrl: cloudflareImplementation.docsUrl,
+  config: {
+    createTemplate: () => cloudflareImplementation.createTemplate(),
+    fields: ["apiToken", "accountId", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (cloudflareImplementation.getCapabilityStatus as any)(
+      config as Cloudflare | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    contents: defineCapability({
+      options: cloudflareImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await cloudflareImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

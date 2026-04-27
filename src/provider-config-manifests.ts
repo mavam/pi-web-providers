@@ -1,3 +1,4 @@
+import { PROVIDERS } from "./providers/index.js";
 import type {
   Claude,
   ClaudeOptions,
@@ -20,6 +21,7 @@ import type {
   Parallel,
   ParallelOptions,
   Perplexity,
+  ProviderConfig,
   ProviderId,
   Serper,
   Tavily,
@@ -51,7 +53,7 @@ export type ProviderSettingDescriptor<TConfig> =
   | ProviderTextSettingDescriptor<TConfig>
   | ProviderValuesSettingDescriptor<TConfig>;
 
-export const PROVIDER_CONFIG_MANIFESTS = {
+const PROVIDER_SETTINGS = {
   claude: {
     settings: [
       stringSetting<Claude>({
@@ -775,10 +777,30 @@ export const PROVIDER_CONFIG_MANIFESTS = {
   },
 } as const;
 
+export const PROVIDER_CONFIG_MANIFESTS = deriveProviderConfigManifests();
+
 export function getProviderConfigManifest<TProviderId extends ProviderId>(
   providerId: TProviderId,
 ): (typeof PROVIDER_CONFIG_MANIFESTS)[TProviderId] {
   return PROVIDER_CONFIG_MANIFESTS[providerId];
+}
+
+function deriveProviderConfigManifests() {
+  return Object.fromEntries(
+    Object.keys(PROVIDERS).map((providerId) => [
+      providerId,
+      {
+        settings:
+          PROVIDER_SETTINGS[providerId as keyof typeof PROVIDER_SETTINGS]
+            ?.settings ?? [],
+      },
+    ]),
+  ) as unknown as Record<
+    ProviderId,
+    {
+      settings: readonly ProviderSettingDescriptor<ProviderConfig>[];
+    }
+  >;
 }
 
 function stringSetting<TConfig>(

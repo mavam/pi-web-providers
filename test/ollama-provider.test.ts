@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConfig } from "../src/config.js";
+import type { ContentsResponse } from "../src/contents.js";
 import {
   getProviderConfigManifest,
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
-import { ollamaAdapter } from "../src/providers/ollama.js";
-import type { Ollama } from "../src/types.js";
+import { executeProviderCapability } from "../src/providers/definition.js";
+import { ollamaProvider } from "../src/providers/ollama.js";
+import type { Ollama, ProviderContext, SearchResponse } from "../src/types.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -15,7 +17,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("ollamaAdapter", () => {
+async function searchOllama(
+  query: string,
+  maxResults: number,
+  config: Ollama,
+  context: ProviderContext,
+): Promise<SearchResponse> {
+  return await executeProviderCapability(
+    ollamaProvider,
+    "search",
+    { query, maxResults },
+    { ...context, config },
+  );
+}
+
+async function fetchOllama(
+  urls: string[],
+  config: Ollama,
+  context: ProviderContext,
+): Promise<ContentsResponse> {
+  return await executeProviderCapability(
+    ollamaProvider,
+    "contents",
+    { urls },
+    { ...context, config },
+  );
+}
+
+describe("ollamaProvider", () => {
   it("returns search results from the Ollama web search API", async () => {
     process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi.fn().mockResolvedValue(
@@ -39,7 +68,7 @@ describe("ollamaAdapter", () => {
     );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    const response = await ollamaAdapter.search(
+    const response = await searchOllama(
       "what is ollama?",
       5,
       {
@@ -86,7 +115,7 @@ describe("ollamaAdapter", () => {
       );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    await ollamaAdapter.search(
+    await searchOllama(
       "test",
       20,
       {
@@ -118,7 +147,7 @@ describe("ollamaAdapter", () => {
     );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    const response = await ollamaAdapter.contents(
+    const response = await fetchOllama(
       ["https://ollama.com"],
       {
         apiKey: "OLLAMA_API_KEY",
@@ -162,7 +191,7 @@ describe("ollamaAdapter", () => {
       );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    await ollamaAdapter.search(
+    await searchOllama(
       "test",
       5,
       {
@@ -188,7 +217,7 @@ describe("ollamaAdapter", () => {
     );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    const response = await ollamaAdapter.contents(
+    const response = await fetchOllama(
       ["https://ollama.com"],
       {
         apiKey: "OLLAMA_API_KEY",
@@ -217,7 +246,7 @@ describe("ollamaAdapter", () => {
     ) as typeof fetch;
 
     await expect(
-      ollamaAdapter.search(
+      searchOllama(
         "test",
         5,
         {
@@ -232,7 +261,7 @@ describe("ollamaAdapter", () => {
 
   it("requires an API key", async () => {
     await expect(
-      ollamaAdapter.search(
+      searchOllama(
         "test",
         5,
         {
@@ -245,7 +274,7 @@ describe("ollamaAdapter", () => {
 
   it("reports missing_api_key when the configured API key does not resolve", () => {
     expect(
-      ollamaAdapter.getCapabilityStatus(
+      ollamaProvider.getCapabilityStatus(
         {
           apiKey: "OLLAMA_API_KEY",
         },
@@ -258,7 +287,7 @@ describe("ollamaAdapter", () => {
     process.env.OLLAMA_API_KEY = "test-key";
 
     expect(
-      ollamaAdapter.getCapabilityStatus(
+      ollamaProvider.getCapabilityStatus(
         {
           apiKey: "OLLAMA_API_KEY",
         },
@@ -268,10 +297,12 @@ describe("ollamaAdapter", () => {
   });
 
   it("supports search and contents tools", () => {
-    expect(typeof ollamaAdapter.search).toBe("function");
-    expect(typeof ollamaAdapter.contents).toBe("function");
-    expect(ollamaAdapter.answer).toBeUndefined();
-    expect(ollamaAdapter.research).toBeUndefined();
+    expect(typeof ollamaProvider.capabilities.search.execute).toBe("function");
+    expect(typeof ollamaProvider.capabilities.contents.execute).toBe(
+      "function",
+    );
+    expect("answer" in ollamaProvider.capabilities).toBe(false);
+    expect("research" in ollamaProvider.capabilities).toBe(false);
   });
 });
 
@@ -320,7 +351,7 @@ describe("Ollama config", () => {
   });
 
   it("creates an Ollama provider template", () => {
-    expect(ollamaAdapter.createTemplate()).toEqual({
+    expect(ollamaProvider.config.createTemplate()).toEqual({
       apiKey: "OLLAMA_API_KEY",
     });
   });

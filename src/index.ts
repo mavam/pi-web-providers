@@ -28,7 +28,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@mariozechner/pi-tui";
-import { Type } from "typebox";
+import { type TObject, Type } from "typebox";
 import { getConfigPath, loadConfig, writeConfigFile } from "./config.js";
 import { type ContentsResponse, renderContentsAnswers } from "./contents.js";
 import { formatElapsed, formatErrorMessage } from "./execution-policy.js";
@@ -38,11 +38,9 @@ import {
   DEFAULT_CONTENT_TTL_MS,
   DEFAULT_PREFETCH_MAX_URLS,
   mergeSearchContentsPrefetchOptions,
-  parseSearchContentsPrefetchOptions,
   resetContentStore,
   resolveContentsFromStore,
   startContentsPrefetch,
-  stripSearchContentsPrefetchOptions,
 } from "./prefetch-manager.js";
 import {
   getProviderConfigManifest,
@@ -70,7 +68,11 @@ import {
   getProviderTools,
   TOOL_INFO,
 } from "./provider-tools.js";
-import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
+import {
+  PROVIDER_IDS,
+  PROVIDER_LIST,
+  PROVIDERS_BY_ID,
+} from "./providers/index.js";
 import type {
   Claude,
   Codex,
@@ -93,7 +95,6 @@ import type {
   WebResearchResult,
   WebSearchDetails,
 } from "./types.js";
-import { PROVIDER_IDS } from "./types.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
@@ -201,10 +202,6 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     );
   };
 
-  registerManagedTools(pi, {
-    activeWebResearchRequests,
-    updateWebResearchWidget,
-  });
   if ("registerMessageRenderer" in pi) {
     pi.registerMessageRenderer(
       WEB_RESEARCH_RESULT_MESSAGE_TYPE,
@@ -256,11 +253,6 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     stopWebResearchWidgetTimer();
     latestWidgetContext?.ui.setWidget(WEB_RESEARCH_WIDGET_KEY, undefined);
   });
-
-  registerManagedTools(pi, {
-    activeWebResearchRequests,
-    updateWebResearchWidget,
-  });
 }
 
 function registerManagedTools(
@@ -273,19 +265,13 @@ function registerManagedTools(
   },
   providerIdsByCapability: Partial<Record<Tool, ProviderId[]>> = {},
 ): void {
-  registerWebSearchTool(pi, providerIdsByCapability.search ?? PROVIDER_IDS);
-  registerWebContentsTool(
-    pi,
-    providerIdsByCapability.contents ?? getProviderIdsForCapability("contents"),
-  );
-  registerWebAnswerTool(
-    pi,
-    providerIdsByCapability.answer ?? getProviderIdsForCapability("answer"),
-  );
+  registerWebSearchTool(pi, providerIdsByCapability.search ?? []);
+  registerWebContentsTool(pi, providerIdsByCapability.contents ?? []);
+  registerWebAnswerTool(pi, providerIdsByCapability.answer ?? []);
   registerWebResearchTool(
     pi,
     webResearchLifecycle,
-    providerIdsByCapability.research ?? getProviderIdsForCapability("research"),
+    providerIdsByCapability.research ?? [],
   );
 }
 
@@ -293,8 +279,10 @@ function registerWebSearchTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  if (providerIds.length !== 1) return;
+
+  const selectedProviderId = providerIds[0];
+  const maxAllowedResults = getSearchMaxResultsLimit(selectedProviderId);
 
   pi.registerTool({
     name: "web_search",
@@ -305,24 +293,27 @@ function registerWebSearchTool(
     promptGuidelines: [
       "Batch related searches when grouped comparison matters; use separate sibling web_search calls when independent results should surface as soon as they are ready.",
     ],
-    parameters: Type.Object({
-      queries: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        maxItems: MAX_SEARCH_QUERIES,
-        description: `One or more search queries to run in one call (max ${MAX_SEARCH_QUERIES})`,
-      }),
-      maxResults: Type.Optional(
-        Type.Integer({
-          minimum: 1,
-          maximum: MAX_ALLOWED_RESULTS,
-          description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
+    parameters: Type.Object(
+      {
+        queries: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          maxItems: MAX_SEARCH_QUERIES,
+          description: `One or more search queries to run in one call (max ${MAX_SEARCH_QUERIES})`,
         }),
-      ),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("search", selectedProviderId),
-      ),
-    }),
+        maxResults: Type.Optional(
+          Type.Integer({
+            minimum: 1,
+            maximum: maxAllowedResults,
+            description: `Maximum number of results to return (default: ${DEFAULT_MAX_RESULTS})`,
+          }),
+        ),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("search", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
 
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeSearchTool({
@@ -365,26 +356,28 @@ function registerWebContentsTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_contents",
     label: "Web Contents",
     description:
       "Read and extract the main contents of one or more web pages. Batch related pages together, or use separate sibling calls when each page can be acted on independently.",
-    parameters: Type.Object({
-      urls: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        description: "One or more URLs to extract",
-      }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("contents", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        urls: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          description: "One or more URLs to extract",
+        }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("contents", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         config: await loadConfig(),
@@ -426,26 +419,28 @@ function registerWebAnswerTool(
   pi: ExtensionAPI,
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_answer",
     label: "Web Answer",
     description: `Answer one or more simple factual questions using web-grounded evidence (up to ${MAX_SEARCH_QUERIES} per call). Prefer web_search plus web_contents when source selection matters, and web_research for multi-step investigations.`,
-    parameters: Type.Object({
-      queries: Type.Array(Type.String({ minLength: 1 }), {
-        minItems: 1,
-        maxItems: MAX_SEARCH_QUERIES,
-        description: `One or more simple factual questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
-      }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("answer", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        queries: Type.Array(Type.String({ minLength: 1 }), {
+          minItems: 1,
+          maxItems: MAX_SEARCH_QUERIES,
+          description: `One or more simple factual questions to answer in one call (max ${MAX_SEARCH_QUERIES})`,
+        }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("answer", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     promptGuidelines: [
       "Use web_answer as a quick grounded-answer shortcut for simple factual questions, not as a replacement for inspecting sources or doing deeper research.",
       "Prefer web_search plus web_contents when source selection matters or primary sources need direct inspection; prefer web_research for open-ended, controversial, or multi-step investigations.",
@@ -498,23 +493,25 @@ function registerWebResearchTool(
   },
   providerIds: readonly ProviderId[],
 ): void {
-  if (providerIds.length === 0) return;
+  if (providerIds.length !== 1) return;
 
-  const selectedProviderId =
-    providerIds.length === 1 ? providerIds[0] : undefined;
+  const selectedProviderId = providerIds[0];
 
   pi.registerTool({
     name: "web_research",
     label: "Web Research",
     description:
       "Start a long-running web research job. Returns immediately with a dispatch notice; the final report is saved to a file and posted later as a custom message.",
-    parameters: Type.Object({
-      input: Type.String({ description: "Research brief or question" }),
-      ...optionalField(
-        "options",
-        buildStructuredOptionsSchema("research", selectedProviderId),
-      ),
-    }),
+    parameters: Type.Object(
+      {
+        input: Type.String({ description: "Research brief or question" }),
+        ...optionalField(
+          "options",
+          buildStructuredOptionsSchema("research", selectedProviderId),
+        ),
+      },
+      { additionalProperties: false },
+    ),
     promptGuidelines: [
       "Use this tool for deep investigations that can finish asynchronously.",
       "Do not expect the final report in the same turn; tell the user that web research has started and wait for the completion message with the saved report path.",
@@ -719,10 +716,11 @@ async function syncManagedToolAvailability(
   }
 }
 
-function getProviderIdsForCapability(capability: Tool): ProviderId[] {
-  return ADAPTERS.filter((provider) => supportsTool(provider, capability)).map(
-    (provider) => provider.id,
-  );
+function getSearchMaxResultsLimit(providerId: ProviderId): number {
+  const capabilities = PROVIDERS_BY_ID[providerId].capabilities as Partial<
+    Record<Tool, { limits?: { maxResults?: number } }>
+  >;
+  return capabilities.search?.limits?.maxResults ?? MAX_ALLOWED_RESULTS;
 }
 
 function optionalField(
@@ -748,8 +746,10 @@ function resolveProviderOptionsSchema(
   if (!providerId) {
     return undefined;
   }
-  const adapter = ADAPTERS_BY_ID[providerId];
-  return adapter.getToolOptionsSchema?.(capability);
+  const provider = PROVIDERS_BY_ID[providerId];
+  return (
+    provider.capabilities as Partial<Record<Tool, { options?: TObject }>>
+  )[capability]?.options;
 }
 
 async function executeSearchTool({
@@ -766,10 +766,7 @@ async function executeSearchTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     maxResults: request.maxResults,
     queries: request.queries,
   });
@@ -782,7 +779,6 @@ async function executeSearchToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   maxResults,
   queries,
   executionOverrides,
@@ -793,7 +789,6 @@ async function executeSearchToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   maxResults?: number;
   queries: string[];
   executionOverrides?: ProviderExecution<"search">[];
@@ -805,7 +800,7 @@ async function executeSearchToolInternal({
 
   const prefetchOptions = mergeSearchContentsPrefetchOptions(
     getSearchPrefetchDefaults(config),
-    parseSearchContentsPrefetchOptions(runtimeOptions),
+    undefined,
   );
   const searchQueries = resolveSearchQueries(queries);
   if (
@@ -835,7 +830,10 @@ async function executeSearchToolInternal({
     cwd: ctx.cwd,
     signal: signal ?? undefined,
   };
-  const clampedMaxResults = clampResults(maxResults);
+  const clampedMaxResults = clampResults(
+    maxResults,
+    getSearchMaxResultsLimit(provider.id),
+  );
 
   let outcomes: SearchQueryOutcome[];
   try {
@@ -848,7 +846,6 @@ async function executeSearchToolInternal({
           query: searchQuery,
           maxResults: clampedMaxResults,
           options: providerOptions,
-          runtimeOptions,
           providerContext,
           onProgress:
             searchQueries.length > 1 ? undefined : progressReporter.report,
@@ -909,7 +906,6 @@ async function executeRawProviderRequest({
   ctx,
   signal,
   options,
-  runtimeOptions,
   maxResults,
   urls,
   query,
@@ -921,7 +917,6 @@ async function executeRawProviderRequest({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   maxResults?: number;
   urls?: string[];
   query?: string;
@@ -935,9 +930,11 @@ async function executeRawProviderRequest({
       provider,
       providerConfig,
       query: query ?? "",
-      maxResults: clampResults(maxResults),
+      maxResults: clampResults(
+        maxResults,
+        getSearchMaxResultsLimit(provider.id),
+      ),
       options,
-      runtimeOptions,
       providerContext: {
         cwd: ctx.cwd,
         signal: signal ?? undefined,
@@ -962,7 +959,6 @@ async function executeRawProviderRequest({
       ctx,
       signal,
       options,
-      runtimeOptions,
       urls,
     });
   }
@@ -976,7 +972,6 @@ async function executeRawProviderRequest({
       ctx,
       signal,
       options,
-      runtimeOptions,
       query,
     });
   }
@@ -989,7 +984,6 @@ async function executeRawProviderRequest({
     ctx,
     signal,
     options,
-    runtimeOptions,
     input,
   });
 }
@@ -1021,17 +1015,15 @@ async function executeSingleSearchQuery({
   query,
   maxResults,
   options,
-  runtimeOptions,
   providerContext,
   onProgress,
   executionOverride,
 }: {
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   query: string;
   maxResults: number;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   providerContext: { cwd: string; signal?: AbortSignal };
   onProgress?: (message: string) => void;
   executionOverride?: ProviderExecution<"search">;
@@ -1045,24 +1037,14 @@ async function executeSingleSearchQuery({
 
   onProgress?.(`Searching via ${provider.label}: ${query}`);
   const result = executionOverride
-    ? await executeProviderExecution(
-        executionOverride,
-        stripSearchContentsPrefetchOptions(runtimeOptions),
-        {
-          ...providerContext,
-          onProgress,
-        },
-      )
-    : await executeProviderRequest(
-        provider,
-        providerConfig,
-        request,
-        stripSearchContentsPrefetchOptions(runtimeOptions),
-        {
-          ...providerContext,
-          onProgress,
-        },
-      );
+    ? await executeProviderExecution(executionOverride, {
+        ...providerContext,
+        onProgress,
+      })
+    : await executeProviderRequest(provider, providerConfig, request, {
+        ...providerContext,
+        onProgress,
+      });
   if (!isSearchResponse(result)) {
     throw new Error(`${provider.label} search returned an invalid result.`);
   }
@@ -1087,10 +1069,7 @@ async function executeAnswerTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     queries: request.queries,
   });
 }
@@ -1102,7 +1081,6 @@ async function executeAnswerToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   queries,
   executionOverrides,
 }: {
@@ -1112,7 +1090,6 @@ async function executeAnswerToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   queries: string[];
   executionOverrides?: ProviderExecution<"answer">[];
 }) {
@@ -1161,7 +1138,6 @@ async function executeAnswerToolInternal({
           ctx,
           signal,
           options: providerOptions,
-          runtimeOptions,
           query: answerQuery,
           onProgress:
             answerQueries.length > 1 ? undefined : progressReporter.report,
@@ -1278,19 +1254,17 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   onProgress,
   executionOverride,
 }: {
   capability: "contents";
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   onProgress?: (message: string) => void;
   executionOverride?: ProviderExecution<"contents">;
@@ -1303,7 +1277,6 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   query,
   input,
   onProgress,
@@ -1311,12 +1284,11 @@ async function executeProviderOperation({
 }: {
   capability: Exclude<Tool, "search" | "contents">;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   query?: string;
   input?: string;
   onProgress?: (message: string) => void;
@@ -1330,7 +1302,6 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   query,
   input,
@@ -1339,12 +1310,11 @@ async function executeProviderOperation({
 }: {
   capability: Exclude<Tool, "search">;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   query?: string;
   input?: string;
@@ -1369,7 +1339,6 @@ async function executeProviderOperation({
       config,
       cwd: ctx.cwd,
       options,
-      runtimeOptions,
       signal: signal ?? undefined,
       onProgress,
     });
@@ -1386,22 +1355,16 @@ async function executeProviderOperation({
   }
 
   const result = executionOverride
-    ? await executeProviderExecution(executionOverride, runtimeOptions, {
+    ? await executeProviderExecution(executionOverride, {
         cwd: ctx.cwd,
         signal: signal ?? undefined,
         onProgress,
       })
-    : await executeProviderRequest(
-        provider,
-        providerConfig,
-        request,
-        runtimeOptions,
-        {
-          cwd: ctx.cwd,
-          signal: signal ?? undefined,
-          onProgress,
-        },
-      );
+    : await executeProviderRequest(provider, providerConfig, request, {
+        cwd: ctx.cwd,
+        signal: signal ?? undefined,
+        onProgress,
+      });
   if (isSearchResponse(result)) {
     throw new Error(
       `${provider.label} ${capability} returned an invalid result.`,
@@ -1425,10 +1388,7 @@ async function executeProviderTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     urls: request.urls,
     query: request.query,
     input: request.input,
@@ -1443,7 +1403,6 @@ async function executeProviderToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   urls,
   query,
   input,
@@ -1457,7 +1416,6 @@ async function executeProviderToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   query?: string;
   input?: string;
@@ -1493,7 +1451,6 @@ async function executeProviderToolInternal({
               ctx,
               signal,
               options: providerOptions,
-              runtimeOptions,
               urls: urls ?? [],
               progressReport: progressReporter.report,
               executionOverrides,
@@ -1506,7 +1463,6 @@ async function executeProviderToolInternal({
               ctx,
               signal,
               options: providerOptions,
-              runtimeOptions,
               urls,
               onProgress: progressReporter.report,
               executionOverride: executionOverride as
@@ -1522,7 +1478,6 @@ async function executeProviderToolInternal({
         ctx,
         signal,
         options: providerOptions,
-        runtimeOptions,
         query,
         input,
         onProgress: progressReporter.report,
@@ -1578,7 +1533,7 @@ async function dispatchWebResearch({
     updateWebResearchWidget,
     config,
     ctx: context,
-    providerOptions: request.options?.provider,
+    providerOptions: request.options,
     input: request.input,
   });
 }
@@ -1665,7 +1620,7 @@ async function runDispatchedWebResearch({
   ) => void;
   request: WebResearchRequest;
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
   options: Record<string, unknown> | undefined;
@@ -1783,7 +1738,7 @@ function buildWebResearchWidgetLines(
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
     .slice(0, 3)) {
     const providerLabel =
-      ADAPTERS_BY_ID[request.provider]?.label ?? request.provider;
+      PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
     const icon = getWebResearchWidgetIcon(request, now);
     lines.push(
@@ -1903,7 +1858,7 @@ function formatWebResearchArtifact(
   reportText: string,
 ): string {
   const providerLabel =
-    ADAPTERS_BY_ID[result.provider]?.label ?? result.provider;
+    PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
   const lines = [
     "# Web research report",
     "",
@@ -1957,18 +1912,16 @@ async function executeBatchedContentsTool({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   progressReport,
   executionOverrides,
 }: {
   config: WebProviders;
-  provider: (typeof ADAPTERS)[number];
+  provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls: string[];
   progressReport: ((message: string) => void) | undefined;
   executionOverrides?: ProviderExecution<"contents">[];
@@ -2000,7 +1953,6 @@ async function executeBatchedContentsTool({
         ctx,
         signal,
         options,
-        runtimeOptions,
         urls: [url],
         onProgress: undefined,
         executionOverride: executionOverrides?.[index],
@@ -2178,7 +2130,7 @@ function createToolProgressReporter(
         return;
       }
 
-      const providerLabel = ADAPTERS_BY_ID[providerId]?.label ?? providerId;
+      const providerLabel = PROVIDERS_BY_ID[providerId]?.label ?? providerId;
       const elapsed = formatElapsed(Date.now() - startedAt);
       emit(`Researching via ${providerLabel} (${elapsed} elapsed)`);
       lastUpdateAt = Date.now();
@@ -2343,7 +2295,7 @@ function renderWebResearchDispatchResult(
   }
 
   const summary = details
-    ? `Started web research via ${ADAPTERS_BY_ID[details.provider]?.label ?? details.provider}`
+    ? `Started web research via ${PROVIDERS_BY_ID[details.provider]?.label ?? details.provider}`
     : text;
   let summaryText = theme.fg("success", summary);
   summaryText += theme.fg("muted", ` (${getExpandHint()})`);
@@ -2391,7 +2343,7 @@ function buildWebResearchResultSummaryLines(
   theme: Pick<Theme, "fg">,
 ): string[] {
   const providerLabel =
-    ADAPTERS_BY_ID[result.provider]?.label ?? result.provider;
+    PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
   const statusLine =
     result.status === "completed"
       ? `Web research completed via ${providerLabel}`
@@ -2481,7 +2433,7 @@ function renderCollapsedProviderToolSummary(
     details.queryCount > 1
   ) {
     const providerLabel =
-      ADAPTERS_BY_ID[details.provider]?.label ?? details.provider;
+      PROVIDERS_BY_ID[details.provider]?.label ?? details.provider;
     const failureSuffix =
       details.failedQueryCount && details.failedQueryCount > 0
         ? `, ${details.failedQueryCount} failed`
@@ -2612,7 +2564,7 @@ function formatProviderCapabilityChecks(
 ): string {
   return (["search", "contents", "answer", "research"] as const)
     .map((tool) =>
-      supportsTool(ADAPTERS_BY_ID[providerId], tool)
+      supportsTool(PROVIDERS_BY_ID[providerId], tool)
         ? theme.fg("success", "✔")
         : " ",
     )
@@ -2624,7 +2576,7 @@ function resolveProviderSelectionValue(
   value: string,
 ): ProviderId | undefined {
   return providerIds.find(
-    (candidate) => ADAPTERS_BY_ID[candidate].label === value,
+    (candidate) => PROVIDERS_BY_ID[candidate].label === value,
   );
 }
 
@@ -2646,7 +2598,7 @@ function sortProviderIdsForSettings(
   providerIds: readonly ProviderId[],
 ): ProviderId[] {
   const displayOrder = new Map(
-    ADAPTERS.map((provider, index) => [provider.id, index] as const),
+    PROVIDER_LIST.map((provider, index) => [provider.id, index] as const),
   );
   return [...providerIds].sort(
     (left, right) =>
@@ -2804,7 +2756,7 @@ class WebProvidersSettingsView implements Component {
     this.activeProvider = initialProvider;
     this.selection.provider = Math.max(
       0,
-      ADAPTERS.findIndex((provider) => provider.id === initialProvider),
+      PROVIDER_LIST.findIndex((provider) => provider.id === initialProvider),
     );
   }
 
@@ -2889,7 +2841,7 @@ class WebProvidersSettingsView implements Component {
   }
 
   private buildProviderSectionItems(): SettingsEntry[] {
-    return ADAPTERS.map((provider) => {
+    return PROVIDER_LIST.map((provider) => {
       const setupState = getProviderSetupState(this.config, provider.id);
       const statusSummary = getProviderReadinessSummary(
         this.config,
@@ -2920,10 +2872,10 @@ class WebProvidersSettingsView implements Component {
       const mappedProviderId = getMappedProviderIdForTool(this.config, toolId);
       const currentValue =
         mappedProviderId && readyCompatibleProviders.includes(mappedProviderId)
-          ? ADAPTERS_BY_ID[mappedProviderId].label
+          ? PROVIDERS_BY_ID[mappedProviderId].label
           : "off";
       const compatibleLabels = readyCompatibleProviders.map(
-        (providerId) => ADAPTERS_BY_ID[providerId].label,
+        (providerId) => PROVIDERS_BY_ID[providerId].label,
       );
       return {
         id: `tool:${toolId}`,
@@ -3029,7 +2981,7 @@ class WebProvidersSettingsView implements Component {
     if (this.activeSection !== "provider") {
       return;
     }
-    const provider = ADAPTERS[this.selection.provider];
+    const provider = PROVIDER_LIST[this.selection.provider];
     if (!provider) {
       return;
     }
@@ -3301,11 +3253,13 @@ class ToolSettingsSubmenu implements Component {
     );
     const providerValues = [
       "off",
-      ...readyProviderIds.map((providerId) => ADAPTERS_BY_ID[providerId].label),
+      ...readyProviderIds.map(
+        (providerId) => PROVIDERS_BY_ID[providerId].label,
+      ),
     ];
     const currentProviderValue =
       mappedProviderId && readyProviderIds.includes(mappedProviderId)
-        ? ADAPTERS_BY_ID[mappedProviderId].label
+        ? PROVIDERS_BY_ID[mappedProviderId].label
         : "off";
 
     const entries: SettingsEntry[] = [
@@ -3330,12 +3284,12 @@ class ToolSettingsSubmenu implements Component {
       const prefetchValues = [
         "off",
         ...prefetchProviderIds.map(
-          (providerId) => ADAPTERS_BY_ID[providerId].label,
+          (providerId) => PROVIDERS_BY_ID[providerId].label,
         ),
       ];
       const currentPrefetchProviderValue =
         prefetch?.provider && prefetchProviderIds.includes(prefetch.provider)
-          ? ADAPTERS_BY_ID[prefetch.provider].label
+          ? PROVIDERS_BY_ID[prefetch.provider].label
           : "off";
 
       entries.push(
@@ -3490,7 +3444,7 @@ class ProviderSettingsSubmenu implements Component {
       return this.submenu.render(width);
     }
 
-    const provider = ADAPTERS_BY_ID[this.providerId];
+    const provider = PROVIDERS_BY_ID[this.providerId];
     const providerConfig = this.getProviderConfig();
     const entries = this.getEntries();
     const lines = [
@@ -3749,7 +3703,7 @@ function didContentsCacheInputsChange(
 function getContentsCacheInputs(config: WebProviders): Record<string, unknown> {
   const providers: Record<string, unknown> = {};
 
-  for (const provider of ADAPTERS) {
+  for (const provider of PROVIDER_LIST) {
     if (!supportsTool(provider, "contents")) {
       continue;
     }
@@ -3811,8 +3765,9 @@ function getProviderReadinessSummaryForProviderConfig(
   providerId: ProviderId,
   providerConfig: ProviderConfig | undefined,
 ): string {
-  const status = ADAPTERS_BY_ID[providerId].getCapabilityStatus(
-    (providerConfig ?? ADAPTERS_BY_ID[providerId].createTemplate()) as never,
+  const status = PROVIDERS_BY_ID[providerId].getCapabilityStatus(
+    (providerConfig ??
+      PROVIDERS_BY_ID[providerId].config.createTemplate()) as never,
     "",
   );
   return formatProviderCapabilityStatus(status, providerId);
@@ -3835,9 +3790,9 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function clampResults(value?: number): number {
-  if (value === undefined) return DEFAULT_MAX_RESULTS;
-  return Math.min(Math.max(Math.trunc(value), 1), MAX_ALLOWED_RESULTS);
+function clampResults(value?: number, maximum = MAX_ALLOWED_RESULTS): number {
+  if (value === undefined) return Math.min(DEFAULT_MAX_RESULTS, maximum);
+  return Math.min(Math.max(Math.trunc(value), 1), maximum);
 }
 
 function resolveSearchQueries(queries: string[]): string[] {
@@ -4025,7 +3980,7 @@ function renderCollapsedSearchSummary(
       : inferSearchFailureCount(text);
   const providerLabel =
     typeof details?.provider === "string"
-      ? (ADAPTERS_BY_ID[details.provider]?.label ?? details.provider)
+      ? (PROVIDERS_BY_ID[details.provider]?.label ?? details.provider)
       : undefined;
 
   let base = buildSearchSummaryText({
@@ -4097,7 +4052,7 @@ function inferSearchFailureCount(text: string | undefined): number | undefined {
 }
 
 function appendProviderSummary(summary: string, provider: ProviderId): string {
-  const providerLabel = ADAPTERS_BY_ID[provider]?.label ?? provider;
+  const providerLabel = PROVIDERS_BY_ID[provider]?.label ?? provider;
   const providerSuffix = `via ${providerLabel}`;
   return summary.toLowerCase().includes(providerSuffix.toLowerCase())
     ? summary
@@ -4301,7 +4256,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     queries,
     executionOverrides,
   }: {
@@ -4311,7 +4265,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     queries: string[];
     executionOverrides?: ProviderExecution<"answer">[];
   }) =>
@@ -4322,7 +4275,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       queries,
       executionOverrides,
     }),
@@ -4335,7 +4287,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     urls,
     query,
     input,
@@ -4349,7 +4300,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     urls?: string[];
     query?: string;
     input?: string;
@@ -4364,7 +4314,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       urls,
       query,
       input,
@@ -4378,7 +4327,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     maxResults,
     queries,
     executionOverrides,
@@ -4389,7 +4337,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     maxResults?: number;
     queries: string[];
     executionOverrides?: ProviderExecution<"search">[];
@@ -4401,7 +4348,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       maxResults,
       queries,
       executionOverrides,

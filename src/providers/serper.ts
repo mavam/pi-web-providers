@@ -1,14 +1,13 @@
 import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type {
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
   Serper,
   Tool,
 } from "../types.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://google.serper.dev";
@@ -46,16 +45,8 @@ const serperSearchOptionsSchema = Type.Object(
   { description: "Serper search options." },
 );
 
-export const serperAdapter: ProviderAdapter<"serper"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Serper,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-} = {
-  id: "serper",
+const serperImplementation = {
+  id: "serper" as const,
   label: "Serper",
   docsUrl: "https://serper.dev/",
 
@@ -91,16 +82,15 @@ export const serperAdapter: ProviderAdapter<"serper"> & {
       throw new Error("is missing an API key");
     }
 
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
-    const runtimeOptions = stripLocalExecutionOptions(asJsonObject(options));
+    const defaults = asJsonObject(config.options?.search) ?? {};
+    const callOptions = asJsonObject(options);
     const {
       q: _ignoredQuery,
       num: _ignoredNum,
       ...providerOptions
     } = {
       ...defaults,
-      ...(runtimeOptions ?? {}),
+      ...(callOptions ?? {}),
     };
 
     const response = await fetch(joinUrl(resolveConfigValue(config.baseUrl)), {
@@ -127,7 +117,7 @@ export const serperAdapter: ProviderAdapter<"serper"> & {
     const searchContext = buildSearchContext(responseRecord);
 
     return {
-      provider: serperAdapter.id,
+      provider: serperImplementation.id,
       results: organic
         .map((entry) => toSearchResult(entry, searchContext))
         .filter(
@@ -275,3 +265,35 @@ function readNumber(value: unknown): number | undefined {
     ? value
     : undefined;
 }
+
+export const serperProvider = defineProvider({
+  id: "serper" as const,
+  label: serperImplementation.label,
+  docsUrl: serperImplementation.docsUrl,
+  config: {
+    createTemplate: () => serperImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (serperImplementation.getCapabilityStatus as any)(
+      config as Serper | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: serperImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await serperImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+  },
+});

@@ -1,14 +1,10 @@
-import { type TObject, Type } from "typebox";
 import { Exa as ExaClient } from "exa-js";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import {
-  executeAsyncResearch,
-  stripLocalExecutionOptions,
-} from "../execution-policy.js";
+import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   Exa,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   ResearchJob,
@@ -25,45 +21,7 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-type ExaAdapter = ProviderAdapter<"exa"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Exa,
-    context: ProviderContext,
-    searchOptions?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Exa,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-  answer(
-    query: string,
-    config: Exa,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Exa,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  startResearch(
-    input: string,
-    config: Exa,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchJob>;
-  pollResearch(
-    id: string,
-    config: Exa,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchPollResult>;
-};
+import { defineCapability, defineProvider } from "./definition.js";
 
 const exaSearchOptionsSchema = Type.Object(
   {
@@ -147,8 +105,8 @@ const exaSearchOptionsSchema = Type.Object(
   { description: "Exa search options." },
 );
 
-export const exaAdapter: ExaAdapter = {
-  id: "exa",
+const exaImplementation = {
+  id: "exa" as const,
   label: "Exa",
   docsUrl: "https://exa.ai/docs/sdks/typescript-sdk-specification",
 
@@ -188,8 +146,7 @@ export const exaAdapter: ExaAdapter = {
   ): Promise<SearchResponse> {
     const client = createClient(config);
     const options = {
-      ...(stripLocalExecutionOptions(asJsonObject(config.options?.search)) ??
-        {}),
+      ...(asJsonObject(config.options?.search) ?? {}),
       ...(searchOptions ?? {}),
       numResults: maxResults,
     };
@@ -197,7 +154,7 @@ export const exaAdapter: ExaAdapter = {
     const response = await client.search(query, options as never);
 
     return {
-      provider: exaAdapter.id,
+      provider: exaImplementation.id,
       results: (response.results ?? [])
         .slice(0, maxResults)
         .map((result: any) => ({
@@ -229,7 +186,7 @@ export const exaAdapter: ExaAdapter = {
     const results = response.results ?? [];
 
     return {
-      provider: exaAdapter.id,
+      provider: exaImplementation.id,
       answers: urls.map((url, index) => {
         const result = results[index];
         if (!result) {
@@ -278,7 +235,7 @@ export const exaAdapter: ExaAdapter = {
     }
 
     return {
-      provider: exaAdapter.id,
+      provider: exaImplementation.id,
       text: lines.join("\n").trimEnd(),
       itemCount: citations.length,
     };
@@ -291,13 +248,18 @@ export const exaAdapter: ExaAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
     return await executeAsyncResearch({
-      providerLabel: exaAdapter.label,
-      providerId: exaAdapter.id,
+      providerLabel: exaImplementation.label,
+      providerId: exaImplementation.id,
       context,
       start: (researchContext) =>
-        exaAdapter.startResearch(input, config, researchContext, options),
+        exaImplementation.startResearch(
+          input,
+          config,
+          researchContext,
+          options,
+        ),
       poll: (id, researchContext) =>
-        exaAdapter.pollResearch(id, config, researchContext, options),
+        exaImplementation.pollResearch(id, config, researchContext, options),
     });
   },
 
@@ -330,7 +292,7 @@ export const exaAdapter: ExaAdapter = {
       return {
         status: "completed",
         output: {
-          provider: exaAdapter.id,
+          provider: exaImplementation.id,
           text:
             typeof content === "string"
               ? content
@@ -367,3 +329,68 @@ function createClient(config: Exa): ExaClient {
 
   return new ExaClient(apiKey, resolveConfigValue(config.baseUrl));
 }
+
+export const exaProvider = defineProvider({
+  id: "exa" as const,
+  label: exaImplementation.label,
+  docsUrl: exaImplementation.docsUrl,
+  config: {
+    createTemplate: () => exaImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+    optionCapabilities: ["search"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (exaImplementation.getCapabilityStatus as any)(
+      config as Exa | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: exaImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await exaImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: exaImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await exaImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: exaImplementation.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await exaImplementation.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: exaImplementation.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await exaImplementation.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

@@ -7,9 +7,7 @@ import {
 } from "@tavily/core";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -19,21 +17,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-type TavilyAdapter = ProviderAdapter<"tavily"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Tavily,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Tavily,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
+import { defineCapability, defineProvider } from "./definition.js";
 
 const tavilySearchOptionsSchema = Type.Object(
   {
@@ -115,8 +99,8 @@ const tavilyExtractOptionsSchema = Type.Object(
   { description: "Tavily extract options." },
 );
 
-export const tavilyAdapter: TavilyAdapter = {
-  id: "tavily",
+const tavilyImplementation = {
+  id: "tavily" as const,
   label: "Tavily",
   docsUrl: "https://docs.tavily.com/sdk/javascript/reference",
 
@@ -158,8 +142,7 @@ export const tavilyAdapter: TavilyAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
 
     const response = await client.search(query, {
       ...defaults,
@@ -168,7 +151,7 @@ export const tavilyAdapter: TavilyAdapter = {
     });
 
     return {
-      provider: tavilyAdapter.id,
+      provider: tavilyImplementation.id,
       results: response.results.slice(0, maxResults).map((result) => ({
         title: result.title || result.url || "Untitled",
         url: result.url || "",
@@ -186,8 +169,7 @@ export const tavilyAdapter: TavilyAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.extract)) ?? {};
+    const defaults = asJsonObject(config.options?.extract) ?? {};
 
     const response = await client.extract(urls, {
       ...defaults,
@@ -202,7 +184,7 @@ export const tavilyAdapter: TavilyAdapter = {
     );
 
     return {
-      provider: tavilyAdapter.id,
+      provider: tavilyImplementation.id,
       answers: urls.map((url) => {
         const result = resultsByUrl.get(url);
         if (result) {
@@ -277,3 +259,45 @@ function buildExtractMetadata(
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
+
+export const tavilyProvider = defineProvider({
+  id: "tavily" as const,
+  label: tavilyImplementation.label,
+  docsUrl: tavilyImplementation.docsUrl,
+  config: {
+    createTemplate: () => tavilyImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (tavilyImplementation.getCapabilityStatus as any)(
+      config as Tavily | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: tavilyImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await tavilyImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: tavilyImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await tavilyImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

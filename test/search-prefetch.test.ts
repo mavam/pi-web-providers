@@ -37,11 +37,17 @@ afterEach(async () => {
 });
 
 describe("search contents prefetch", () => {
-  it("starts background contents prefetching and reuses prefetched per-URL entries when prefetch.provider is set", async () => {
+  it("starts background contents prefetching and reuses prefetched per-URL entries when settings.search.provider is set", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       tools: {
         contents: "exa",
+      },
+      settings: {
+        search: {
+          maxUrls: 2,
+          provider: "exa",
+        },
       },
       providers: {
         exa: {
@@ -79,12 +85,6 @@ describe("search contents prefetch", () => {
       signal: undefined,
       onUpdate: undefined,
       options: undefined,
-      runtimeOptions: {
-        prefetch: {
-          maxUrls: 2,
-          provider: "exa",
-        },
-      },
       maxResults: 2,
       queries: ["exa docs"],
     });
@@ -150,7 +150,7 @@ describe("search contents prefetch", () => {
     );
   });
 
-  it("does not start prefetching without an explicit prefetch.provider", async () => {
+  it("does not start prefetching without a configured search prefetch provider", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       tools: {
@@ -180,11 +180,6 @@ describe("search contents prefetch", () => {
       signal: undefined,
       onUpdate: undefined,
       options: undefined,
-      runtimeOptions: {
-        prefetch: {
-          maxUrls: 1,
-        },
-      },
       maxResults: 1,
       queries: ["exa docs"],
     });
@@ -249,7 +244,7 @@ describe("search contents prefetch", () => {
     );
   });
 
-  it("allows per-call prefetch.provider=null to disable persisted search prefetch defaults", async () => {
+  it("does not start prefetching when persisted search settings omit provider", async () => {
     const { __test__ } = await import("../src/index.js");
     const config = {
       tools: {
@@ -257,7 +252,6 @@ describe("search contents prefetch", () => {
       },
       settings: {
         search: {
-          provider: "exa",
           maxUrls: 1,
         },
       },
@@ -285,11 +279,6 @@ describe("search contents prefetch", () => {
       signal: undefined,
       onUpdate: undefined,
       options: undefined,
-      runtimeOptions: {
-        prefetch: {
-          provider: null,
-        },
-      },
       maxResults: 1,
       queries: ["exa docs"],
     });
@@ -422,6 +411,13 @@ describe("search contents prefetch", () => {
         tools: {
           contents: "exa",
         },
+        settings: {
+          search: {
+            maxUrls: 1,
+            provider: "exa",
+            ttlMs: 1000,
+          },
+        },
         providers: {
           exa: {
             apiKey: "literal-key",
@@ -453,13 +449,6 @@ describe("search contents prefetch", () => {
         signal: undefined,
         onUpdate: undefined,
         options: undefined,
-        runtimeOptions: {
-          prefetch: {
-            maxUrls: 1,
-            provider: "exa",
-            ttlMs: 1000,
-          },
-        },
         maxResults: 1,
         queries: ["exa docs"],
       });

@@ -1,16 +1,14 @@
-import { type TObject, Type } from "typebox";
 import {
   type FetchParams,
   LinkupClient,
   type SearchDepth,
   type SearchParams,
 } from "linkup-sdk";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Linkup,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -20,6 +18,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
+import { defineCapability, defineProvider } from "./definition.js";
 type LinkupSearchOptions = {
   depth?: SearchDepth;
   includeImages?: boolean;
@@ -43,22 +42,6 @@ type ManagedLinkupSearchParams = Extract<
   SearchParams,
   { outputType: "searchResults" }
 >;
-
-type LinkupAdapter = ProviderAdapter<"linkup"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Linkup,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Linkup,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
 
 const linkupSearchOptionsSchema = Type.Object(
   {
@@ -105,8 +88,8 @@ const linkupContentsOptionsSchema = Type.Object(
   { description: "Linkup fetch options." },
 );
 
-export const linkupAdapter: LinkupAdapter = {
-  id: "linkup",
+const linkupImplementation = {
+  id: "linkup" as const,
   label: "Linkup",
   docsUrl: "https://docs.linkup.so/pages/sdk/js/js",
 
@@ -139,17 +122,16 @@ export const linkupAdapter: LinkupAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
     const response = await client.search(
       buildSearchParams(query, maxResults, {
         ...defaults,
-        ...(stripLocalExecutionOptions(options) ?? {}),
+        ...(options ?? {}),
       }),
     );
 
     return {
-      provider: linkupAdapter.id,
+      provider: linkupImplementation.id,
       results: (response.results ?? [])
         .map(toSearchResult)
         .filter((result): result is SearchResult => result !== null)
@@ -164,18 +146,17 @@ export const linkupAdapter: LinkupAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.fetch)) ?? {};
+    const defaults = asJsonObject(config.options?.fetch) ?? {};
 
     return {
-      provider: linkupAdapter.id,
+      provider: linkupImplementation.id,
       answers: await Promise.all(
         urls.map(async (url) => {
           try {
             const response = await client.fetch(
               buildFetchParams(url, {
                 ...defaults,
-                ...(stripLocalExecutionOptions(options) ?? {}),
+                ...(options ?? {}),
               }),
             );
 
@@ -334,3 +315,45 @@ function toDate(value: string | number | Date, name: string): Date {
   }
   return date;
 }
+
+export const linkupProvider = defineProvider({
+  id: "linkup" as const,
+  label: linkupImplementation.label,
+  docsUrl: linkupImplementation.docsUrl,
+  config: {
+    createTemplate: () => linkupImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (linkupImplementation.getCapabilityStatus as any)(
+      config as Linkup | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: linkupImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await linkupImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: linkupImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await linkupImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

@@ -5,7 +5,6 @@ import { executeAsyncResearch } from "../execution-policy.js";
 import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../execution-policy-defaults.js";
 import type {
   Gemini,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   ResearchJob,
@@ -14,47 +13,13 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { getApiKeyStatus } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
-
-type GeminiAdapter = ProviderAdapter<"gemini"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  answer(
-    query: string,
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  research(
-    input: string,
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ToolOutput>;
-  startResearch(
-    input: string,
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchJob>;
-  pollResearch(
-    id: string,
-    config: Gemini,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchPollResult>;
-  createClient(config: Gemini): GoogleGenAI;
-};
 
 const geminiGenerationConfigSchema = Type.Object(
   {
@@ -121,7 +86,7 @@ const geminiAgentConfigSchema = Type.Object(
   {
     additionalProperties: false,
     description:
-      "Safe Gemini deep-research agent configuration. The adapter adds the required type field.",
+      "Safe Gemini deep-research agent configuration. The provider adds the required type field.",
   },
 );
 
@@ -158,8 +123,8 @@ const geminiResearchOptionsSchema = Type.Object(
   { additionalProperties: false, description: "Gemini research options." },
 );
 
-export const geminiAdapter: GeminiAdapter = {
-  id: "gemini",
+export const geminiImplementation = {
+  id: "gemini" as const,
   label: "Gemini",
   docsUrl: "https://github.com/googleapis/js-genai",
 
@@ -1111,3 +1076,56 @@ function readNonEmptyString(value: unknown): string | undefined {
     ? value
     : undefined;
 }
+
+export const geminiProvider = defineProvider({
+  id: "gemini" as const,
+  label: geminiImplementation.label,
+  docsUrl: geminiImplementation.docsUrl,
+  config: {
+    createTemplate: () => geminiImplementation.createTemplate(),
+    fields: ["apiKey", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (geminiImplementation.getCapabilityStatus as any)(
+      config as Gemini | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: geminiImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await geminiImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: geminiImplementation.getToolOptionsSchema?.("answer"),
+      async execute(input: any, ctx) {
+        return await geminiImplementation.answer!(
+          input.query,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: geminiImplementation.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await geminiImplementation.research!(
+          input.input,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

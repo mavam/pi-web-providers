@@ -20,6 +20,8 @@ vi.mock("node:child_process", async () => {
 
 import {
   getEffectiveProviderConfig,
+  getEffectiveSharedSettings,
+  getProviderCapabilityStatus,
   resolveProviderForTool,
   resolveSearchProvider,
 } from "../src/provider-resolution.js";
@@ -236,6 +238,58 @@ describe("provider resolution", () => {
     ).toThrow(/Provider 'cloudflare' is not available: missing account ID/);
   });
 
+  it("reports command-backed API key failures as invalid provider config", () => {
+    const failingCommand = `!${JSON.stringify(process.execPath)} -e "process.exit(44)"`;
+    const config = createConfig({
+      tools: {
+        search: "exa",
+      },
+      providers: {
+        exa: {
+          apiKey: failingCommand,
+        },
+      },
+    });
+
+    expect(
+      getProviderCapabilityStatus(config, process.cwd(), "exa", "search"),
+    ).toMatchObject({
+      state: "invalid_config",
+      detail: expect.stringContaining("Command failed"),
+    });
+    expect(() =>
+      resolveProviderForTool(config, process.cwd(), "search"),
+    ).toThrow(/Provider 'exa' is not available: command failed/i);
+  });
+
+  it("reports command-backed Cloudflare account ID failures as invalid provider config", () => {
+    process.env.CLOUDFLARE_API_TOKEN = "test-token";
+    const failingCommand = `!${JSON.stringify(process.execPath)} -e "process.exit(44)"`;
+    const config = createConfig({
+      tools: {
+        contents: "cloudflare",
+      },
+      providers: {
+        cloudflare: {
+          apiToken: "CLOUDFLARE_API_TOKEN",
+          accountId: failingCommand,
+        },
+      },
+    });
+
+    expect(
+      getProviderCapabilityStatus(
+        config,
+        process.cwd(),
+        "cloudflare",
+        "contents",
+      ),
+    ).toMatchObject({
+      state: "invalid_config",
+      detail: expect.stringContaining("Command failed"),
+    });
+  });
+
   it("rejects Custom when the mapped capability has no command configured", () => {
     const config = createConfig({
       tools: {
@@ -277,6 +331,27 @@ describe("provider resolution", () => {
       "perplexity",
     );
     expect(provider.id).toBe("perplexity");
+  });
+
+  it("uses defaults for undefined shared settings", () => {
+    const config = createConfig({
+      settings: {
+        requestTimeoutMs: undefined,
+        retryCount: undefined,
+        retryDelayMs: undefined,
+        researchTimeoutMs: undefined,
+        search: {
+          provider: "exa",
+        },
+      },
+    });
+
+    expect(getEffectiveSharedSettings(config)).toEqual({
+      requestTimeoutMs: 30000,
+      retryCount: 3,
+      retryDelayMs: 2000,
+      researchTimeoutMs: 1800000,
+    });
   });
 
   it("merges shared settings into the effective provider settings", () => {

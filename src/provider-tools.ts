@@ -1,4 +1,4 @@
-import { ADAPTERS, ADAPTERS_BY_ID } from "./providers/index.js";
+import { PROVIDER_LIST, PROVIDERS } from "./providers/index.js";
 import {
   type ProviderId,
   TOOLS,
@@ -26,18 +26,20 @@ export const TOOL_INFO: Record<Tool, { label: string; help: string }> = {
 };
 
 export function supportsTool(providerId: ProviderId, toolId: Tool): boolean {
-  return typeof ADAPTERS_BY_ID[providerId][toolId] === "function";
+  const capabilities = PROVIDERS[providerId].capabilities as Partial<
+    Record<Tool, unknown>
+  >;
+  return capabilities[toolId] !== undefined;
 }
 
 export function getProviderTools(providerId: ProviderId): Tool[] {
-  const provider = ADAPTERS_BY_ID[providerId];
-  return TOOLS.filter((tool) => typeof provider[tool] === "function");
+  return TOOLS.filter((tool) => supportsTool(providerId, tool));
 }
 
 export function getCompatibleProviders(toolId: Tool): ProviderId[] {
-  return ADAPTERS.filter((provider) => supportsTool(provider.id, toolId)).map(
-    (provider) => provider.id,
-  );
+  return PROVIDER_LIST.filter((provider) =>
+    supportsTool(provider.id, toolId),
+  ).map((provider) => provider.id);
 }
 
 export function getMappedProviderForTool(

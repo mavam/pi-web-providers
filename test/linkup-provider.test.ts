@@ -17,7 +17,8 @@ vi.mock("linkup-sdk", () => ({
   }),
 }));
 
-import { linkupAdapter } from "../src/providers/linkup.js";
+import { linkupProvider } from "../src/providers/linkup.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   delete process.env.LINKUP_API_KEY;
@@ -26,7 +27,7 @@ afterEach(() => {
   linkupFetchMock.mockReset();
 });
 
-describe("linkupAdapter", () => {
+describe("providerHarness(linkupProvider)", () => {
   it("forwards supported Linkup search options and keeps search-results output fixed", async () => {
     process.env.LINKUP_API_KEY = "test-key";
 
@@ -47,7 +48,7 @@ describe("linkupAdapter", () => {
       ],
     });
 
-    const response = await linkupAdapter.search(
+    const response = await providerHarness(linkupProvider).search(
       "linkup sdk",
       2,
       {
@@ -114,7 +115,7 @@ describe("linkupAdapter", () => {
 
   it("rejects incompatible Linkup search option overrides", async () => {
     await expect(
-      linkupAdapter.search(
+      providerHarness(linkupProvider).search(
         "linkup sdk",
         2,
         {
@@ -143,7 +144,7 @@ describe("linkupAdapter", () => {
       };
     });
 
-    const response = await linkupAdapter.contents(
+    const response = await providerHarness(linkupProvider).contents(
       [
         "https://example.com/a",
         "https://example.com/b",
@@ -205,7 +206,7 @@ describe("linkupAdapter", () => {
 
   it("requires an API key", async () => {
     await expect(
-      linkupAdapter.search(
+      providerHarness(linkupProvider).search(
         "linkup",
         1,
         {

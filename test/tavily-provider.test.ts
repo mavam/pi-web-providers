@@ -21,7 +21,8 @@ vi.mock("@tavily/core", () => ({
   }),
 }));
 
-import { tavilyAdapter } from "../src/providers/tavily.js";
+import { tavilyProvider } from "../src/providers/tavily.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   delete process.env.TAVILY_API_KEY;
@@ -30,7 +31,7 @@ afterEach(() => {
   tavilyFactoryMock.mockClear();
 });
 
-describe("tavilyAdapter", () => {
+describe("providerHarness(tavilyProvider)", () => {
   it("merges search options, overrides maxResults, and preserves metadata", async () => {
     process.env.TAVILY_API_KEY = "test-key";
     searchMock.mockResolvedValue({
@@ -51,7 +52,7 @@ describe("tavilyAdapter", () => {
       ],
     });
 
-    const response = await tavilyAdapter.search(
+    const response = await providerHarness(tavilyProvider).search(
       "tavily sdk",
       5,
       {
@@ -60,7 +61,6 @@ describe("tavilyAdapter", () => {
         options: {
           search: {
             topic: "news",
-            requestTimeoutMs: 999,
           },
         },
       },
@@ -118,14 +118,13 @@ describe("tavilyAdapter", () => {
       requestId: "extract-123",
     });
 
-    const response = await tavilyAdapter.contents(
+    const response = await providerHarness(tavilyProvider).contents(
       ["https://example.com/a", "https://example.com/b"],
       {
         apiKey: "literal-key",
         options: {
           extract: {
             format: "markdown",
-            requestTimeoutMs: 999,
           },
         },
       },

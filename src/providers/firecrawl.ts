@@ -5,10 +5,8 @@ import FirecrawlClient, {
 import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import { stripLocalExecutionOptions } from "../execution-policy.js";
 import type {
   Firecrawl,
-  ProviderAdapter,
   ProviderCapabilityStatus,
   ProviderContext,
   SearchResponse,
@@ -18,21 +16,7 @@ import type {
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-type FirecrawlAdapter = ProviderAdapter<"firecrawl"> & {
-  search(
-    query: string,
-    maxResults: number,
-    config: Firecrawl,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<SearchResponse>;
-  contents(
-    urls: string[],
-    config: Firecrawl,
-    context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ContentsResponse>;
-};
+import { defineCapability, defineProvider } from "./definition.js";
 
 const firecrawlSearchOptionsSchema = Type.Object(
   {
@@ -142,8 +126,8 @@ const firecrawlScrapeOptionsSchema = Type.Object(
   { description: "Firecrawl scrape options." },
 );
 
-export const firecrawlAdapter: FirecrawlAdapter = {
-  id: "firecrawl",
+const firecrawlImplementation = {
+  id: "firecrawl" as const,
   label: "Firecrawl",
   docsUrl: "https://docs.firecrawl.dev/sdks/node",
 
@@ -182,8 +166,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.search)) ?? {};
+    const defaults = asJsonObject(config.options?.search) ?? {};
     const response = await client.search(query, {
       ...defaults,
       ...(options ?? {}),
@@ -191,7 +174,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     });
 
     return {
-      provider: firecrawlAdapter.id,
+      provider: firecrawlImplementation.id,
       results: flattenSearchResults(response).slice(0, maxResults),
     };
   },
@@ -203,8 +186,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const defaults =
-      stripLocalExecutionOptions(asJsonObject(config.options?.scrape)) ?? {};
+    const defaults = asJsonObject(config.options?.scrape) ?? {};
     const scrapeOptions = {
       formats: ["markdown"],
       onlyMainContent: true,
@@ -213,7 +195,7 @@ export const firecrawlAdapter: FirecrawlAdapter = {
     };
 
     return {
-      provider: firecrawlAdapter.id,
+      provider: firecrawlImplementation.id,
       answers: await Promise.all(
         urls.map(async (url) => {
           try {
@@ -330,3 +312,45 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 function readString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
+
+export const firecrawlProvider = defineProvider({
+  id: "firecrawl" as const,
+  label: firecrawlImplementation.label,
+  docsUrl: firecrawlImplementation.docsUrl,
+  config: {
+    createTemplate: () => firecrawlImplementation.createTemplate(),
+    fields: ["apiKey", "baseUrl", "options", "settings"],
+  },
+  getCapabilityStatus: (config, cwd, tool) =>
+    (firecrawlImplementation.getCapabilityStatus as any)(
+      config as Firecrawl | undefined,
+      cwd,
+      tool,
+    ),
+  capabilities: {
+    search: defineCapability({
+      options: firecrawlImplementation.getToolOptionsSchema?.("search"),
+      async execute(input: any, ctx) {
+        const { query, maxResults, options } = input;
+        return await firecrawlImplementation.search!(
+          query,
+          maxResults,
+          ctx.config as never,
+          ctx,
+          options,
+        );
+      },
+    }),
+    contents: defineCapability({
+      options: firecrawlImplementation.getToolOptionsSchema?.("contents"),
+      async execute(input: any, ctx) {
+        return await firecrawlImplementation.contents!(
+          input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+  },
+});

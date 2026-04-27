@@ -20,7 +20,7 @@ describe("executeProviderExecution research timeouts", () => {
           await new Promise<ToolOutput>(() => {}),
       };
 
-      const promise = executeProviderExecution(operation, undefined, {
+      const promise = executeProviderExecution(operation, {
         cwd: process.cwd(),
       });
 

@@ -7,13 +7,8 @@ import {
 } from "./provider-resolution.js";
 import { executeProviderRequest } from "./provider-runtime.js";
 import { supportsTool } from "./provider-tools.js";
-import { ADAPTERS_BY_ID } from "./providers/index.js";
-import {
-  PROVIDER_IDS,
-  type ProviderId,
-  type SearchSettings,
-  type WebProviders,
-} from "./types.js";
+import { PROVIDERS_BY_ID, PROVIDER_IDS } from "./providers/index.js";
+import type { ProviderId, SearchSettings, WebProviders } from "./types.js";
 
 const CONTENT_CACHE_VERSION = 2;
 
@@ -44,7 +39,6 @@ interface EnsureContentsArgs {
   config: WebProviders;
   cwd: string;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   ttlMs?: number;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
@@ -115,7 +109,6 @@ export async function resolveContentsFromStore({
   config,
   cwd,
   options,
-  runtimeOptions,
   signal,
   onProgress,
 }: {
@@ -124,7 +117,6 @@ export async function resolveContentsFromStore({
   config: WebProviders;
   cwd: string;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<ContentsResponse> {
@@ -140,7 +132,6 @@ export async function resolveContentsFromStore({
       config,
       cwd,
       options,
-      runtimeOptions,
       signal,
       onProgress,
     });
@@ -152,31 +143,9 @@ export async function resolveContentsFromStore({
     config,
     cwd,
     options,
-    runtimeOptions,
     signal,
     onProgress,
   });
-}
-
-export function parseSearchContentsPrefetchOptions(
-  options: Record<string, unknown> | undefined,
-): SearchContentsPrefetchOptions | undefined {
-  const raw = options?.prefetch;
-  if (raw === undefined) {
-    return undefined;
-  }
-  if (!isJsonObject(raw)) {
-    throw new Error("prefetch must be an object.");
-  }
-
-  const maxUrls = parseOptionalPositiveInteger(raw.maxUrls, "maxUrls");
-  const provider = parseOptionalProviderId(raw.provider);
-  const ttlMs = parseOptionalPositiveInteger(raw.ttlMs, "ttlMs");
-  return {
-    maxUrls,
-    provider,
-    ttlMs,
-  };
 }
 
 export function mergeSearchContentsPrefetchOptions(
@@ -198,19 +167,6 @@ export function mergeSearchContentsPrefetchOptions(
   };
 }
 
-export function stripSearchContentsPrefetchOptions(
-  options: Record<string, unknown> | undefined,
-): Record<string, unknown> | undefined {
-  if (!options) {
-    return undefined;
-  }
-
-  const { prefetch: _prefetch, ...rest } = options;
-  return Object.keys(rest).length > 0
-    ? (rest as Record<string, unknown>)
-    : undefined;
-}
-
 export function resetContentStore(): void {
   contentStoreGeneration += 1;
   contentCache.clear();
@@ -223,7 +179,6 @@ async function resolvePerUrlContents({
   config,
   cwd,
   options,
-  runtimeOptions,
   signal,
   onProgress,
 }: {
@@ -232,7 +187,6 @@ async function resolvePerUrlContents({
   config: WebProviders;
   cwd: string;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<ContentsResponse> {
@@ -244,7 +198,6 @@ async function resolvePerUrlContents({
         config,
         cwd,
         options,
-        runtimeOptions,
         signal,
         onProgress,
       }),
@@ -301,7 +254,6 @@ async function fetchBatchContents({
   config,
   cwd,
   options,
-  runtimeOptions,
   signal,
   onProgress,
   ttlMs = DEFAULT_CONTENT_TTL_MS,
@@ -312,7 +264,6 @@ async function fetchBatchContents({
   config: WebProviders;
   cwd: string;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
   ttlMs?: number;
@@ -329,7 +280,6 @@ async function fetchBatchContents({
     config,
     cwd,
     options,
-    runtimeOptions,
     signal,
     onProgress,
   });
@@ -368,7 +318,6 @@ async function ensureContentsStored({
   config,
   cwd,
   options,
-  runtimeOptions,
   signal,
   onProgress,
   ttlMs = DEFAULT_CONTENT_TTL_MS,
@@ -396,7 +345,6 @@ async function ensureContentsStored({
         config,
         cwd,
         options,
-        runtimeOptions,
         signal,
         onProgress,
       });
@@ -429,7 +377,6 @@ async function fetchContentsViaProvider({
   config,
   cwd,
   options,
-  runtimeOptions,
   signal,
   onProgress,
 }: {
@@ -438,11 +385,10 @@ async function fetchContentsViaProvider({
   config: WebProviders;
   cwd: string;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   signal?: AbortSignal;
   onProgress?: (message: string) => void;
 }): Promise<ContentsResponse> {
-  const provider = ADAPTERS_BY_ID[providerId];
+  const provider = PROVIDERS_BY_ID[providerId];
   const providerConfig = getEffectiveProviderConfig(config, providerId);
 
   onProgress?.(
@@ -456,7 +402,6 @@ async function fetchContentsViaProvider({
       urls,
       options,
     },
-    runtimeOptions,
     {
       cwd,
       signal,
@@ -593,7 +538,7 @@ function resolveContentsProvider(
     return undefined;
   }
 
-  const provider = ADAPTERS_BY_ID[explicitProvider];
+  const provider = PROVIDERS_BY_ID[explicitProvider];
   if (!supportsTool(explicitProvider, "contents")) {
     return undefined;
   }
@@ -683,34 +628,6 @@ function formatUnknownError(error: unknown): string {
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function parseOptionalPositiveInteger(
-  value: unknown,
-  field: string,
-): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!Number.isInteger(value) || Number(value) <= 0) {
-    throw new Error(`prefetch.${field} must be a positive integer.`);
-  }
-  return Number(value);
-}
-
-function parseOptionalProviderId(
-  value: unknown,
-): ProviderId | null | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value === null) {
-    return null;
-  }
-  if (isProviderId(value)) {
-    return value;
-  }
-  throw new Error("prefetch.provider must be a valid provider id or null.");
 }
 
 function isProviderId(value: unknown): value is ProviderId {

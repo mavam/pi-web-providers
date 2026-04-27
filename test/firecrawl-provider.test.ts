@@ -16,7 +16,8 @@ vi.mock("@mendable/firecrawl-js", () => ({
   }),
 }));
 
-import { firecrawlAdapter } from "../src/providers/firecrawl.js";
+import { firecrawlProvider } from "../src/providers/firecrawl.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   delete process.env.FIRECRAWL_API_KEY;
@@ -25,8 +26,8 @@ afterEach(() => {
   firecrawlScrapeMock.mockReset();
 });
 
-describe("firecrawlAdapter", () => {
-  it("merges search options, strips local execution settings, and maps results", async () => {
+describe("providerHarness(firecrawlProvider)", () => {
+  it("merges search options and maps results", async () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
 
     firecrawlSearchMock.mockResolvedValue({
@@ -63,7 +64,7 @@ describe("firecrawlAdapter", () => {
       ],
     });
 
-    const response = await firecrawlAdapter.search(
+    const response = await providerHarness(firecrawlProvider).search(
       "firecrawl sdk",
       4,
       {
@@ -73,7 +74,6 @@ describe("firecrawlAdapter", () => {
           search: {
             sources: ["web", "news"],
             timeout: 15,
-            requestTimeoutMs: 999,
           },
         },
       },
@@ -163,7 +163,7 @@ describe("firecrawlAdapter", () => {
       };
     });
 
-    const response = await firecrawlAdapter.contents(
+    const response = await providerHarness(firecrawlProvider).contents(
       [
         "https://example.com/a",
         "https://example.com/b",
@@ -175,7 +175,6 @@ describe("firecrawlAdapter", () => {
           scrape: {
             formats: ["markdown"],
             waitFor: 500,
-            requestTimeoutMs: 999,
           },
         },
       },
