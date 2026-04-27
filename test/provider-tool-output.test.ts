@@ -944,131 +944,20 @@ describe("provider tool output", () => {
     }
   });
 
-  it("rejects runtime options for research", async () => {
-    const config: WebProviders = {
-      providers: {
-        perplexity: {
-          apiKey: "literal-key",
-        },
-      },
-    };
-
-    await expect(
-      __test__.executeProviderTool({
-        capability: "research",
-        config,
-        explicitProvider: "perplexity",
-        ctx: { cwd: process.cwd() },
-        signal: undefined,
-        onUpdate: undefined,
-        options: undefined,
-        runtimeOptions: {
-          requestTimeoutMs: 1000,
-        },
-        input: "Investigate the topic",
-      }),
-    ).rejects.toThrow("Perplexity research does not accept options.runtime.");
-  });
-
-  it("rejects malformed local execution control fields", async () => {
-    const config: WebProviders = {
-      providers: {
-        exa: {
-          apiKey: "literal-key",
-        },
-      },
-    };
-
-    await expect(
-      __test__.executeProviderTool({
-        capability: "contents",
-        config,
-        explicitProvider: "exa",
-        ctx: { cwd: process.cwd() },
-        signal: undefined,
-        onUpdate: undefined,
-        options: undefined,
-        runtimeOptions: {
-          requestTimeoutMs: "1000" as never,
-        },
-        urls: ["https://example.com"],
-        executionOverride: {
-          capability: "contents",
-          providerLabel: "Exa",
-          execute: async () => ({
-            provider: "exa",
-            text: "contents",
-          }),
-        },
-      }),
-    ).rejects.toThrow("options.requestTimeoutMs must be a positive integer.");
-  });
-
-  it("rejects unsupported runtime options on non-research tools", async () => {
-    const config: WebProviders = {
-      providers: {
-        exa: {
-          apiKey: "literal-key",
-        },
-      },
-    };
-
-    await expect(
-      __test__.executeProviderTool({
-        capability: "contents",
-        config,
-        explicitProvider: "exa",
-        ctx: { cwd: process.cwd() },
-        signal: undefined,
-        onUpdate: undefined,
-        options: undefined,
-        runtimeOptions: {
-          timeoutMs: 1000,
-        },
-        urls: ["https://example.com"],
-        executionOverride: {
-          capability: "contents",
-          providerLabel: "Exa",
-          execute: async () => ({
-            provider: "exa",
-            text: "contents",
-          }),
-        },
-      }),
-    ).rejects.toThrow("Unsupported runtime options: timeoutMs.");
-  });
-
-  it("builds structured options schema with provider and runtime sub-objects", () => {
+  it("builds structured options schema from provider options directly", () => {
     const inner = schemaInner(
       __test__.buildStructuredOptionsSchema("search", "tavily"),
     );
     const props = inner.properties ?? {};
-    expect(props).toHaveProperty("provider");
-    expect(props).toHaveProperty("runtime");
-    const runtimeProps =
-      (props.runtime?.anyOf?.[0] ?? props.runtime)?.properties ?? {};
-    expect(runtimeProps).toHaveProperty("prefetch");
-    expect(runtimeProps).toHaveProperty("requestTimeoutMs");
-  });
-
-  it("omits provider sub-schema when provider has none", () => {
-    const inner = schemaInner(
-      __test__.buildStructuredOptionsSchema("search", undefined),
-    );
-    const props = inner.properties ?? {};
+    expect(props).toHaveProperty("country");
     expect(props).not.toHaveProperty("provider");
-    expect(props).toHaveProperty("runtime");
+    expect(props).not.toHaveProperty("runtime");
   });
 
-  it("omits prefetch from runtime for non-search capabilities", () => {
-    const inner = schemaInner(
-      __test__.buildStructuredOptionsSchema("contents", "tavily"),
+  it("omits options schema when no provider-specific schema is available", () => {
+    expect(__test__.buildStructuredOptionsSchema("search", undefined)).toBe(
+      undefined,
     );
-    const runtimeInner =
-      inner.properties?.runtime?.anyOf?.[0] ?? inner.properties?.runtime;
-    const runtimeProps = runtimeInner?.properties ?? {};
-    expect(runtimeProps).not.toHaveProperty("prefetch");
-    expect(runtimeProps).toHaveProperty("requestTimeoutMs");
   });
   it("omits provider options when a capability has no per-call provider schema", () => {
     const exaContents = __test__.buildStructuredOptionsSchema(
@@ -1080,25 +969,14 @@ describe("provider tool output", () => {
       "custom",
     )!;
 
-    const exaContentsProps = schemaInner(exaContents).properties ?? {};
-    const customSearchProps = schemaInner(customSearch).properties ?? {};
-
-    expect(exaContentsProps).not.toHaveProperty("provider");
-    expect(customSearchProps).not.toHaveProperty("provider");
+    expect(exaContents).toBeUndefined();
+    expect(customSearch).toBeUndefined();
   });
 
   it("does not leak Exa search options into the contents schema", () => {
-    const inner = schemaInner(
-      __test__.buildStructuredOptionsSchema("contents", "exa"),
-    );
-    const props = inner.properties ?? {};
+    const schema = __test__.buildStructuredOptionsSchema("contents", "exa");
 
-    expect(props).not.toHaveProperty("provider");
-    expect(JSON.stringify(inner)).not.toContain("includeDomains");
-    expect(JSON.stringify(inner)).not.toContain("excludeDomains");
-    expect(JSON.stringify(inner)).not.toContain("startPublishedDate");
-    expect(JSON.stringify(inner)).not.toContain("endPublishedDate");
-    expect(JSON.stringify(inner)).not.toContain("userLocation");
+    expect(schema).toBeUndefined();
   });
 
   it("exposes provider-specific search knobs in provider schemas", () => {
@@ -1110,27 +988,22 @@ describe("provider tool output", () => {
     const serper = __test__.buildStructuredOptionsSchema("search", "serper")!;
     const tavily = __test__.buildStructuredOptionsSchema("search", "tavily")!;
 
-    const perplexityProvider = schemaInner(perplexity).properties?.provider;
-    const exaProvider = schemaInner(exa).properties?.provider;
-    const serperProvider = schemaInner(serper).properties?.provider;
-    const tavilyProvider = schemaInner(tavily).properties?.provider;
-
-    expect(perplexityProvider?.properties ?? {}).toHaveProperty("country");
-    expect(exaProvider?.properties ?? {}).toHaveProperty("userLocation");
-    expect(serperProvider?.properties ?? {}).toHaveProperty("gl");
-    expect(serperProvider?.properties ?? {}).toHaveProperty("location");
-    expect(tavilyProvider?.properties ?? {}).toHaveProperty("country");
+    expect(schemaInner(perplexity).properties ?? {}).toHaveProperty("country");
+    expect(schemaInner(exa).properties ?? {}).toHaveProperty("userLocation");
+    expect(schemaInner(serper).properties ?? {}).toHaveProperty("gl");
+    expect(schemaInner(serper).properties ?? {}).toHaveProperty("location");
+    expect(schemaInner(tavily).properties ?? {}).toHaveProperty("country");
   });
 
   it("exposes only safe Gemini research knobs in provider schemas", () => {
     const gemini = __test__.buildStructuredOptionsSchema("research", "gemini")!;
     const valyu = __test__.buildStructuredOptionsSchema("search", "valyu")!;
 
-    const geminiProvider = schemaInner(gemini).properties?.provider;
-    const geminiProviderProps = geminiProvider?.properties ?? {};
-    const valyuProvider = schemaInner(valyu).properties?.provider;
+    const geminiProvider = schemaInner(gemini);
+    const geminiProviderProps = geminiProvider.properties ?? {};
+    const valyuProvider = schemaInner(valyu);
 
-    expect(geminiProvider?.additionalProperties).toBe(false);
+    expect(geminiProvider.additionalProperties).toBe(false);
     expect(geminiProviderProps).toHaveProperty("agent_config");
     expect(geminiProviderProps.agent_config?.additionalProperties).toBe(false);
     expect(geminiProviderProps).not.toHaveProperty("store");
@@ -1140,7 +1013,7 @@ describe("provider tool output", () => {
     expect(geminiProviderProps).not.toHaveProperty("system_instruction");
     expect(JSON.stringify(gemini)).not.toContain("search_types");
     expect(JSON.stringify(gemini)).not.toContain("response_length");
-    expect(valyuProvider?.properties ?? {}).toHaveProperty("countryCode");
+    expect(valyuProvider.properties ?? {}).toHaveProperty("countryCode");
   });
 
   it("omits runtime from the research tool schema", () => {
@@ -1150,6 +1023,6 @@ describe("provider tool output", () => {
     const props = inner.properties ?? {};
 
     expect(props).not.toHaveProperty("runtime");
-    expect(props).toHaveProperty("provider");
+    expect(props).toHaveProperty("agent_config");
   });
 });

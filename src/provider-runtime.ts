@@ -1,7 +1,6 @@
 import {
   formatDuration,
   formatErrorMessage,
-  parseLocalExecutionOptions,
   runWithExecutionPolicy,
 } from "./execution-policy.js";
 import { formatProviderDiagnostic } from "./provider-diagnostics.js";
@@ -30,7 +29,6 @@ export async function executeProviderRequest<TTool extends Tool>(
   provider: ProviderAdapter,
   config: ProviderConfig,
   request: ProviderRequest<TTool>,
-  options: Record<string, unknown> | undefined,
   context: ProviderContext,
 ): Promise<ProviderResult<TTool>> {
   return (await executeProviderExecution(
@@ -41,18 +39,15 @@ export async function executeProviderRequest<TTool extends Tool>(
       execute: (executionContext) =>
         executeProviderHandler(provider, config, request, executionContext),
     },
-    options,
     context,
   )) as ProviderResult<TTool>;
 }
 
 export async function executeProviderExecution<TTool extends Tool>(
   execution: ProviderExecution<TTool>,
-  options: Record<string, unknown> | undefined,
   context: ProviderContext,
 ): Promise<ProviderResult<TTool>> {
   if (execution.capability === "research") {
-    rejectResearchExecutionControls(execution.providerLabel, options);
     const deadline = createResearchDeadlineSignal(
       context.signal,
       execution.providerLabel,
@@ -79,7 +74,7 @@ export async function executeProviderExecution<TTool extends Tool>(
     }
   }
 
-  const requestPolicy = resolveExecutionPolicy(execution.settings, options);
+  const requestPolicy = resolveExecutionPolicy(execution.settings);
   try {
     return await runWithExecutionPolicy(
       `${execution.providerLabel} ${execution.capability} request`,
@@ -156,18 +151,11 @@ function unsupportedProviderTool(provider: ProviderAdapter, tool: Tool): Error {
   return new Error(`Provider '${provider.id}' does not support '${tool}'.`);
 }
 
-function resolveExecutionPolicy(
-  defaults: ExecutionSettings | undefined,
-  options: Record<string, unknown> | undefined,
-) {
-  validateRuntimeOptions(options);
-  const localOptions = parseLocalExecutionOptions(options);
-
+function resolveExecutionPolicy(defaults: ExecutionSettings | undefined) {
   return {
-    requestTimeoutMs:
-      localOptions.requestTimeoutMs ?? defaults?.requestTimeoutMs,
-    retryCount: localOptions.retryCount ?? defaults?.retryCount ?? 0,
-    retryDelayMs: localOptions.retryDelayMs ?? defaults?.retryDelayMs ?? 2000,
+    requestTimeoutMs: defaults?.requestTimeoutMs,
+    retryCount: defaults?.retryCount ?? 0,
+    retryDelayMs: defaults?.retryDelayMs ?? 2000,
   };
 }
 
@@ -257,38 +245,4 @@ async function withAbortSignal<T>(
       },
     );
   });
-}
-
-function rejectResearchExecutionControls(
-  providerLabel: string,
-  options: Record<string, unknown> | undefined,
-): void {
-  if (!options || Object.keys(options).length === 0) {
-    return;
-  }
-
-  throw new Error(`${providerLabel} research does not accept options.runtime.`);
-}
-
-function validateRuntimeOptions(
-  options: Record<string, unknown> | undefined,
-): void {
-  if (!options) {
-    return;
-  }
-
-  const unsupportedKeys = Object.keys(options).filter(
-    (key) =>
-      key !== "requestTimeoutMs" &&
-      key !== "retryCount" &&
-      key !== "retryDelayMs",
-  );
-
-  if (unsupportedKeys.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `Unsupported runtime options: ${unsupportedKeys.join(", ")}.`,
-  );
 }

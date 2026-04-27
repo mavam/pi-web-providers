@@ -38,11 +38,9 @@ import {
   DEFAULT_CONTENT_TTL_MS,
   DEFAULT_PREFETCH_MAX_URLS,
   mergeSearchContentsPrefetchOptions,
-  parseSearchContentsPrefetchOptions,
   resetContentStore,
   resolveContentsFromStore,
   startContentsPrefetch,
-  stripSearchContentsPrefetchOptions,
 } from "./prefetch-manager.js";
 import {
   getProviderConfigManifest,
@@ -766,10 +764,7 @@ async function executeSearchTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     maxResults: request.maxResults,
     queries: request.queries,
   });
@@ -782,7 +777,6 @@ async function executeSearchToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   maxResults,
   queries,
   executionOverrides,
@@ -793,7 +787,6 @@ async function executeSearchToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   maxResults?: number;
   queries: string[];
   executionOverrides?: ProviderExecution<"search">[];
@@ -805,7 +798,7 @@ async function executeSearchToolInternal({
 
   const prefetchOptions = mergeSearchContentsPrefetchOptions(
     getSearchPrefetchDefaults(config),
-    parseSearchContentsPrefetchOptions(runtimeOptions),
+    undefined,
   );
   const searchQueries = resolveSearchQueries(queries);
   if (
@@ -848,7 +841,6 @@ async function executeSearchToolInternal({
           query: searchQuery,
           maxResults: clampedMaxResults,
           options: providerOptions,
-          runtimeOptions,
           providerContext,
           onProgress:
             searchQueries.length > 1 ? undefined : progressReporter.report,
@@ -909,7 +901,6 @@ async function executeRawProviderRequest({
   ctx,
   signal,
   options,
-  runtimeOptions,
   maxResults,
   urls,
   query,
@@ -921,7 +912,6 @@ async function executeRawProviderRequest({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   maxResults?: number;
   urls?: string[];
   query?: string;
@@ -937,7 +927,6 @@ async function executeRawProviderRequest({
       query: query ?? "",
       maxResults: clampResults(maxResults),
       options,
-      runtimeOptions,
       providerContext: {
         cwd: ctx.cwd,
         signal: signal ?? undefined,
@@ -962,7 +951,6 @@ async function executeRawProviderRequest({
       ctx,
       signal,
       options,
-      runtimeOptions,
       urls,
     });
   }
@@ -976,7 +964,6 @@ async function executeRawProviderRequest({
       ctx,
       signal,
       options,
-      runtimeOptions,
       query,
     });
   }
@@ -989,7 +976,6 @@ async function executeRawProviderRequest({
     ctx,
     signal,
     options,
-    runtimeOptions,
     input,
   });
 }
@@ -1021,7 +1007,6 @@ async function executeSingleSearchQuery({
   query,
   maxResults,
   options,
-  runtimeOptions,
   providerContext,
   onProgress,
   executionOverride,
@@ -1031,7 +1016,6 @@ async function executeSingleSearchQuery({
   query: string;
   maxResults: number;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   providerContext: { cwd: string; signal?: AbortSignal };
   onProgress?: (message: string) => void;
   executionOverride?: ProviderExecution<"search">;
@@ -1045,24 +1029,14 @@ async function executeSingleSearchQuery({
 
   onProgress?.(`Searching via ${provider.label}: ${query}`);
   const result = executionOverride
-    ? await executeProviderExecution(
-        executionOverride,
-        stripSearchContentsPrefetchOptions(runtimeOptions),
-        {
-          ...providerContext,
-          onProgress,
-        },
-      )
-    : await executeProviderRequest(
-        provider,
-        providerConfig,
-        request,
-        stripSearchContentsPrefetchOptions(runtimeOptions),
-        {
-          ...providerContext,
-          onProgress,
-        },
-      );
+    ? await executeProviderExecution(executionOverride, {
+        ...providerContext,
+        onProgress,
+      })
+    : await executeProviderRequest(provider, providerConfig, request, {
+        ...providerContext,
+        onProgress,
+      });
   if (!isSearchResponse(result)) {
     throw new Error(`${provider.label} search returned an invalid result.`);
   }
@@ -1087,10 +1061,7 @@ async function executeAnswerTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     queries: request.queries,
   });
 }
@@ -1102,7 +1073,6 @@ async function executeAnswerToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   queries,
   executionOverrides,
 }: {
@@ -1112,7 +1082,6 @@ async function executeAnswerToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   queries: string[];
   executionOverrides?: ProviderExecution<"answer">[];
 }) {
@@ -1161,7 +1130,6 @@ async function executeAnswerToolInternal({
           ctx,
           signal,
           options: providerOptions,
-          runtimeOptions,
           query: answerQuery,
           onProgress:
             answerQueries.length > 1 ? undefined : progressReporter.report,
@@ -1278,7 +1246,6 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   onProgress,
   executionOverride,
@@ -1290,7 +1257,6 @@ async function executeProviderOperation({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   onProgress?: (message: string) => void;
   executionOverride?: ProviderExecution<"contents">;
@@ -1303,7 +1269,6 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   query,
   input,
   onProgress,
@@ -1316,7 +1281,6 @@ async function executeProviderOperation({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   query?: string;
   input?: string;
   onProgress?: (message: string) => void;
@@ -1330,7 +1294,6 @@ async function executeProviderOperation({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   query,
   input,
@@ -1344,7 +1307,6 @@ async function executeProviderOperation({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   query?: string;
   input?: string;
@@ -1369,7 +1331,6 @@ async function executeProviderOperation({
       config,
       cwd: ctx.cwd,
       options,
-      runtimeOptions,
       signal: signal ?? undefined,
       onProgress,
     });
@@ -1386,22 +1347,16 @@ async function executeProviderOperation({
   }
 
   const result = executionOverride
-    ? await executeProviderExecution(executionOverride, runtimeOptions, {
+    ? await executeProviderExecution(executionOverride, {
         cwd: ctx.cwd,
         signal: signal ?? undefined,
         onProgress,
       })
-    : await executeProviderRequest(
-        provider,
-        providerConfig,
-        request,
-        runtimeOptions,
-        {
-          cwd: ctx.cwd,
-          signal: signal ?? undefined,
-          onProgress,
-        },
-      );
+    : await executeProviderRequest(provider, providerConfig, request, {
+        cwd: ctx.cwd,
+        signal: signal ?? undefined,
+        onProgress,
+      });
   if (isSearchResponse(result)) {
     throw new Error(
       `${provider.label} ${capability} returned an invalid result.`,
@@ -1425,10 +1380,7 @@ async function executeProviderTool({
     ctx: { cwd: context.cwd },
     signal: context.signal,
     progress: context.progress,
-    providerOptions: request.options?.provider,
-    runtimeOptions: request.options?.runtime as
-      | Record<string, unknown>
-      | undefined,
+    providerOptions: request.options,
     urls: request.urls,
     query: request.query,
     input: request.input,
@@ -1443,7 +1395,6 @@ async function executeProviderToolInternal({
   signal,
   progress,
   providerOptions,
-  runtimeOptions,
   urls,
   query,
   input,
@@ -1457,7 +1408,6 @@ async function executeProviderToolInternal({
   signal: AbortSignal | null | undefined;
   progress?: ProgressCallback;
   providerOptions: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls?: string[];
   query?: string;
   input?: string;
@@ -1493,7 +1443,6 @@ async function executeProviderToolInternal({
               ctx,
               signal,
               options: providerOptions,
-              runtimeOptions,
               urls: urls ?? [],
               progressReport: progressReporter.report,
               executionOverrides,
@@ -1506,7 +1455,6 @@ async function executeProviderToolInternal({
               ctx,
               signal,
               options: providerOptions,
-              runtimeOptions,
               urls,
               onProgress: progressReporter.report,
               executionOverride: executionOverride as
@@ -1522,7 +1470,6 @@ async function executeProviderToolInternal({
         ctx,
         signal,
         options: providerOptions,
-        runtimeOptions,
         query,
         input,
         onProgress: progressReporter.report,
@@ -1578,7 +1525,7 @@ async function dispatchWebResearch({
     updateWebResearchWidget,
     config,
     ctx: context,
-    providerOptions: request.options?.provider,
+    providerOptions: request.options,
     input: request.input,
   });
 }
@@ -1957,7 +1904,6 @@ async function executeBatchedContentsTool({
   ctx,
   signal,
   options,
-  runtimeOptions,
   urls,
   progressReport,
   executionOverrides,
@@ -1968,7 +1914,6 @@ async function executeBatchedContentsTool({
   ctx: { cwd: string };
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
-  runtimeOptions?: Record<string, unknown> | undefined;
   urls: string[];
   progressReport: ((message: string) => void) | undefined;
   executionOverrides?: ProviderExecution<"contents">[];
@@ -2000,7 +1945,6 @@ async function executeBatchedContentsTool({
         ctx,
         signal,
         options,
-        runtimeOptions,
         urls: [url],
         onProgress: undefined,
         executionOverride: executionOverrides?.[index],
@@ -4301,7 +4245,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     queries,
     executionOverrides,
   }: {
@@ -4311,7 +4254,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     queries: string[];
     executionOverrides?: ProviderExecution<"answer">[];
   }) =>
@@ -4322,7 +4264,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       queries,
       executionOverrides,
     }),
@@ -4335,7 +4276,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     urls,
     query,
     input,
@@ -4349,7 +4289,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     urls?: string[];
     query?: string;
     input?: string;
@@ -4364,7 +4303,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       urls,
       query,
       input,
@@ -4378,7 +4316,6 @@ export const __test__ = {
     signal,
     onUpdate,
     options,
-    runtimeOptions,
     maxResults,
     queries,
     executionOverrides,
@@ -4389,7 +4326,6 @@ export const __test__ = {
     signal: AbortSignal | null | undefined;
     onUpdate: ToolUpdateCallback;
     options: Record<string, unknown> | undefined;
-    runtimeOptions?: Record<string, unknown> | undefined;
     maxResults?: number;
     queries: string[];
     executionOverrides?: ProviderExecution<"search">[];
@@ -4401,7 +4337,6 @@ export const __test__ = {
       signal,
       progress: createProgressEmitter(onUpdate),
       providerOptions: options,
-      runtimeOptions,
       maxResults,
       queries,
       executionOverrides,

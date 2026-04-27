@@ -98,7 +98,7 @@ describe("managed tool availability", () => {
     expect(webSearch?.description).toContain("titles, URLs, and snippets");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("query");
     expect(webSearch?.parameters?.properties).toHaveProperty("queries");
-    expect(webSearch?.parameters?.properties).toHaveProperty("options");
+    expect(webSearch?.parameters?.properties).not.toHaveProperty("options");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("provider");
     expect(webContents?.description).toContain(
       "Read and extract the main contents of one or more web pages.",

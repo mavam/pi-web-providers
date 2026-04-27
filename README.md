@@ -96,18 +96,16 @@ results should arrive as soon as they are ready.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter    | Type     | Default  | Description                                                                                |
-| ------------ | -------- | -------- | ------------------------------------------------------------------------------------------ |
-| `queries`    | string[] | required | One or more search queries to run (max 10)                                                 |
-| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                                                  |
-| `options`    | object   | —        | `provider` settings exposed by the selected provider schema, plus local `runtime` settings |
+| Parameter    | Type     | Default  | Description                                                        |
+| ------------ | -------- | -------- | ------------------------------------------------------------------ |
+| `queries`    | string[] | required | One or more search queries to run (max 10)                         |
+| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                          |
+| `options`    | object   | —        | Provider-specific settings exposed by the selected provider schema |
 
-`web_search.options.runtime.prefetch` is local-only and is not forwarded to the
-provider SDK. It accepts `provider`, `maxUrls`, and `ttlMs`, and starts a
-background page-extraction workflow only when `prefetch.provider` is set.
-`/web-providers` can also persist default search prefetch settings under
-`settings.search`. Per-call retry and timeout overrides also live under
-`web_search.options.runtime`.
+`options` is omitted when the configured search provider has no per-call
+provider options. Runtime controls are not accepted in tool calls. Configure
+retry, timeout, and background contents prefetch under `settings` and
+`settings.search`; prefetch starts only when `settings.search.provider` is set.
 
 </details>
 
@@ -121,10 +119,10 @@ each page can be acted on independently.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type     | Default  | Description                                                                                                     |
-| --------- | -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `urls`    | string[] | required | One or more URLs to extract                                                                                     |
-| `options` | object   | —        | `provider` extraction settings exposed by the selected provider schema, plus optional local `runtime` overrides |
+| Parameter | Type     | Default  | Description                                                        |
+| --------- | -------- | -------- | ------------------------------------------------------------------ |
+| `urls`    | string[] | required | One or more URLs to extract                                        |
+| `options` | object   | —        | Provider-specific settings exposed by the selected provider schema |
 
 `web_contents` reuses any matching cached pages already present in the local
 in-memory cache—whether they came from prefetch or an earlier read—and only
@@ -148,10 +146,10 @@ into sibling calls when earlier independent answers can unblock the next step.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type     | Default  | Description                                                                                          |
-| --------- | -------- | -------- | ---------------------------------------------------------------------------------------------------- |
-| `queries` | string[] | required | One or more questions to answer in one call (max 10)                                                 |
-| `options` | object   | —        | `provider` settings exposed by the selected provider schema, plus optional local `runtime` overrides |
+| Parameter | Type     | Default  | Description                                                        |
+| --------- | -------- | -------- | ------------------------------------------------------------------ |
+| `queries` | string[] | required | One or more questions to answer in one call (max 10)               |
+| `options` | object   | —        | Provider-specific settings exposed by the selected provider schema |
 
 Responses are grouped into per-question sections when more than one question is
 provided.
@@ -168,15 +166,15 @@ saved report path.
 <details>
 <summary><strong>Parameters and behavior</strong></summary>
 
-| Parameter | Type   | Default  | Description                                                                   |
-| --------- | ------ | -------- | ----------------------------------------------------------------------------- |
-| `input`   | string | required | Research brief or question                                                    |
-| `options` | object | —        | Provider-specific `provider` settings exposed by the selected provider schema |
+| Parameter | Type   | Default  | Description                                                        |
+| --------- | ------ | -------- | ------------------------------------------------------------------ |
+| `input`   | string | required | Research brief or question                                         |
+| `options` | object | —        | Provider-specific settings exposed by the selected provider schema |
 
-`options.provider` is provider-specific. Equivalent concepts can use different
-field names across SDKs—for example Perplexity uses `country`, Exa uses
-`userLocation`, and Valyu uses `countryCode`. Unlike the other managed tools,
-`web_research` does not support per-call `options.runtime` overrides.
+`options` is provider-specific. Equivalent concepts can use different field
+names across SDKs—for example Perplexity uses `country`, Exa uses
+`userLocation`, and Valyu uses `countryCode`. Runtime controls are not accepted
+in tool calls.
 
 Unlike the other managed tools, `web_research` does not accept local timeout,
 retry, polling, or resume controls. Research has one opinionated execution
@@ -488,7 +486,7 @@ The `custom` provider lets you bring your own wrapper command for any
 managed tool. Each capability can point at a different local command under
 `providers["custom"].options`.
 
-`custom` does not expose standard per-call `options.provider` fields. Put
+`custom` does not expose standard per-call `options` fields. Put
 provider-specific behavior in the wrapper configuration or in the wrapper
 implementation.
 
