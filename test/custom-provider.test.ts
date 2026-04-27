@@ -2,7 +2,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { customAdapter } from "../src/providers/custom.js";
+import { customProvider } from "../src/providers/custom.js";
+import { providerHarness } from "./provider-harness.js";
 
 const cleanupDirs: string[] = [];
 
@@ -15,7 +16,7 @@ afterEach(async () => {
   }
 });
 
-describe("customAdapter", () => {
+describe("providerHarness(customProvider)", () => {
   it("executes a configured search command and parses structured JSON", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
     cleanupDirs.push(root);
@@ -44,7 +45,7 @@ describe("customAdapter", () => {
       "utf8",
     );
 
-    const provider = customAdapter;
+    const provider = providerHarness(customProvider);
     const progress: string[] = [];
     const result = await provider.search(
       "custom query",
@@ -101,7 +102,7 @@ describe("customAdapter", () => {
       "utf8",
     );
 
-    const provider = customAdapter;
+    const provider = providerHarness(customProvider);
     const result = await provider.answer(
       "what is this?",
       {
@@ -139,7 +140,7 @@ describe("customAdapter", () => {
     );
 
     await expect(
-      customAdapter.contents(
+      providerHarness(customProvider).contents(
         ["https://example.com"],
         {
           options: {
@@ -169,7 +170,7 @@ describe("customAdapter", () => {
       "utf8",
     );
 
-    const provider = customAdapter;
+    const provider = providerHarness(customProvider);
 
     await expect(
       provider.search(

@@ -16,7 +16,8 @@ vi.mock("@mendable/firecrawl-js", () => ({
   }),
 }));
 
-import { firecrawlAdapter } from "../src/providers/firecrawl.js";
+import { firecrawlProvider } from "../src/providers/firecrawl.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   delete process.env.FIRECRAWL_API_KEY;
@@ -25,7 +26,7 @@ afterEach(() => {
   firecrawlScrapeMock.mockReset();
 });
 
-describe("firecrawlAdapter", () => {
+describe("providerHarness(firecrawlProvider)", () => {
   it("merges search options and maps results", async () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
 
@@ -63,7 +64,7 @@ describe("firecrawlAdapter", () => {
       ],
     });
 
-    const response = await firecrawlAdapter.search(
+    const response = await providerHarness(firecrawlProvider).search(
       "firecrawl sdk",
       4,
       {
@@ -162,7 +163,7 @@ describe("firecrawlAdapter", () => {
       };
     });
 
-    const response = await firecrawlAdapter.contents(
+    const response = await providerHarness(firecrawlProvider).contents(
       [
         "https://example.com/a",
         "https://example.com/b",

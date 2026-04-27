@@ -14,7 +14,8 @@ vi.mock("@openai/codex-sdk", () => ({
   }),
 }));
 
-import { codexAdapter } from "../src/providers/codex.js";
+import { codexProvider } from "../src/providers/codex.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   codexCtorMock.mockClear();
@@ -46,7 +47,7 @@ describe("CodexAdapter", () => {
       }),
     });
 
-    const provider = codexAdapter;
+    const provider = providerHarness(codexProvider);
     const response = await provider.search(
       "latest docs",
       5,

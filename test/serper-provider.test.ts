@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { serperAdapter } from "../src/providers/serper.js";
+import { serperProvider } from "../src/providers/serper.js";
+import { providerHarness } from "./provider-harness.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -9,7 +10,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("serperAdapter", () => {
+describe("providerHarness(serperProvider)", () => {
   it("maps Serper organic results and preserves rich metadata", async () => {
     process.env.SERPER_API_KEY = "test-key";
     const fetchMock = vi.fn().mockResolvedValue(
@@ -60,7 +61,7 @@ describe("serperAdapter", () => {
     );
     globalThis.fetch = fetchMock as typeof fetch;
 
-    const response = await serperAdapter.search(
+    const response = await providerHarness(serperProvider).search(
       "serper api",
       25,
       {
@@ -155,7 +156,7 @@ describe("serperAdapter", () => {
         new Response(JSON.stringify({ peopleAlsoAsk: [] }), { status: 200 }),
       ) as typeof fetch;
 
-    const response = await serperAdapter.search(
+    const response = await providerHarness(serperProvider).search(
       "serper",
       3,
       {
@@ -179,7 +180,7 @@ describe("serperAdapter", () => {
     ) as typeof fetch;
 
     await expect(
-      serperAdapter.search(
+      providerHarness(serperProvider).search(
         "serper",
         3,
         {
@@ -194,7 +195,7 @@ describe("serperAdapter", () => {
 
   it("requires an API key", async () => {
     await expect(
-      serperAdapter.search(
+      providerHarness(serperProvider).search(
         "serper",
         1,
         {

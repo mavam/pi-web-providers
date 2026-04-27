@@ -8,15 +8,16 @@ vi.mock("@anthropic-ai/claude-agent-sdk", () => ({
   query: queryMock,
 }));
 
-import { claudeAdapter } from "../src/providers/claude.js";
+import { claudeProvider } from "../src/providers/claude.js";
+import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
   queryMock.mockReset();
 });
 
-describe("claudeAdapter", () => {
+describe("providerHarness(claudeProvider)", () => {
   it("reports Claude as unavailable when an explicit executable path is missing", () => {
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
 
     expect(
       provider.getCapabilityStatus(
@@ -31,7 +32,7 @@ describe("claudeAdapter", () => {
   });
 
   it("reports Claude as available without preflighting auth", () => {
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
 
     expect(
       provider.getCapabilityStatus(
@@ -67,7 +68,7 @@ describe("claudeAdapter", () => {
       close() {},
     }));
 
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
     await provider.search(
       "latest Claude docs",
       1,
@@ -113,7 +114,7 @@ describe("claudeAdapter", () => {
       };
     });
 
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
     const controller = new AbortController();
     const searchPromise = provider.search(
       "latest Claude docs",
@@ -154,7 +155,7 @@ describe("claudeAdapter", () => {
       }),
     );
 
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
     await provider.search(
       "latest Claude docs",
       1,
@@ -212,7 +213,7 @@ describe("claudeAdapter", () => {
       }),
     );
 
-    const provider = claudeAdapter;
+    const provider = providerHarness(claudeProvider);
     const response = await provider.answer(
       "What changed?",
       {
