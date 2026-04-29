@@ -523,30 +523,64 @@ function parseAnswerStream(text: string): {
   for (const line of text.split(/\r?\n/)) {
     const data = line.startsWith("data:") ? line.slice(5).trim() : line.trim();
     if (!data || data === "[DONE]") continue;
-    for (const m of data.matchAll(
-      /<(citation|usage|enum_item)(\{.*?\})(?:<\/\1>?)?/g,
-    )) {
-      try {
-        const parsed = JSON.parse(m[2]);
-        if (m[1] === "citation")
-          citations.push({ title: str(parsed.title), url: str(parsed.url) });
-        else if (m[1] === "usage") usage = parsed;
-      } catch {}
-    }
-    const cleaned = data.replace(
-      /<(citation|usage|enum_item)\{.*?\}(?:<\/\1>?)?/g,
-      "",
-    );
+    const dataTags = extractBraveTags(data);
+    citations.push(...dataTags.citations);
+    usage = dataTags.usage ?? usage;
     try {
-      const parsed = obj(JSON.parse(cleaned));
+      const parsed = obj(JSON.parse(data));
       const choice = obj(arr(parsed.choices)[0]);
       const delta = str(obj(choice.delta).content);
-      if (delta) answer += delta;
+      if (delta) {
+        const deltaTags = extractBraveTags(delta);
+        citations.push(...deltaTags.citations);
+        usage = deltaTags.usage ?? usage;
+        answer += deltaTags.text;
+      }
     } catch {
-      answer += cleaned;
+      answer += dataTags.text;
     }
   }
-  return { answer, citations, usage };
+  return { answer, citations: dedupeCitations(citations), usage };
+}
+
+function extractBraveTags(text: string): {
+  text: string;
+  citations: Array<{ title?: string; url?: string }>;
+  usage?: unknown;
+} {
+  const citations: Array<{ title?: string; url?: string }> = [];
+  let usage: unknown;
+  const cleaned = text.replace(
+    /<(citation|usage|enum_item)(\{.*?\})(?:<\/\1>?)?/gs,
+    (_match, tag: string, json: string) => {
+      try {
+        const parsed = JSON.parse(json);
+        if (tag === "citation") {
+          citations.push({
+            title: str(parsed.title),
+            url: str(parsed.url),
+          });
+        } else if (tag === "usage") {
+          usage = parsed;
+        }
+      } catch {}
+      return "";
+    },
+  );
+  return { text: cleaned, citations, usage };
+}
+
+function dedupeCitations(
+  citations: Array<{ title?: string; url?: string }>,
+): Array<{ title?: string; url?: string }> {
+  const seen = new Set<string>();
+  return citations.filter((citation) => {
+    const key = citation.url ?? citation.title;
+    if (!key) return false;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 export const braveProvider = defineProvider({
