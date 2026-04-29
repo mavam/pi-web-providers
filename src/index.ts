@@ -1349,7 +1349,7 @@ async function executeProviderOperation({
       `Fetching contents via ${provider.label} for ${(urls ?? []).length} URL(s)`,
     );
   } else if (capability === "answer") {
-    onProgress?.(`Answering via ${provider.label}: ${query ?? ""}`);
+    onProgress?.(`Answering via ${provider.label}`);
   } else if (capability === "research") {
     onProgress?.(`Researching via ${provider.label}`);
   }
