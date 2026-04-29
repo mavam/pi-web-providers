@@ -144,7 +144,7 @@ const firecrawlImplementation = {
 
   createTemplate(): Firecrawl {
     return {
-      apiKey: "FIRECRAWL_API_KEY",
+      credentials: { api: "FIRECRAWL_API_KEY" },
       options: {
         scrape: {
           formats: ["markdown"],
@@ -155,7 +155,7 @@ const firecrawlImplementation = {
   },
 
   getCapabilityStatus(config: Firecrawl | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -228,7 +228,7 @@ const firecrawlImplementation = {
 };
 
 function createClient(config: Firecrawl): FirecrawlClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -319,7 +319,7 @@ export const firecrawlProvider = defineProvider({
   docsUrl: firecrawlImplementation.docsUrl,
   config: {
     createTemplate: () => firecrawlImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (firecrawlImplementation.getCapabilityStatus as any)(

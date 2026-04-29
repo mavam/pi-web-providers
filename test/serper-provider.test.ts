@@ -65,7 +65,7 @@ describe("providerHarness(serperProvider)", () => {
       "serper api",
       25,
       {
-        apiKey: "SERPER_API_KEY",
+        credentials: { api: "SERPER_API_KEY" },
         baseUrl: "https://google.serper.test",
         options: {
           search: {
@@ -160,7 +160,7 @@ describe("providerHarness(serperProvider)", () => {
       "serper",
       3,
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
       },
       { cwd: process.cwd() },
     );
@@ -184,7 +184,7 @@ describe("providerHarness(serperProvider)", () => {
         "serper",
         3,
         {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
         { cwd: process.cwd() },
       ),
@@ -199,7 +199,7 @@ describe("providerHarness(serperProvider)", () => {
         "serper",
         1,
         {
-          apiKey: "SERPER_API_KEY",
+          credentials: { api: "SERPER_API_KEY" },
         },
         { cwd: process.cwd() },
       ),

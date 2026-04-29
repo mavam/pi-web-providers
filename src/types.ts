@@ -192,7 +192,10 @@ export interface CustomOptions {
   research?: CustomCommandConfig;
 }
 
+export type ProviderCredentials = Record<string, string>;
+
 export interface Provider<TOptions = never> {
+  credentials?: ProviderCredentials;
   options?: TOptions;
   settings?: ExecutionSettings;
 }
@@ -204,69 +207,56 @@ export interface Claude extends Provider<ClaudeOptions> {
 export interface Codex extends Provider<CodexOptions> {
   codexPath?: string;
   baseUrl?: string;
-  apiKey?: string;
   env?: Record<string, string>;
   config?: Record<string, unknown>;
 }
 
 export interface Cloudflare extends Provider<Record<string, unknown>> {
-  apiToken?: string;
   accountId?: string;
 }
 
 export interface Exa extends Provider<ExaOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Firecrawl extends Provider<FirecrawlOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Gemini extends Provider<GeminiOptions> {
-  apiKey?: string;
 }
 
 export interface Linkup extends Provider<LinkupOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Ollama extends Provider {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Perplexity extends Provider<PerplexityOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Parallel extends Provider<ParallelOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface OpenAI extends Provider<OpenAIOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Custom extends Provider<CustomOptions> {}
 
 export interface Tavily extends Provider<TavilyOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Serper extends Provider<SerperOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 
 export interface Valyu extends Provider<ValyuOptions> {
-  apiKey?: string;
   baseUrl?: string;
 }
 

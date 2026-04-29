@@ -68,7 +68,7 @@ describe("providerHarness(firecrawlProvider)", () => {
       "firecrawl sdk",
       4,
       {
-        apiKey: "FIRECRAWL_API_KEY",
+        credentials: { api: "FIRECRAWL_API_KEY" },
         baseUrl: "https://api.firecrawl.test",
         options: {
           search: {
@@ -170,7 +170,7 @@ describe("providerHarness(firecrawlProvider)", () => {
         "https://example.com/c",
       ],
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
         options: {
           scrape: {
             formats: ["markdown"],

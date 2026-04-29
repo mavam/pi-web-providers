@@ -52,7 +52,7 @@ describe("providerHarness(linkupProvider)", () => {
       "linkup sdk",
       2,
       {
-        apiKey: "LINKUP_API_KEY",
+        credentials: { api: "LINKUP_API_KEY" },
         baseUrl: "https://api.linkup.test/v1",
         options: {
           search: {
@@ -119,7 +119,7 @@ describe("providerHarness(linkupProvider)", () => {
         "linkup sdk",
         2,
         {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
         { cwd: process.cwd() },
         {
@@ -151,7 +151,7 @@ describe("providerHarness(linkupProvider)", () => {
         "https://example.com/c",
       ],
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
         options: {
           fetch: {
             includeRawHtml: true,
@@ -210,7 +210,7 @@ describe("providerHarness(linkupProvider)", () => {
         "linkup",
         1,
         {
-          apiKey: "LINKUP_API_KEY",
+          credentials: { api: "LINKUP_API_KEY" },
         },
         { cwd: process.cwd() },
       ),

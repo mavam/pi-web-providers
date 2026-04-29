@@ -727,7 +727,7 @@ function createProvider(client: unknown) {
 
 function createConfig(): Gemini {
   return {
-    apiKey: "literal-key",
+    credentials: { api: "literal-key" },
     options: {
       searchModel: "gemini-2.5-flash",
     },

@@ -33,7 +33,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -105,7 +105,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -165,7 +165,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -216,7 +216,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -257,7 +257,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -280,7 +280,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -303,7 +303,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -364,7 +364,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -421,7 +421,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -464,7 +464,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -506,7 +506,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -559,7 +559,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -631,7 +631,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -676,7 +676,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -759,7 +759,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -836,7 +836,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -900,7 +900,7 @@ describe("provider tool output", () => {
       const config: WebProviders = {
         providers: {
           perplexity: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
           },
         },
       };

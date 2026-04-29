@@ -20,14 +20,14 @@ export const ollamaProvider = defineProvider({
   config: {
     createTemplate(): Ollama {
       return {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
       };
     },
-    fields: ["apiKey", "baseUrl", "settings"],
+    fields: ["credentials", "baseUrl", "settings"],
   },
 
   getCapabilityStatus(config: Ollama | undefined) {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   capabilities: {
@@ -146,7 +146,7 @@ async function fetchOllamaContents(
 }
 
 function resolveApiKey(config: Ollama): string {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }

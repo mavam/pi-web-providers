@@ -45,7 +45,13 @@ export async function loadConfig(): Promise<WebProviders> {
 export async function readConfigFile(path: string): Promise<WebProviders> {
   try {
     const content = await readFile(path, "utf-8");
-    return parseConfig(content, path);
+    const raw = parseJson(content, path);
+    const migrated = migrateLegacyCredentialConfig(raw);
+    const config = normalizeConfig(migrated.config, path);
+    if (migrated.changed) {
+      await writeFile(path, serializeConfig(config), "utf-8");
+    }
+    return config;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {};
@@ -67,7 +73,10 @@ export function parseConfig(
   text: string,
   source = CONFIG_FILE_NAME,
 ): WebProviders {
-  return normalizeConfig(parseJson(text, source), source);
+  return normalizeConfig(
+    migrateLegacyCredentialConfig(parseJson(text, source)).config,
+    source,
+  );
 }
 
 export function parseProviderConfig(
@@ -106,6 +115,49 @@ function parseJson(text: string, source: string): unknown {
   } catch (error) {
     throw new Error(`Invalid JSON in ${source}: ${(error as Error).message}`);
   }
+}
+
+interface LegacyCredentialMigrationResult {
+  config: unknown;
+  changed: boolean;
+}
+
+// Temporary compatibility shim for the credentials config migration. Keep this
+// isolated from the normal parser so it can be deleted in a future release.
+function migrateLegacyCredentialConfig(
+  raw: unknown,
+): LegacyCredentialMigrationResult {
+  if (!isPlainObject(raw) || !isPlainObject(raw.providers)) {
+    return { config: raw, changed: false };
+  }
+
+  let changed = false;
+  const config = structuredClone(raw) as Record<string, unknown>;
+  const providers = config.providers as Record<string, unknown>;
+
+  for (const [providerId, provider] of Object.entries(providers)) {
+    if (!isPlainObject(provider)) {
+      continue;
+    }
+
+    const legacyKey = providerId === "cloudflare" ? "apiToken" : "apiKey";
+    const legacyValue = provider[legacyKey];
+    if (legacyValue === undefined) {
+      continue;
+    }
+
+    const credentials = isPlainObject(provider.credentials)
+      ? { ...provider.credentials }
+      : {};
+    if (credentials.api === undefined) {
+      credentials.api = legacyValue;
+    }
+    provider.credentials = credentials;
+    delete provider[legacyKey];
+    changed = true;
+  }
+
+  return { config, changed };
 }
 
 function normalizeConfig(raw: unknown, source: string): WebProviders {
@@ -194,8 +246,6 @@ function getProviderConfigFieldParser(
 ): (value: unknown, source: string, field: string) => unknown {
   switch (field) {
     case "accountId":
-    case "apiKey":
-    case "apiToken":
     case "baseUrl":
     case "codexPath":
     case "pathToClaudeCodeExecutable":
@@ -204,6 +254,7 @@ function getProviderConfigFieldParser(
       return readOptionalObject;
     case "customOptions":
       return parseOptionalCustomProviderOptions;
+    case "credentials":
     case "env":
       return readOptionalStringMap;
     case "options":
@@ -591,12 +642,7 @@ function toPublicProviderConfig(
     ...("baseUrl" in provider && provider.baseUrl !== undefined
       ? { baseUrl: provider.baseUrl }
       : {}),
-    ...("apiKey" in provider && provider.apiKey !== undefined
-      ? { apiKey: provider.apiKey }
-      : {}),
-    ...("apiToken" in provider && provider.apiToken !== undefined
-      ? { apiToken: provider.apiToken }
-      : {}),
+    ...(provider.credentials ? { credentials: provider.credentials } : {}),
     ...("accountId" in provider && provider.accountId !== undefined
       ? { accountId: provider.accountId }
       : {}),

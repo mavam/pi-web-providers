@@ -82,7 +82,7 @@ describe("provider resolution", () => {
     const config = createConfig({
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -111,7 +111,7 @@ describe("provider resolution", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -151,7 +151,7 @@ describe("provider resolution", () => {
       },
       providers: {
         parallel: {
-          apiKey: "PARALLEL_API_KEY",
+          credentials: { api: "PARALLEL_API_KEY" },
         },
       },
     });
@@ -169,7 +169,7 @@ describe("provider resolution", () => {
       },
       providers: {
         serper: {
-          apiKey: "SERPER_API_KEY",
+          credentials: { api: "SERPER_API_KEY" },
         },
       },
     });
@@ -187,7 +187,7 @@ describe("provider resolution", () => {
       },
       providers: {
         tavily: {
-          apiKey: "TAVILY_API_KEY",
+          credentials: { api: "TAVILY_API_KEY" },
         },
       },
     });
@@ -208,7 +208,7 @@ describe("provider resolution", () => {
       },
       providers: {
         linkup: {
-          apiKey: "LINKUP_API_KEY",
+          credentials: { api: "LINKUP_API_KEY" },
         },
       },
     });
@@ -228,7 +228,7 @@ describe("provider resolution", () => {
       },
       providers: {
         cloudflare: {
-          apiToken: "CLOUDFLARE_API_TOKEN",
+          credentials: { api: "CLOUDFLARE_API_TOKEN" },
         },
       },
     });
@@ -246,7 +246,7 @@ describe("provider resolution", () => {
       },
       providers: {
         exa: {
-          apiKey: failingCommand,
+          credentials: { api: failingCommand },
         },
       },
     });
@@ -271,7 +271,7 @@ describe("provider resolution", () => {
       },
       providers: {
         cloudflare: {
-          apiToken: "CLOUDFLARE_API_TOKEN",
+          credentials: { api: "CLOUDFLARE_API_TOKEN" },
           accountId: failingCommand,
         },
       },
@@ -319,7 +319,7 @@ describe("provider resolution", () => {
     const config = createConfig({
       providers: {
         perplexity: {
-          apiKey: "PERPLEXITY_API_KEY",
+          credentials: { api: "PERPLEXITY_API_KEY" },
         },
       },
     });

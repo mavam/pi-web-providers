@@ -72,7 +72,7 @@ describe("ollamaProvider", () => {
       "what is ollama?",
       5,
       {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
       },
       { cwd: process.cwd() },
     );
@@ -119,7 +119,7 @@ describe("ollamaProvider", () => {
       "test",
       20,
       {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
       },
       { cwd: process.cwd() },
     );
@@ -150,7 +150,7 @@ describe("ollamaProvider", () => {
     const response = await fetchOllama(
       ["https://ollama.com"],
       {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
       },
       { cwd: process.cwd() },
     );
@@ -195,7 +195,7 @@ describe("ollamaProvider", () => {
       "test",
       5,
       {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
         baseUrl: "https://ollama-proxy.test/api/",
       },
       { cwd: process.cwd() },
@@ -220,7 +220,7 @@ describe("ollamaProvider", () => {
     const response = await fetchOllama(
       ["https://ollama.com"],
       {
-        apiKey: "OLLAMA_API_KEY",
+        credentials: { api: "OLLAMA_API_KEY" },
       },
       { cwd: process.cwd() },
     );
@@ -250,7 +250,7 @@ describe("ollamaProvider", () => {
         "test",
         5,
         {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
         { cwd: process.cwd() },
       ),
@@ -265,7 +265,7 @@ describe("ollamaProvider", () => {
         "test",
         5,
         {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
         { cwd: process.cwd() },
       ),
@@ -276,7 +276,7 @@ describe("ollamaProvider", () => {
     expect(
       ollamaProvider.getCapabilityStatus(
         {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
         process.cwd(),
       ),
@@ -289,7 +289,7 @@ describe("ollamaProvider", () => {
     expect(
       ollamaProvider.getCapabilityStatus(
         {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
         process.cwd(),
       ),
@@ -312,7 +312,7 @@ describe("Ollama config", () => {
       JSON.stringify({
         providers: {
           ollama: {
-            apiKey: "OLLAMA_API_KEY",
+            credentials: { api: "OLLAMA_API_KEY" },
             baseUrl: "https://ollama-proxy.test",
             settings: {
               requestTimeoutMs: 45000,
@@ -324,7 +324,7 @@ describe("Ollama config", () => {
     );
 
     expect(parsed.providers?.ollama).toEqual({
-      apiKey: "OLLAMA_API_KEY",
+      credentials: { api: "OLLAMA_API_KEY" },
       baseUrl: "https://ollama-proxy.test",
       settings: {
         requestTimeoutMs: 45000,
@@ -338,7 +338,7 @@ describe("Ollama config", () => {
         JSON.stringify({
           providers: {
             ollama: {
-              apiKey: "OLLAMA_API_KEY",
+              credentials: { api: "OLLAMA_API_KEY" },
               options: {
                 locale: "en-US",
               },
@@ -352,7 +352,7 @@ describe("Ollama config", () => {
 
   it("creates an Ollama provider template", () => {
     expect(ollamaProvider.config.createTemplate()).toEqual({
-      apiKey: "OLLAMA_API_KEY",
+      credentials: { api: "OLLAMA_API_KEY" },
     });
   });
 
@@ -360,21 +360,21 @@ describe("Ollama config", () => {
     const manifest = getProviderConfigManifest("ollama");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(["apiKey", "baseUrl"]);
+    expect(ids).toEqual(["credentials.api", "baseUrl"]);
   });
 
   it("round-trips Ollama API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("ollama");
-    const apiKeySetting = manifest.settings.find(
-      (setting) => setting.id === "apiKey",
+    const credentialSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.api",
     );
     const baseUrlSetting = manifest.settings.find(
       (setting) => setting.id === "baseUrl",
     );
 
     if (
-      !apiKeySetting ||
-      apiKeySetting.kind !== "text" ||
+      !credentialSetting ||
+      credentialSetting.kind !== "text" ||
       !baseUrlSetting ||
       baseUrlSetting.kind !== "text"
     ) {
@@ -382,7 +382,7 @@ describe("Ollama config", () => {
     }
 
     const config: Ollama = {};
-    (apiKeySetting as ProviderTextSettingDescriptor<Ollama>).setValue(
+    (credentialSetting as ProviderTextSettingDescriptor<Ollama>).setValue(
       config,
       "OLLAMA_API_KEY",
     );
@@ -392,7 +392,7 @@ describe("Ollama config", () => {
     );
 
     expect(config).toEqual({
-      apiKey: "OLLAMA_API_KEY",
+      credentials: { api: "OLLAMA_API_KEY" },
       baseUrl: "https://ollama-proxy.test",
     });
   });

@@ -83,21 +83,21 @@ describe("provider config manifests", () => {
     const manifest = getProviderConfigManifest("cloudflare");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(["apiToken", "accountId"]);
+    expect(ids).toEqual(["credentials.api", "accountId"]);
   });
 
   it("round-trips Cloudflare token and account settings", () => {
     const manifest = getProviderConfigManifest("cloudflare");
-    const apiTokenSetting = manifest.settings.find(
-      (setting) => setting.id === "apiToken",
+    const credentialSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.api",
     );
     const accountIdSetting = manifest.settings.find(
       (setting) => setting.id === "accountId",
     );
 
     if (
-      !apiTokenSetting ||
-      apiTokenSetting.kind !== "text" ||
+      !credentialSetting ||
+      credentialSetting.kind !== "text" ||
       !accountIdSetting ||
       accountIdSetting.kind !== "text"
     ) {
@@ -105,11 +105,11 @@ describe("provider config manifests", () => {
     }
 
     const config: Cloudflare = {};
-    apiTokenSetting.setValue(config, "CLOUDFLARE_API_TOKEN");
+    credentialSetting.setValue(config, "CLOUDFLARE_API_TOKEN");
     accountIdSetting.setValue(config, "CLOUDFLARE_ACCOUNT_ID");
 
     expect(config).toEqual({
-      apiToken: "CLOUDFLARE_API_TOKEN",
+      credentials: { api: "CLOUDFLARE_API_TOKEN" },
       accountId: "CLOUDFLARE_ACCOUNT_ID",
     });
   });
@@ -118,21 +118,21 @@ describe("provider config manifests", () => {
     const manifest = getProviderConfigManifest("linkup");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(["apiKey", "baseUrl"]);
+    expect(ids).toEqual(["credentials.api", "baseUrl"]);
   });
 
   it("round-trips Linkup API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("linkup");
-    const apiKeySetting = manifest.settings.find(
-      (setting) => setting.id === "apiKey",
+    const credentialSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.api",
     );
     const baseUrlSetting = manifest.settings.find(
       (setting) => setting.id === "baseUrl",
     );
 
     if (
-      !apiKeySetting ||
-      apiKeySetting.kind !== "text" ||
+      !credentialSetting ||
+      credentialSetting.kind !== "text" ||
       !baseUrlSetting ||
       baseUrlSetting.kind !== "text"
     ) {
@@ -140,7 +140,7 @@ describe("provider config manifests", () => {
     }
 
     const config: Linkup = {};
-    (apiKeySetting as ProviderTextSettingDescriptor<Linkup>).setValue(
+    (credentialSetting as ProviderTextSettingDescriptor<Linkup>).setValue(
       config,
       "LINKUP_API_KEY",
     );
@@ -150,7 +150,7 @@ describe("provider config manifests", () => {
     );
 
     expect(config).toEqual({
-      apiKey: "LINKUP_API_KEY",
+      credentials: { api: "LINKUP_API_KEY" },
       baseUrl: "https://api.linkup.test/v1",
     });
   });
@@ -159,21 +159,21 @@ describe("provider config manifests", () => {
     const manifest = getProviderConfigManifest("serper");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(["apiKey", "baseUrl"]);
+    expect(ids).toEqual(["credentials.api", "baseUrl"]);
   });
 
   it("round-trips Serper API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("serper");
-    const apiKeySetting = manifest.settings.find(
-      (setting) => setting.id === "apiKey",
+    const credentialSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.api",
     );
     const baseUrlSetting = manifest.settings.find(
       (setting) => setting.id === "baseUrl",
     );
 
     if (
-      !apiKeySetting ||
-      apiKeySetting.kind !== "text" ||
+      !credentialSetting ||
+      credentialSetting.kind !== "text" ||
       !baseUrlSetting ||
       baseUrlSetting.kind !== "text"
     ) {
@@ -181,7 +181,7 @@ describe("provider config manifests", () => {
     }
 
     const config: Serper = {};
-    (apiKeySetting as ProviderTextSettingDescriptor<Serper>).setValue(
+    (credentialSetting as ProviderTextSettingDescriptor<Serper>).setValue(
       config,
       "SERPER_API_KEY",
     );
@@ -191,7 +191,7 @@ describe("provider config manifests", () => {
     );
 
     expect(config).toEqual({
-      apiKey: "SERPER_API_KEY",
+      credentials: { api: "SERPER_API_KEY" },
       baseUrl: "https://google.serper.test",
     });
   });
@@ -200,21 +200,21 @@ describe("provider config manifests", () => {
     const manifest = getProviderConfigManifest("tavily");
     const ids = manifest.settings.map((setting) => setting.id);
 
-    expect(ids).toEqual(["apiKey", "baseUrl"]);
+    expect(ids).toEqual(["credentials.api", "baseUrl"]);
   });
 
   it("round-trips Tavily API key and base URL settings", () => {
     const manifest = getProviderConfigManifest("tavily");
-    const apiKeySetting = manifest.settings.find(
-      (setting) => setting.id === "apiKey",
+    const credentialSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.api",
     );
     const baseUrlSetting = manifest.settings.find(
       (setting) => setting.id === "baseUrl",
     );
 
     if (
-      !apiKeySetting ||
-      apiKeySetting.kind !== "text" ||
+      !credentialSetting ||
+      credentialSetting.kind !== "text" ||
       !baseUrlSetting ||
       baseUrlSetting.kind !== "text"
     ) {
@@ -222,7 +222,7 @@ describe("provider config manifests", () => {
     }
 
     const config: Tavily = {};
-    (apiKeySetting as ProviderTextSettingDescriptor<Tavily>).setValue(
+    (credentialSetting as ProviderTextSettingDescriptor<Tavily>).setValue(
       config,
       "TAVILY_API_KEY",
     );
@@ -232,7 +232,7 @@ describe("provider config manifests", () => {
     );
 
     expect(config).toEqual({
-      apiKey: "TAVILY_API_KEY",
+      credentials: { api: "TAVILY_API_KEY" },
       baseUrl: "https://api.tavily.test",
     });
   });

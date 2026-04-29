@@ -90,7 +90,7 @@ const valyuImplementation = {
 
   createTemplate(): Valyu {
     return {
-      apiKey: "VALYU_API_KEY",
+      credentials: { api: "VALYU_API_KEY" },
       options: {
         search: {
           searchType: "all",
@@ -101,7 +101,7 @@ const valyuImplementation = {
   },
 
   getCapabilityStatus(config: Valyu | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -340,7 +340,7 @@ const valyuImplementation = {
 };
 
 function createClient(config: Valyu): ValyuClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -354,7 +354,7 @@ export const valyuProvider = defineProvider({
   docsUrl: valyuImplementation.docsUrl,
   config: {
     createTemplate: () => valyuImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
   },
   getCapabilityStatus: (config, cwd, tool) =>

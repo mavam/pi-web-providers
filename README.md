@@ -224,7 +224,9 @@ The built-in providers below integrate with official SDKs or documented APIs.
   },
   "providers": {
     "cloudflare": {
-      "apiToken": "CLOUDFLARE_API_TOKEN",
+      "credentials": {
+        "api": "CLOUDFLARE_API_TOKEN"
+      },
       "accountId": "CLOUDFLARE_ACCOUNT_ID"
     }
   }
@@ -328,7 +330,9 @@ Minimal config:
   },
   "providers": {
     "ollama": {
-      "apiKey": "OLLAMA_API_KEY"
+      "credentials": {
+        "api": "OLLAMA_API_KEY"
+      }
     }
   }
 }
@@ -368,7 +372,9 @@ Minimal config:
   },
   "providers": {
     "openai": {
-      "apiKey": "OPENAI_API_KEY",
+      "credentials": {
+        "api": "OPENAI_API_KEY"
+      },
       "options": {
         "search": {
           "model": "gpt-4.1"
@@ -439,7 +445,9 @@ Minimal config:
   },
   "providers": {
     "serper": {
-      "apiKey": "SERPER_API_KEY"
+      "credentials": {
+        "api": "SERPER_API_KEY"
+      }
     }
   }
 }

@@ -117,7 +117,7 @@ const tavilyImplementation = {
 
   createTemplate(): Tavily {
     return {
-      apiKey: "TAVILY_API_KEY",
+      credentials: { api: "TAVILY_API_KEY" },
       options: {
         search: {
           includeFavicon: true,
@@ -131,7 +131,7 @@ const tavilyImplementation = {
   },
 
   getCapabilityStatus(config: Tavily | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -215,7 +215,7 @@ const tavilyImplementation = {
 };
 
 function createClient(config: Tavily): TavilyClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -266,7 +266,7 @@ export const tavilyProvider = defineProvider({
   docsUrl: tavilyImplementation.docsUrl,
   config: {
     createTemplate: () => tavilyImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (tavilyImplementation.getCapabilityStatus as any)(

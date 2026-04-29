@@ -51,7 +51,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -158,7 +158,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -204,7 +204,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -257,7 +257,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -297,7 +297,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -357,7 +357,7 @@ describe("search contents prefetch", () => {
       },
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     } as const;
@@ -420,7 +420,7 @@ describe("search contents prefetch", () => {
         },
         providers: {
           exa: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
           },
         },
       } as const;

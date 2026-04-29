@@ -111,7 +111,7 @@ const codexImplementation = {
     const codex = new CodexClient({
       codexPathOverride: config.codexPath,
       baseUrl: config.baseUrl,
-      apiKey: resolveConfigValue(config.apiKey),
+      apiKey: resolveConfigValue(config.credentials?.api),
       config: config.config as never,
       env: resolveEnvMap(config.env),
     });
@@ -285,7 +285,7 @@ export const codexProvider = defineProvider({
     fields: [
       "codexPath",
       "baseUrl",
-      "apiKey",
+      "credentials",
       "env",
       "config",
       "options",

@@ -62,7 +62,7 @@ const parallelImplementation = {
 
   createTemplate(): Parallel {
     return {
-      apiKey: "PARALLEL_API_KEY",
+      credentials: { api: "PARALLEL_API_KEY" },
       options: {
         search: {
           mode: "agentic",
@@ -76,7 +76,7 @@ const parallelImplementation = {
   },
 
   getCapabilityStatus(config: Parallel | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -163,7 +163,7 @@ const parallelImplementation = {
 };
 
 function createClient(config: Parallel): ParallelClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -186,7 +186,7 @@ export const parallelProvider = defineProvider({
   docsUrl: parallelImplementation.docsUrl,
   config: {
     createTemplate: () => parallelImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (parallelImplementation.getCapabilityStatus as any)(

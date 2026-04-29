@@ -77,7 +77,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -159,7 +159,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         ollama: {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
       },
     });
@@ -181,7 +181,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -217,7 +217,7 @@ describe("managed tool availability", () => {
       providers: {
         codex: {},
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -241,7 +241,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -335,7 +335,7 @@ describe("managed tool availability", () => {
       providers: {
         codex: {},
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -420,7 +420,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -495,7 +495,7 @@ describe("managed tool availability", () => {
     const previous = createConfig({
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
           options: {
             search: {
               type: "auto",
@@ -511,7 +511,7 @@ describe("managed tool availability", () => {
     const next = createConfig({
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
           options: {
             search: {
               type: "keyword",
@@ -530,7 +530,7 @@ describe("managed tool availability", () => {
     const previous = createConfig({
       providers: {
         parallel: {
-          apiKey: "PARALLEL_API_KEY",
+          credentials: { api: "PARALLEL_API_KEY" },
           options: {
             extract: {
               full_content: true,
@@ -543,7 +543,7 @@ describe("managed tool availability", () => {
     const next = createConfig({
       providers: {
         parallel: {
-          apiKey: "PARALLEL_API_KEY",
+          credentials: { api: "PARALLEL_API_KEY" },
           options: {
             extract: {
               full_content: false,
@@ -590,7 +590,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         perplexity: {
-          apiKey: "PERPLEXITY_API_KEY",
+          credentials: { api: "PERPLEXITY_API_KEY" },
         },
       },
     });
@@ -620,7 +620,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         serper: {
-          apiKey: "SERPER_API_KEY",
+          credentials: { api: "SERPER_API_KEY" },
         },
       },
     });
@@ -654,7 +654,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         tavily: {
-          apiKey: "TAVILY_API_KEY",
+          credentials: { api: "TAVILY_API_KEY" },
         },
       },
     });
@@ -688,7 +688,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         linkup: {
-          apiKey: "LINKUP_API_KEY",
+          credentials: { api: "LINKUP_API_KEY" },
         },
       },
     });

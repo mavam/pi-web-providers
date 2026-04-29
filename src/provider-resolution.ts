@@ -162,13 +162,13 @@ export function getProviderSetupState(
   }
 
   if (providerId === "cloudflare") {
-    return providerConfig.apiToken !== undefined ||
+    return providerConfig.credentials !== undefined ||
       providerConfig.accountId !== undefined
       ? "configured"
       : "none";
   }
 
-  return providerConfig.apiKey !== undefined ? "configured" : "none";
+  return providerConfig.credentials !== undefined ? "configured" : "none";
 }
 
 export function formatProviderCapabilityStatus(
