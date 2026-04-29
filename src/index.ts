@@ -514,6 +514,7 @@ function registerWebResearchTool(
     ),
     promptGuidelines: [
       "Use this tool for deep investigations that can finish asynchronously.",
+      "Pass only the research brief in input unless the user explicitly asks for provider-specific options; do not invent tuning options such as citation flags, token limits, query counts, iteration counts, or time limits.",
       "Do not expect the final report in the same turn; tell the user that web research has started and wait for the completion message with the saved report path.",
     ],
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

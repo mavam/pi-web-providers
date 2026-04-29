@@ -47,7 +47,17 @@ const braveResearchOptionsSchema = Type.Object(
     country: Type.Optional(Type.String()),
     language: Type.Optional(Type.String()),
     enable_entities: Type.Optional(Type.Boolean()),
+    enable_citations: Type.Optional(
+      Type.Boolean({
+        description:
+          "Accepted for compatibility but forced to false for Brave research mode.",
+      }),
+    ),
     max_completion_tokens: Type.Optional(Type.Integer({ minimum: 1 })),
+    research_allow_thinking: Type.Optional(Type.Boolean()),
+    research_maximum_number_of_tokens_per_query: Type.Optional(
+      Type.Integer({ minimum: 1 }),
+    ),
     research_maximum_number_of_queries: Type.Optional(
       Type.Integer({ minimum: 1 }),
     ),
