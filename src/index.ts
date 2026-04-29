@@ -1212,13 +1212,13 @@ function formatAnswerOutcomeSection(
   index: number,
   total: number,
 ): string {
-  const heading =
-    total > 1
-      ? `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`
-      : `## ${formatAnswerHeading(outcome.query)}`;
   const body = outcome.response
     ? outcome.response.text
     : `Answer failed: ${outcome.error ?? "Unknown error."}`;
+  if (total === 1) {
+    return body;
+  }
+  const heading = `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`;
   return `${heading}\n\n${body}`;
 }
 

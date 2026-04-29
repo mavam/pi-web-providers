@@ -491,7 +491,7 @@ describe("provider tool output", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      '## "What are common ACME platform use cases?"\n\nACME platforms are used for workflow automation and data migrations.',
+      "ACME platforms are used for workflow automation and data migrations.",
     );
     expect(result.details).toEqual({
       tool: "web_answer",

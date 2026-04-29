@@ -501,7 +501,23 @@ describe("web_search markdown formatting", () => {
 });
 
 describe("web_answer markdown formatting", () => {
-  it("formats each question as an H2 with proper spacing", () => {
+  it("does not repeat the question for a single answer", () => {
+    const rendered = __test__.formatAnswerResponses([
+      {
+        query: "What is Beacon Security?",
+        response: {
+          provider: "brave",
+          text: "Beacon Security is a security data management platform.",
+        },
+      },
+    ]);
+
+    expect(rendered).toBe(
+      "Beacon Security is a security data management platform.",
+    );
+  });
+
+  it("formats multiple questions as H2 sections with proper spacing", () => {
     const rendered = __test__.formatAnswerResponses([
       {
         query: "What are the main use cases for ACME platforms?",
