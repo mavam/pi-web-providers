@@ -158,6 +158,7 @@ describe("providerHarness(braveProvider)", () => {
         new Response(
           [
             'data: {"choices":[{"delta":{"content":"Answer text "}}]}',
+            'data: {"choices":[{"delta":{"content":"<enum_item>{\\"uuid\\":\\"album-1\\",\\"name\\":\\"The Fame\\",\\"href\\":\\"https://example.com/the-fame\\",\\"original_tokens\\":\\"The Fame\\",\\"citations\\":[1]}</enum_item>"}}]}',
             'data: {"choices":[{"delta":{"content":"<citation>{\\"title\\":\\"Example source\\",\\"url\\":\\"https://example.com/source\\"}</citation>"}}]}',
             'data: {"choices":[{"delta":{"content":"<usage>{\\"X-Request-Queries\\":1}</usage>"}}]}',
             "data: [DONE]",
@@ -203,14 +204,25 @@ describe("providerHarness(braveProvider)", () => {
     expect(response).toEqual({
       provider: "brave",
       text: [
-        "Answer text",
+        "Answer text The Fame",
         "",
         "Sources:",
         "1. Example source",
         "   https://example.com/source",
       ].join("\n"),
       itemCount: 1,
-      metadata: { usage: { "X-Request-Queries": 1 } },
+      metadata: {
+        usage: { "X-Request-Queries": 1 },
+        entities: [
+          {
+            uuid: "album-1",
+            name: "The Fame",
+            href: "https://example.com/the-fame",
+            original_tokens: "The Fame",
+            citations: [1],
+          },
+        ],
+      },
     });
   });
 

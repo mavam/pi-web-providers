@@ -1067,16 +1067,32 @@ async function completion(
       if (c.url) lines.push(`   ${c.url}`);
     });
   }
+  const metadata = buildAnswerMetadata(parsed);
   return {
     provider: "brave",
     text: lines.join("\n").trimEnd(),
     itemCount: parsed.citations.length,
-    metadata: parsed.usage ? { usage: parsed.usage } : undefined,
+    ...(metadata ? { metadata } : {}),
   };
+}
+
+function buildAnswerMetadata(parsed: {
+  entities: Array<Record<string, unknown>>;
+  usage?: unknown;
+}): Record<string, unknown> | undefined {
+  const metadata: Record<string, unknown> = {};
+  if (parsed.usage) {
+    metadata.usage = parsed.usage;
+  }
+  if (parsed.entities.length) {
+    metadata.entities = parsed.entities;
+  }
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 function parseAnswerJson(text: string): {
   answer: string;
   citations: Array<{ title?: string; url?: string }>;
+  entities: Array<Record<string, unknown>>;
   usage?: unknown;
 } {
   const payload = obj(JSON.parse(text));
@@ -1087,6 +1103,7 @@ function parseAnswerJson(text: string): {
   return {
     answer: tags.text,
     citations: dedupeCitations(tags.citations),
+    entities: tags.entities,
     usage: payload.usage ?? tags.usage,
   };
 }
@@ -1094,6 +1111,7 @@ function parseAnswerJson(text: string): {
 function parseAnswerStream(text: string): {
   answer: string;
   citations: Array<{ title?: string; url?: string }>;
+  entities: Array<Record<string, unknown>>;
   usage?: unknown;
 } {
   let rawAnswer = "";
@@ -1115,6 +1133,7 @@ function parseAnswerStream(text: string): {
   return {
     answer: tags.text,
     citations: dedupeCitations(tags.citations),
+    entities: tags.entities,
     usage: tags.usage,
   };
 }
@@ -1122,9 +1141,11 @@ function parseAnswerStream(text: string): {
 function extractBraveTags(text: string): {
   text: string;
   citations: Array<{ title?: string; url?: string }>;
+  entities: Array<Record<string, unknown>>;
   usage?: unknown;
 } {
   const citations: Array<{ title?: string; url?: string }> = [];
+  const entities: Array<Record<string, unknown>> = [];
   let usage: unknown;
   let cleaned = "";
   let offset = 0;
@@ -1160,6 +1181,11 @@ function extractBraveTags(text: string): {
           title: str(parsed.title),
           url: str(parsed.url),
         });
+      } else if (parsedTag.tag === "enum_item") {
+        const item = obj(parsed);
+        entities.push(item);
+        cleaned +=
+          str(item.original_tokens) ?? str(item.name) ?? str(item.href) ?? "";
       } else if (parsedTag.tag === "usage") {
         usage = parsed;
       }
@@ -1176,7 +1202,7 @@ function extractBraveTags(text: string): {
     }
   }
 
-  return { text: cleaned, citations, usage };
+  return { text: cleaned, citations, entities, usage };
 }
 
 const BRAVE_STRUCTURED_TAGS = new Set([
