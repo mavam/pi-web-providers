@@ -1,3 +1,4 @@
+import { braveProvider } from "./brave.js";
 import { claudeProvider } from "./claude.js";
 import { cloudflareProvider } from "./cloudflare.js";
 import { codexProvider } from "./codex.js";
@@ -16,6 +17,7 @@ import { tavilyProvider } from "./tavily.js";
 import { valyuProvider } from "./valyu.js";
 
 export const PROVIDERS = defineProviders({
+  brave: braveProvider,
   claude: claudeProvider,
   codex: codexProvider,
   cloudflare: cloudflareProvider,

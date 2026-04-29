@@ -100,7 +100,7 @@ describe("OpenAI provider", () => {
       config: {
         providers: {
           openai: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
             options: {
               search: {
                 model: "gpt-4.1",
@@ -170,7 +170,7 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toContain('## "openai deep research"');
+    expect(result.content[0]?.text).not.toContain('## "openai deep research"');
     expect(result.content[0]?.text).toContain(
       "1. [OpenAI Deep Research docs](<https://platform.openai.com/docs/guides/deep-research>)",
     );
@@ -221,7 +221,7 @@ describe("OpenAI provider", () => {
       config: {
         providers: {
           openai: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
             options: {
               answer: {
                 model: "gpt-4.1",
@@ -280,7 +280,7 @@ describe("async research providers", () => {
       config: {
         providers: {
           exa: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
           },
         },
       } satisfies WebProviders,
@@ -347,7 +347,7 @@ describe("async research providers", () => {
       config: {
         providers: {
           openai: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
             options: {
               research: {
                 model: "o3-deep-research",
@@ -430,7 +430,7 @@ describe("async research providers", () => {
       config: {
         providers: {
           valyu: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
           },
         },
       } satisfies WebProviders,

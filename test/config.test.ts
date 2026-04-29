@@ -8,6 +8,7 @@ import {
   getConfigPath,
   loadConfig,
   parseConfig,
+  readConfigFile,
   resolveConfigValue,
   serializeConfig,
 } from "../src/config.js";
@@ -83,7 +84,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           cloudflare: {
-            apiToken: "CLOUDFLARE_API_TOKEN",
+            credentials: { api: "CLOUDFLARE_API_TOKEN" },
             accountId: "CLOUDFLARE_ACCOUNT_ID",
             options: {
               cacheTTL: 0,
@@ -98,7 +99,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.cloudflare).toEqual({
-      apiToken: "CLOUDFLARE_API_TOKEN",
+      credentials: { api: "CLOUDFLARE_API_TOKEN" },
       accountId: "CLOUDFLARE_ACCOUNT_ID",
       options: {
         cacheTTL: 0,
@@ -114,7 +115,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           tavily: {
-            apiKey: "TAVILY_API_KEY",
+            credentials: { api: "TAVILY_API_KEY" },
             baseUrl: "https://api.tavily.test",
             options: {
               search: {
@@ -134,7 +135,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.tavily).toEqual({
-      apiKey: "TAVILY_API_KEY",
+      credentials: { api: "TAVILY_API_KEY" },
       baseUrl: "https://api.tavily.test",
       options: {
         search: {
@@ -155,7 +156,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           linkup: {
-            apiKey: "LINKUP_API_KEY",
+            credentials: { api: "LINKUP_API_KEY" },
             baseUrl: "https://api.linkup.test/v1",
             options: {
               search: {
@@ -175,7 +176,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.linkup).toEqual({
-      apiKey: "LINKUP_API_KEY",
+      credentials: { api: "LINKUP_API_KEY" },
       baseUrl: "https://api.linkup.test/v1",
       options: {
         search: {
@@ -196,7 +197,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           serper: {
-            apiKey: "SERPER_API_KEY",
+            credentials: { api: "SERPER_API_KEY" },
             baseUrl: "https://google.serper.test",
             options: {
               search: {
@@ -211,7 +212,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.serper).toEqual({
-      apiKey: "SERPER_API_KEY",
+      credentials: { api: "SERPER_API_KEY" },
       baseUrl: "https://google.serper.test",
       options: {
         search: {
@@ -227,7 +228,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           exa: {
-            apiKey: "EXA_API_KEY",
+            credentials: { api: "EXA_API_KEY" },
             options: {
               search: {
                 type: "auto",
@@ -243,7 +244,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.exa).toEqual({
-      apiKey: "EXA_API_KEY",
+      credentials: { api: "EXA_API_KEY" },
       options: {
         search: {
           type: "auto",
@@ -261,7 +262,7 @@ describe("config parsing", () => {
         JSON.stringify({
           providers: {
             exa: {
-              apiKey: "EXA_API_KEY",
+              credentials: { api: "EXA_API_KEY" },
               options: {
                 type: "auto",
               },
@@ -278,7 +279,7 @@ describe("config parsing", () => {
       JSON.stringify({
         providers: {
           valyu: {
-            apiKey: "VALYU_API_KEY",
+            credentials: { api: "VALYU_API_KEY" },
             options: {
               search: {
                 searchType: "all",
@@ -297,7 +298,7 @@ describe("config parsing", () => {
     );
 
     expect(parsed.providers?.valyu).toEqual({
-      apiKey: "VALYU_API_KEY",
+      credentials: { api: "VALYU_API_KEY" },
       options: {
         search: {
           searchType: "all",
@@ -318,7 +319,7 @@ describe("config parsing", () => {
         JSON.stringify({
           providers: {
             valyu: {
-              apiKey: "VALYU_API_KEY",
+              credentials: { api: "VALYU_API_KEY" },
               options: {
                 searchType: "all",
               },
@@ -462,6 +463,52 @@ describe("config parsing", () => {
     ).toThrow(/Unknown search settings/);
   });
 
+  it("migrates legacy provider credential fields when reading a config file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-web-providers-config-"));
+    cleanupDirs.push(root);
+    const path = join(root, "web-providers.json");
+
+    await writeFile(
+      path,
+      JSON.stringify({
+        providers: {
+          exa: {
+            apiKey: "EXA_API_KEY",
+            baseUrl: "https://api.exa.test",
+          },
+          cloudflare: {
+            apiToken: "CLOUDFLARE_API_TOKEN",
+            accountId: "CLOUDFLARE_ACCOUNT_ID",
+          },
+        },
+      }),
+      "utf-8",
+    );
+
+    const loaded = await readConfigFile(path);
+
+    expect(loaded.providers?.exa).toEqual({
+      credentials: { api: "EXA_API_KEY" },
+      baseUrl: "https://api.exa.test",
+    });
+    expect(loaded.providers?.cloudflare).toEqual({
+      credentials: { api: "CLOUDFLARE_API_TOKEN" },
+      accountId: "CLOUDFLARE_ACCOUNT_ID",
+    });
+    expect(JSON.parse(await readFile(path, "utf-8"))).toEqual({
+      providers: {
+        cloudflare: {
+          credentials: { api: "CLOUDFLARE_API_TOKEN" },
+          accountId: "CLOUDFLARE_ACCOUNT_ID",
+        },
+        exa: {
+          baseUrl: "https://api.exa.test",
+          credentials: { api: "EXA_API_KEY" },
+        },
+      },
+    });
+  });
+
   it("loads the global config", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-web-providers-config-"));
     cleanupDirs.push(root);
@@ -485,14 +532,14 @@ describe("config parsing", () => {
       },
     };
     config.providers.cloudflare = {
-      apiToken: "CLOUDFLARE_API_TOKEN",
+      credentials: { api: "CLOUDFLARE_API_TOKEN" },
       accountId: "CLOUDFLARE_ACCOUNT_ID",
       options: {
         cacheTTL: 0,
       },
     };
     config.providers.exa = {
-      apiKey: "EXA_API_KEY",
+      credentials: { api: "EXA_API_KEY" },
       options: {
         search: {
           type: "auto",
@@ -500,7 +547,7 @@ describe("config parsing", () => {
       },
     };
     config.providers.parallel = {
-      apiKey: "PARALLEL_API_KEY",
+      credentials: { api: "PARALLEL_API_KEY" },
       options: {
         search: {
           mode: "one-shot",
@@ -508,7 +555,7 @@ describe("config parsing", () => {
       },
     };
     config.providers.tavily = {
-      apiKey: "TAVILY_API_KEY",
+      credentials: { api: "TAVILY_API_KEY" },
       options: {
         search: {
           topic: "news",
@@ -519,7 +566,7 @@ describe("config parsing", () => {
       },
     };
     config.providers.gemini = {
-      apiKey: "GOOGLE_API_KEY",
+      credentials: { api: "GOOGLE_API_KEY" },
       options: {
         apiVersion: "v1alpha",
         searchModel: "gemini-2.5-flash",
@@ -532,7 +579,7 @@ describe("config parsing", () => {
       },
     };
     config.providers.perplexity = {
-      apiKey: "PERPLEXITY_API_KEY",
+      credentials: { api: "PERPLEXITY_API_KEY" },
       options: {
         search: {
           country: "US",
@@ -569,12 +616,14 @@ describe("config parsing", () => {
     expect(loaded.providers?.codex?.options?.additionalDirectories).toEqual([
       "notes",
     ]);
-    expect(loaded.providers?.cloudflare?.apiToken).toBe("CLOUDFLARE_API_TOKEN");
+    expect(loaded.providers?.cloudflare?.credentials?.api).toBe(
+      "CLOUDFLARE_API_TOKEN",
+    );
     expect(loaded.providers?.cloudflare?.accountId).toBe(
       "CLOUDFLARE_ACCOUNT_ID",
     );
     expect(loaded.providers?.cloudflare?.options?.cacheTTL).toBe(0);
-    expect(loaded.providers?.exa?.apiKey).toBe("EXA_API_KEY");
+    expect(loaded.providers?.exa?.credentials?.api).toBe("EXA_API_KEY");
     expect(loaded.providers?.exa?.options?.search?.type).toBe("auto");
     expect(loaded.providers?.gemini?.options?.apiVersion).toBe("v1alpha");
     expect(loaded.providers?.gemini?.settings?.requestTimeoutMs).toBe(45000);
@@ -619,13 +668,13 @@ describe("config parsing", () => {
       PROVIDERS_BY_ID.gemini.config.createTemplate().settings,
     ).toBeUndefined();
     expect(PROVIDERS_BY_ID.linkup.config.createTemplate()).toEqual({
-      apiKey: "LINKUP_API_KEY",
+      credentials: { api: "LINKUP_API_KEY" },
     });
     expect(PROVIDERS_BY_ID.ollama.config.createTemplate()).toEqual({
-      apiKey: "OLLAMA_API_KEY",
+      credentials: { api: "OLLAMA_API_KEY" },
     });
     expect(PROVIDERS_BY_ID.serper.config.createTemplate()).toEqual({
-      apiKey: "SERPER_API_KEY",
+      credentials: { api: "SERPER_API_KEY" },
       options: {},
     });
     expect(PROVIDERS_BY_ID.tavily.config.createTemplate().options).toEqual({

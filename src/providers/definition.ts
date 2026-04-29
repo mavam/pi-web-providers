@@ -39,6 +39,7 @@ export interface CapabilityDefinition<
 > {
   options?: TObject;
   limits?: CapabilityLimits;
+  promptGuidelines?: readonly string[];
   execute(
     input: CapabilityInput<TInput, TOptions>,
     context: ProviderExecutionContext,
@@ -51,8 +52,7 @@ export interface ProviderExecutionContext extends ProviderContext {
 
 export type ProviderConfigField =
   | "accountId"
-  | "apiKey"
-  | "apiToken"
+  | "credentials"
   | "baseUrl"
   | "codexPath"
   | "config"
@@ -65,6 +65,7 @@ export type ProviderConfigField =
 export interface ProviderConfigDefinition<TConfig> {
   createTemplate: () => TConfig;
   fields: readonly ProviderConfigField[];
+  credentials?: Record<string, string>;
   optionCapabilities?: readonly Tool[];
 }
 

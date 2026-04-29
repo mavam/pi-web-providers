@@ -224,7 +224,7 @@ describe("web_answer renderer", () => {
 });
 
 describe("web_research renderer", () => {
-  it("renders the research brief on its own line", () => {
+  it("renders a compact research call header", () => {
     const rendered = renderComponentText(
       __test__.renderResearchCallHeader(
         {
@@ -236,9 +236,8 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered.startsWith("web_research")).toBe(true);
-    expect(rendered).toContain(
-      "  ACME platform use cases: what problems do these products solve, who uses them, and in what scenarios?",
+    expect(rendered.startsWith("web_research ACME platform use cases:")).toBe(
+      true,
     );
     expect(rendered).not.toContain('web_research "');
     expect(rendered).not.toContain("provider=");
@@ -268,7 +267,24 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("ctrl+o to expand");
   });
 
-  it("shows the full research prompt in the expanded tool result", () => {
+  it("keeps long research prompts compact in the call header", () => {
+    const rendered = renderComponentText(
+      __test__.renderResearchCallHeader(
+        {
+          input:
+            "What is pi coding agent? Provide a concise overview of its purpose, main features, model support, extension system, and typical workflows.",
+        },
+        createTheme(),
+      ),
+      60,
+    );
+
+    expect(rendered).toContain("web_research What is pi coding agent?");
+    expect(rendered).toContain("...");
+    expect(rendered).not.toContain("typical workflows.");
+  });
+
+  it("shows dispatch details and the full prompt in the expanded result", () => {
     const rendered = renderComponentText(
       __test__.renderWebResearchDispatchResult(
         {
@@ -289,10 +305,13 @@ describe("web_research renderer", () => {
       200,
     );
 
+    expect(rendered).toContain("Started web research via Gemini.");
+    expect(rendered).toContain("Research brief");
     expect(rendered).toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
-    expect(rendered).not.toContain("Started web research via Gemini.");
+    expect(rendered).toContain("Report path");
+    expect(rendered).toContain("/tmp/report.md");
   });
 
   it("renders collapsed completion messages with the saved path", () => {
@@ -467,7 +486,30 @@ describe("provider tool summaries", () => {
 });
 
 describe("web_search markdown formatting", () => {
-  it("formats each query as an H2 with proper spacing", () => {
+  it("does not repeat the query for a single search", () => {
+    const rendered = __test__.formatSearchResponses([
+      {
+        query: "ACME product comparison",
+        response: {
+          provider: "brave",
+          results: [
+            {
+              title: "ACME Product Comparison",
+              url: "https://example.com/acme-product-comparison",
+              snippet: "A generic comparison of fictional products.",
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(rendered).toContain(
+      "1. [ACME Product Comparison](<https://example.com/acme-product-comparison>)",
+    );
+    expect(rendered).not.toContain("ACME product comparison");
+  });
+
+  it("formats multiple queries as H2 sections with proper spacing", () => {
     const rendered = __test__.formatSearchResponses([
       {
         query: "site:example.com/blog acme platform",
@@ -501,7 +543,23 @@ describe("web_search markdown formatting", () => {
 });
 
 describe("web_answer markdown formatting", () => {
-  it("formats each question as an H2 with proper spacing", () => {
+  it("does not repeat the question for a single answer", () => {
+    const rendered = __test__.formatAnswerResponses([
+      {
+        query: "What is Beacon Security?",
+        response: {
+          provider: "brave",
+          text: "Beacon Security is a security data management platform.",
+        },
+      },
+    ]);
+
+    expect(rendered).toBe(
+      "Beacon Security is a security data management platform.",
+    );
+  });
+
+  it("formats multiple questions as H2 sections with proper spacing", () => {
     const rendered = __test__.formatAnswerResponses([
       {
         query: "What are the main use cases for ACME platforms?",

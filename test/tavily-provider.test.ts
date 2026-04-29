@@ -56,7 +56,7 @@ describe("providerHarness(tavilyProvider)", () => {
       "tavily sdk",
       5,
       {
-        apiKey: "TAVILY_API_KEY",
+        credentials: { api: "TAVILY_API_KEY" },
         baseUrl: "https://api.tavily.test",
         options: {
           search: {
@@ -121,7 +121,7 @@ describe("providerHarness(tavilyProvider)", () => {
     const response = await providerHarness(tavilyProvider).contents(
       ["https://example.com/a", "https://example.com/b"],
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
         options: {
           extract: {
             format: "markdown",

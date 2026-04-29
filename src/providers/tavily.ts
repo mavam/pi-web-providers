@@ -1,10 +1,10 @@
-import { type TObject, Type } from "typebox";
 import {
   type TavilyClient,
   type TavilyExtractResponse,
   type TavilySearchResponse,
   tavily,
 } from "@tavily/core";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
@@ -14,16 +14,16 @@ import type {
   Tavily,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
-
-import { defineCapability, defineProvider } from "./definition.js";
 
 const tavilySearchOptionsSchema = Type.Object(
   {
     topic: Type.Optional(
       literalUnion(["general", "news", "finance"], {
-        description: "Category of the search query.",
+        description:
+          "Category of the search query. Use 'news' for recent journalism or current events, 'finance' for markets or company financial data, and 'general' for broad web search.",
       }),
     ),
     searchDepth: Type.Optional(
@@ -117,7 +117,7 @@ const tavilyImplementation = {
 
   createTemplate(): Tavily {
     return {
-      apiKey: "TAVILY_API_KEY",
+      credentials: { api: "TAVILY_API_KEY" },
       options: {
         search: {
           includeFavicon: true,
@@ -131,7 +131,7 @@ const tavilyImplementation = {
   },
 
   getCapabilityStatus(config: Tavily | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -215,7 +215,7 @@ const tavilyImplementation = {
 };
 
 function createClient(config: Tavily): TavilyClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -266,7 +266,7 @@ export const tavilyProvider = defineProvider({
   docsUrl: tavilyImplementation.docsUrl,
   config: {
     createTemplate: () => tavilyImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (tavilyImplementation.getCapabilityStatus as any)(

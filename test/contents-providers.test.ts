@@ -94,7 +94,7 @@ describe("contents providers", () => {
     const result = await provider.contents(
       ["https://developers.cloudflare.com/browser-rendering/"],
       {
-        apiToken: "literal-token",
+        credentials: { api: "literal-token" },
         accountId: "account-id",
         options: {
           gotoOptions: {
@@ -147,7 +147,7 @@ describe("contents providers", () => {
     const result = await provider.contents(
       ["https://example.com"],
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
       },
       { cwd: process.cwd() },
       undefined,
@@ -171,7 +171,7 @@ describe("contents providers", () => {
     const { parallelProvider } = await import("../src/providers/parallel.js");
     const provider = providerHarness(parallelProvider);
     const config = provider.createTemplate();
-    config.apiKey = "literal-key";
+    config.credentials = { api: "literal-key" };
 
     parallelExtractMock.mockResolvedValue({
       results: [
@@ -231,7 +231,7 @@ describe("contents providers", () => {
     const result = await provider.contents(
       ["https://valyu.ai/docs"],
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
       },
       { cwd: process.cwd() },
       undefined,

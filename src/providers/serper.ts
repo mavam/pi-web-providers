@@ -61,13 +61,13 @@ const serperImplementation = {
 
   createTemplate(): Serper {
     return {
-      apiKey: "SERPER_API_KEY",
+      credentials: { api: "SERPER_API_KEY" },
       options: {},
     };
   },
 
   getCapabilityStatus(config: Serper | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -77,7 +77,7 @@ const serperImplementation = {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<SearchResponse> {
-    const apiKey = resolveConfigValue(config.apiKey);
+    const apiKey = resolveConfigValue(config.credentials?.api);
     if (!apiKey) {
       throw new Error("is missing an API key");
     }
@@ -272,7 +272,7 @@ export const serperProvider = defineProvider({
   docsUrl: serperImplementation.docsUrl,
   config: {
     createTemplate: () => serperImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search"],
   },
   getCapabilityStatus: (config, cwd, tool) =>

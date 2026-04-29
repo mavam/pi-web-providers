@@ -106,12 +106,12 @@ const linkupImplementation = {
 
   createTemplate(): Linkup {
     return {
-      apiKey: "LINKUP_API_KEY",
+      credentials: { api: "LINKUP_API_KEY" },
     };
   },
 
   getCapabilityStatus(config: Linkup | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -260,7 +260,7 @@ function buildFetchParams(
 }
 
 function createClient(config: Linkup): LinkupClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -322,7 +322,7 @@ export const linkupProvider = defineProvider({
   docsUrl: linkupImplementation.docsUrl,
   config: {
     createTemplate: () => linkupImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (linkupImplementation.getCapabilityStatus as any)(

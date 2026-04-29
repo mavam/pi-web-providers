@@ -290,9 +290,9 @@ function registerWebSearchTool(
     description:
       `Find likely sources on the public web for up to ${MAX_SEARCH_QUERIES} queries in a single call and return titles, URLs, and snippets grouped by query. ` +
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("search", selectedProviderId, [
       "Batch related searches when grouped comparison matters; use separate sibling web_search calls when independent results should surface as soon as they are ready.",
-    ],
+    ]),
     parameters: Type.Object(
       {
         queries: Type.Array(Type.String({ minLength: 1 }), {
@@ -378,6 +378,7 @@ function registerWebContentsTool(
       },
       { additionalProperties: false },
     ),
+    promptGuidelines: buildPromptGuidelines("contents", selectedProviderId, []),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         config: await loadConfig(),
@@ -441,11 +442,11 @@ function registerWebAnswerTool(
       },
       { additionalProperties: false },
     ),
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("answer", selectedProviderId, [
       "Use web_answer as a quick grounded-answer shortcut for simple factual questions, not as a replacement for inspecting sources or doing deeper research.",
       "Prefer web_search plus web_contents when source selection matters or primary sources need direct inspection; prefer web_research for open-ended, controversial, or multi-step investigations.",
       "Batch related questions when the answers belong together; use separate sibling web_answer calls when earlier independent answers can unblock the next step.",
-    ],
+    ]),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeAnswerTool({
         config: await loadConfig(),
@@ -512,10 +513,11 @@ function registerWebResearchTool(
       },
       { additionalProperties: false },
     ),
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("research", selectedProviderId, [
       "Use this tool for deep investigations that can finish asynchronously.",
+      "Pass only input unless the user explicitly requests provider options.",
       "Do not expect the final report in the same turn; tell the user that web research has started and wait for the completion message with the saved report path.",
-    ],
+    ]),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return dispatchWebResearch({
         pi,
@@ -721,6 +723,27 @@ function getSearchMaxResultsLimit(providerId: ProviderId): number {
     Record<Tool, { limits?: { maxResults?: number } }>
   >;
   return capabilities.search?.limits?.maxResults ?? MAX_ALLOWED_RESULTS;
+}
+
+function buildPromptGuidelines(
+  capability: Tool,
+  providerId: ProviderId,
+  baseGuidelines: readonly string[],
+): string[] {
+  return [
+    ...baseGuidelines,
+    ...getProviderCapabilityPromptGuidelines(capability, providerId),
+  ];
+}
+
+function getProviderCapabilityPromptGuidelines(
+  capability: Tool,
+  providerId: ProviderId,
+): readonly string[] {
+  const capabilities = PROVIDERS_BY_ID[providerId].capabilities as Partial<
+    Record<Tool, { promptGuidelines?: readonly string[] }>
+  >;
+  return capabilities[capability]?.promptGuidelines ?? [];
 }
 
 function optionalField(
@@ -1212,13 +1235,13 @@ function formatAnswerOutcomeSection(
   index: number,
   total: number,
 ): string {
-  const heading =
-    total > 1
-      ? `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`
-      : `## ${formatAnswerHeading(outcome.query)}`;
   const body = outcome.response
     ? outcome.response.text
     : `Answer failed: ${outcome.error ?? "Unknown error."}`;
+  if (total === 1) {
+    return body;
+  }
+  const heading = `## Question ${index + 1}: ${formatAnswerHeading(outcome.query)}`;
   return `${heading}\n\n${body}`;
 }
 
@@ -1349,7 +1372,7 @@ async function executeProviderOperation({
       `Fetching contents via ${provider.label} for ${(urls ?? []).length} URL(s)`,
     );
   } else if (capability === "answer") {
-    onProgress?.(`Answering via ${provider.label}: ${query ?? ""}`);
+    onProgress?.(`Answering via ${provider.label}`);
   } else if (capability === "research") {
     onProgress?.(`Researching via ${provider.label}`);
   }
@@ -2188,13 +2211,23 @@ function renderListCallHeader(
       );
 
       for (const item of normalizedItems) {
-        const itemLine = truncateToWidth(
-          `  ${theme.fg("accent", truncateInline(item, 120))}`,
-          width,
-        );
-        lines.push(
-          itemLine + " ".repeat(Math.max(0, width - visibleWidth(itemLine))),
-        );
+        const itemLines = options.forceMultiline
+          ? wrapTextWithAnsi(
+              theme.fg("accent", item),
+              Math.max(1, width - 2),
+            ).map((line) => `  ${line}`)
+          : [
+              truncateToWidth(
+                `  ${theme.fg("accent", truncateInline(item, 120))}`,
+                width,
+              ),
+            ];
+        for (const itemLine of itemLines) {
+          const line = truncateToWidth(itemLine, width);
+          lines.push(
+            line + " ".repeat(Math.max(0, width - visibleWidth(line))),
+          );
+        }
       }
 
       return lines;
@@ -2237,15 +2270,7 @@ function renderResearchCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderListCallHeader(
-    "web_research",
-    [params.input],
-    theme,
-    undefined,
-    {
-      forceMultiline: true,
-    },
-  );
+  return renderListCallHeader("web_research", [params.input], theme);
 }
 
 function renderSearchToolResult(
@@ -2291,7 +2316,20 @@ function renderWebResearchDispatchResult(
     : undefined;
 
   if (expanded) {
-    return renderBlockText(details?.input ?? text, theme, "toolOutput");
+    const expandedText = details
+      ? [
+          text,
+          "",
+          "## Research brief",
+          "",
+          details.input,
+          "",
+          "## Report path",
+          "",
+          `\`${details.outputPath}\``,
+        ].join("\n")
+      : text;
+    return renderMarkdownBlock(expandedText);
   }
 
   const summary = details
@@ -4109,13 +4147,13 @@ function formatSearchOutcomeSection(
   index: number,
   total: number,
 ): string {
-  const heading =
-    total > 1
-      ? `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`
-      : `## ${formatSearchHeading(outcome.query)}`;
   const body = outcome.response
     ? formatSearchResponseMarkdown(outcome.response)
     : `Search failed: ${outcome.error ?? "Unknown error."}`;
+  if (total === 1) {
+    return body;
+  }
+  const heading = `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`;
   return `${heading}\n\n${body}`;
 }
 

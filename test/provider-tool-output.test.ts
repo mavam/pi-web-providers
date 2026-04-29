@@ -8,6 +8,7 @@ import type { WebProviders } from "../src/types.js";
 interface TestSchema {
   additionalProperties?: boolean;
   anyOf?: TestSchema[];
+  enum?: string[];
   properties?: Record<string, TestSchema>;
 }
 
@@ -33,7 +34,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -105,7 +106,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -165,7 +166,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -216,7 +217,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -257,7 +258,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -280,7 +281,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -303,7 +304,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -364,7 +365,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -421,7 +422,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -464,7 +465,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -491,7 +492,7 @@ describe("provider tool output", () => {
     });
 
     expect(result.content[0]?.text).toBe(
-      '## "What are common ACME platform use cases?"\n\nACME platforms are used for workflow automation and data migrations.',
+      "ACME platforms are used for workflow automation and data migrations.",
     );
     expect(result.details).toEqual({
       tool: "web_answer",
@@ -506,7 +507,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -559,7 +560,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -631,7 +632,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         exa: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -676,7 +677,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -759,7 +760,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -836,7 +837,7 @@ describe("provider tool output", () => {
     const config: WebProviders = {
       providers: {
         gemini: {
-          apiKey: "literal-key",
+          credentials: { api: "literal-key" },
         },
       },
     };
@@ -900,7 +901,7 @@ describe("provider tool output", () => {
       const config: WebProviders = {
         providers: {
           perplexity: {
-            apiKey: "literal-key",
+            credentials: { api: "literal-key" },
           },
         },
       };
@@ -984,11 +985,24 @@ describe("provider tool output", () => {
       "search",
       "perplexity",
     )!;
+    const brave = __test__.buildStructuredOptionsSchema("search", "brave")!;
     const exa = __test__.buildStructuredOptionsSchema("search", "exa")!;
     const serper = __test__.buildStructuredOptionsSchema("search", "serper")!;
     const tavily = __test__.buildStructuredOptionsSchema("search", "tavily")!;
 
+    const braveProps = schemaInner(brave).properties ?? {};
+
     expect(schemaInner(perplexity).properties ?? {}).toHaveProperty("country");
+    expect(braveProps.mode?.enum).toEqual([
+      "web",
+      "llm_context",
+      "news",
+      "videos",
+      "images",
+      "places",
+    ]);
+    expect(braveProps.news?.properties ?? {}).toHaveProperty("freshness");
+    expect(braveProps.videos?.properties ?? {}).toHaveProperty("safesearch");
     expect(schemaInner(exa).properties ?? {}).toHaveProperty("userLocation");
     expect(schemaInner(serper).properties ?? {}).toHaveProperty("gl");
     expect(schemaInner(serper).properties ?? {}).toHaveProperty("location");

@@ -56,7 +56,7 @@ const cloudflareImplementation = {
 
   createTemplate(): Cloudflare {
     return {
-      apiToken: "CLOUDFLARE_API_TOKEN",
+      credentials: { api: "CLOUDFLARE_API_TOKEN" },
       accountId: "CLOUDFLARE_ACCOUNT_ID",
       options: {
         gotoOptions: {
@@ -69,7 +69,7 @@ const cloudflareImplementation = {
   getCapabilityStatus(
     config: Cloudflare | undefined,
   ): ProviderCapabilityStatus {
-    const apiTokenStatus = getApiKeyStatus(config?.apiToken);
+    const apiTokenStatus = getApiKeyStatus(config?.credentials?.api);
     if (apiTokenStatus.state !== "ready") {
       return apiTokenStatus;
     }
@@ -136,7 +136,7 @@ const cloudflareImplementation = {
 };
 
 function createClient(config: Cloudflare): CloudflareClient {
-  const apiToken = resolveConfigValue(config.apiToken);
+  const apiToken = resolveConfigValue(config.credentials?.api);
   if (!apiToken) {
     throw new Error("is missing an API token");
   }
@@ -158,7 +158,7 @@ export const cloudflareProvider = defineProvider({
   docsUrl: cloudflareImplementation.docsUrl,
   config: {
     createTemplate: () => cloudflareImplementation.createTemplate(),
-    fields: ["apiToken", "accountId", "options", "settings"],
+    fields: ["credentials", "accountId", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (cloudflareImplementation.getCapabilityStatus as any)(

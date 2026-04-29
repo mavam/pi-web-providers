@@ -1,5 +1,6 @@
 import { PROVIDERS } from "./providers/index.js";
 import type {
+  Brave,
   Claude,
   ClaudeOptions,
   Cloudflare,
@@ -54,6 +55,23 @@ export type ProviderSettingDescriptor<TConfig> =
   | ProviderValuesSettingDescriptor<TConfig>;
 
 const PROVIDER_SETTINGS = {
+  brave: {
+    settings: [
+      credentialSetting<Brave>({
+        id: "credentials.search",
+        name: "search",
+        label: "Search API key",
+        help: "Brave Search API key. You can use a literal value, an env var name like BRAVE_SEARCH_API_KEY, or !command.",
+      }),
+      credentialSetting<Brave>({
+        id: "credentials.answers",
+        name: "answers",
+        label: "Answers API key",
+        help: "Brave Answers API key. You can use a literal value, an env var name like BRAVE_ANSWERS_API_KEY, or !command.",
+      }),
+      baseUrlSetting<Brave>(),
+    ],
+  },
   claude: {
     settings: [
       stringSetting<Claude>({
@@ -121,22 +139,10 @@ const PROVIDER_SETTINGS = {
   },
   cloudflare: {
     settings: [
-      stringSetting<Cloudflare>({
-        id: "apiToken",
+      credentialSetting<Cloudflare>({
+        id: "credentials.api",
         label: "API token",
         help: "Cloudflare API token for Browser Rendering. The token needs the permission `Account | Browser Rendering | Edit`. You can use a literal value, an env var name like CLOUDFLARE_API_TOKEN, or !command.",
-        secret: true,
-        getValue: (config) => config?.apiToken,
-        setValue: (config, value) => {
-          assignOptionalString(
-            config as Record<
-              string,
-              string | number | boolean | Record<string, unknown> | undefined
-            >,
-            "apiToken",
-            value,
-          );
-        },
       }),
       stringSetting<Cloudflare>({
         id: "accountId",
@@ -394,7 +400,7 @@ const PROVIDER_SETTINGS = {
   },
   exa: {
     settings: [
-      apiKeySetting<Exa>(),
+      credentialSetting<Exa>(),
       baseUrlSetting<Exa>(),
       valuesSetting<Exa>({
         id: "exaSearchType",
@@ -454,11 +460,11 @@ const PROVIDER_SETTINGS = {
     ],
   },
   firecrawl: {
-    settings: [apiKeySetting<Firecrawl>(), baseUrlSetting<Firecrawl>()],
+    settings: [credentialSetting<Firecrawl>(), baseUrlSetting<Firecrawl>()],
   },
   gemini: {
     settings: [
-      apiKeySetting<Gemini>(),
+      credentialSetting<Gemini>(),
       valuesSetting<Gemini>({
         id: "geminiApiVersion",
         label: "API version",
@@ -520,14 +526,14 @@ const PROVIDER_SETTINGS = {
     ],
   },
   linkup: {
-    settings: [apiKeySetting<Linkup>(), baseUrlSetting<Linkup>()],
+    settings: [credentialSetting<Linkup>(), baseUrlSetting<Linkup>()],
   },
   ollama: {
-    settings: [apiKeySetting<Ollama>(), baseUrlSetting<Ollama>()],
+    settings: [credentialSetting<Ollama>(), baseUrlSetting<Ollama>()],
   },
   openai: {
     settings: [
-      apiKeySetting<OpenAI>(),
+      credentialSetting<OpenAI>(),
       baseUrlSetting<OpenAI>(),
       stringSetting<OpenAI>({
         id: "openaiSearchModel",
@@ -632,11 +638,11 @@ const PROVIDER_SETTINGS = {
     ],
   },
   perplexity: {
-    settings: [apiKeySetting<Perplexity>(), baseUrlSetting<Perplexity>()],
+    settings: [credentialSetting<Perplexity>(), baseUrlSetting<Perplexity>()],
   },
   parallel: {
     settings: [
-      apiKeySetting<Parallel>(),
+      credentialSetting<Parallel>(),
       baseUrlSetting<Parallel>(),
       valuesSetting<Parallel>({
         id: "parallelSearchMode",
@@ -707,14 +713,14 @@ const PROVIDER_SETTINGS = {
     ],
   },
   serper: {
-    settings: [apiKeySetting<Serper>(), baseUrlSetting<Serper>()],
+    settings: [credentialSetting<Serper>(), baseUrlSetting<Serper>()],
   },
   tavily: {
-    settings: [apiKeySetting<Tavily>(), baseUrlSetting<Tavily>()],
+    settings: [credentialSetting<Tavily>(), baseUrlSetting<Tavily>()],
   },
   valyu: {
     settings: [
-      apiKeySetting<Valyu>(),
+      credentialSetting<Valyu>(),
       baseUrlSetting<Valyu>(),
       valuesSetting<Valyu>({
         id: "valyuSearchType",
@@ -821,22 +827,26 @@ function valuesSetting<TConfig>(
   };
 }
 
-function apiKeySetting<TConfig extends { apiKey?: string }>() {
+function credentialSetting<
+  TConfig extends { credentials?: Record<string, string> },
+>(options: { id?: string; name?: string; label?: string; help?: string } = {}) {
+  const name = options.name ?? "api";
   return stringSetting<TConfig>({
-    id: "apiKey",
-    label: "API key",
-    help: "Provider API key. You can use a literal value, an env var name like EXA_API_KEY, or !command.",
+    id: options.id ?? `credentials.${name}`,
+    label: options.label ?? "API key",
+    help:
+      options.help ??
+      "Provider credential. You can use a literal value, an env var name like EXA_API_KEY, or !command.",
     secret: true,
-    getValue: (config) => config?.apiKey,
+    getValue: (config) => config?.credentials?.[name],
     setValue: (config, value) => {
-      assignOptionalString(
-        config as Record<
-          string,
-          string | number | boolean | Record<string, unknown> | undefined
-        >,
-        "apiKey",
-        value,
-      );
+      const trimmed = value.trim();
+      if (!trimmed) {
+        delete config.credentials?.[name];
+      } else {
+        config.credentials = { ...(config.credentials ?? {}), [name]: trimmed };
+      }
+      cleanupEmpty(config, "credentials");
     },
   });
 }
@@ -929,7 +939,7 @@ function asJsonObject(value: unknown): Record<string, unknown> | undefined {
 
 function cleanupEmpty<TConfig extends object>(
   config: TConfig,
-  key: "options" | "settings",
+  key: "credentials" | "options" | "settings",
 ): void {
   const value = asJsonObject((config as Record<string, unknown>)[key]);
   if (value && Object.keys(value).length === 0) {

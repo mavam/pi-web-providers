@@ -143,7 +143,7 @@ export const geminiImplementation = {
 
   createTemplate(): Gemini {
     return {
-      apiKey: "GOOGLE_API_KEY",
+      credentials: { api: "GOOGLE_API_KEY" },
       options: {
         searchModel: DEFAULT_SEARCH_MODEL,
         answerModel: DEFAULT_ANSWER_MODEL,
@@ -153,7 +153,7 @@ export const geminiImplementation = {
   },
 
   getCapabilityStatus(config: Gemini | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -347,7 +347,7 @@ export const geminiImplementation = {
   },
 
   createClient(config: Gemini): GoogleGenAI {
-    const apiKey = resolveConfigValue(config.apiKey);
+    const apiKey = resolveConfigValue(config.credentials?.api);
     if (!apiKey) {
       throw new Error("is missing an API key");
     }
@@ -1083,7 +1083,7 @@ export const geminiProvider = defineProvider({
   docsUrl: geminiImplementation.docsUrl,
   config: {
     createTemplate: () => geminiImplementation.createTemplate(),
-    fields: ["apiKey", "options", "settings"],
+    fields: ["credentials", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (geminiImplementation.getCapabilityStatus as any)(

@@ -51,7 +51,10 @@ const codexSearchOptionsSchema = Type.Object(
           Type.Literal("cached"),
           Type.Literal("live"),
         ],
-        { description: "How Codex should source web results." },
+        {
+          description:
+            "How Codex should source web results. Use 'live' for current information, 'cached' when freshness is less important, and 'disabled' only when web access should not be used.",
+        },
       ),
     ),
   },
@@ -111,7 +114,7 @@ const codexImplementation = {
     const codex = new CodexClient({
       codexPathOverride: config.codexPath,
       baseUrl: config.baseUrl,
-      apiKey: resolveConfigValue(config.apiKey),
+      apiKey: resolveConfigValue(config.credentials?.api),
       config: config.config as never,
       env: resolveEnvMap(config.env),
     });
@@ -285,7 +288,7 @@ export const codexProvider = defineProvider({
     fields: [
       "codexPath",
       "baseUrl",
-      "apiKey",
+      "credentials",
       "env",
       "config",
       "options",

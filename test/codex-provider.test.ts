@@ -52,7 +52,7 @@ describe("Codex provider", () => {
       "latest docs",
       5,
       {
-        apiKey: "literal-key",
+        credentials: { api: "literal-key" },
         options: {
           model: "gpt-4.1",
           modelReasoningEffort: "low",

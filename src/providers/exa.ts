@@ -121,7 +121,7 @@ const exaImplementation = {
 
   createTemplate(): Exa {
     return {
-      apiKey: "EXA_API_KEY",
+      credentials: { api: "EXA_API_KEY" },
       options: {
         search: {
           type: "auto",
@@ -134,7 +134,7 @@ const exaImplementation = {
   },
 
   getCapabilityStatus(config: Exa | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -322,7 +322,7 @@ const exaImplementation = {
 };
 
 function createClient(config: Exa): ExaClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -336,7 +336,7 @@ export const exaProvider = defineProvider({
   docsUrl: exaImplementation.docsUrl,
   config: {
     createTemplate: () => exaImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search"],
   },
   getCapabilityStatus: (config, cwd, tool) =>

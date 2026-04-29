@@ -9,9 +9,9 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 
@@ -33,7 +33,10 @@ const perplexitySearchOptionsSchema = Type.Object(
       Type.String({ description: "Country hint for search results." }),
     ),
     search_mode: Type.Optional(
-      Type.String({ description: "Perplexity search mode." }),
+      Type.String({
+        description:
+          "Perplexity search mode. Choose the provider mode that best matches the user's intent, such as broad web search versus academic or other specialized retrieval modes supported by Perplexity.",
+      }),
     ),
     search_domain_filter: Type.Optional(
       Type.Array(Type.String(), {
@@ -91,7 +94,7 @@ const perplexityImplementation = {
 
   createTemplate(): Perplexity {
     return {
-      apiKey: "PERPLEXITY_API_KEY",
+      credentials: { api: "PERPLEXITY_API_KEY" },
       options: {
         answer: {
           model: DEFAULT_ANSWER_MODEL,
@@ -106,7 +109,7 @@ const perplexityImplementation = {
   getCapabilityStatus(
     config: Perplexity | undefined,
   ): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -293,7 +296,7 @@ async function runStreamingForegroundChatTool(
 }
 
 function createClient(config: Perplexity): PerplexityClient {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -428,7 +431,7 @@ export const perplexityProvider = defineProvider({
   docsUrl: perplexityImplementation.docsUrl,
   config: {
     createTemplate: () => perplexityImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (perplexityImplementation.getCapabilityStatus as any)(

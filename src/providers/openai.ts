@@ -154,7 +154,7 @@ const openaiImplementation = {
 
   createTemplate(): OpenAIConfig {
     return {
-      apiKey: "OPENAI_API_KEY",
+      credentials: { api: "OPENAI_API_KEY" },
       options: {
         search: {
           model: DEFAULT_SEARCH_MODEL,
@@ -172,7 +172,7 @@ const openaiImplementation = {
   getCapabilityStatus(
     config: OpenAIConfig | undefined,
   ): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.apiKey);
+    return getApiKeyStatus(config?.credentials?.api);
   },
 
   async search(
@@ -293,7 +293,7 @@ const openaiImplementation = {
 };
 
 function createClient(config: OpenAIConfig): OpenAI {
-  const apiKey = resolveConfigValue(config.apiKey);
+  const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
     throw new Error("is missing an API key");
   }
@@ -684,7 +684,7 @@ export const openaiProvider = defineProvider({
   docsUrl: openaiImplementation.docsUrl,
   config: {
     createTemplate: () => openaiImplementation.createTemplate(),
-    fields: ["apiKey", "baseUrl", "options", "settings"],
+    fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
   },
   getCapabilityStatus: (config, cwd, tool) =>

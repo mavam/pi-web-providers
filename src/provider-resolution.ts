@@ -54,6 +54,10 @@ export function getEffectiveProviderConfig<TProviderId extends ProviderId>(
   const resolved = {
     ...defaults,
     ...overrides,
+    credentials: mergeNestedObjects(
+      defaults.credentials,
+      overrides.credentials,
+    ),
     options: mergeNestedObjects(defaults.options, overrides.options),
   } as ProviderConfig<TProviderId>;
 
@@ -162,13 +166,13 @@ export function getProviderSetupState(
   }
 
   if (providerId === "cloudflare") {
-    return providerConfig.apiToken !== undefined ||
+    return providerConfig.credentials !== undefined ||
       providerConfig.accountId !== undefined
       ? "configured"
       : "none";
   }
 
-  return providerConfig.apiKey !== undefined ? "configured" : "none";
+  return providerConfig.credentials !== undefined ? "configured" : "none";
 }
 
 export function formatProviderCapabilityStatus(

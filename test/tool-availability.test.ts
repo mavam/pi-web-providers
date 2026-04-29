@@ -29,6 +29,7 @@ beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), "pi-web-providers-home-"));
   cleanupDirs.push(home);
   process.env.HOME = home;
+  delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
@@ -43,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
@@ -77,7 +79,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -88,13 +90,18 @@ describe("managed tool availability", () => {
         additionalProperties?: boolean;
         properties?: Record<string, unknown>;
       };
+      promptGuidelines?: string[];
       renderResult?: (...args: any[]) => unknown;
     }> = [];
 
     const handlers = new Map<string, Function>();
 
     webProvidersExtension({
-      registerTool(tool: { name: string; description: string }) {
+      registerTool(tool: {
+        name: string;
+        description: string;
+        promptGuidelines?: string[];
+      }) {
         tools.push(tool);
       },
       registerCommand() {},
@@ -132,6 +139,9 @@ describe("managed tool availability", () => {
     expect(webSearch?.parameters?.properties).toHaveProperty("queries");
     expect(webSearch?.parameters?.properties).toHaveProperty("options");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("provider");
+    expect(JSON.stringify(webSearch?.promptGuidelines)).not.toContain(
+      "Brave places mode",
+    );
     expect(webContents?.description).toContain(
       "Read and extract the main contents of one or more web pages.",
     );
@@ -151,6 +161,48 @@ describe("managed tool availability", () => {
     expect(webResearch?.parameters?.properties).not.toHaveProperty("provider");
   });
 
+  it("adds Brave places and LLM context guidance to the search prompt", async () => {
+    process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "brave",
+      },
+      providers: {
+        brave: {
+          credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        },
+      },
+    });
+
+    const tools = await captureRegisteredTools();
+    const webSearch = tools.find((tool) => tool.name === "web_search");
+
+    expect(webSearch?.promptGuidelines).toContain(
+      "Use Brave places mode for direct point-of-interest listings such as restaurants, cafes, hotels, shops, landmarks, or venues.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "Prefer Brave places mode over llm_context when the user asks for nearby businesses or wants names, addresses, ratings, opening hours, categories, or contact details.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave places mode, set places.includeDetails when the task needs POI attributes beyond the basic result list, such as contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance metadata.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave places mode, set places.includeDescriptions when the task needs qualitative summaries or short explanations of places. Leave it off for simple nearby/place listing queries to avoid extra latency and quota usage.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "Use Brave llm_context mode when the agent needs extracted source context for reasoning, synthesis, RAG-style grounding, or source-material collection.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave llm_context mode, set llmContext.enable_local=true for local or near-me queries where POI/map grounding may be useful.",
+    );
+    expect(JSON.stringify(webSearch?.parameters)).toContain(
+      "Fetch detailed POI metadata",
+    );
+    expect(JSON.stringify(webSearch?.parameters)).toContain(
+      "Fetch AI-generated POI descriptions",
+    );
+  });
+
   it("registers provider-bound search schemas from configuration", async () => {
     process.env.OLLAMA_API_KEY = "test-key";
     writeConfig({
@@ -159,7 +211,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         ollama: {
-          apiKey: "OLLAMA_API_KEY",
+          credentials: { api: "OLLAMA_API_KEY" },
         },
       },
     });
@@ -181,7 +233,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -217,7 +269,7 @@ describe("managed tool availability", () => {
       providers: {
         codex: {},
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -241,7 +293,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -335,7 +387,7 @@ describe("managed tool availability", () => {
       providers: {
         codex: {},
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -420,7 +472,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
         },
       },
     });
@@ -495,7 +547,7 @@ describe("managed tool availability", () => {
     const previous = createConfig({
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
           options: {
             search: {
               type: "auto",
@@ -511,7 +563,7 @@ describe("managed tool availability", () => {
     const next = createConfig({
       providers: {
         exa: {
-          apiKey: "EXA_API_KEY",
+          credentials: { api: "EXA_API_KEY" },
           options: {
             search: {
               type: "keyword",
@@ -530,7 +582,7 @@ describe("managed tool availability", () => {
     const previous = createConfig({
       providers: {
         parallel: {
-          apiKey: "PARALLEL_API_KEY",
+          credentials: { api: "PARALLEL_API_KEY" },
           options: {
             extract: {
               full_content: true,
@@ -543,7 +595,7 @@ describe("managed tool availability", () => {
     const next = createConfig({
       providers: {
         parallel: {
-          apiKey: "PARALLEL_API_KEY",
+          credentials: { api: "PARALLEL_API_KEY" },
           options: {
             extract: {
               full_content: false,
@@ -590,7 +642,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         perplexity: {
-          apiKey: "PERPLEXITY_API_KEY",
+          credentials: { api: "PERPLEXITY_API_KEY" },
         },
       },
     });
@@ -620,7 +672,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         serper: {
-          apiKey: "SERPER_API_KEY",
+          credentials: { api: "SERPER_API_KEY" },
         },
       },
     });
@@ -654,7 +706,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         tavily: {
-          apiKey: "TAVILY_API_KEY",
+          credentials: { api: "TAVILY_API_KEY" },
         },
       },
     });
@@ -688,7 +740,7 @@ describe("managed tool availability", () => {
       },
       providers: {
         linkup: {
-          apiKey: "LINKUP_API_KEY",
+          credentials: { api: "LINKUP_API_KEY" },
         },
       },
     });
@@ -734,6 +786,7 @@ async function captureRegisteredTools(): Promise<
       additionalProperties?: boolean;
       properties?: Record<string, unknown>;
     };
+    promptGuidelines?: string[];
     renderResult?: (...args: any[]) => unknown;
   }>
 > {
@@ -744,6 +797,7 @@ async function captureRegisteredTools(): Promise<
       additionalProperties?: boolean;
       properties?: Record<string, unknown>;
     };
+    promptGuidelines?: string[];
     renderResult?: (...args: any[]) => unknown;
   }> = [];
   const handlers = new Map<string, Function>();
@@ -756,6 +810,7 @@ async function captureRegisteredTools(): Promise<
         additionalProperties?: boolean;
         properties?: Record<string, unknown>;
       };
+      promptGuidelines?: string[];
       renderResult?: (...args: any[]) => unknown;
     }) {
       tools.push(tool);
