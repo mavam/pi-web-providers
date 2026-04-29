@@ -2301,7 +2301,17 @@ function renderWebResearchDispatchResult(
     : undefined;
 
   if (expanded) {
-    return renderBlockText(text, theme, "toolOutput");
+    const expandedText = details
+      ? [
+          text,
+          "",
+          "Research brief:",
+          details.input,
+          "",
+          `Report path: ${details.outputPath}`,
+        ].join("\n")
+      : text;
+    return renderBlockText(expandedText, theme, "toolOutput");
   }
 
   const summary = details

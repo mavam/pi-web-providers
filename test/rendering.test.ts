@@ -286,7 +286,7 @@ describe("web_research renderer", () => {
     expect(rendered).not.toContain("…");
   });
 
-  it("does not repeat the research prompt in the expanded dispatch result", () => {
+  it("shows dispatch details and the full prompt in the expanded result", () => {
     const rendered = renderComponentText(
       __test__.renderWebResearchDispatchResult(
         {
@@ -308,9 +308,11 @@ describe("web_research renderer", () => {
     );
 
     expect(rendered).toContain("Started web research via Gemini.");
-    expect(rendered).not.toContain(
+    expect(rendered).toContain("Research brief:");
+    expect(rendered).toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
+    expect(rendered).toContain("Report path: /tmp/report.md");
   });
 
   it("renders collapsed completion messages with the saved path", () => {
