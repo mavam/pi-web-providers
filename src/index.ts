@@ -2188,13 +2188,23 @@ function renderListCallHeader(
       );
 
       for (const item of normalizedItems) {
-        const itemLine = truncateToWidth(
-          `  ${theme.fg("accent", truncateInline(item, 120))}`,
-          width,
-        );
-        lines.push(
-          itemLine + " ".repeat(Math.max(0, width - visibleWidth(itemLine))),
-        );
+        const itemLines = options.forceMultiline
+          ? wrapTextWithAnsi(
+              theme.fg("accent", item),
+              Math.max(1, width - 2),
+            ).map((line) => `  ${line}`)
+          : [
+              truncateToWidth(
+                `  ${theme.fg("accent", truncateInline(item, 120))}`,
+                width,
+              ),
+            ];
+        for (const itemLine of itemLines) {
+          const line = truncateToWidth(itemLine, width);
+          lines.push(
+            line + " ".repeat(Math.max(0, width - visibleWidth(line))),
+          );
+        }
       }
 
       return lines;

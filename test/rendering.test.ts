@@ -268,6 +268,24 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("ctrl+o to expand");
   });
 
+  it("wraps long research prompts without ellipsizing them", () => {
+    const rendered = renderComponentText(
+      __test__.renderResearchCallHeader(
+        {
+          input:
+            "What is pi coding agent? Provide a concise overview of its purpose, main features, model support, extension system, and typical workflows.",
+        },
+        createTheme(),
+      ),
+      60,
+    );
+
+    expect(rendered).toContain("What is pi coding agent?");
+    expect(rendered).toContain("typical workflows.");
+    expect(rendered).not.toContain("...");
+    expect(rendered).not.toContain("…");
+  });
+
   it("does not repeat the research prompt in the expanded dispatch result", () => {
     const rendered = renderComponentText(
       __test__.renderWebResearchDispatchResult(
