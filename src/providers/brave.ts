@@ -236,16 +236,24 @@ const braveSearchOptionsSchema = Type.Object(
           units: Type.Optional(
             Type.String({ description: "Distance units for local search." }),
           ),
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          geoloc: Type.Optional(
+            Type.String({
+              description: "Optional geolocation token used to refine results.",
+            }),
+          ),
           count: countOption,
           includeDetails: Type.Optional(
             Type.Boolean({
-              description: "Whether callers want place details in metadata.",
+              description:
+                "Places mode only. Fetch detailed POI metadata when the task needs contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance data. Leave off for simple place listings to avoid extra latency and quota usage.",
             }),
           ),
           includeDescriptions: Type.Optional(
             Type.Boolean({
               description:
-                "Whether callers want place descriptions in metadata.",
+                "Places mode only. Fetch AI-generated POI descriptions when the task needs qualitative summaries or short explanations of places. Leave off for simple nearby/place listing queries to avoid extra latency and quota usage.",
             }),
           ),
         },
@@ -255,6 +263,12 @@ const braveSearchOptionsSchema = Type.Object(
   },
   { description: "Brave search options." },
 );
+
+const braveSearchPromptGuidelines = [
+  "Use Brave places mode for local businesses, venues, restaurants, hotels, shops, landmarks, or other points of interest.",
+  "In Brave places mode, set places.includeDetails when the task needs POI attributes beyond the basic result list, such as contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance metadata.",
+  "In Brave places mode, set places.includeDescriptions when the task needs qualitative summaries or short explanations of places. Leave it off for simple nearby/place listing queries to avoid extra latency and quota usage.",
+] as const;
 
 const braveAnswerOptionsSchema = Type.Object(
   {
@@ -807,6 +821,9 @@ async function places(
       "location",
       "radius",
       "units",
+      "safesearch",
+      "spellcheck",
+      "geoloc",
       "count",
     ]),
   };
@@ -817,32 +834,157 @@ async function places(
   if (!r.ok) throw new Error(await httpError(r));
   const p = obj(await r.json());
   const rows = arr(p.results).slice(0, clamp(maxResults));
+  const ids = rows.map((e) => str(obj(e).id)).filter((id) => id !== undefined);
+  const [detailsById, descriptionsById] = await Promise.all([
+    placeOptions.includeDetails && ids.length > 0
+      ? fetchPlaceDetails(
+          config,
+          context,
+          key,
+          ids,
+          pick(params, ["search_lang", "ui_lang", "units"]),
+        )
+      : Promise.resolve(new Map<string, Record<string, unknown>>()),
+    placeOptions.includeDescriptions && ids.length > 0
+      ? fetchPlaceDescriptions(config, context, key, ids)
+      : Promise.resolve(new Map<string, Record<string, unknown>>()),
+  ]);
   return {
     provider: "brave",
     results: rows.map((e) => {
       const x = obj(e);
+      const id = str(x.id);
+      const details = id ? detailsById.get(id) : undefined;
+      const description = id ? descriptionsById.get(id) : undefined;
       const u = str(x.url) ?? str(x.provider_url) ?? "";
       return {
         title: str(x.title) || u || "Untitled",
         url: u,
         snippet: trimSnippet(
           [
-            str(x.description),
-            str(x.address),
+            placeDescriptionText(description) ?? str(x.description),
+            placeAddress(x, details),
             arr(x.categories).join(", "),
-            num(x.rating) ? `Rating: ${num(x.rating)}` : undefined,
+            placeRating(x, details),
           ]
             .filter(Boolean)
             .join(" — "),
         ),
         metadata: {
           ...x,
-          includeDetails: !!placeOptions.includeDetails,
-          includeDescriptions: !!placeOptions.includeDescriptions,
+          ...(details ? { poiDetails: details } : {}),
+          ...(description ? { poiDescription: description } : {}),
         },
       };
     }),
   };
+}
+
+async function fetchPlaceDetails(
+  config: Brave,
+  context: ProviderContext,
+  key: string,
+  ids: string[],
+  options: Record<string, unknown>,
+): Promise<Map<string, Record<string, unknown>>> {
+  const r = await fetch(
+    urlWithRepeatedArrays(config, "/res/v1/local/pois", {
+      ids: ids.slice(0, 20),
+      ...options,
+    }),
+    {
+      headers: headers(key),
+      signal: context.signal,
+    },
+  );
+  if (!r.ok) throw new Error(await httpError(r));
+  return indexById(arr(obj(await r.json()).results));
+}
+
+async function fetchPlaceDescriptions(
+  config: Brave,
+  context: ProviderContext,
+  key: string,
+  ids: string[],
+): Promise<Map<string, Record<string, unknown>>> {
+  const r = await fetch(
+    urlWithRepeatedArrays(config, "/res/v1/local/descriptions", {
+      ids: ids.slice(0, 20),
+    }),
+    {
+      headers: headers(key),
+      signal: context.signal,
+    },
+  );
+  if (!r.ok) throw new Error(await httpError(r));
+  return indexById(arr(obj(await r.json()).results));
+}
+
+function urlWithRepeatedArrays(
+  config: Brave,
+  path: string,
+  params: Record<string, unknown>,
+): URL {
+  const u = new URL(`${base(config)}${path}`);
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined) continue;
+    if (Array.isArray(v)) {
+      for (const item of v) {
+        u.searchParams.append(k, String(item));
+      }
+    } else {
+      u.searchParams.set(k, String(v));
+    }
+  }
+  return u;
+}
+
+function indexById(values: unknown[]): Map<string, Record<string, unknown>> {
+  const result = new Map<string, Record<string, unknown>>();
+  for (const value of values) {
+    const entry = obj(value);
+    const id = str(entry.id);
+    if (id) {
+      result.set(id, entry);
+    }
+  }
+  return result;
+}
+
+function placeDescriptionText(
+  description: Record<string, unknown> | undefined,
+): string | undefined {
+  if (!description) return undefined;
+  return (
+    str(description.description) ??
+    str(description.text) ??
+    str(description.summary) ??
+    str(obj(description.description).text)
+  );
+}
+
+function placeAddress(
+  place: Record<string, unknown>,
+  details: Record<string, unknown> | undefined,
+): string | undefined {
+  return (
+    str(place.address) ??
+    str(obj(place.postal_address).displayAddress) ??
+    str(details?.address) ??
+    str(obj(details?.postal_address).displayAddress)
+  );
+}
+
+function placeRating(
+  place: Record<string, unknown>,
+  details: Record<string, unknown> | undefined,
+): string | undefined {
+  const rating =
+    num(place.rating) ??
+    num(obj(place.rating).ratingValue) ??
+    num(details?.rating) ??
+    num(obj(details?.rating).ratingValue);
+  return rating === undefined ? undefined : `Rating: ${rating}`;
 }
 
 function buildAnswerRequest(
@@ -1105,6 +1247,7 @@ export const braveProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: braveImplementation.getToolOptionsSchema("search"),
+      promptGuidelines: braveSearchPromptGuidelines,
       async execute(input: any, ctx) {
         return await braveImplementation.search(
           input.query,

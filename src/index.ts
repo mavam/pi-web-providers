@@ -292,6 +292,7 @@ function registerWebSearchTool(
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
     promptGuidelines: [
       "Batch related searches when grouped comparison matters; use separate sibling web_search calls when independent results should surface as soon as they are ready.",
+      ...getProviderCapabilityPromptGuidelines("search", selectedProviderId),
     ],
     parameters: Type.Object(
       {
@@ -722,6 +723,16 @@ function getSearchMaxResultsLimit(providerId: ProviderId): number {
     Record<Tool, { limits?: { maxResults?: number } }>
   >;
   return capabilities.search?.limits?.maxResults ?? MAX_ALLOWED_RESULTS;
+}
+
+function getProviderCapabilityPromptGuidelines(
+  capability: Tool,
+  providerId: ProviderId,
+): readonly string[] {
+  const capabilities = PROVIDERS_BY_ID[providerId].capabilities as Partial<
+    Record<Tool, { promptGuidelines?: readonly string[] }>
+  >;
+  return capabilities[capability]?.promptGuidelines ?? [];
 }
 
 function optionalField(

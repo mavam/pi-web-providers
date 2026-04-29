@@ -39,6 +39,7 @@ export interface CapabilityDefinition<
 > {
   options?: TObject;
   limits?: CapabilityLimits;
+  promptGuidelines?: readonly string[];
   execute(
     input: CapabilityInput<TInput, TOptions>,
     context: ProviderExecutionContext,

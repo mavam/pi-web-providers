@@ -29,6 +29,7 @@ beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), "pi-web-providers-home-"));
   cleanupDirs.push(home);
   process.env.HOME = home;
+  delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
@@ -43,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.EXA_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
@@ -88,13 +90,18 @@ describe("managed tool availability", () => {
         additionalProperties?: boolean;
         properties?: Record<string, unknown>;
       };
+      promptGuidelines?: string[];
       renderResult?: (...args: any[]) => unknown;
     }> = [];
 
     const handlers = new Map<string, Function>();
 
     webProvidersExtension({
-      registerTool(tool: { name: string; description: string }) {
+      registerTool(tool: {
+        name: string;
+        description: string;
+        promptGuidelines?: string[];
+      }) {
         tools.push(tool);
       },
       registerCommand() {},
@@ -132,6 +139,9 @@ describe("managed tool availability", () => {
     expect(webSearch?.parameters?.properties).toHaveProperty("queries");
     expect(webSearch?.parameters?.properties).toHaveProperty("options");
     expect(webSearch?.parameters?.properties).not.toHaveProperty("provider");
+    expect(JSON.stringify(webSearch?.promptGuidelines)).not.toContain(
+      "Brave places mode",
+    );
     expect(webContents?.description).toContain(
       "Read and extract the main contents of one or more web pages.",
     );
@@ -149,6 +159,39 @@ describe("managed tool availability", () => {
       "Returns immediately with a dispatch notice",
     );
     expect(webResearch?.parameters?.properties).not.toHaveProperty("provider");
+  });
+
+  it("adds Brave places enrichment guidance to the search prompt", async () => {
+    process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "brave",
+      },
+      providers: {
+        brave: {
+          credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        },
+      },
+    });
+
+    const tools = await captureRegisteredTools();
+    const webSearch = tools.find((tool) => tool.name === "web_search");
+
+    expect(webSearch?.promptGuidelines).toContain(
+      "Use Brave places mode for local businesses, venues, restaurants, hotels, shops, landmarks, or other points of interest.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave places mode, set places.includeDetails when the task needs POI attributes beyond the basic result list, such as contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance metadata.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave places mode, set places.includeDescriptions when the task needs qualitative summaries or short explanations of places. Leave it off for simple nearby/place listing queries to avoid extra latency and quota usage.",
+    );
+    expect(JSON.stringify(webSearch?.parameters)).toContain(
+      "Fetch detailed POI metadata",
+    );
+    expect(JSON.stringify(webSearch?.parameters)).toContain(
+      "Fetch AI-generated POI descriptions",
+    );
   });
 
   it("registers provider-bound search schemas from configuration", async () => {
@@ -734,6 +777,7 @@ async function captureRegisteredTools(): Promise<
       additionalProperties?: boolean;
       properties?: Record<string, unknown>;
     };
+    promptGuidelines?: string[];
     renderResult?: (...args: any[]) => unknown;
   }>
 > {
@@ -744,6 +788,7 @@ async function captureRegisteredTools(): Promise<
       additionalProperties?: boolean;
       properties?: Record<string, unknown>;
     };
+    promptGuidelines?: string[];
     renderResult?: (...args: any[]) => unknown;
   }> = [];
   const handlers = new Map<string, Function>();
@@ -756,6 +801,7 @@ async function captureRegisteredTools(): Promise<
         additionalProperties?: boolean;
         properties?: Record<string, unknown>;
       };
+      promptGuidelines?: string[];
       renderResult?: (...args: any[]) => unknown;
     }) {
       tools.push(tool);
