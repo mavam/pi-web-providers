@@ -224,7 +224,7 @@ describe("web_answer renderer", () => {
 });
 
 describe("web_research renderer", () => {
-  it("renders the research brief on its own line", () => {
+  it("renders a compact research call header", () => {
     const rendered = renderComponentText(
       __test__.renderResearchCallHeader(
         {
@@ -236,9 +236,8 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered.startsWith("web_research")).toBe(true);
-    expect(rendered).toContain(
-      "  ACME platform use cases: what problems do these products solve, who uses them, and in what scenarios?",
+    expect(rendered.startsWith("web_research ACME platform use cases:")).toBe(
+      true,
     );
     expect(rendered).not.toContain('web_research "');
     expect(rendered).not.toContain("provider=");
@@ -268,7 +267,7 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("ctrl+o to expand");
   });
 
-  it("wraps long research prompts without ellipsizing them", () => {
+  it("keeps long research prompts compact in the call header", () => {
     const rendered = renderComponentText(
       __test__.renderResearchCallHeader(
         {
@@ -280,10 +279,9 @@ describe("web_research renderer", () => {
       60,
     );
 
-    expect(rendered).toContain("What is pi coding agent?");
-    expect(rendered).toContain("typical workflows.");
-    expect(rendered).not.toContain("...");
-    expect(rendered).not.toContain("…");
+    expect(rendered).toContain("web_research What is pi coding agent?");
+    expect(rendered).toContain("...");
+    expect(rendered).not.toContain("typical workflows.");
   });
 
   it("shows dispatch details and the full prompt in the expanded result", () => {

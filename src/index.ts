@@ -2248,15 +2248,7 @@ function renderResearchCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderListCallHeader(
-    "web_research",
-    [params.input],
-    theme,
-    undefined,
-    {
-      forceMultiline: true,
-    },
-  );
+  return renderListCallHeader("web_research", [params.input], theme);
 }
 
 function renderSearchToolResult(
