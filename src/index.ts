@@ -290,10 +290,9 @@ function registerWebSearchTool(
     description:
       `Find likely sources on the public web for up to ${MAX_SEARCH_QUERIES} queries in a single call and return titles, URLs, and snippets grouped by query. ` +
       `Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} when needed.`,
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("search", selectedProviderId, [
       "Batch related searches when grouped comparison matters; use separate sibling web_search calls when independent results should surface as soon as they are ready.",
-      ...getProviderCapabilityPromptGuidelines("search", selectedProviderId),
-    ],
+    ]),
     parameters: Type.Object(
       {
         queries: Type.Array(Type.String({ minLength: 1 }), {
@@ -379,6 +378,7 @@ function registerWebContentsTool(
       },
       { additionalProperties: false },
     ),
+    promptGuidelines: buildPromptGuidelines("contents", selectedProviderId, []),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeProviderTool({
         config: await loadConfig(),
@@ -442,11 +442,11 @@ function registerWebAnswerTool(
       },
       { additionalProperties: false },
     ),
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("answer", selectedProviderId, [
       "Use web_answer as a quick grounded-answer shortcut for simple factual questions, not as a replacement for inspecting sources or doing deeper research.",
       "Prefer web_search plus web_contents when source selection matters or primary sources need direct inspection; prefer web_research for open-ended, controversial, or multi-step investigations.",
       "Batch related questions when the answers belong together; use separate sibling web_answer calls when earlier independent answers can unblock the next step.",
-    ],
+    ]),
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       return executeAnswerTool({
         config: await loadConfig(),
@@ -513,11 +513,11 @@ function registerWebResearchTool(
       },
       { additionalProperties: false },
     ),
-    promptGuidelines: [
+    promptGuidelines: buildPromptGuidelines("research", selectedProviderId, [
       "Use this tool for deep investigations that can finish asynchronously.",
       "Pass only input unless the user explicitly requests provider options.",
       "Do not expect the final report in the same turn; tell the user that web research has started and wait for the completion message with the saved report path.",
-    ],
+    ]),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       return dispatchWebResearch({
         pi,
@@ -723,6 +723,17 @@ function getSearchMaxResultsLimit(providerId: ProviderId): number {
     Record<Tool, { limits?: { maxResults?: number } }>
   >;
   return capabilities.search?.limits?.maxResults ?? MAX_ALLOWED_RESULTS;
+}
+
+function buildPromptGuidelines(
+  capability: Tool,
+  providerId: ProviderId,
+  baseGuidelines: readonly string[],
+): string[] {
+  return [
+    ...baseGuidelines,
+    ...getProviderCapabilityPromptGuidelines(capability, providerId),
+  ];
 }
 
 function getProviderCapabilityPromptGuidelines(
