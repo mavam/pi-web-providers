@@ -1000,8 +1000,11 @@ function buildAnswerRequest(
   if (webSearchOptions.enable_citations === undefined) {
     webSearchOptions.enable_citations = true;
   }
+  const stream =
+    webSearchOptions.enable_citations === true ||
+    webSearchOptions.enable_entities === true;
   return {
-    stream: false,
+    stream,
     ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
     web_search_options: webSearchOptions,
   };
@@ -1027,7 +1030,7 @@ function buildResearchRequest(
     enable_citations: false,
   };
   return {
-    stream: false,
+    stream: true,
     ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
     web_search_options: webSearchOptions,
   };
@@ -1093,30 +1096,27 @@ function parseAnswerStream(text: string): {
   citations: Array<{ title?: string; url?: string }>;
   usage?: unknown;
 } {
-  let answer = "";
-  const citations: Array<{ title?: string; url?: string }> = [];
-  let usage: unknown;
+  let rawAnswer = "";
   for (const line of text.split(/\r?\n/)) {
     const data = line.startsWith("data:") ? line.slice(5).trim() : line.trim();
     if (!data || data === "[DONE]") continue;
-    const dataTags = extractBraveTags(data);
-    citations.push(...dataTags.citations);
-    usage = dataTags.usage ?? usage;
     try {
       const parsed = obj(JSON.parse(data));
       const choice = obj(arr(parsed.choices)[0]);
       const delta = str(obj(choice.delta).content);
       if (delta) {
-        const deltaTags = extractBraveTags(delta);
-        citations.push(...deltaTags.citations);
-        usage = deltaTags.usage ?? usage;
-        answer += deltaTags.text;
+        rawAnswer += delta;
       }
     } catch {
-      answer += dataTags.text;
+      rawAnswer += data;
     }
   }
-  return { answer, citations: dedupeCitations(citations), usage };
+  const tags = extractBraveTags(rawAnswer);
+  return {
+    answer: tags.text,
+    citations: dedupeCitations(tags.citations),
+    usage: tags.usage,
+  };
 }
 
 function extractBraveTags(text: string): {
@@ -1136,38 +1136,37 @@ function extractBraveTags(text: string): {
       break;
     }
 
-    const tag = ["citation", "usage", "enum_item"].find((candidate) =>
-      text.startsWith(`<${candidate}{`, tagStart),
-    );
-    if (!tag) {
+    const parsedTag = readBraveTagStart(text, tagStart);
+    if (!parsedTag) {
       cleaned += text.slice(offset, tagStart + 1);
       offset = tagStart + 1;
       continue;
     }
 
-    const jsonStart = tagStart + tag.length + 1;
-    const jsonEnd = findJsonObjectEnd(text, jsonStart);
+    const jsonEnd = findJsonValueEnd(text, parsedTag.jsonStart);
     if (jsonEnd === -1) {
       cleaned += text.slice(offset);
       break;
     }
 
     cleaned += text.slice(offset, tagStart);
-    const json = text.slice(jsonStart, jsonEnd + 1);
+    const json = text.slice(parsedTag.jsonStart, jsonEnd + 1);
     try {
       const parsed = JSON.parse(json);
-      if (tag === "citation") {
+      if (parsedTag.tag === "answer") {
+        cleaned += str(parsed.answer) ?? str(parsed.text) ?? "";
+      } else if (parsedTag.tag === "citation") {
         citations.push({
           title: str(parsed.title),
           url: str(parsed.url),
         });
-      } else if (tag === "usage") {
+      } else if (parsedTag.tag === "usage") {
         usage = parsed;
       }
     } catch {}
 
-    const closing = `</${tag}>`;
-    const abbreviatedClosing = `</${tag}`;
+    const closing = `</${parsedTag.tag}>`;
+    const abbreviatedClosing = `</${parsedTag.tag}`;
     if (text.startsWith(closing, jsonEnd + 1)) {
       offset = jsonEnd + 1 + closing.length;
     } else if (text.startsWith(abbreviatedClosing, jsonEnd + 1)) {
@@ -1180,9 +1179,40 @@ function extractBraveTags(text: string): {
   return { text: cleaned, citations, usage };
 }
 
-function findJsonObjectEnd(text: string, start: number): number {
-  if (text[start] !== "{") return -1;
-  let depth = 0;
+const BRAVE_STRUCTURED_TAGS = new Set([
+  "analyzing",
+  "answer",
+  "blindspots",
+  "citation",
+  "enum_item",
+  "progress",
+  "queries",
+  "thinking",
+  "usage",
+]);
+
+function readBraveTagStart(
+  text: string,
+  tagStart: number,
+): { tag: string; jsonStart: number } | undefined {
+  const match = /^<([A-Za-z_][A-Za-z0-9_-]*)(>)?[{[]/.exec(
+    text.slice(tagStart),
+  );
+  if (!match) return undefined;
+  const tag = match[1];
+  if (!BRAVE_STRUCTURED_TAGS.has(tag)) return undefined;
+  return {
+    tag,
+    jsonStart: tagStart + match[0].length - 1,
+  };
+}
+
+function findJsonValueEnd(text: string, start: number): number {
+  const first = text[start];
+  const closing = first === "{" ? "}" : first === "[" ? "]" : undefined;
+  if (!closing) return -1;
+
+  const stack: string[] = [];
   let inString = false;
   let escaped = false;
 
@@ -1201,10 +1231,13 @@ function findJsonObjectEnd(text: string, start: number): number {
       continue;
     }
     if (inString) continue;
-    if (char === "{") depth++;
-    if (char === "}") {
-      depth--;
-      if (depth === 0) return index;
+    if (char === "{") {
+      stack.push("}");
+    } else if (char === "[") {
+      stack.push("]");
+    } else if (char === "}" || char === "]") {
+      if (stack.pop() !== char) return -1;
+      if (stack.length === 0) return index;
     }
   }
 

@@ -54,6 +54,10 @@ export function getEffectiveProviderConfig<TProviderId extends ProviderId>(
   const resolved = {
     ...defaults,
     ...overrides,
+    credentials: mergeNestedObjects(
+      defaults.credentials,
+      overrides.credentials,
+    ),
     options: mergeNestedObjects(defaults.options, overrides.options),
   } as ProviderConfig<TProviderId>;
 

@@ -354,6 +354,23 @@ describe("provider resolution", () => {
     });
   });
 
+  it("merges provider credentials into the effective provider config", () => {
+    const config = createConfig({
+      providers: {
+        brave: {
+          credentials: {
+            search: "CUSTOM_BRAVE_SEARCH_API_KEY",
+          },
+        },
+      },
+    });
+
+    expect(getEffectiveProviderConfig(config, "brave").credentials).toEqual({
+      search: "CUSTOM_BRAVE_SEARCH_API_KEY",
+      answers: "BRAVE_ANSWERS_API_KEY",
+    });
+  });
+
   it("merges shared settings into the effective provider settings", () => {
     const config = createConfig({
       settings: {

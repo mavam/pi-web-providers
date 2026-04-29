@@ -6,6 +6,7 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   delete process.env.BRAVE_SEARCH_API_KEY;
+  delete process.env.BRAVE_ANSWERS_API_KEY;
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
@@ -147,6 +148,118 @@ describe("providerHarness(braveProvider)", () => {
         },
       },
     ]);
+  });
+
+  it("sends Brave Answers options under web_search_options and parses streamed tags", async () => {
+    process.env.BRAVE_ANSWERS_API_KEY = "answers-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          [
+            'data: {"choices":[{"delta":{"content":"Answer text "}}]}',
+            'data: {"choices":[{"delta":{"content":"<citation>{\\"title\\":\\"Example source\\",\\"url\\":\\"https://example.com/source\\"}</citation>"}}]}',
+            'data: {"choices":[{"delta":{"content":"<usage>{\\"X-Request-Queries\\":1}</usage>"}}]}',
+            "data: [DONE]",
+          ].join("\n\n"),
+          { status: 200 },
+        ),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const response = await providerHarness(braveProvider).answer(
+      "what happened?",
+      {
+        credentials: { answers: "BRAVE_ANSWERS_API_KEY" },
+        baseUrl: "https://api.search.brave.test",
+      },
+      { cwd: process.cwd() },
+      { country: "US", language: "en", enable_entities: true },
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.search.brave.test/res/v1/chat/completions",
+      expect.objectContaining({
+        method: "POST",
+        headers: {
+          "X-Subscription-Token": "answers-key",
+          "content-type": "application/json",
+        },
+        signal: undefined,
+      }),
+    );
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: "brave",
+      messages: [{ role: "user", content: "what happened?" }],
+      stream: true,
+      web_search_options: {
+        country: "US",
+        language: "en",
+        enable_entities: true,
+        enable_citations: true,
+      },
+    });
+    expect(response).toEqual({
+      provider: "brave",
+      text: [
+        "Answer text",
+        "",
+        "Sources:",
+        "1. Example source",
+        "   https://example.com/source",
+      ].join("\n"),
+      itemCount: 1,
+      metadata: { usage: { "X-Request-Queries": 1 } },
+    });
+  });
+
+  it("sends Brave research mode under web_search_options and extracts answer tags", async () => {
+    process.env.BRAVE_ANSWERS_API_KEY = "answers-key";
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          [
+            'data: {"choices":[{"delta":{"content":"<queries>{\\"queries\\":[\\"research this topic\\"]}</queries>"}}]}',
+            'data: {"choices":[{"delta":{"content":"<thinking>{\\"urls_analyzed\\":3}</thinking>"}}]}',
+            'data: {"choices":[{"delta":{"content":"<blindspots>[\\"missing detail\\"]</blindspots>"}}]}',
+            'data: {"choices":[{"delta":{"content":"<answer>{\\"answer\\":\\"Research report\\"}</answer>"}}]}',
+            "data: [DONE]",
+          ].join("\n\n"),
+          { status: 200 },
+        ),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const response = await providerHarness(braveProvider).research(
+      "research this topic",
+      {
+        credentials: { answers: "BRAVE_ANSWERS_API_KEY" },
+        baseUrl: "https://api.search.brave.test",
+      },
+      { cwd: process.cwd() },
+      {
+        country: "US",
+        research_maximum_number_of_queries: 3,
+        max_completion_tokens: 1000,
+      },
+    );
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init.body))).toEqual({
+      model: "brave",
+      messages: [{ role: "user", content: "research this topic" }],
+      stream: true,
+      max_completion_tokens: 1000,
+      web_search_options: {
+        country: "US",
+        research_maximum_number_of_queries: 3,
+        enable_research: true,
+        enable_citations: false,
+      },
+    });
+    expect(response.text).toBe("Research report");
   });
 
   it("fetches Brave place details and descriptions when requested", async () => {
