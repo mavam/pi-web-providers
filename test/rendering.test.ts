@@ -489,14 +489,14 @@ describe("web_search markdown formatting", () => {
   it("does not repeat the query for a single search", () => {
     const rendered = __test__.formatSearchResponses([
       {
-        query: "Tenzir vs Cribl comparison",
+        query: "ACME product comparison",
         response: {
           provider: "brave",
           results: [
             {
-              title: "Tenzir vs Cribl",
-              url: "https://example.com/tenzir-vs-cribl",
-              snippet: "A comparison of security data pipeline tools.",
+              title: "ACME Product Comparison",
+              url: "https://example.com/acme-product-comparison",
+              snippet: "A generic comparison of fictional products.",
             },
           ],
         },
@@ -504,9 +504,9 @@ describe("web_search markdown formatting", () => {
     ]);
 
     expect(rendered).toContain(
-      "1. [Tenzir vs Cribl](<https://example.com/tenzir-vs-cribl>)",
+      "1. [ACME Product Comparison](<https://example.com/acme-product-comparison>)",
     );
-    expect(rendered).not.toContain("Tenzir vs Cribl comparison");
+    expect(rendered).not.toContain("ACME product comparison");
   });
 
   it("formats multiple queries as H2 sections with proper spacing", () => {

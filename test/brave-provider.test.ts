@@ -159,15 +159,15 @@ describe("providerHarness(braveProvider)", () => {
             results: [
               {
                 id: "loc-1",
-                title: "Blue Bottle Coffee",
-                url: "https://bluebottlecoffee.example",
-                postal_address: { displayAddress: "66 Mint St" },
-                categories: ["Coffee & Tea", "Cafe"],
+                title: "ACME Cafe",
+                url: "https://acme-cafe.example.com",
+                postal_address: { displayAddress: "100 Example Street" },
+                categories: ["Cafe", "Bakery"],
               },
               {
                 id: "loc-2",
-                title: "Ferry Building",
-                provider_url: "https://maps.example/ferry-building",
+                title: "Example Market Hall",
+                provider_url: "https://maps.example.com/market-hall",
               },
             ],
           }),
@@ -181,12 +181,12 @@ describe("providerHarness(braveProvider)", () => {
             results: [
               {
                 id: "loc-1",
-                contact: { telephone: "+1 555 0100" },
+                contact: { telephone: "+1 000 000 0000" },
                 rating: { ratingValue: 4.5 },
               },
               {
                 id: "loc-2",
-                postal_address: { displayAddress: "1 Ferry Building" },
+                postal_address: { displayAddress: "200 Example Avenue" },
               },
             ],
           }),
@@ -198,8 +198,8 @@ describe("providerHarness(braveProvider)", () => {
           JSON.stringify({
             type: "local_descriptions",
             results: [
-              { id: "loc-1", description: "A cozy coffee shop." },
-              { id: "loc-2", description: "A historic marketplace." },
+              { id: "loc-1", description: "A fictional neighborhood cafe." },
+              { id: "loc-2", description: "A fictional indoor market." },
             ],
           }),
           { status: 200 },
@@ -220,7 +220,7 @@ describe("providerHarness(braveProvider)", () => {
       { cwd: process.cwd() },
       {
         places: {
-          location: "san francisco ca united states",
+          location: "example city example region",
           includeDetails: true,
           includeDescriptions: true,
           search_lang: "en",
@@ -233,7 +233,7 @@ describe("providerHarness(braveProvider)", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       new URL(
-        "https://api.search.brave.test/res/v1/local/place_search?q=coffee&count=2&search_lang=en&ui_lang=en-US&location=san+francisco+ca+united+states&units=imperial",
+        "https://api.search.brave.test/res/v1/local/place_search?q=coffee&count=2&search_lang=en&ui_lang=en-US&location=example+city+example+region&units=imperial",
       ),
       {
         headers: { "X-Subscription-Token": "test-key" },
@@ -262,42 +262,42 @@ describe("providerHarness(braveProvider)", () => {
     );
     expect(response.results).toEqual([
       {
-        title: "Blue Bottle Coffee",
-        url: "https://bluebottlecoffee.example",
+        title: "ACME Cafe",
+        url: "https://acme-cafe.example.com",
         snippet:
-          "A cozy coffee shop. — 66 Mint St — Coffee & Tea, Cafe — Rating: 4.5",
+          "A fictional neighborhood cafe. — 100 Example Street — Cafe, Bakery — Rating: 4.5",
         metadata: {
           id: "loc-1",
-          title: "Blue Bottle Coffee",
-          url: "https://bluebottlecoffee.example",
-          postal_address: { displayAddress: "66 Mint St" },
-          categories: ["Coffee & Tea", "Cafe"],
+          title: "ACME Cafe",
+          url: "https://acme-cafe.example.com",
+          postal_address: { displayAddress: "100 Example Street" },
+          categories: ["Cafe", "Bakery"],
           poiDetails: {
             id: "loc-1",
-            contact: { telephone: "+1 555 0100" },
+            contact: { telephone: "+1 000 000 0000" },
             rating: { ratingValue: 4.5 },
           },
           poiDescription: {
             id: "loc-1",
-            description: "A cozy coffee shop.",
+            description: "A fictional neighborhood cafe.",
           },
         },
       },
       {
-        title: "Ferry Building",
-        url: "https://maps.example/ferry-building",
-        snippet: "A historic marketplace. — 1 Ferry Building",
+        title: "Example Market Hall",
+        url: "https://maps.example.com/market-hall",
+        snippet: "A fictional indoor market. — 200 Example Avenue",
         metadata: {
           id: "loc-2",
-          title: "Ferry Building",
-          provider_url: "https://maps.example/ferry-building",
+          title: "Example Market Hall",
+          provider_url: "https://maps.example.com/market-hall",
           poiDetails: {
             id: "loc-2",
-            postal_address: { displayAddress: "1 Ferry Building" },
+            postal_address: { displayAddress: "200 Example Avenue" },
           },
           poiDescription: {
             id: "loc-2",
-            description: "A historic marketplace.",
+            description: "A fictional indoor market.",
           },
         },
       },
