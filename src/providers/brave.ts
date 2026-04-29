@@ -167,14 +167,13 @@ const braveImplementation = {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    return await completion(query, config, context, {
+    const raw = {
       ...asJsonObject(
         config.options?.answer as Record<string, unknown> | undefined,
       ),
       ...(options ?? {}),
-      enable_citations: options?.enable_citations ?? true,
-      stream: true,
-    });
+    };
+    return await completion(query, config, context, buildAnswerRequest(raw));
   },
 
   async research(
@@ -183,15 +182,13 @@ const braveImplementation = {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    return await completion(input, config, context, {
+    const raw = {
       ...asJsonObject(
         config.options?.research as Record<string, unknown> | undefined,
       ),
       ...(options ?? {}),
-      enable_research: true,
-      enable_citations: false,
-      stream: true,
-    });
+    };
+    return await completion(input, config, context, buildResearchRequest(raw));
   },
 };
 
@@ -475,18 +472,63 @@ async function places(
   };
 }
 
+function buildAnswerRequest(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  const webSearchOptions = pick(raw, [
+    "country",
+    "language",
+    "safesearch",
+    "enable_entities",
+    "enable_citations",
+  ]);
+  if (webSearchOptions.enable_citations === undefined) {
+    webSearchOptions.enable_citations = true;
+  }
+  return {
+    stream: false,
+    ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
+    web_search_options: webSearchOptions,
+  };
+}
+
+function buildResearchRequest(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
+  const webSearchOptions = {
+    ...pick(raw, [
+      "country",
+      "language",
+      "safesearch",
+      "enable_entities",
+      "research_allow_thinking",
+      "research_maximum_number_of_tokens_per_query",
+      "research_maximum_number_of_queries",
+      "research_maximum_number_of_iterations",
+      "research_maximum_number_of_seconds",
+      "research_maximum_number_of_results_per_query",
+    ]),
+    enable_research: true,
+    enable_citations: false,
+  };
+  return {
+    stream: true,
+    ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
+    web_search_options: webSearchOptions,
+  };
+}
+
 async function completion(
   input: string,
   config: Brave,
   context: ProviderContext,
-  raw: Record<string, unknown>,
+  request: Record<string, unknown>,
 ): Promise<ToolOutput> {
   const key = requireKey(config.credentials?.answers, "Brave Answers");
-  const body = {
+  const body: Record<string, unknown> = {
     model: "brave",
     messages: [{ role: "user", content: input }],
-    ...raw,
-    stream: true,
+    ...request,
   };
   const r = await fetch(`${base(config)}/res/v1/chat/completions`, {
     method: "POST",
@@ -495,12 +537,14 @@ async function completion(
     signal: context.signal,
   });
   if (!r.ok) throw new Error(await httpError(r));
+
   const text = await r.text();
-  const { answer, citations, usage } = parseAnswerStream(text);
-  const lines = [answer.trim() || text.trim()];
-  if (citations.length) {
+  const parsed =
+    body.stream === false ? parseAnswerJson(text) : parseAnswerStream(text);
+  const lines = [parsed.answer.trim() || text.trim()];
+  if (parsed.citations.length) {
     lines.push("", "Sources:");
-    citations.forEach((c, i) => {
+    parsed.citations.forEach((c, i) => {
       lines.push(`${i + 1}. ${c.title ?? c.url ?? "Source"}`);
       if (c.url) lines.push(`   ${c.url}`);
     });
@@ -508,10 +552,27 @@ async function completion(
   return {
     provider: "brave",
     text: lines.join("\n").trimEnd(),
-    itemCount: citations.length,
-    metadata: usage ? { usage } : undefined,
+    itemCount: parsed.citations.length,
+    metadata: parsed.usage ? { usage: parsed.usage } : undefined,
   };
 }
+function parseAnswerJson(text: string): {
+  answer: string;
+  citations: Array<{ title?: string; url?: string }>;
+  usage?: unknown;
+} {
+  const payload = obj(JSON.parse(text));
+  const choice = obj(arr(payload.choices)[0]);
+  const message = obj(choice.message);
+  const content = str(message.content) ?? "";
+  const tags = extractBraveTags(content);
+  return {
+    answer: tags.text,
+    citations: dedupeCitations(tags.citations),
+    usage: payload.usage ?? tags.usage,
+  };
+}
+
 function parseAnswerStream(text: string): {
   answer: string;
   citations: Array<{ title?: string; url?: string }>;
@@ -550,24 +611,89 @@ function extractBraveTags(text: string): {
 } {
   const citations: Array<{ title?: string; url?: string }> = [];
   let usage: unknown;
-  const cleaned = text.replace(
-    /<(citation|usage|enum_item)(\{.*?\})(?:<\/\1>?)?/gs,
-    (_match, tag: string, json: string) => {
-      try {
-        const parsed = JSON.parse(json);
-        if (tag === "citation") {
-          citations.push({
-            title: str(parsed.title),
-            url: str(parsed.url),
-          });
-        } else if (tag === "usage") {
-          usage = parsed;
-        }
-      } catch {}
-      return "";
-    },
-  );
+  let cleaned = "";
+  let offset = 0;
+
+  while (offset < text.length) {
+    const tagStart = text.indexOf("<", offset);
+    if (tagStart === -1) {
+      cleaned += text.slice(offset);
+      break;
+    }
+
+    const tag = ["citation", "usage", "enum_item"].find((candidate) =>
+      text.startsWith(`<${candidate}{`, tagStart),
+    );
+    if (!tag) {
+      cleaned += text.slice(offset, tagStart + 1);
+      offset = tagStart + 1;
+      continue;
+    }
+
+    const jsonStart = tagStart + tag.length + 1;
+    const jsonEnd = findJsonObjectEnd(text, jsonStart);
+    if (jsonEnd === -1) {
+      cleaned += text.slice(offset);
+      break;
+    }
+
+    cleaned += text.slice(offset, tagStart);
+    const json = text.slice(jsonStart, jsonEnd + 1);
+    try {
+      const parsed = JSON.parse(json);
+      if (tag === "citation") {
+        citations.push({
+          title: str(parsed.title),
+          url: str(parsed.url),
+        });
+      } else if (tag === "usage") {
+        usage = parsed;
+      }
+    } catch {}
+
+    const closing = `</${tag}>`;
+    const abbreviatedClosing = `</${tag}`;
+    if (text.startsWith(closing, jsonEnd + 1)) {
+      offset = jsonEnd + 1 + closing.length;
+    } else if (text.startsWith(abbreviatedClosing, jsonEnd + 1)) {
+      offset = jsonEnd + 1 + abbreviatedClosing.length;
+    } else {
+      offset = jsonEnd + 1;
+    }
+  }
+
   return { text: cleaned, citations, usage };
+}
+
+function findJsonObjectEnd(text: string, start: number): number {
+  if (text[start] !== "{") return -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index++) {
+    const char = text[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth++;
+    if (char === "}") {
+      depth--;
+      if (depth === 0) return index;
+    }
+  }
+
+  return -1;
 }
 
 function dedupeCitations(
