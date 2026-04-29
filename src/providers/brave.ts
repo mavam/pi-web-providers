@@ -13,7 +13,7 @@ import { literalUnion } from "./schema.js";
 import { asJsonObject, formatConfigValueError, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
-const BRAVE_API_VERSION = "2024-10-22";
+const BRAVE_API_VERSION: string | undefined = undefined;
 
 const braveSearchOptionsSchema = Type.Object(
   {
@@ -241,12 +241,15 @@ function mergeOptions(
 ) {
   return pick({ ...obj(options.common), ...obj(options[key]) }, allowed);
 }
-function headers(key: string, json = false) {
-  return {
-    "X-Subscription-Token": key,
-    "Api-Version": BRAVE_API_VERSION,
-    ...(json ? { "content-type": "application/json" } : {}),
-  };
+function headers(key: string, json = false): Record<string, string> {
+  const result: Record<string, string> = { "X-Subscription-Token": key };
+  if (BRAVE_API_VERSION) {
+    result["Api-Version"] = BRAVE_API_VERSION;
+  }
+  if (json) {
+    result["content-type"] = "application/json";
+  }
+  return result;
 }
 function url(config: Brave, path: string, params: Record<string, unknown>) {
   const u = new URL(`${base(config)}${path}`);
