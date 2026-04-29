@@ -2,6 +2,7 @@
 title: Dependency compatibility updates
 type: bugfix
 author: mavam
+pr: 18
 created: 2026-04-29T06:16:17.477094Z
 ---
 
