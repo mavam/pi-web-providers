@@ -150,7 +150,94 @@ describe("providerHarness(braveProvider)", () => {
     ]);
   });
 
-  it("sends Brave Answers options under web_search_options and parses streamed tags", async () => {
+  it("includes generic, map, and POI entries from Brave LLM Context responses", async () => {
+    process.env.BRAVE_SEARCH_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          grounding: {
+            generic: [
+              {
+                title: "Generic source",
+                url: "https://generic.example.com",
+                snippets: ["Generic context"],
+              },
+            ],
+            map: [
+              {
+                name: "Map result",
+                url: "https://map.example.com",
+                snippets: ["Map context"],
+              },
+            ],
+            poi: {
+              name: "POI result",
+              url: "https://poi.example.com",
+              snippets: ["POI context"],
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const response = await providerHarness(braveProvider).search(
+      "coffee near me",
+      5,
+      {
+        credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        baseUrl: "https://api.search.brave.test",
+        options: { search: { mode: "llm_context" } },
+      },
+      { cwd: process.cwd() },
+      { llmContext: { enable_local: true } },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL(
+        "https://api.search.brave.test/res/v1/llm/context?q=coffee+near+me&count=5&maximum_number_of_urls=5&maximum_number_of_tokens=8192&enable_source_metadata=true&enable_local=true",
+      ),
+      {
+        headers: { "X-Subscription-Token": "test-key" },
+        signal: undefined,
+      },
+    );
+    expect(response.results).toEqual([
+      {
+        title: "Generic source",
+        url: "https://generic.example.com",
+        snippet: "Generic context",
+        metadata: {
+          title: "Generic source",
+          url: "https://generic.example.com",
+          snippets: ["Generic context"],
+        },
+      },
+      {
+        title: "Map result",
+        url: "https://map.example.com",
+        snippet: "Map context",
+        metadata: {
+          name: "Map result",
+          url: "https://map.example.com",
+          snippets: ["Map context"],
+        },
+      },
+      {
+        title: "POI result",
+        url: "https://poi.example.com",
+        snippet: "POI context",
+        metadata: {
+          name: "POI result",
+          url: "https://poi.example.com",
+          snippets: ["POI context"],
+        },
+      },
+    ]);
+  });
+
+  it("sends Brave Answers options at the top level and parses streamed tags", async () => {
     process.env.BRAVE_ANSWERS_API_KEY = "answers-key";
     const fetchMock = vi
       .fn()
@@ -194,12 +281,10 @@ describe("providerHarness(braveProvider)", () => {
       model: "brave",
       messages: [{ role: "user", content: "what happened?" }],
       stream: true,
-      web_search_options: {
-        country: "US",
-        language: "en",
-        enable_entities: true,
-        enable_citations: true,
-      },
+      country: "US",
+      language: "en",
+      enable_entities: true,
+      enable_citations: true,
     });
     expect(response).toEqual({
       provider: "brave",
@@ -264,12 +349,10 @@ describe("providerHarness(braveProvider)", () => {
       messages: [{ role: "user", content: "research this topic" }],
       stream: true,
       max_completion_tokens: 1000,
-      web_search_options: {
-        country: "US",
-        research_maximum_number_of_queries: 3,
-        enable_research: true,
-        enable_citations: false,
-      },
+      country: "US",
+      research_maximum_number_of_queries: 3,
+      enable_research: true,
+      enable_citations: false,
     });
     expect(response.text).toBe("Research report");
   });

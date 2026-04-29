@@ -265,9 +265,12 @@ const braveSearchOptionsSchema = Type.Object(
 );
 
 const braveSearchPromptGuidelines = [
-  "Use Brave places mode for local businesses, venues, restaurants, hotels, shops, landmarks, or other points of interest.",
+  "Use Brave places mode for direct point-of-interest listings such as restaurants, cafes, hotels, shops, landmarks, or venues.",
+  "Prefer Brave places mode over llm_context when the user asks for nearby businesses or wants names, addresses, ratings, opening hours, categories, or contact details.",
   "In Brave places mode, set places.includeDetails when the task needs POI attributes beyond the basic result list, such as contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance metadata.",
   "In Brave places mode, set places.includeDescriptions when the task needs qualitative summaries or short explanations of places. Leave it off for simple nearby/place listing queries to avoid extra latency and quota usage.",
+  "Use Brave llm_context mode when the agent needs extracted source context for reasoning, synthesis, RAG-style grounding, or source-material collection.",
+  "In Brave llm_context mode, set llmContext.enable_local=true for local or near-me queries where POI/map grounding may be useful.",
 ] as const;
 
 const braveAnswerOptionsSchema = Type.Object(
@@ -625,13 +628,18 @@ async function llmContext(
   const p = obj(await r.json());
   return {
     provider: "brave",
-    results: arr(obj(p.grounding).generic)
+    results: collectLlmContextEntries(obj(p.grounding))
       .map((e) => {
         const x = obj(e);
         const snippets = arr(x.snippets).map(String);
-        const u = str(x.url) ?? str(obj(x.source).url) ?? "";
+        const source = obj(x.source);
+        const u = str(x.url) ?? str(source.url) ?? "";
         return {
-          title: str(x.title) ?? str(obj(x.source).title) ?? (u || "Untitled"),
+          title:
+            str(x.title) ??
+            str(x.name) ??
+            str(source.title) ??
+            (u || "Untitled"),
           url: u,
           snippet: trimSnippet(snippets.join("\n\n"), 1200),
           metadata: x,
@@ -639,6 +647,22 @@ async function llmContext(
       })
       .slice(0, clamp(maxResults)),
   };
+}
+
+function collectLlmContextEntries(
+  grounding: Record<string, unknown>,
+): Record<string, unknown>[] {
+  const entries: Record<string, unknown>[] = [];
+  for (const value of [grounding.generic, grounding.map]) {
+    entries.push(...arr(value).map(obj));
+  }
+
+  const poiEntries = Array.isArray(grounding.poi)
+    ? grounding.poi.map(obj)
+    : [obj(grounding.poi)];
+  entries.push(...poiEntries.filter((entry) => Object.keys(entry).length > 0));
+
+  return entries;
 }
 async function news(
   query: string,
@@ -990,49 +1014,47 @@ function placeRating(
 function buildAnswerRequest(
   raw: Record<string, unknown>,
 ): Record<string, unknown> {
-  const webSearchOptions = pick(raw, [
+  const answerOptions = pick(raw, [
     "country",
     "language",
     "safesearch",
     "enable_entities",
     "enable_citations",
   ]);
-  if (webSearchOptions.enable_citations === undefined) {
-    webSearchOptions.enable_citations = true;
+  if (answerOptions.enable_citations === undefined) {
+    answerOptions.enable_citations = true;
   }
   const stream =
-    webSearchOptions.enable_citations === true ||
-    webSearchOptions.enable_entities === true;
+    answerOptions.enable_citations === true ||
+    answerOptions.enable_entities === true;
   return {
     stream,
     ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
-    web_search_options: webSearchOptions,
+    ...answerOptions,
   };
 }
 
 function buildResearchRequest(
   raw: Record<string, unknown>,
 ): Record<string, unknown> {
-  const webSearchOptions = {
-    ...pick(raw, [
-      "country",
-      "language",
-      "safesearch",
-      "enable_entities",
-      "research_allow_thinking",
-      "research_maximum_number_of_tokens_per_query",
-      "research_maximum_number_of_queries",
-      "research_maximum_number_of_iterations",
-      "research_maximum_number_of_seconds",
-      "research_maximum_number_of_results_per_query",
-    ]),
-    enable_research: true,
-    enable_citations: false,
-  };
+  const researchOptions = pick(raw, [
+    "country",
+    "language",
+    "safesearch",
+    "enable_entities",
+    "research_allow_thinking",
+    "research_maximum_number_of_tokens_per_query",
+    "research_maximum_number_of_queries",
+    "research_maximum_number_of_iterations",
+    "research_maximum_number_of_seconds",
+    "research_maximum_number_of_results_per_query",
+  ]);
   return {
     stream: true,
     ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
-    web_search_options: webSearchOptions,
+    ...researchOptions,
+    enable_research: true,
+    enable_citations: false,
   };
 }
 

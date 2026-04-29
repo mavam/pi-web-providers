@@ -224,7 +224,10 @@ export interface BraveResearchOptions {
   country?: string;
   language?: string;
   enable_entities?: boolean;
+  enable_citations?: boolean;
   max_completion_tokens?: number;
+  research_allow_thinking?: boolean;
+  research_maximum_number_of_tokens_per_query?: number;
   research_maximum_number_of_queries?: number;
   research_maximum_number_of_iterations?: number;
   research_maximum_number_of_seconds?: number;

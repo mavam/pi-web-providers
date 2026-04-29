@@ -161,7 +161,7 @@ describe("managed tool availability", () => {
     expect(webResearch?.parameters?.properties).not.toHaveProperty("provider");
   });
 
-  it("adds Brave places enrichment guidance to the search prompt", async () => {
+  it("adds Brave places and LLM context guidance to the search prompt", async () => {
     process.env.BRAVE_SEARCH_API_KEY = "test-key";
     writeConfig({
       tools: {
@@ -178,13 +178,22 @@ describe("managed tool availability", () => {
     const webSearch = tools.find((tool) => tool.name === "web_search");
 
     expect(webSearch?.promptGuidelines).toContain(
-      "Use Brave places mode for local businesses, venues, restaurants, hotels, shops, landmarks, or other points of interest.",
+      "Use Brave places mode for direct point-of-interest listings such as restaurants, cafes, hotels, shops, landmarks, or venues.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "Prefer Brave places mode over llm_context when the user asks for nearby businesses or wants names, addresses, ratings, opening hours, categories, or contact details.",
     );
     expect(webSearch?.promptGuidelines).toContain(
       "In Brave places mode, set places.includeDetails when the task needs POI attributes beyond the basic result list, such as contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance metadata.",
     );
     expect(webSearch?.promptGuidelines).toContain(
       "In Brave places mode, set places.includeDescriptions when the task needs qualitative summaries or short explanations of places. Leave it off for simple nearby/place listing queries to avoid extra latency and quota usage.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "Use Brave llm_context mode when the agent needs extracted source context for reasoning, synthesis, RAG-style grounding, or source-material collection.",
+    );
+    expect(webSearch?.promptGuidelines).toContain(
+      "In Brave llm_context mode, set llmContext.enable_local=true for local or near-me queries where POI/map grounding may be useful.",
     );
     expect(JSON.stringify(webSearch?.parameters)).toContain(
       "Fetch detailed POI metadata",
