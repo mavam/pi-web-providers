@@ -1,0 +1,9 @@
+created: 2026-04-29
+title: Brave provider and named credentials
+intro: >-
+  This release adds Brave as a first-class web provider and standardizes provider
+  credentials so integrations can support multiple API keys. It also improves search
+  mode guidance, research prompt display, and dependency compatibility.
+source:
+  mode: sync-stable-queue
+  previous_stable: v2.5.0
