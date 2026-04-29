@@ -192,7 +192,7 @@ The built-in providers below integrate with official SDKs or documented APIs.
 <summary><strong>Brave</strong></summary>
 
 - API: Brave Search API and Brave Answers API
-- Supports `web_search` via Web Search, plus optional `llm_context`, `images`, and `places` search modes
+- Supports `web_search` via Web Search, plus optional `llm_context`, `news`, `videos`, `images`, and `places` search modes
 - Supports `web_answer` and `web_research` via Brave Answers streaming chat completions
 - `web_contents` stays routed to URL-fetch providers; Brave LLM Context is query-based retrieval and is exposed as a search mode instead
 - Brave Answers may require a different key or plan than Brave Search
@@ -218,8 +218,9 @@ The built-in providers below integrate with official SDKs or documented APIs.
 ```
 
 Use `providers.brave.options.search.mode` or per-call search options to select
-`llm_context`, `images`, or `places`. Places details and descriptions are
-opt-in because they can add calls, latency, and place-specific semantics.
+`llm_context`, `news`, `videos`, `images`, or `places`. Places details and
+descriptions are opt-in because they can add calls, latency, and place-specific
+semantics.
 
 </details>
 

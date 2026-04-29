@@ -9,24 +9,248 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
-import { literalUnion } from "./schema.js";
 import { asJsonObject, formatConfigValueError, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
 const BRAVE_API_VERSION: string | undefined = undefined;
 
+const countryOption = Type.Optional(
+  Type.String({
+    description:
+      "Country code used to localize Brave results, for example 'US'.",
+  }),
+);
+const searchLangOption = Type.Optional(
+  Type.String({
+    description: "Content language for Brave results, for example 'en'.",
+  }),
+);
+const uiLangOption = Type.Optional(
+  Type.String({
+    description: "UI language for response metadata, for example 'en-US'.",
+  }),
+);
+const freshnessOption = Type.Optional(
+  Type.String({
+    description:
+      "Freshness filter such as 'pd' (24h), 'pw' (7d), 'pm' (31d), 'py' (year), or a Brave date range.",
+  }),
+);
+const safesearchOption = Type.Optional(
+  Type.Enum({ off: "off", moderate: "moderate", strict: "strict" } as const, {
+    description: "Safe-search filtering level.",
+  }),
+);
+const spellcheckOption = Type.Optional(
+  Type.Boolean({ description: "Whether Brave may spellcheck the query." }),
+);
+const countOption = Type.Optional(
+  Type.Integer({
+    minimum: 1,
+    maximum: 50,
+    description:
+      "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed.",
+  }),
+);
+const offsetOption = Type.Optional(
+  Type.Integer({
+    minimum: 0,
+    description: "Brave result page offset for paginated requests.",
+  }),
+);
+const gogglesOption = Type.Optional(
+  Type.String({ description: "Brave Goggles URL or inline definition." }),
+);
+const extraSnippetsOption = Type.Optional(
+  Type.Boolean({ description: "Whether to ask Brave for extra snippets." }),
+);
+
 const braveSearchOptionsSchema = Type.Object(
   {
     mode: Type.Optional(
-      literalUnion(["web", "llm_context", "images", "places"], {
-        description: "Brave search mode.",
-      }),
+      Type.Enum(
+        {
+          web: "web",
+          llm_context: "llm_context",
+          news: "news",
+          videos: "videos",
+          images: "images",
+          places: "places",
+        } as const,
+        {
+          description:
+            "Brave search mode. Use 'news' for news articles, 'videos' for video results, 'images' for image results, 'places' for local places, and 'llm_context' for retrieval context.",
+        },
+      ),
     ),
-    common: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    web: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    llmContext: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    images: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-    places: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    common: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+        },
+        {
+          description:
+            "Common Brave query options merged into the selected mode's options.",
+        },
+      ),
+    ),
+    web: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          freshness: freshnessOption,
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          goggles: gogglesOption,
+          extra_snippets: extraSnippetsOption,
+          offset: offsetOption,
+          enable_rich_callback: Type.Optional(
+            Type.Boolean({
+              description: "Whether to enable Brave rich callback metadata.",
+            }),
+          ),
+        },
+        { description: "Options for Brave Web Search mode." },
+      ),
+    ),
+    llmContext: Type.Optional(
+      Type.Object(
+        {
+          count: countOption,
+          maximum_number_of_urls: Type.Optional(
+            Type.Integer({ minimum: 1, description: "Maximum source URLs." }),
+          ),
+          maximum_number_of_tokens: Type.Optional(
+            Type.Integer({
+              minimum: 1,
+              description: "Maximum context tokens.",
+            }),
+          ),
+          maximum_number_of_snippets: Type.Optional(
+            Type.Integer({ minimum: 1, description: "Maximum snippets." }),
+          ),
+          maximum_number_of_tokens_per_url: Type.Optional(
+            Type.Integer({
+              minimum: 1,
+              description: "Maximum context tokens per URL.",
+            }),
+          ),
+          maximum_number_of_snippets_per_url: Type.Optional(
+            Type.Integer({
+              minimum: 1,
+              description: "Maximum snippets per URL.",
+            }),
+          ),
+          context_threshold_mode: Type.Optional(
+            Type.String({ description: "Brave LLM Context threshold mode." }),
+          ),
+          enable_local: Type.Optional(
+            Type.Boolean({ description: "Whether to include local results." }),
+          ),
+          enable_source_metadata: Type.Optional(
+            Type.Boolean({
+              description: "Whether to include source metadata in grounding.",
+            }),
+          ),
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          freshness: freshnessOption,
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          goggles: gogglesOption,
+        },
+        { description: "Options for Brave LLM Context mode." },
+      ),
+    ),
+    news: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          freshness: freshnessOption,
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          goggles: gogglesOption,
+          extra_snippets: extraSnippetsOption,
+          offset: offsetOption,
+          count: countOption,
+        },
+        { description: "Options for Brave News Search mode." },
+      ),
+    ),
+    videos: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          freshness: freshnessOption,
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          offset: offsetOption,
+          count: countOption,
+        },
+        { description: "Options for Brave Video Search mode." },
+      ),
+    ),
+    images: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          safesearch: safesearchOption,
+          spellcheck: spellcheckOption,
+          count: countOption,
+        },
+        { description: "Options for Brave Image Search mode." },
+      ),
+    ),
+    places: Type.Optional(
+      Type.Object(
+        {
+          country: countryOption,
+          search_lang: searchLangOption,
+          ui_lang: uiLangOption,
+          latitude: Type.Optional(
+            Type.Number({ description: "Latitude for local place search." }),
+          ),
+          longitude: Type.Optional(
+            Type.Number({ description: "Longitude for local place search." }),
+          ),
+          location: Type.Optional(
+            Type.String({
+              description: "Human-readable local search location.",
+            }),
+          ),
+          radius: Type.Optional(
+            Type.Number({ description: "Local search radius." }),
+          ),
+          units: Type.Optional(
+            Type.String({ description: "Distance units for local search." }),
+          ),
+          count: countOption,
+          includeDetails: Type.Optional(
+            Type.Boolean({
+              description: "Whether callers want place details in metadata.",
+            }),
+          ),
+          includeDescriptions: Type.Optional(
+            Type.Boolean({
+              description:
+                "Whether callers want place descriptions in metadata.",
+            }),
+          ),
+        },
+        { description: "Options for Brave Local Place Search mode." },
+      ),
+    ),
   },
   { description: "Brave search options." },
 );
@@ -150,6 +374,24 @@ const braveImplementation = {
         apiKey,
         callOptions,
       );
+    if (mode === "news")
+      return await news(
+        query,
+        maxResults,
+        config,
+        context,
+        apiKey,
+        callOptions,
+      );
+    if (mode === "videos")
+      return await videos(
+        query,
+        maxResults,
+        config,
+        context,
+        apiKey,
+        callOptions,
+      );
     if (mode === "images")
       return await images(
         query,
@@ -216,8 +458,16 @@ function base(config: Brave): string {
 function clamp(n: number, max = 20): number {
   return Math.max(1, Math.min(max, Math.trunc(n || 0)));
 }
-function readMode(v: unknown): "web" | "llm_context" | "images" | "places" {
-  return v === "llm_context" || v === "images" || v === "places" ? v : "web";
+function readMode(
+  v: unknown,
+): "web" | "llm_context" | "news" | "videos" | "images" | "places" {
+  return v === "llm_context" ||
+    v === "news" ||
+    v === "videos" ||
+    v === "images" ||
+    v === "places"
+    ? v
+    : "web";
 }
 function obj(v: unknown): Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v)
@@ -375,6 +625,118 @@ async function llmContext(
       .slice(0, clamp(maxResults)),
   };
 }
+async function news(
+  query: string,
+  maxResults: number,
+  config: Brave,
+  context: ProviderContext,
+  key: string,
+  options: Record<string, unknown>,
+): Promise<SearchResponse> {
+  const params = {
+    q: query,
+    count: clamp(maxResults, 50),
+    ...mergeOptions(options, "news", [
+      "country",
+      "search_lang",
+      "ui_lang",
+      "freshness",
+      "safesearch",
+      "spellcheck",
+      "goggles",
+      "extra_snippets",
+      "offset",
+      "count",
+    ]),
+  };
+  const r = await fetch(url(config, "/res/v1/news/search", params), {
+    headers: headers(key),
+    signal: context.signal,
+  });
+  if (!r.ok) throw new Error(await httpError(r));
+  const p = obj(await r.json());
+  return {
+    provider: "brave",
+    results: arr(p.results)
+      .map((e) => {
+        const x = obj(e);
+        const u = str(x.url) ?? "";
+        const source = str(x.source) ?? str(x.source_name);
+        return {
+          title: str(x.title) || u || "Untitled",
+          url: u,
+          snippet: trimSnippet(
+            [
+              str(x.description) ?? arr(x.extra_snippets).join(" "),
+              source,
+              str(x.age) ?? str(x.page_age),
+            ]
+              .filter(Boolean)
+              .join(" — "),
+          ),
+          metadata: x,
+        };
+      })
+      .slice(0, clamp(maxResults, 50)),
+  };
+}
+
+async function videos(
+  query: string,
+  maxResults: number,
+  config: Brave,
+  context: ProviderContext,
+  key: string,
+  options: Record<string, unknown>,
+): Promise<SearchResponse> {
+  const params = {
+    q: query,
+    count: clamp(maxResults, 50),
+    ...mergeOptions(options, "videos", [
+      "country",
+      "search_lang",
+      "ui_lang",
+      "freshness",
+      "safesearch",
+      "spellcheck",
+      "offset",
+      "count",
+    ]),
+  };
+  const r = await fetch(url(config, "/res/v1/videos/search", params), {
+    headers: headers(key),
+    signal: context.signal,
+  });
+  if (!r.ok) throw new Error(await httpError(r));
+  const p = obj(await r.json());
+  return {
+    provider: "brave",
+    results: arr(p.results)
+      .map((e) => {
+        const x = obj(e);
+        const u = str(x.url) ?? "";
+        const video = obj(x.video);
+        return {
+          title: str(x.title) || u || "Untitled",
+          url: u,
+          snippet: trimSnippet(
+            [
+              str(x.description),
+              str(video.creator) ?? str(x.creator),
+              str(video.duration) ?? str(x.duration),
+              num(video.views) ? `${num(video.views)} views` : undefined,
+              str(x.age) ?? str(x.page_age),
+            ]
+              .filter(Boolean)
+              .join(" — "),
+          ),
+          metadata: x,
+        };
+      })
+      .slice(0, clamp(maxResults, 50)),
+  };
+}
+
 async function images(
   query: string,
   maxResults: number,
