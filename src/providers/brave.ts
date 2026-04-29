@@ -79,7 +79,7 @@ const braveSearchOptionsSchema = Type.Object(
         } as const,
         {
           description:
-            "Brave search mode. Use 'news' for news articles, 'videos' for video results, 'images' for image results, 'places' for local places, and 'llm_context' for retrieval context.",
+            "Brave search mode. Use 'news' for recent journalism or current events, 'videos' for clips/tutorials, 'images' for visual references, 'places' for local businesses, venues, cafes, restaurants, hotels, shops, or near/in-location searches, and 'llm_context' for retrieval context.",
         },
       ),
     ),
@@ -226,7 +226,8 @@ const braveSearchOptionsSchema = Type.Object(
           ),
           location: Type.Optional(
             Type.String({
-              description: "Human-readable local search location.",
+              description:
+                "Human-readable local search location, e.g. 'Eppendorf, Hamburg, Germany'. Use with mode='places' for neighborhood or near-me style searches.",
             }),
           ),
           radius: Type.Optional(

@@ -1,5 +1,5 @@
-import { type TObject, Type } from "typebox";
 import ParallelClient from "parallel-web";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
@@ -9,6 +9,7 @@ import type {
   SearchResponse,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -17,13 +18,12 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
-
 const parallelSearchOptionsSchema = Type.Object(
   {
     mode: Type.Optional(
       literalUnion(["agentic", "one-shot"], {
-        description: "Parallel search mode.",
+        description:
+          "Parallel search mode. Use 'agentic' for exploratory or multi-step source discovery and 'one-shot' for direct, simple searches.",
       }),
     ),
   },

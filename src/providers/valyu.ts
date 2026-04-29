@@ -13,6 +13,7 @@ import type {
   ToolOutput,
   Valyu,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -21,13 +22,12 @@ import {
   trimSnippet,
 } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
-
 const valyuSearchOptionsSchema = Type.Object(
   {
     searchType: Type.Optional(
       literalUnion(["all", "web", "proprietary", "news"], {
-        description: "Valyu search type.",
+        description:
+          "Valyu search type. Use 'news' for recent journalism or current events, 'web' for public web results, 'proprietary' for Valyu proprietary sources, and 'all' when both public and proprietary sources are useful.",
       }),
     ),
     responseLength: Type.Optional(

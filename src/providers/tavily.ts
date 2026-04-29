@@ -1,10 +1,10 @@
-import { type TObject, Type } from "typebox";
 import {
   type TavilyClient,
   type TavilyExtractResponse,
   type TavilySearchResponse,
   tavily,
 } from "@tavily/core";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
@@ -14,16 +14,16 @@ import type {
   Tavily,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
-
-import { defineCapability, defineProvider } from "./definition.js";
 
 const tavilySearchOptionsSchema = Type.Object(
   {
     topic: Type.Optional(
       literalUnion(["general", "news", "finance"], {
-        description: "Category of the search query.",
+        description:
+          "Category of the search query. Use 'news' for recent journalism or current events, 'finance' for markets or company financial data, and 'general' for broad web search.",
       }),
     ),
     searchDepth: Type.Optional(

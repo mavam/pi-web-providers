@@ -9,9 +9,9 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_ANSWER_MODEL = "sonar";
 const DEFAULT_RESEARCH_MODEL = "sonar-deep-research";
 
@@ -33,7 +33,10 @@ const perplexitySearchOptionsSchema = Type.Object(
       Type.String({ description: "Country hint for search results." }),
     ),
     search_mode: Type.Optional(
-      Type.String({ description: "Perplexity search mode." }),
+      Type.String({
+        description:
+          "Perplexity search mode. Choose the provider mode that best matches the user's intent, such as broad web search versus academic or other specialized retrieval modes supported by Perplexity.",
+      }),
     ),
     search_domain_filter: Type.Optional(
       Type.Array(Type.String(), {

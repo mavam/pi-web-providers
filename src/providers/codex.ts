@@ -51,7 +51,10 @@ const codexSearchOptionsSchema = Type.Object(
           Type.Literal("cached"),
           Type.Literal("live"),
         ],
-        { description: "How Codex should source web results." },
+        {
+          description:
+            "How Codex should source web results. Use 'live' for current information, 'cached' when freshness is less important, and 'disabled' only when web access should not be used.",
+        },
       ),
     ),
   },
