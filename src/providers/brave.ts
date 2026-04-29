@@ -512,7 +512,7 @@ function buildResearchRequest(
     enable_citations: false,
   };
   return {
-    stream: true,
+    stream: false,
     ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
     web_search_options: webSearchOptions,
   };

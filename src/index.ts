@@ -2291,7 +2291,7 @@ function renderWebResearchDispatchResult(
     : undefined;
 
   if (expanded) {
-    return renderBlockText(details?.input ?? text, theme, "toolOutput");
+    return renderBlockText(text, theme, "toolOutput");
   }
 
   const summary = details
@@ -4109,13 +4109,13 @@ function formatSearchOutcomeSection(
   index: number,
   total: number,
 ): string {
-  const heading =
-    total > 1
-      ? `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`
-      : `## ${formatSearchHeading(outcome.query)}`;
   const body = outcome.response
     ? formatSearchResponseMarkdown(outcome.response)
     : `Search failed: ${outcome.error ?? "Unknown error."}`;
+  if (total === 1) {
+    return body;
+  }
+  const heading = `## Query ${index + 1}: ${formatSearchHeading(outcome.query)}`;
   return `${heading}\n\n${body}`;
 }
 

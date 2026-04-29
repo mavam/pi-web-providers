@@ -268,7 +268,7 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("ctrl+o to expand");
   });
 
-  it("shows the full research prompt in the expanded tool result", () => {
+  it("does not repeat the research prompt in the expanded dispatch result", () => {
     const rendered = renderComponentText(
       __test__.renderWebResearchDispatchResult(
         {
@@ -289,10 +289,10 @@ describe("web_research renderer", () => {
       200,
     );
 
-    expect(rendered).toContain(
+    expect(rendered).toContain("Started web research via Gemini.");
+    expect(rendered).not.toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
-    expect(rendered).not.toContain("Started web research via Gemini.");
   });
 
   it("renders collapsed completion messages with the saved path", () => {
@@ -467,7 +467,30 @@ describe("provider tool summaries", () => {
 });
 
 describe("web_search markdown formatting", () => {
-  it("formats each query as an H2 with proper spacing", () => {
+  it("does not repeat the query for a single search", () => {
+    const rendered = __test__.formatSearchResponses([
+      {
+        query: "Tenzir vs Cribl comparison",
+        response: {
+          provider: "brave",
+          results: [
+            {
+              title: "Tenzir vs Cribl",
+              url: "https://example.com/tenzir-vs-cribl",
+              snippet: "A comparison of security data pipeline tools.",
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(rendered).toContain(
+      "1. [Tenzir vs Cribl](<https://example.com/tenzir-vs-cribl>)",
+    );
+    expect(rendered).not.toContain("Tenzir vs Cribl comparison");
+  });
+
+  it("formats multiple queries as H2 sections with proper spacing", () => {
     const rendered = __test__.formatSearchResponses([
       {
         query: "site:example.com/blog acme platform",

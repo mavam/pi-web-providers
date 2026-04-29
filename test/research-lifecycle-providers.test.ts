@@ -170,7 +170,7 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toContain('## "openai deep research"');
+    expect(result.content[0]?.text).not.toContain('## "openai deep research"');
     expect(result.content[0]?.text).toContain(
       "1. [OpenAI Deep Research docs](<https://platform.openai.com/docs/guides/deep-research>)",
     );
