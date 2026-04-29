@@ -1,5 +1,6 @@
 import { PROVIDERS } from "./providers/index.js";
 import type {
+  Brave,
   Claude,
   ClaudeOptions,
   Cloudflare,
@@ -54,6 +55,23 @@ export type ProviderSettingDescriptor<TConfig> =
   | ProviderValuesSettingDescriptor<TConfig>;
 
 const PROVIDER_SETTINGS = {
+  brave: {
+    settings: [
+      credentialSetting<Brave>({
+        id: "credentials.search",
+        name: "search",
+        label: "Search API key",
+        help: "Brave Search API key. You can use a literal value, an env var name like BRAVE_SEARCH_API_KEY, or !command.",
+      }),
+      credentialSetting<Brave>({
+        id: "credentials.answers",
+        name: "answers",
+        label: "Answers API key",
+        help: "Brave Answers API key. You can use a literal value, an env var name like BRAVE_ANSWERS_API_KEY, or !command.",
+      }),
+      baseUrlSetting<Brave>(),
+    ],
+  },
   claude: {
     settings: [
       stringSetting<Claude>({

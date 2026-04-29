@@ -4,6 +4,7 @@ import {
   type ProviderTextSettingDescriptor,
 } from "../src/provider-config-manifests.js";
 import type {
+  Brave,
   Cloudflare,
   Custom,
   Linkup,
@@ -77,6 +78,54 @@ describe("provider config manifests", () => {
     expect(() =>
       getTextSetting("customSearchArgv").setValue(config, "[]"),
     ).toThrow(/non-empty JSON string array/);
+  });
+
+  it("exposes Brave credential and base URL settings", () => {
+    const manifest = getProviderConfigManifest("brave");
+    const ids = manifest.settings.map((setting) => setting.id);
+
+    expect(ids).toEqual([
+      "credentials.search",
+      "credentials.answers",
+      "baseUrl",
+    ]);
+  });
+
+  it("round-trips Brave credential and base URL settings", () => {
+    const manifest = getProviderConfigManifest("brave");
+    const searchSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.search",
+    );
+    const answersSetting = manifest.settings.find(
+      (setting) => setting.id === "credentials.answers",
+    );
+    const baseUrlSetting = manifest.settings.find(
+      (setting) => setting.id === "baseUrl",
+    );
+
+    if (
+      !searchSetting ||
+      searchSetting.kind !== "text" ||
+      !answersSetting ||
+      answersSetting.kind !== "text" ||
+      !baseUrlSetting ||
+      baseUrlSetting.kind !== "text"
+    ) {
+      throw new Error("Missing Brave settings.");
+    }
+
+    const config: Brave = {};
+    searchSetting.setValue(config, "BRAVE_SEARCH_API_KEY");
+    answersSetting.setValue(config, "BRAVE_ANSWERS_API_KEY");
+    baseUrlSetting.setValue(config, "https://api.search.brave.test");
+
+    expect(config).toEqual({
+      credentials: {
+        search: "BRAVE_SEARCH_API_KEY",
+        answers: "BRAVE_ANSWERS_API_KEY",
+      },
+      baseUrl: "https://api.search.brave.test",
+    });
   });
 
   it("exposes only Cloudflare-specific settings", () => {
