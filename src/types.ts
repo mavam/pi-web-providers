@@ -2,6 +2,7 @@ import type { ModelReasoningEffort, WebSearchMode } from "@openai/codex-sdk";
 import type { ContentsResponse } from "./contents.js";
 
 export const PROVIDER_IDS = [
+  "brave",
   "claude",
   "cloudflare",
   "codex",
@@ -200,6 +201,46 @@ export interface Provider<TOptions = never> {
   settings?: ExecutionSettings;
 }
 
+export interface BraveSearchOptions {
+  mode?: "web" | "llm_context" | "news" | "videos" | "images" | "places";
+  common?: Record<string, unknown>;
+  web?: Record<string, unknown>;
+  llmContext?: Record<string, unknown>;
+  news?: Record<string, unknown>;
+  videos?: Record<string, unknown>;
+  images?: Record<string, unknown>;
+  places?: Record<string, unknown>;
+}
+
+export interface BraveAnswerOptions {
+  country?: string;
+  language?: string;
+  enable_citations?: boolean;
+  enable_entities?: boolean;
+  max_completion_tokens?: number;
+}
+
+export interface BraveResearchOptions {
+  country?: string;
+  language?: string;
+  enable_entities?: boolean;
+  max_completion_tokens?: number;
+  research_maximum_number_of_queries?: number;
+  research_maximum_number_of_iterations?: number;
+  research_maximum_number_of_seconds?: number;
+  research_maximum_number_of_results_per_query?: number;
+}
+
+export interface BraveOptions {
+  search?: BraveSearchOptions;
+  answer?: BraveAnswerOptions;
+  research?: BraveResearchOptions;
+}
+
+export interface Brave extends Provider<BraveOptions> {
+  baseUrl?: string;
+}
+
 export interface Claude extends Provider<ClaudeOptions> {
   pathToClaudeCodeExecutable?: string;
 }
@@ -223,8 +264,7 @@ export interface Firecrawl extends Provider<FirecrawlOptions> {
   baseUrl?: string;
 }
 
-export interface Gemini extends Provider<GeminiOptions> {
-}
+export interface Gemini extends Provider<GeminiOptions> {}
 
 export interface Linkup extends Provider<LinkupOptions> {
   baseUrl?: string;
@@ -265,6 +305,7 @@ export interface Settings extends ExecutionSettings {
 }
 
 export interface ProviderConfigMap {
+  brave: Brave;
   claude: Claude;
   cloudflare: Cloudflare;
   codex: Codex;

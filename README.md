@@ -14,7 +14,7 @@ not as a replacement for source inspection or deeper research.
 
 ## ✨ Features
 
-- **Multiple providers**: Claude, Cloudflare, Codex, Exa, Firecrawl,
+- **Multiple providers**: Brave, Claude, Cloudflare, Codex, Exa, Firecrawl,
   Gemini, Linkup, Ollama, OpenAI, Perplexity, Parallel, Serper,
   [Tavily](https://tavily.com), Valyu
 - **Provider-aware tool options**: pi only exposes the provider settings that
@@ -57,6 +57,7 @@ Each tool can be routed to any compatible provider:
 
 | Provider       | search | contents | answer | research | Auth                                             |
 | -------------- | :----: | :------: | :----: | :------: | ------------------------------------------------ |
+| **Brave**      |   ✔    |          |   ✔    |    ✔     | `BRAVE_SEARCH_API_KEY` / `BRAVE_ANSWERS_API_KEY` |
 | **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
 | **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
@@ -186,6 +187,41 @@ report under `.pi/artifacts/research/`.
 ### Providers
 
 The built-in providers below integrate with official SDKs or documented APIs.
+
+<details>
+<summary><strong>Brave</strong></summary>
+
+- API: Brave Search API and Brave Answers API
+- Supports `web_search` via Web Search, plus optional `llm_context`, `images`, and `places` search modes
+- Supports `web_answer` and `web_research` via Brave Answers streaming chat completions
+- `web_contents` stays routed to URL-fetch providers; Brave LLM Context is query-based retrieval and is exposed as a search mode instead
+- Brave Answers may require a different key or plan than Brave Search
+
+**Setup**
+
+```json
+{
+  "tools": {
+    "search": "brave",
+    "answer": "brave",
+    "research": "brave"
+  },
+  "providers": {
+    "brave": {
+      "credentials": {
+        "search": "BRAVE_SEARCH_API_KEY",
+        "answers": "BRAVE_ANSWERS_API_KEY"
+      }
+    }
+  }
+}
+```
+
+Use `providers.brave.options.search.mode` or per-call search options to select
+`llm_context`, `images`, or `places`. Places details and descriptions are
+opt-in because they can add calls, latency, and place-specific semantics.
+
+</details>
 
 <details>
 <summary><strong>Claude</strong></summary>
