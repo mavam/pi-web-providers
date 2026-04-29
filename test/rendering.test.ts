@@ -306,11 +306,12 @@ describe("web_research renderer", () => {
     );
 
     expect(rendered).toContain("Started web research via Gemini.");
-    expect(rendered).toContain("Research brief:");
+    expect(rendered).toContain("Research brief");
     expect(rendered).toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
-    expect(rendered).toContain("Report path: /tmp/report.md");
+    expect(rendered).toContain("Report path");
+    expect(rendered).toContain("/tmp/report.md");
   });
 
   it("renders collapsed completion messages with the saved path", () => {

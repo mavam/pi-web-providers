@@ -2298,13 +2298,16 @@ function renderWebResearchDispatchResult(
       ? [
           text,
           "",
-          "Research brief:",
+          "## Research brief",
+          "",
           details.input,
           "",
-          `Report path: ${details.outputPath}`,
+          "## Report path",
+          "",
+          `\`${details.outputPath}\``,
         ].join("\n")
       : text;
-    return renderBlockText(expandedText, theme, "toolOutput");
+    return renderMarkdownBlock(expandedText);
   }
 
   const summary = details
