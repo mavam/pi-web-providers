@@ -106,7 +106,7 @@ const serperSearchOptionsSchema = Type.Object(
     mode: Type.Optional(
       Type.Enum(SERPER_SEARCH_MODE_VALUES, {
         description:
-          "Serper search type. Use 'search' for web results, 'news' for recent journalism/current events, 'images' for visual references, 'videos' for clips/tutorials, 'places' or 'maps' for local businesses/venues, 'reviews' for Google business reviews, 'shopping' for products, 'product-reviews' for product reviews, 'lens' for reverse image search, 'scholar' for scholarly articles, 'patents' for patents, 'autocomplete' for suggestions, and 'webpage' to scrape a URL.",
+          "Serper search type. Use 'search' for web results, 'news' for recent journalism/current events, 'images' for visual references, 'videos' for clips/tutorials, 'places' or 'maps' for local businesses/venues, 'reviews' for Google business reviews by place ID/CID/FID or query, 'shopping' for products, 'product-reviews' for product reviews, 'lens' for reverse image search, 'scholar' for scholarly articles, 'patents' for patents, 'autocomplete' for suggestions, and 'webpage' to scrape a URL.",
       }),
     ),
     gl: Type.Optional(
@@ -389,9 +389,13 @@ function buildRequestBody(
           page: options.page,
         }),
       );
-    case "reviews":
+    case "reviews": {
+      const hasExplicitPlaceIdentifier =
+        firstNonEmptyString(options.cid, options.fid, options.placeId) !==
+        undefined;
       return withExtra(
         omitUndefined({
+          q: hasExplicitPlaceIdentifier ? undefined : query,
           cid: options.cid,
           fid: options.fid,
           placeId: options.placeId,
@@ -402,6 +406,7 @@ function buildRequestBody(
           nextPageToken: options.nextPageToken,
         }),
       );
+    }
     case "lens":
       return withExtra(
         omitUndefined({
@@ -515,7 +520,7 @@ function toSearchResult(
   if (typeof entry === "string") {
     return {
       title: entry,
-      url: "",
+      url: mode === "autocomplete" ? toGoogleSearchUrl(entry) : "",
       snippet: entry,
       metadata: {
         source: mode,
@@ -531,7 +536,7 @@ function toSearchResult(
 
   const responseMetadata = asRecord(record.metadata);
   const user = asRecord(record.user);
-  const url =
+  const resultUrl =
     firstString(record.link, record.website, record.url, record.imageUrl) ?? "";
   const title =
     firstNonEmptyString(
@@ -542,8 +547,10 @@ function toSearchResult(
       record.value,
       user?.name,
       formatReviewTitle(record, user),
-      url,
+      resultUrl,
     ) ?? "Untitled";
+  const url =
+    resultUrl || (mode === "autocomplete" ? toGoogleSearchUrl(title) : "");
   const snippet = trimSnippet(
     firstNonEmptyString(
       record.snippet,
@@ -663,6 +670,10 @@ function copyBooleanOption(
 
 function firstString(...values: unknown[]): string | undefined {
   return values.find((value): value is string => typeof value === "string");
+}
+
+function toGoogleSearchUrl(query: string): string {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
 }
 
 function formatReviewTitle(

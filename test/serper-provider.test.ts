@@ -379,6 +379,101 @@ describe("providerHarness(serperProvider)", () => {
     ]);
   });
 
+  it("uses the query as a Serper reviews identifier when no place id is provided", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ reviews: [] }), { status: 200 }),
+      );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await providerHarness(serperProvider).search(
+      "Fauve Coffee Berlin",
+      5,
+      {
+        credentials: { api: "literal-key" },
+      },
+      { cwd: process.cwd() },
+      { mode: "reviews", gl: "de", hl: "en" },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://google.serper.dev/reviews",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "literal-key",
+        },
+        body: JSON.stringify({
+          q: "Fauve Coffee Berlin",
+          gl: "de",
+          hl: "en",
+        }),
+        signal: undefined,
+      },
+    );
+  });
+
+  it("maps Serper autocomplete suggestions to actionable search URLs", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          suggestions: [
+            { value: "how to build your own pc" },
+            "how to build your own website",
+          ],
+        }),
+        { status: 200 },
+      ),
+    ) as typeof fetch;
+
+    const response = await providerHarness(serperProvider).search(
+      "how to build your own",
+      5,
+      {
+        credentials: { api: "literal-key" },
+      },
+      { cwd: process.cwd() },
+      { mode: "autocomplete", gl: "us", hl: "en" },
+    );
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "https://google.serper.dev/autocomplete",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": "literal-key",
+        },
+        body: JSON.stringify({
+          q: "how to build your own",
+          gl: "us",
+          hl: "en",
+        }),
+        signal: undefined,
+      },
+    );
+    expect(response.results).toEqual([
+      {
+        title: "how to build your own pc",
+        url: "https://www.google.com/search?q=how%20to%20build%20your%20own%20pc",
+        snippet: "how to build your own pc",
+        metadata: {
+          source: "autocomplete",
+        },
+      },
+      {
+        title: "how to build your own website",
+        url: "https://www.google.com/search?q=how%20to%20build%20your%20own%20website",
+        snippet: "how to build your own website",
+        metadata: {
+          source: "autocomplete",
+        },
+      },
+    ]);
+  });
+
   it("maps Serper review titles from reviewer metadata", async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(

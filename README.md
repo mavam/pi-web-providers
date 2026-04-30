@@ -472,6 +472,7 @@ call.
 - Exposes search options `mode`, `gl`, `hl`, `location`, `page`, `tbs`,
   `autocorrect`, and mode-specific fields such as `url`, `ll`, `placeId`,
   `cid`, `fid`, `productId`, `nextPageToken`, and webpage include flags.
+  Reviews mode uses the top-level query when no place identifier is provided.
   `includeMarkdown` defaults to `true` for webpage scraping
 - Preserves rich metadata from Serper responses, including ranking position,
   sitelinks, attributes, and top-level response context such as
