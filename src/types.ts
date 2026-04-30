@@ -170,8 +170,52 @@ export interface TavilyOptions {
   extract?: Record<string, unknown>;
 }
 
+export const SERPER_SEARCH_MODE_VALUES = {
+  search: "search",
+  images: "images",
+  videos: "videos",
+  places: "places",
+  maps: "maps",
+  reviews: "reviews",
+  news: "news",
+  shopping: "shopping",
+  productReviews: "product-reviews",
+  lens: "lens",
+  scholar: "scholar",
+  patents: "patents",
+  autocomplete: "autocomplete",
+  webpage: "webpage",
+} as const;
+
+export type SerperSearchMode =
+  (typeof SERPER_SEARCH_MODE_VALUES)[keyof typeof SERPER_SEARCH_MODE_VALUES];
+
+export interface SerperSearchOptions {
+  mode?: SerperSearchMode;
+  gl?: string;
+  hl?: string;
+  location?: string;
+  page?: number;
+  tbs?: string;
+  autocorrect?: boolean;
+  url?: string;
+  ll?: string;
+  placeId?: string;
+  cid?: string;
+  fid?: string;
+  sortBy?: string;
+  topicId?: string;
+  productId?: string;
+  nextPageToken?: string;
+  includeMarkdown?: boolean;
+  includeImages?: boolean;
+  includeLinks?: boolean;
+  includeVideos?: boolean;
+  [key: string]: unknown;
+}
+
 export interface SerperOptions {
-  search?: Record<string, unknown>;
+  search?: SerperSearchOptions;
 }
 
 export interface ValyuOptions {
