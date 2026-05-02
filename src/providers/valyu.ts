@@ -446,7 +446,7 @@ export const valyuProvider = defineProvider({
   config: {
     createTemplate: () => valyuImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
-    optionCapabilities: ["search", "answer", "research"],
+    optionCapabilities: ["search", "contents", "answer", "research"],
   },
   getCapabilityStatus: (config, cwd, tool) =>
     (valyuImplementation.getCapabilityStatus as any)(
