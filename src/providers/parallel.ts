@@ -30,6 +30,12 @@ const parallelSearchOptionsSchema = Type.Object(
   { description: "Parallel search options." },
 );
 
+const parallelSearchPromptGuidelines = [
+  "Use Parallel mode='agentic' for exploratory, ambiguous, or multi-hop source discovery where the provider should plan the search.",
+  "Use Parallel mode='one-shot' for direct factual lookups and simple source finding where low latency is preferred.",
+  "Prefer web_contents with Parallel extraction when a URL set is already known and the task needs full page content rather than more source discovery.",
+] as const;
+
 const parallelExtractOptionsSchema = Type.Object(
   {
     excerpts: Type.Optional(
@@ -197,6 +203,7 @@ export const parallelProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: parallelImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: parallelSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await parallelImplementation.search!(

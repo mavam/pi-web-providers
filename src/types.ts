@@ -218,10 +218,53 @@ export interface SerperOptions {
   search?: SerperSearchOptions;
 }
 
+export interface ValyuSearchOptions extends Record<string, unknown> {
+  searchType?: "all" | "web" | "proprietary" | "news";
+  responseLength?: "short" | "medium" | "large" | "max" | number;
+  countryCode?: string;
+  maxPrice?: number;
+  relevanceThreshold?: number;
+  includedSources?: string[];
+  excludeSources?: string[];
+  sourceBiases?: Record<string, number>;
+  category?: string;
+  startDate?: string;
+  endDate?: string;
+  fastMode?: boolean;
+  urlOnly?: boolean;
+  instructions?: string;
+}
+
+export interface ValyuContentsOptions extends Record<string, unknown> {
+  summary?: boolean | string | object;
+  extractEffort?: "normal" | "high" | "auto";
+  responseLength?: "short" | "medium" | "large" | "max" | number;
+  maxPriceDollars?: number;
+  screenshot?: boolean;
+}
+
+export interface ValyuAnswerOptions extends Record<string, unknown> {
+  responseLength?: "short" | "medium" | "large" | "max" | number;
+  countryCode?: string;
+  searchType?: "all" | "web" | "proprietary" | "news";
+  dataMaxPrice?: number;
+  includedSources?: string[];
+  excludedSources?: string[];
+  startDate?: string;
+  endDate?: string;
+  fastMode?: boolean;
+}
+
+export interface ValyuResearchOptions extends Record<string, unknown> {
+  responseLength?: "short" | "medium" | "large" | "max";
+  countryCode?: string;
+}
+
 export interface ValyuOptions {
-  search?: Record<string, unknown>;
-  answer?: Record<string, unknown>;
-  research?: Record<string, unknown>;
+  search?: ValyuSearchOptions;
+  contents?: ValyuContentsOptions;
+  answer?: ValyuAnswerOptions;
+  research?: ValyuResearchOptions;
 }
 
 export interface CustomCommandConfig {

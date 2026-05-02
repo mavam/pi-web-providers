@@ -50,6 +50,13 @@ const perplexitySearchOptionsSchema = Type.Object(
   { description: "Perplexity search options." },
 );
 
+const perplexitySearchPromptGuidelines = [
+  "Use Perplexity search for concise web result retrieval with recency and domain filters, not for synthesized answers.",
+  "Set search_recency_filter when freshness matters, such as breaking news, recently updated documentation, prices, or current events.",
+  "Set search_domain_filter when the user asks for primary sources, official documentation, or domain-scoped retrieval.",
+  "Use web_answer or web_research with Perplexity when the user wants synthesis rather than a list of candidate sources.",
+] as const;
+
 const perplexityAnswerOptionsSchema = Type.Object(
   {
     model: Type.Optional(
@@ -442,6 +449,7 @@ export const perplexityProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: perplexityImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: perplexitySearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await perplexityImplementation.search!(

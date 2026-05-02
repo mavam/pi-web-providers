@@ -13,10 +13,9 @@ import type {
   SearchResult,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
-
-import { defineCapability, defineProvider } from "./definition.js";
 
 const firecrawlSearchOptionsSchema = Type.Object(
   {
@@ -76,6 +75,13 @@ const firecrawlSearchOptionsSchema = Type.Object(
   },
   { description: "Firecrawl search options." },
 );
+
+const firecrawlSearchPromptGuidelines = [
+  "Use Firecrawl search when the task benefits from searchable results that can also include scraped page content through scrapeOptions.",
+  "Set scrapeOptions.formats=['markdown'] and onlyMainContent=true when source snippets are not enough and the user needs extracted page context in the search results.",
+  "Use lang, country, or location when the user asks for language-specific, country-specific, or local results.",
+  "Prefer web_contents with Firecrawl scrape options after search when only a small set of known URLs needs full extraction.",
+] as const;
 
 const firecrawlScrapeOptionsSchema = Type.Object(
   {
@@ -330,6 +336,7 @@ export const firecrawlProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: firecrawlImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: firecrawlSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await firecrawlImplementation.search!(
