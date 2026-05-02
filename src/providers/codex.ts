@@ -61,6 +61,12 @@ const codexSearchOptionsSchema = Type.Object(
   { description: "Codex search options." },
 );
 
+const codexSearchPromptGuidelines = [
+  "Use Codex search when the local Codex SDK should perform web-backed source discovery, especially for coding or developer-oriented investigations.",
+  "Use webSearchMode='live' for current information and 'cached' when freshness is less important; do not set 'disabled' for normal web_search calls.",
+  "Increase modelReasoningEffort only for difficult or ambiguous searches where deeper reasoning is worth the extra latency.",
+] as const;
+
 const codexImplementation = {
   id: "codex" as const,
   label: "Codex",
@@ -304,6 +310,7 @@ export const codexProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: codexImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: codexSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await codexImplementation.search!(

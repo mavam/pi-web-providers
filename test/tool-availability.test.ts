@@ -32,6 +32,7 @@ beforeEach(() => {
   delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.EXA_API_KEY;
+  delete process.env.FIRECRAWL_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.GOOGLE_API_KEY;
   delete process.env.LINKUP_API_KEY;
@@ -46,6 +47,7 @@ beforeEach(() => {
 afterEach(() => {
   delete process.env.BRAVE_SEARCH_API_KEY;
   delete process.env.EXA_API_KEY;
+  delete process.env.FIRECRAWL_API_KEY;
   delete process.env.CODEX_API_KEY;
   delete process.env.PERPLEXITY_API_KEY;
   delete process.env.LINKUP_API_KEY;
@@ -53,6 +55,9 @@ afterEach(() => {
   delete process.env.OPENAI_API_KEY;
   delete process.env.SERPER_API_KEY;
   delete process.env.TAVILY_API_KEY;
+  delete process.env.GOOGLE_API_KEY;
+  delete process.env.PARALLEL_API_KEY;
+  delete process.env.VALYU_API_KEY;
   execFileSyncMock.mockReset();
   if (originalHome === undefined) {
     delete process.env.HOME;
@@ -230,6 +235,73 @@ describe("managed tool availability", () => {
         expect.stringContaining("webpage mode"),
       ]),
     );
+  });
+
+  it("adds provider-specific search prompt guidelines across typed providers", async () => {
+    const cases: Array<{
+      provider: string;
+      env?: string;
+      expected: string;
+    }> = [
+      { provider: "claude", expected: "Claude search" },
+      { provider: "codex", expected: "Codex search" },
+      { provider: "exa", env: "EXA_API_KEY", expected: "Exa's neural/auto" },
+      {
+        provider: "firecrawl",
+        env: "FIRECRAWL_API_KEY",
+        expected: "Firecrawl search",
+      },
+      { provider: "gemini", env: "GOOGLE_API_KEY", expected: "Gemini search" },
+      {
+        provider: "linkup",
+        env: "LINKUP_API_KEY",
+        expected: "Linkup depth='deep'",
+      },
+      {
+        provider: "openai",
+        env: "OPENAI_API_KEY",
+        expected: "OpenAI web search",
+      },
+      {
+        provider: "parallel",
+        env: "PARALLEL_API_KEY",
+        expected: "Parallel mode='agentic'",
+      },
+      {
+        provider: "perplexity",
+        env: "PERPLEXITY_API_KEY",
+        expected: "Perplexity search",
+      },
+      {
+        provider: "tavily",
+        env: "TAVILY_API_KEY",
+        expected: "Tavily topic='news'",
+      },
+      {
+        provider: "valyu",
+        env: "VALYU_API_KEY",
+        expected: "Valyu searchType='news'",
+      },
+    ];
+
+    for (const { provider, env, expected } of cases) {
+      if (env) {
+        process.env[env] = "test-key";
+      }
+      writeConfig({
+        tools: {
+          search: provider as never,
+        },
+        providers: {
+          [provider]: env ? { credentials: { api: env } } : {},
+        },
+      });
+
+      const tools = await captureRegisteredTools();
+      const webSearch = tools.find((tool) => tool.name === "web_search");
+      expect(webSearch?.promptGuidelines?.join("\n")).toContain(expected);
+      expect(webSearch?.parameters?.properties).toHaveProperty("options");
+    }
   });
 
   it("registers provider-bound search schemas from configuration", async () => {

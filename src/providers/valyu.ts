@@ -38,8 +38,94 @@ const valyuSearchOptionsSchema = Type.Object(
     countryCode: Type.Optional(
       Type.String({ description: "Country code to scope search results." }),
     ),
+    maxPrice: Type.Optional(
+      Type.Number({ minimum: 0, description: "Maximum search cost in USD." }),
+    ),
+    relevanceThreshold: Type.Optional(
+      Type.Number({
+        minimum: 0,
+        maximum: 1,
+        description: "Minimum result relevance score.",
+      }),
+    ),
+    includedSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict retrieval to these Valyu sources.",
+      }),
+    ),
+    excludeSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Exclude these Valyu sources.",
+      }),
+    ),
+    category: Type.Optional(
+      Type.String({ description: "Valyu source category to search." }),
+    ),
+    startDate: Type.Optional(
+      Type.String({ description: "ISO date string for earliest result date." }),
+    ),
+    endDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest result date." }),
+    ),
+    fastMode: Type.Optional(
+      Type.Boolean({
+        description: "Use Valyu fast mode when lower latency is preferred.",
+      }),
+    ),
+    urlOnly: Type.Optional(
+      Type.Boolean({
+        description: "Return URL-focused results with less content.",
+      }),
+    ),
+    instructions: Type.Optional(
+      Type.String({
+        description:
+          "Provider instructions for retrieval and result selection.",
+      }),
+    ),
   },
   { description: "Valyu search options." },
+);
+
+const valyuSearchPromptGuidelines = [
+  "Use Valyu searchType='news' for recent journalism or current events, 'web' for public web results, and 'proprietary' when proprietary Valyu sources are required.",
+  "Use includedSources, excludeSources, category, or source biases from configuration when the user asks for source-specific retrieval.",
+  "Use startDate/endDate and countryCode when the task requires temporal or geographic scoping.",
+  "Set responseLength higher only when search results need richer inline context; otherwise prefer concise results and follow up with web_contents.",
+] as const;
+
+const valyuContentsOptionsSchema = Type.Object(
+  {
+    summary: Type.Optional(
+      Type.Union([Type.Boolean(), Type.String()], {
+        description:
+          "Whether to include a summary, or instructions for the summary.",
+      }),
+    ),
+    extractEffort: Type.Optional(
+      literalUnion(["normal", "high", "auto"], {
+        description:
+          "Extraction effort. Use 'high' for difficult pages and 'normal' for faster extraction.",
+      }),
+    ),
+    responseLength: Type.Optional(
+      literalUnion(["short", "medium", "large", "max"], {
+        description: "Content response length.",
+      }),
+    ),
+    maxPriceDollars: Type.Optional(
+      Type.Number({
+        minimum: 0,
+        description: "Maximum extraction cost in USD.",
+      }),
+    ),
+    screenshot: Type.Optional(
+      Type.Boolean({
+        description: "Include screenshot capture when supported.",
+      }),
+    ),
+  },
+  { description: "Valyu contents options." },
 );
 
 const valyuAnswerOptionsSchema = Type.Object(
@@ -79,6 +165,8 @@ const valyuImplementation = {
     switch (capability) {
       case "search":
         return valyuSearchOptionsSchema;
+      case "contents":
+        return valyuContentsOptionsSchema;
       case "answer":
         return valyuAnswerOptionsSchema;
       case "research":
@@ -144,7 +232,10 @@ const valyuImplementation = {
     options?: Record<string, unknown>,
   ): Promise<ContentsResponse> {
     const client = createClient(config);
-    const response = await client.contents(urls, options as never);
+    const response = await client.contents(urls, {
+      ...(asJsonObject(config.options?.contents) ?? {}),
+      ...(options ?? {}),
+    } as never);
     const finalResponse =
       "jobId" in response
         ? await client.waitForJob(response.jobId, {})
@@ -366,6 +457,7 @@ export const valyuProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: valyuImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: valyuSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await valyuImplementation.search!(

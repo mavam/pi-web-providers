@@ -73,6 +73,13 @@ const tavilySearchOptionsSchema = Type.Object(
   { description: "Tavily search options." },
 );
 
+const tavilySearchPromptGuidelines = [
+  "Use Tavily topic='news' for recent journalism or current events and topic='finance' for market or company-finance research; otherwise leave topic as general.",
+  "Use searchDepth='advanced' for broader or higher-recall source discovery, and 'basic' for quick direct lookups.",
+  "Set timeRange, days, or country when the user asks for freshness, recency, or geography-specific results.",
+  "Set includeRawContent or includeAnswer only when the search response itself should carry more context; prefer web_contents for selected source inspection.",
+] as const;
+
 const tavilyExtractOptionsSchema = Type.Object(
   {
     extractDepth: Type.Optional(
@@ -277,6 +284,7 @@ export const tavilyProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: tavilyImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: tavilySearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await tavilyImplementation.search!(

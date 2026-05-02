@@ -103,6 +103,13 @@ const geminiSearchOptionsSchema = Type.Object(
   { description: "Gemini search options." },
 );
 
+const geminiSearchPromptGuidelines = [
+  "Use Gemini search when a grounded model should perform web-backed source discovery and return likely sources.",
+  "Change model only when the user requests a specific Gemini model or when project configuration requires it.",
+  "Tune generation_config only for explicit output-control needs; avoid disabling tool use for search tasks.",
+  "Prefer web_contents after Gemini search when selected sources need direct extraction or closer reading.",
+] as const;
+
 const geminiAnswerOptionsSchema = Type.Object(
   {
     model: Type.Optional(
@@ -1094,6 +1101,7 @@ export const geminiProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: geminiImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: geminiSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await geminiImplementation.search!(
