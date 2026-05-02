@@ -465,9 +465,15 @@ call.
 <summary><strong>Serper</strong></summary>
 
 - API: Serper HTTP API
-- Supports `web_search` via Serper's Google search endpoint
-- Good fit for fast, straightforward Google-style organic search results
-- Exposes search options `gl`, `hl`, `location`, `page`, and `autocorrect`
+- Supports `web_search` via Serper's Google endpoints for web, image, video,
+  places, maps, reviews, news, shopping, product reviews, Lens, Scholar,
+  patents, autocomplete, and webpage results
+- Good fit for fast, straightforward Google-style search results
+- Exposes search options `mode`, `gl`, `hl`, `location`, `page`, `tbs`,
+  `autocorrect`, and mode-specific fields such as `url`, `ll`, `placeId`,
+  `cid`, `fid`, `productId`, `nextPageToken`, and webpage include flags.
+  Reviews mode uses the top-level query when no place identifier is provided.
+  `includeMarkdown` defaults to `true` for webpage scraping
 - Preserves rich metadata from Serper responses, including ranking position,
   sitelinks, attributes, and top-level response context such as
   `knowledgeGraph`, `answerBox`, `peopleAlsoAsk`, and `relatedSearches`

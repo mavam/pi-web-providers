@@ -675,7 +675,11 @@ describe("config parsing", () => {
     });
     expect(PROVIDERS_BY_ID.serper.config.createTemplate()).toEqual({
       credentials: { api: "SERPER_API_KEY" },
-      options: {},
+      options: {
+        search: {
+          includeMarkdown: true,
+        },
+      },
     });
     expect(PROVIDERS_BY_ID.tavily.config.createTemplate().options).toEqual({
       search: {

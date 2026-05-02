@@ -203,6 +203,35 @@ describe("managed tool availability", () => {
     );
   });
 
+  it("adds Serper mode guidance to the search prompt", async () => {
+    process.env.SERPER_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        search: "serper",
+      },
+      providers: {
+        serper: {
+          credentials: { api: "SERPER_API_KEY" },
+        },
+      },
+    });
+
+    const tools = await captureRegisteredTools();
+    const webSearch = tools.find((tool) => tool.name === "web_search");
+
+    const guidelines = webSearch?.promptGuidelines ?? [];
+    expect(guidelines).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Serper news mode"),
+        expect.stringContaining("Serper places or maps mode"),
+        expect.stringContaining("Serper reviews mode"),
+        expect.stringContaining("product-reviews mode"),
+        expect.stringContaining("Serper autocomplete mode"),
+        expect.stringContaining("webpage mode"),
+      ]),
+    );
+  });
+
   it("registers provider-bound search schemas from configuration", async () => {
     process.env.OLLAMA_API_KEY = "test-key";
     writeConfig({
