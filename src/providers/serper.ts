@@ -101,6 +101,17 @@ const CONTEXT_ARRAY_FIELDS = [
   "suggestions",
 ] as const;
 
+const serperSearchPromptGuidelines = [
+  "Use Serper news mode for recent journalism, current events, announcements, or time-sensitive reporting.",
+  "Use Serper images or videos mode when the user asks for visual references, screenshots, diagrams, clips, tutorials, or media results.",
+  "Use Serper places or maps mode for local businesses, venues, addresses, ratings, phone numbers, opening details, or nearby/in-location searches.",
+  "Use Serper reviews mode when the task needs Google business reviews. Prefer cid, fid, or placeId from a maps or places result when available; otherwise use the search query as the place identifier.",
+  "Use Serper shopping mode for product listings, prices, merchants, offers, or purchase comparisons, and use product-reviews mode when the task needs reviews for a known product ID.",
+  "Use Serper scholar mode for academic papers and patents mode for patent searches.",
+  "Use Serper autocomplete mode when the task is to discover search suggestions or query completions rather than source pages.",
+  "Use Serper lens mode for reverse image search with an image URL, and use webpage mode to scrape a specific URL. Webpage mode includes Markdown by default.",
+] as const;
+
 const serperSearchOptionsSchema = Type.Object(
   {
     mode: Type.Optional(
@@ -775,6 +786,7 @@ export const serperProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: serperImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: serperSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await serperImplementation.search!(
