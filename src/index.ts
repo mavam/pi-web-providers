@@ -1727,17 +1727,33 @@ async function runDispatchedWebResearch({
       executionOverride,
     });
     const completedAt = new Date().toISOString();
-    result = {
-      ...request,
-      status: "completed",
-      completedAt,
-      elapsedMs: Math.max(
-        0,
-        Date.parse(completedAt) - Date.parse(request.startedAt),
-      ),
-      itemCount: response.itemCount,
-    };
-    reportText = response.text;
+    if (
+      abortController.signal.aborted &&
+      task.cancelRequestedAt !== undefined
+    ) {
+      result = {
+        ...request,
+        status: "cancelled",
+        completedAt,
+        elapsedMs: Math.max(
+          0,
+          Date.parse(completedAt) - Date.parse(request.startedAt),
+        ),
+        error: "web research was cancelled by the user.",
+      };
+    } else {
+      result = {
+        ...request,
+        status: "completed",
+        completedAt,
+        elapsedMs: Math.max(
+          0,
+          Date.parse(completedAt) - Date.parse(request.startedAt),
+        ),
+        itemCount: response.itemCount,
+      };
+      reportText = response.text;
+    }
   } catch (error) {
     const completedAt = new Date().toISOString();
     result = {
