@@ -3134,24 +3134,29 @@ function parseWebResearchArtifactMetadata(
   content: string,
 ): Record<string, string> {
   const result: Record<string, string> = {};
-  const headings = new Set([
+  const metadataHeadings = new Set([
     "Query",
     "Provider",
     "Status",
     "Started",
     "Completed",
   ]);
+  const artifactBodyHeadings = new Set(["Elapsed", "Items", "Error", "Report"]);
   const lines = content.split(/\r?\n/u);
   for (let index = 0; index < lines.length; index++) {
     const match = /^##\s+(.+)$/u.exec(lines[index] ?? "");
-    if (!match || !headings.has(match[1])) continue;
+    if (!match) continue;
+    const heading = match[1];
+    if (artifactBodyHeadings.has(heading)) break;
+    if (!metadataHeadings.has(heading) || result[heading] !== undefined)
+      continue;
     const values: string[] = [];
     for (let next = index + 1; next < lines.length; next++) {
       if (/^##\s+/u.test(lines[next] ?? "")) break;
       if ((lines[next] ?? "").trim() || values.length > 0)
         values.push(lines[next] ?? "");
     }
-    result[match[1]] = values.join("\n").trim();
+    result[heading] = values.join("\n").trim();
   }
   return result;
 }
