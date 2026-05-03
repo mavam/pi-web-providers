@@ -935,6 +935,9 @@ describe("provider tool output", () => {
         "## Report",
         "Older report",
         "",
+        "## Status",
+        "This report section must not override artifact metadata.",
+        "",
       ].join("\n"),
       "utf-8",
     );
@@ -970,6 +973,7 @@ describe("provider tool output", () => {
       "Older topic",
     ]);
     expect(history[0]?.status).toBe("cancelled");
+    expect(history[1]?.status).toBe("completed");
 
     const preview = await __test__.loadWebResearchPreview(olderPath);
     expect(preview).toContain("Older report");
