@@ -182,6 +182,11 @@ retry, polling, or resume controls. Research has one opinionated execution
 style: pi starts it asynchronously, tracks it locally, and saves the final
 report under `.pi/artifacts/research/`.
 
+Use `/web-research` in interactive pi sessions to inspect running research jobs
+and recent saved reports. The manager can cancel a running local job after
+confirmation; cancellation aborts the provider call and records a durable
+`cancelled` artifact under `.pi/artifacts/research/`.
+
 </details>
 
 ### Providers
