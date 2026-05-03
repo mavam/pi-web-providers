@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import {
@@ -103,6 +103,8 @@ const RESEARCH_HEARTBEAT_MS = 15000;
 const WEB_RESEARCH_RESULT_MESSAGE_TYPE = "web-research-result";
 const WEB_RESEARCH_WIDGET_KEY = "web-research-jobs";
 const RESEARCH_ARTIFACTS_DIR = join(".pi", "artifacts", "research");
+const MAX_RESEARCH_HISTORY_ITEMS = 20;
+const RESEARCH_PREVIEW_MAX_BYTES = 50000;
 const pendingResearchTasks = new Set<Promise<void>>();
 const CAPABILITY_TOOL_NAMES: Record<Tool, string> = {
   search: "web_search",
@@ -120,6 +122,28 @@ type ToolUpdateCallback =
   | undefined;
 
 type ProgressCallback = ((message: string) => void) | undefined;
+
+interface ActiveWebResearchTask {
+  request: WebResearchRequest;
+  abortController: AbortController;
+  cancelRequestedAt?: string;
+}
+
+interface WebResearchTaskSnapshot {
+  request: WebResearchRequest;
+  cancelRequestedAt?: string;
+}
+
+interface WebResearchHistoryItem {
+  outputPath: string;
+  fileName: string;
+  query: string;
+  provider: string;
+  status: string;
+  startedAt: string;
+  completedAt: string;
+  mtimeMs: number;
+}
 
 interface ToolExecutionContext {
   cwd: string;
@@ -152,7 +176,7 @@ interface ResearchToolRequest {
 }
 
 export default function webProvidersExtension(pi: ExtensionAPI) {
-  const activeWebResearchRequests = new Map<string, WebResearchRequest>();
+  const activeWebResearchRequests = new Map<string, ActiveWebResearchTask>();
   let latestWidgetContext: Pick<ExtensionContext, "hasUI" | "ui"> | undefined;
   let webResearchWidgetTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -196,7 +220,7 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
     widgetContext.ui.setWidget(
       WEB_RESEARCH_WIDGET_KEY,
       buildWebResearchWidgetLines(
-        [...activeWebResearchRequests.values()],
+        getActiveWebResearchRequests(activeWebResearchRequests),
         widgetContext.ui.theme,
       ),
     );
@@ -222,6 +246,34 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
         { activeWebResearchRequests, updateWebResearchWidget },
         ctx,
       );
+    },
+  });
+
+  pi.registerCommand("web-research", {
+    description: "Manage web research jobs",
+    handler: async (_args, ctx: ExtensionCommandContext) => {
+      if (!ctx.hasUI) {
+        ctx.ui.notify("web-research requires interactive mode", "error");
+        return;
+      }
+
+      let timer: ReturnType<typeof setInterval> | undefined;
+      try {
+        await ctx.ui.custom((tui, theme, _keybindings, done) => {
+          const view = new WebResearchManagerView(
+            tui,
+            theme,
+            done,
+            ctx.cwd,
+            activeWebResearchRequests,
+            () => updateWebResearchWidget(ctx),
+          );
+          timer = setInterval(() => view.refresh(), 1000);
+          return view;
+        });
+      } finally {
+        if (timer) clearInterval(timer);
+      }
     },
   });
 
@@ -258,7 +310,7 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
 function registerManagedTools(
   pi: ExtensionAPI,
   webResearchLifecycle: {
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -487,7 +539,7 @@ function registerWebAnswerTool(
 function registerWebResearchTool(
   pi: ExtensionAPI,
   webResearchLifecycle: {
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -549,7 +601,7 @@ function registerWebResearchTool(
 async function runWebProvidersConfig(
   pi: ExtensionAPI,
   webResearchLifecycle: {
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -647,7 +699,7 @@ function getSyncedActiveTools(
 async function refreshManagedTools(
   pi: ExtensionAPI,
   webResearchLifecycle: {
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -676,7 +728,7 @@ async function refreshManagedTools(
 async function refreshManagedToolsOnStartup(
   pi: ExtensionAPI,
   webResearchLifecycle: {
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -1542,7 +1594,7 @@ async function dispatchWebResearch({
   context,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
-  activeWebResearchRequests: Map<string, WebResearchRequest>;
+  activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
   updateWebResearchWidget: (
     ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
   ) => void;
@@ -1573,7 +1625,7 @@ async function dispatchWebResearchInternal({
   executionOverride,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
-  activeWebResearchRequests: Map<string, WebResearchRequest>;
+  activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
   updateWebResearchWidget: (
     ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
   ) => void;
@@ -1593,9 +1645,11 @@ async function dispatchWebResearchInternal({
     explicitProvider,
   );
   const request = createWebResearchRequest(ctx.cwd, provider.id, input);
+  const abortController = new AbortController();
+  const task: ActiveWebResearchTask = { request, abortController };
   const providerConfig = getEffectiveProviderConfig(config, provider.id);
 
-  activeWebResearchRequests.set(request.id, request);
+  activeWebResearchRequests.set(request.id, task);
   updateWebResearchWidget(ctx);
 
   trackPendingResearchTask(
@@ -1603,7 +1657,7 @@ async function dispatchWebResearchInternal({
       pi,
       activeWebResearchRequests,
       updateWebResearchWidget,
-      request,
+      task,
       config,
       provider,
       providerConfig,
@@ -1628,7 +1682,7 @@ async function runDispatchedWebResearch({
   pi,
   activeWebResearchRequests,
   updateWebResearchWidget,
-  request,
+  task,
   config,
   provider,
   providerConfig,
@@ -1637,11 +1691,11 @@ async function runDispatchedWebResearch({
   executionOverride,
 }: {
   pi: Pick<ExtensionAPI, "sendMessage">;
-  activeWebResearchRequests: Map<string, WebResearchRequest>;
+  activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
   updateWebResearchWidget: (
     ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
   ) => void;
-  request: WebResearchRequest;
+  task: ActiveWebResearchTask;
   config: WebProviders;
   provider: (typeof PROVIDER_LIST)[number];
   providerConfig: ProviderConfig;
@@ -1649,6 +1703,7 @@ async function runDispatchedWebResearch({
   options: Record<string, unknown> | undefined;
   executionOverride?: ProviderExecution<"research">;
 }): Promise<void> {
+  const { request, abortController } = task;
   let result: WebResearchResult;
   let reportText = "";
 
@@ -1659,7 +1714,7 @@ async function runDispatchedWebResearch({
       provider,
       providerConfig,
       ctx,
-      signal: undefined,
+      signal: abortController.signal,
       options,
       input: request.input,
       onProgress: (message) => {
@@ -1687,13 +1742,19 @@ async function runDispatchedWebResearch({
     const completedAt = new Date().toISOString();
     result = {
       ...request,
-      status: "failed",
+      status:
+        abortController.signal.aborted && task.cancelRequestedAt !== undefined
+          ? "cancelled"
+          : "failed",
       completedAt,
       elapsedMs: Math.max(
         0,
         Date.parse(completedAt) - Date.parse(request.startedAt),
       ),
-      error: formatErrorMessage(error),
+      error:
+        abortController.signal.aborted && task.cancelRequestedAt !== undefined
+          ? "web research was cancelled by the user."
+          : formatErrorMessage(error),
     };
   }
 
@@ -1709,6 +1770,35 @@ async function runDispatchedWebResearch({
     activeWebResearchRequests.delete(request.id);
     updateWebResearchWidget();
   }
+}
+
+function getActiveWebResearchRequests(
+  tasks: ReadonlyMap<string, ActiveWebResearchTask>,
+): WebResearchRequest[] {
+  return [...tasks.values()].map((task) => task.request);
+}
+
+function getWebResearchTaskSnapshots(
+  tasks: ReadonlyMap<string, ActiveWebResearchTask>,
+): WebResearchTaskSnapshot[] {
+  return [...tasks.values()].map((task) => ({
+    request: task.request,
+    cancelRequestedAt: task.cancelRequestedAt,
+  }));
+}
+
+function cancelWebResearchTask(
+  tasks: Map<string, ActiveWebResearchTask>,
+  id: string,
+): boolean {
+  const task = tasks.get(id);
+  if (!task || task.abortController.signal.aborted) return false;
+  task.cancelRequestedAt = new Date().toISOString();
+  task.request.progress = "cancelling";
+  task.abortController.abort(
+    new Error("web research was cancelled by the user."),
+  );
+  return true;
 }
 
 function createWebResearchRequest(
@@ -1764,8 +1854,9 @@ function buildWebResearchWidgetLines(
       PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
     const icon = getWebResearchWidgetIcon(request, now);
+    const progress = request.progress ? `${request.progress} · ` : "";
     lines.push(
-      `${icon}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${truncateInline(cleanSingleLine(request.input), 70)}`,
+      `${icon}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${theme.fg("muted", progress)}${truncateInline(cleanSingleLine(request.input), 70)}`,
     );
   }
 
@@ -1784,7 +1875,7 @@ function getWebResearchWidgetIcon(
     return "⟳ ";
   }
 
-  if (request.progress === "queued") {
+  if (request.progress === "queued" || request.progress === "cancelling") {
     return "◌ ";
   }
 
@@ -2356,7 +2447,12 @@ function renderWebResearchResultMessage(
     ? message.details
     : undefined;
   const isSuccess = details?.status === "completed";
-  const accent: "success" | "error" = isSuccess ? "success" : "error";
+  const isCancelled = details?.status === "cancelled";
+  const accent: "success" | "warning" | "error" = isSuccess
+    ? "success"
+    : isCancelled
+      ? "warning"
+      : "error";
   const box = new Box(1, 1, (value) => theme.bg("customMessageBg", value));
 
   if (!expanded) {
@@ -2371,7 +2467,11 @@ function renderWebResearchResultMessage(
   box.addChild(
     isSuccess
       ? renderMarkdownBlock(text ?? "")
-      : renderBlockText(text ?? "", theme, "error"),
+      : renderBlockText(
+          text ?? "",
+          theme,
+          isCancelled ? "toolOutput" : "error",
+        ),
   );
   return box;
 }
@@ -2385,11 +2485,17 @@ function buildWebResearchResultSummaryLines(
   const statusLine =
     result.status === "completed"
       ? `Web research completed via ${providerLabel}`
-      : `Web research failed via ${providerLabel}`;
+      : result.status === "cancelled"
+        ? `Web research cancelled via ${providerLabel}`
+        : `Web research failed via ${providerLabel}`;
+  const statusColor =
+    result.status === "completed"
+      ? "success"
+      : result.status === "cancelled"
+        ? "warning"
+        : "error";
 
-  const lines = [
-    theme.fg(result.status === "completed" ? "success" : "error", statusLine),
-  ];
+  const lines = [theme.fg(statusColor, statusLine)];
   lines.push(
     theme.fg("muted", `○ start: ${result.startedAt}`),
     theme.fg("muted", `◴ duration: ${formatElapsed(result.elapsedMs)}`),
@@ -2768,6 +2874,295 @@ function stripDuplicatePolicyOverrides(config: WebProviders): void {
     if (Object.keys(providerConfig.settings).length === 0) {
       delete providerConfig.settings;
     }
+  }
+}
+
+async function loadWebResearchHistory(
+  cwd: string,
+  maxItems = MAX_RESEARCH_HISTORY_ITEMS,
+): Promise<WebResearchHistoryItem[]> {
+  const dir = join(cwd, RESEARCH_ARTIFACTS_DIR);
+  let entries: string[];
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const markdown = entries.filter((name) => name.endsWith(".md"));
+  const withStats = await Promise.all(
+    markdown.map(async (fileName) => {
+      const outputPath = join(dir, fileName);
+      try {
+        return { fileName, outputPath, stat: await stat(outputPath) };
+      } catch {
+        return undefined;
+      }
+    }),
+  );
+
+  const newest = withStats
+    .filter((item): item is NonNullable<typeof item> => item !== undefined)
+    .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs)
+    .slice(0, maxItems);
+
+  return Promise.all(
+    newest.map(async ({ fileName, outputPath, stat }) => {
+      let content = "";
+      try {
+        content = await readFile(outputPath, "utf-8");
+      } catch {}
+      const metadata = parseWebResearchArtifactMetadata(content);
+      return {
+        outputPath,
+        fileName,
+        query: metadata.Query ?? "",
+        provider: metadata.Provider ?? "",
+        status: metadata.Status ?? "unknown",
+        startedAt: metadata.Started ?? "",
+        completedAt: metadata.Completed ?? "",
+        mtimeMs: stat.mtimeMs,
+      };
+    }),
+  );
+}
+
+function parseWebResearchArtifactMetadata(
+  content: string,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  const headings = new Set([
+    "Query",
+    "Provider",
+    "Status",
+    "Started",
+    "Completed",
+  ]);
+  const lines = content.split(/\r?\n/u);
+  for (let index = 0; index < lines.length; index++) {
+    const match = /^##\s+(.+)$/u.exec(lines[index] ?? "");
+    if (!match || !headings.has(match[1])) continue;
+    const values: string[] = [];
+    for (let next = index + 1; next < lines.length; next++) {
+      if (/^##\s+/u.test(lines[next] ?? "")) break;
+      if ((lines[next] ?? "").trim() || values.length > 0)
+        values.push(lines[next] ?? "");
+    }
+    result[match[1]] = values.join("\n").trim();
+  }
+  return result;
+}
+
+async function loadWebResearchPreview(outputPath: string): Promise<string> {
+  const buffer = await readFile(outputPath);
+  const truncated = buffer.byteLength > RESEARCH_PREVIEW_MAX_BYTES;
+  const text = buffer.subarray(0, RESEARCH_PREVIEW_MAX_BYTES).toString("utf-8");
+  return truncated
+    ? `${text}\n\n---\nPreview truncated. Open the full report at \`${outputPath}\`.`
+    : `${text}\n\n---\nFull report: \`${outputPath}\``;
+}
+
+class WebResearchManagerView implements Component {
+  private activeSection: "running" | "history" = "running";
+  private selection = { running: 0, history: 0 };
+  private history: WebResearchHistoryItem[] = [];
+  private confirmCancelId: string | undefined;
+  private preview: string | undefined;
+  private previewError: string | undefined;
+
+  constructor(
+    private readonly tui: TUI,
+    private readonly theme: Theme,
+    private readonly done: (result: undefined) => void,
+    private readonly cwd: string,
+    private readonly tasks: Map<string, ActiveWebResearchTask>,
+    private readonly onChange: () => void,
+  ) {
+    void this.reloadHistory();
+  }
+
+  render(width: number): string[] {
+    if (this.preview !== undefined || this.previewError !== undefined) {
+      const text = this.previewError ?? this.preview ?? "";
+      return [
+        this.theme.fg("accent", "Web research report preview"),
+        "",
+        ...text
+          .split("\n")
+          .slice(0, 200)
+          .map((line) => truncateToWidth(line, width)),
+        "",
+        this.theme.fg("dim", "Esc back"),
+      ];
+    }
+
+    this.clampSelections();
+    const lines: string[] = [this.theme.fg("accent", "Web research jobs"), ""];
+    lines.push(...this.renderRunning(width));
+    lines.push("");
+    lines.push(...this.renderHistory(width));
+    lines.push("");
+    lines.push(
+      this.theme.fg(
+        "dim",
+        "↑↓ move · Tab switch section · Enter open/cancel · Esc close",
+      ),
+    );
+    return lines;
+  }
+
+  invalidate(): void {}
+
+  handleInput(data: string): void {
+    const kb = getKeybindings();
+    if (this.preview !== undefined || this.previewError !== undefined) {
+      if (kb.matches(data, "tui.select.cancel")) {
+        this.preview = undefined;
+        this.previewError = undefined;
+      }
+      this.tui.requestRender();
+      return;
+    }
+    if (kb.matches(data, "tui.select.up")) this.move(-1);
+    else if (kb.matches(data, "tui.select.down")) this.move(1);
+    else if (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")))
+      this.switchSection();
+    else if (kb.matches(data, "tui.select.confirm")) void this.activate();
+    else if (kb.matches(data, "tui.select.cancel")) {
+      if (this.confirmCancelId) this.confirmCancelId = undefined;
+      else return this.done(undefined);
+    }
+    this.tui.requestRender();
+  }
+
+  refresh(): void {
+    this.clampSelections();
+    void this.reloadHistory();
+    this.tui.requestRender();
+  }
+
+  private async reloadHistory(): Promise<void> {
+    this.history = await loadWebResearchHistory(this.cwd);
+    this.clampSelections();
+    this.tui.requestRender();
+  }
+
+  private renderRunning(width: number): string[] {
+    const snapshots = getWebResearchTaskSnapshots(this.tasks);
+    const lines = [this.sectionTitle("Running", "running")];
+    if (snapshots.length === 0)
+      return [...lines, this.theme.fg("muted", "  No running jobs")];
+    snapshots.forEach((snapshot, index) => {
+      const selected =
+        this.activeSection === "running" && this.selection.running === index
+          ? "›"
+          : " ";
+      const request = snapshot.request;
+      const provider =
+        PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
+      const elapsed = formatCompactElapsed(
+        Date.now() - Date.parse(request.startedAt),
+      );
+      const progress = snapshot.cancelRequestedAt
+        ? "cancelling"
+        : (request.progress ?? "running");
+      lines.push(
+        truncateToWidth(
+          `${selected} ${provider} ${elapsed} ${progress} — ${cleanSingleLine(request.input)}`,
+          width,
+        ),
+      );
+      if (this.confirmCancelId === request.id)
+        lines.push(
+          this.theme.fg(
+            "warning",
+            truncateToWidth(
+              `  Press Enter again to cancel ${provider}: ${truncateInline(cleanSingleLine(request.input), 80)}`,
+              width,
+            ),
+          ),
+        );
+    });
+    return lines;
+  }
+
+  private renderHistory(width: number): string[] {
+    const lines = [this.sectionTitle("History", "history")];
+    if (this.history.length === 0)
+      return [...lines, this.theme.fg("muted", "  No saved reports")];
+    this.history.forEach((item, index) => {
+      const selected =
+        this.activeSection === "history" && this.selection.history === index
+          ? "›"
+          : " ";
+      lines.push(
+        truncateToWidth(
+          `${selected} ${item.status} ${item.provider} ${item.completedAt} — ${cleanSingleLine(item.query)}`,
+          width,
+        ),
+      );
+    });
+    return lines;
+  }
+
+  private sectionTitle(title: string, section: "running" | "history"): string {
+    return this.activeSection === section
+      ? this.theme.fg("accent", title)
+      : title;
+  }
+
+  private move(delta: number): void {
+    const count =
+      this.activeSection === "running" ? this.tasks.size : this.history.length;
+    if (count === 0) return;
+    this.selection[this.activeSection] =
+      (this.selection[this.activeSection] + delta + count) % count;
+    this.confirmCancelId = undefined;
+  }
+
+  private switchSection(): void {
+    this.activeSection =
+      this.activeSection === "running" ? "history" : "running";
+    this.confirmCancelId = undefined;
+    this.clampSelections();
+  }
+
+  private async activate(): Promise<void> {
+    if (this.activeSection === "running") {
+      const snapshot = getWebResearchTaskSnapshots(this.tasks)[
+        this.selection.running
+      ];
+      if (!snapshot) return;
+      if (this.confirmCancelId !== snapshot.request.id) {
+        this.confirmCancelId = snapshot.request.id;
+        return;
+      }
+      cancelWebResearchTask(this.tasks, snapshot.request.id);
+      this.confirmCancelId = undefined;
+      this.onChange();
+      return;
+    }
+    const item = this.history[this.selection.history];
+    if (!item) return;
+    try {
+      this.preview = await loadWebResearchPreview(item.outputPath);
+      this.previewError = undefined;
+    } catch (error) {
+      this.preview = undefined;
+      this.previewError = `Failed to read ${item.outputPath}: ${formatErrorMessage(error)}`;
+    }
+    this.tui.requestRender();
+  }
+
+  private clampSelections(): void {
+    this.selection.running = Math.min(
+      Math.max(0, this.selection.running),
+      Math.max(0, this.tasks.size - 1),
+    );
+    this.selection.history = Math.min(
+      Math.max(0, this.selection.history),
+      Math.max(0, this.history.length - 1),
+    );
   }
 }
 
@@ -4265,7 +4660,7 @@ export const __test__ = {
     executionOverride,
   }: {
     pi: Pick<ExtensionAPI, "sendMessage">;
-    activeWebResearchRequests: Map<string, WebResearchRequest>;
+    activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
     updateWebResearchWidget: (
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
@@ -4392,6 +4787,11 @@ export const __test__ = {
     }),
   extractTextContent,
   formatWebResearchResultMessage,
+  getActiveWebResearchRequests,
+  getWebResearchTaskSnapshots,
+  cancelWebResearchTask,
+  loadWebResearchHistory,
+  loadWebResearchPreview,
   getAvailableManagedToolNames,
   getReadyCompatibleProvidersForTool,
   getEnabledCompatibleProvidersForTool: getReadyCompatibleProvidersForTool,
