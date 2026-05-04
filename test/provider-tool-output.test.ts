@@ -752,8 +752,10 @@ describe("provider tool output", () => {
     };
     expect(details.status).toBe("completed");
     const report = await readFile(details.outputPath, "utf-8");
+    expect(report).toContain("---\n");
+    expect(report).toContain('query: "Investigate the topic"');
+    expect(report).toContain('status: "completed"');
     expect(report).toContain("# Web research report");
-    expect(report).toContain("## Report");
     expect(report).toContain("Detailed report text");
   });
 
@@ -829,9 +831,9 @@ describe("provider tool output", () => {
     expect(details.error).toBe("Gemini: rate limited.");
 
     const report = await readFile(details.outputPath, "utf-8");
+    expect(report).toContain('status: "failed"');
+    expect(report).toContain('error: "Gemini: rate limited."');
     expect(report).toContain("# Web research report");
-    expect(report).toContain("## Error");
-    expect(report).toContain("Gemini: rate limited.");
   });
 
   it("records cancellation even when the provider resolves after abort", async () => {
@@ -901,7 +903,7 @@ describe("provider tool output", () => {
     expect(activeWebResearchRequests.size).toBe(0);
 
     const report = await readFile(details.outputPath, "utf-8");
-    expect(report).toContain("## Status\ncancelled");
+    expect(report).toContain('status: "cancelled"');
     expect(report).not.toContain("Late successful report");
   });
 
@@ -945,23 +947,15 @@ describe("provider tool output", () => {
     await writeFile(
       newerPath,
       [
+        "---",
+        'query: "Newer topic"',
+        'provider: "Gemini"',
+        'status: "cancelled"',
+        'startedAt: "2026-01-02T00:00:00.000Z"',
+        'completedAt: "2026-01-02T00:00:01.000Z"',
+        "---",
+        "",
         "# Web research report",
-        "",
-        "## Query",
-        "Newer topic",
-        "",
-        "## Provider",
-        "Gemini",
-        "",
-        "## Status",
-        "cancelled",
-        "",
-        "## Started",
-        "2026-01-02T00:00:00.000Z",
-        "",
-        "## Completed",
-        "2026-01-02T00:00:01.000Z",
-        "",
       ].join("\n"),
       "utf-8",
     );
