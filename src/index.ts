@@ -1,7 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, relative } from "node:path";
+import { basename, join } from "node:path";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -29,9 +28,20 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { type TObject, Type } from "typebox";
-import { getConfigPath, loadConfig, writeConfigFile } from "./config.js";
+import { loadConfig, writeConfigFile } from "./config.js";
 import { type ContentsResponse, renderContentsAnswers } from "./contents.js";
 import { formatElapsed, formatErrorMessage } from "./execution-policy.js";
+import {
+  CAPABILITY_TOOL_NAMES,
+  getAvailableManagedToolNames,
+  getAvailableProviderIdsForCapability,
+  getProviderStatusForTool,
+  getSyncedActiveTools,
+  MANAGED_TOOL_NAMES,
+  refreshManagedTools as refreshManagedToolsAvailability,
+  refreshManagedToolsOnStartup as refreshManagedToolsOnStartupAvailability,
+  type ManagedToolRegistration,
+} from "./managed-tools.js";
 import { buildToolOptionsSchema, type ToolOptionsFor } from "./options.js";
 import {
   cleanupContentStore,
@@ -81,6 +91,18 @@ import {
   buildSearchSummaryParts as buildDisplaySearchSummaryParts,
   buildSearchToolDisplay as buildDisplaySearchToolDisplay,
 } from "./tool-display.js";
+import {
+  type ActiveWebResearchTask,
+  cancelWebResearchTask,
+  dispatchWebResearch as dispatchWebResearchLifecycle,
+  formatWebResearchResultMessage,
+  getActiveWebResearchRequests,
+  getWebResearchTaskSnapshots,
+  loadWebResearchHistory,
+  loadWebResearchPreview,
+  waitForPendingResearchTasks,
+} from "./web-research-lifecycle.js";
+import { WebResearchManagerView } from "./web-research-view.js";
 import type {
   Claude,
   Codex,
@@ -111,17 +133,6 @@ const MAX_SEARCH_QUERIES = 10;
 const RESEARCH_HEARTBEAT_MS = 15000;
 const WEB_RESEARCH_RESULT_MESSAGE_TYPE = "web-research-result";
 const WEB_RESEARCH_WIDGET_KEY = "web-research-jobs";
-const RESEARCH_ARTIFACTS_DIR = join(".pi", "artifacts", "research");
-const MAX_RESEARCH_HISTORY_ITEMS = 20;
-const RESEARCH_PREVIEW_MAX_BYTES = 50000;
-const pendingResearchTasks = new Set<Promise<void>>();
-const CAPABILITY_TOOL_NAMES: Record<Tool, string> = {
-  search: "web_search",
-  contents: "web_contents",
-  answer: "web_answer",
-  research: "web_research",
-};
-const MANAGED_TOOL_NAMES = Object.values(CAPABILITY_TOOL_NAMES);
 
 type ToolUpdateCallback =
   | ((update: {
@@ -134,28 +145,6 @@ type ToolUpdateCallback =
 type ProgressCallback =
   | ((message: string, display?: ToolDisplayDetails) => void)
   | undefined;
-
-interface ActiveWebResearchTask {
-  request: WebResearchRequest;
-  abortController: AbortController;
-  cancelRequestedAt?: string;
-}
-
-interface WebResearchTaskSnapshot {
-  request: WebResearchRequest;
-  cancelRequestedAt?: string;
-}
-
-interface WebResearchHistoryItem {
-  outputPath: string;
-  fileName: string;
-  query: string;
-  provider: string;
-  status: string;
-  startedAt: string;
-  completedAt: string;
-  mtimeMs: number;
-}
 
 interface ToolExecutionContext {
   cwd: string;
@@ -335,7 +324,7 @@ function registerManagedTools(
       ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
     ) => void;
   },
-  providerIdsByCapability: Partial<Record<Tool, ProviderId[]>> = {},
+  providerIdsByCapability: ManagedToolRegistration = {},
 ): void {
   registerWebSearchTool(pi, providerIdsByCapability.search ?? []);
   registerWebContentsTool(pi, providerIdsByCapability.contents ?? []);
@@ -648,83 +637,6 @@ async function runWebProvidersConfig(
   });
 }
 
-function formatStartupConfigError(error: unknown): string {
-  const detail = error instanceof Error ? error.message : String(error);
-  return `web-providers config error: ${detail.replace(getConfigPath(), "~/.pi/agent/web-providers.json")}`;
-}
-
-function getAvailableProviderIdsForCapability(
-  config: WebProviders,
-  cwd: string,
-  capability: Tool,
-): ProviderId[] {
-  const providerId = getMappedProviderIdForTool(config, capability);
-  if (!providerId) {
-    return [];
-  }
-
-  const provider = PROVIDERS_BY_ID[providerId];
-  if (!supportsTool(provider, capability)) {
-    return [];
-  }
-
-  const status = getProviderCapabilityStatus(
-    config,
-    cwd,
-    providerId,
-    capability,
-    {
-      resolveSecrets: false,
-    },
-  );
-  return isProviderCapabilityExposable(status) ? [providerId] : [];
-}
-
-function getProviderStatusForTool(
-  config: WebProviders,
-  cwd: string,
-  providerId: ProviderId,
-  capability: Tool,
-) {
-  return getProviderCapabilityStatus(config, cwd, providerId, capability);
-}
-
-function getAvailableManagedToolNames(
-  config: WebProviders,
-  cwd: string,
-): string[] {
-  return (Object.keys(CAPABILITY_TOOL_NAMES) as Tool[])
-    .filter(
-      (capability) =>
-        getAvailableProviderIdsForCapability(config, cwd, capability).length >
-        0,
-    )
-    .map((capability) => CAPABILITY_TOOL_NAMES[capability]);
-}
-
-function getSyncedActiveTools(
-  config: WebProviders,
-  cwd: string,
-  activeToolNames: readonly string[],
-  options: { addAvailable: boolean },
-): Set<string> {
-  const availableToolNames = new Set(getAvailableManagedToolNames(config, cwd));
-  const nextActiveTools = new Set(activeToolNames);
-
-  for (const toolName of MANAGED_TOOL_NAMES) {
-    if (availableToolNames.has(toolName)) {
-      if (options.addAvailable) {
-        nextActiveTools.add(toolName);
-      }
-      continue;
-    }
-
-    nextActiveTools.delete(toolName);
-  }
-
-  return nextActiveTools;
-}
-
 async function refreshManagedTools(
   pi: ExtensionAPI,
   webResearchLifecycle: {
@@ -736,22 +648,13 @@ async function refreshManagedTools(
   cwd: string,
   options: { addAvailable: boolean },
 ): Promise<void> {
-  const config = await loadConfig();
-  const nextActiveTools = getSyncedActiveTools(
-    config,
+  await refreshManagedToolsAvailability(
+    pi,
+    (providerIdsByCapability) =>
+      registerManagedTools(pi, webResearchLifecycle, providerIdsByCapability),
     cwd,
-    pi.getActiveTools(),
     options,
   );
-
-  registerManagedTools(pi, webResearchLifecycle, {
-    search: getAvailableProviderIdsForCapability(config, cwd, "search"),
-    contents: getAvailableProviderIdsForCapability(config, cwd, "contents"),
-    answer: getAvailableProviderIdsForCapability(config, cwd, "answer"),
-    research: getAvailableProviderIdsForCapability(config, cwd, "research"),
-  });
-
-  await syncManagedToolAvailability(pi, nextActiveTools);
 }
 
 async function refreshManagedToolsOnStartup(
@@ -765,38 +668,13 @@ async function refreshManagedToolsOnStartup(
   cwd: string,
   options: { addAvailable: boolean },
 ): Promise<void> {
-  try {
-    await refreshManagedTools(pi, webResearchLifecycle, cwd, options);
-  } catch (error) {
-    const message = formatStartupConfigError(error);
-    pi.sendMessage({
-      customType: "web-providers-config-error",
-      content: message,
-      display: true,
-    });
-    await syncManagedToolAvailability(
-      pi,
-      new Set(
-        pi
-          .getActiveTools()
-          .filter((toolName) => !MANAGED_TOOL_NAMES.includes(toolName)),
-      ),
-    );
-  }
-}
-
-async function syncManagedToolAvailability(
-  pi: ExtensionAPI,
-  nextActiveTools: ReadonlySet<string>,
-): Promise<void> {
-  const activeTools = pi.getActiveTools();
-  const changed =
-    activeTools.length !== nextActiveTools.size ||
-    activeTools.some((toolName) => !nextActiveTools.has(toolName));
-
-  if (changed) {
-    pi.setActiveTools(Array.from(nextActiveTools));
-  }
+  await refreshManagedToolsOnStartupAvailability(
+    pi,
+    (providerIdsByCapability) =>
+      registerManagedTools(pi, webResearchLifecycle, providerIdsByCapability),
+    cwd,
+    options,
+  );
 }
 
 function getSearchMaxResultsLimit(providerId: ProviderId): number {
@@ -1727,229 +1605,41 @@ async function dispatchWebResearchInternal({
   input: string;
   executionOverride?: ProviderExecution<"research">;
 }) {
-  await cleanupContentStore();
-
-  const provider = resolveProviderForTool(
+  return dispatchWebResearchLifecycle({
+    activeWebResearchRequests,
     config,
-    ctx.cwd,
-    "research",
     explicitProvider,
-  );
-  const request = createWebResearchRequest(ctx.cwd, provider.id, input);
-  const abortController = new AbortController();
-  const task: ActiveWebResearchTask = { request, abortController };
-  const providerConfig = getEffectiveProviderConfig(config, provider.id);
-
-  activeWebResearchRequests.set(request.id, task);
-  updateWebResearchWidget(ctx);
-
-  trackPendingResearchTask(
-    runDispatchedWebResearch({
-      pi,
-      activeWebResearchRequests,
-      updateWebResearchWidget,
-      task,
-      config,
-      provider,
-      providerConfig,
-      ctx,
-      options: providerOptions,
-      executionOverride,
-    }),
-  );
-
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `Started web research via ${provider.label}.`,
-      },
-    ],
-    details: request,
-    display: buildProviderToolDisplay({
-      capability: "research",
-      providerId: provider.id,
-      details: { tool: "web_research", provider: provider.id },
-      text: "started",
-    }),
-  };
-}
-
-async function runDispatchedWebResearch({
-  pi,
-  activeWebResearchRequests,
-  updateWebResearchWidget,
-  task,
-  config,
-  provider,
-  providerConfig,
-  ctx,
-  options,
-  executionOverride,
-}: {
-  pi: Pick<ExtensionAPI, "sendMessage">;
-  activeWebResearchRequests: Map<string, ActiveWebResearchTask>;
-  updateWebResearchWidget: (
-    ctx?: Pick<ExtensionContext, "hasUI" | "ui">,
-  ) => void;
-  task: ActiveWebResearchTask;
-  config: WebProviders;
-  provider: (typeof PROVIDER_LIST)[number];
-  providerConfig: ProviderConfig;
-  ctx: Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
-  options: Record<string, unknown> | undefined;
-  executionOverride?: ProviderExecution<"research">;
-}): Promise<void> {
-  const { request, abortController } = task;
-  let result: WebResearchResult;
-  let reportText = "";
-
-  try {
-    const response = await executeProviderOperation({
-      capability: "research",
-      config,
-      provider,
-      providerConfig,
-      ctx,
-      signal: abortController.signal,
-      options,
-      input: request.input,
-      onProgress: (message) => {
-        request.progress = summarizeWebResearchProgress(
-          message,
-          provider.label,
-        );
-        updateWebResearchWidget();
-      },
-      executionOverride,
-    });
-    const completedAt = new Date().toISOString();
-    if (
-      abortController.signal.aborted &&
-      task.cancelRequestedAt !== undefined
-    ) {
-      result = {
-        ...request,
-        status: "cancelled",
-        completedAt,
-        elapsedMs: Math.max(
-          0,
-          Date.parse(completedAt) - Date.parse(request.startedAt),
-        ),
-        error: "web research was cancelled by the user.",
-      };
-    } else {
-      result = {
-        ...request,
-        status: "completed",
-        completedAt,
-        elapsedMs: Math.max(
-          0,
-          Date.parse(completedAt) - Date.parse(request.startedAt),
-        ),
-        itemCount: response.itemCount,
-      };
-      reportText = response.text;
-    }
-  } catch (error) {
-    const completedAt = new Date().toISOString();
-    result = {
-      ...request,
-      status:
-        abortController.signal.aborted && task.cancelRequestedAt !== undefined
-          ? "cancelled"
-          : "failed",
-      completedAt,
-      elapsedMs: Math.max(
-        0,
-        Date.parse(completedAt) - Date.parse(request.startedAt),
-      ),
-      error:
-        abortController.signal.aborted && task.cancelRequestedAt !== undefined
-          ? "web research was cancelled by the user."
-          : formatErrorMessage(error),
-    };
-  }
-
-  try {
-    await writeWebResearchArtifact(result, reportText);
-    pi.sendMessage({
-      customType: WEB_RESEARCH_RESULT_MESSAGE_TYPE,
-      content: formatWebResearchResultMessage(result, reportText),
-      display: true,
-      details: result,
-    });
-  } finally {
-    activeWebResearchRequests.delete(request.id);
-    updateWebResearchWidget();
-  }
-}
-
-function getActiveWebResearchRequests(
-  tasks: ReadonlyMap<string, ActiveWebResearchTask>,
-): WebResearchRequest[] {
-  return [...tasks.values()].map((task) => task.request);
-}
-
-function getWebResearchTaskSnapshots(
-  tasks: ReadonlyMap<string, ActiveWebResearchTask>,
-): WebResearchTaskSnapshot[] {
-  return [...tasks.values()].map((task) => ({
-    request: task.request,
-    cancelRequestedAt: task.cancelRequestedAt,
-  }));
-}
-
-function cancelWebResearchTask(
-  tasks: Map<string, ActiveWebResearchTask>,
-  id: string,
-): boolean {
-  const task = tasks.get(id);
-  if (!task || task.abortController.signal.aborted) return false;
-  task.cancelRequestedAt = new Date().toISOString();
-  task.request.progress = "cancelling";
-  task.abortController.abort(
-    new Error("web research was cancelled by the user."),
-  );
-  return true;
-}
-
-function createWebResearchRequest(
-  cwd: string,
-  provider: ProviderId,
-  input: string,
-): WebResearchRequest {
-  const startedAt = new Date().toISOString();
-
-  return {
-    tool: "web_research",
-    id: randomUUID(),
-    provider,
+    ctx: { cwd: ctx.cwd },
+    options: providerOptions,
     input,
-    outputPath: buildWebResearchArtifactPath(cwd, input, startedAt),
-    startedAt,
-  };
-}
-
-function buildWebResearchArtifactPath(
-  cwd: string,
-  input: string,
-  startedAt: string,
-): string {
-  const timestamp = startedAt.replaceAll(":", "-").replace(".", "-");
-  const slug = slugifyWebResearchInput(input);
-  return join(cwd, RESEARCH_ARTIFACTS_DIR, `${timestamp}-${slug}.md`);
-}
-
-function slugifyWebResearchInput(input: string): string {
-  const slug = input
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60)
-    .replace(/-+$/g, "");
-  return slug.length > 0 ? slug : "research";
+    executionOverride,
+    executeResearch: async ({
+      config,
+      provider,
+      providerConfig,
+      ctx,
+      signal,
+      options,
+      input,
+      onProgress,
+      executionOverride,
+    }) =>
+      executeProviderOperation({
+        capability: "research",
+        config,
+        provider,
+        providerConfig,
+        ctx,
+        signal,
+        options,
+        input,
+        onProgress,
+        executionOverride,
+      }),
+    deliverResult: (message) => pi.sendMessage(message),
+    onJobsChanged: () => updateWebResearchWidget(ctx),
+    resultMessageType: WEB_RESEARCH_RESULT_MESSAGE_TYPE,
+  });
 }
 
 function buildWebResearchWidgetLines(
@@ -2003,36 +1693,6 @@ function getWebResearchWidgetIcon(
   return "● ";
 }
 
-function summarizeWebResearchProgress(
-  message: string,
-  providerLabel: string,
-): string {
-  const startingMessage = `Starting research via ${providerLabel}`;
-  if (message === startingMessage) {
-    return "starting";
-  }
-
-  const startedPrefix = `${providerLabel} research started: `;
-  if (message.startsWith(startedPrefix)) {
-    return `started: ${message.slice(startedPrefix.length)}`;
-  }
-
-  const statusPrefix = `Research via ${providerLabel}: `;
-  if (message.startsWith(statusPrefix)) {
-    return message
-      .slice(statusPrefix.length)
-      .replace(/\s+\([^)]* elapsed\)$/u, "")
-      .trim();
-  }
-
-  const retryPrefix = `${providerLabel} research poll is still retrying after transient errors`;
-  if (message.startsWith(retryPrefix)) {
-    return "poll retrying after transient errors";
-  }
-
-  return message.trim();
-}
-
 function formatCompactElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const minutes = Math.floor(totalSeconds / 60);
@@ -2043,93 +1703,6 @@ function formatCompactElapsed(ms: number): string {
   }
 
   return `${totalSeconds}s`;
-}
-
-function formatWebResearchResultMessage(
-  result: WebResearchResult,
-  reportText: string,
-): string {
-  const text = reportText.trim();
-  if (text.length > 0) {
-    return `${text}\n`;
-  }
-
-  if (result.error) {
-    return `${result.error}\n`;
-  }
-
-  return "";
-}
-
-function formatWebResearchDisplayPath(outputPath: string, cwd: string): string {
-  const relativePath = relative(cwd, outputPath);
-  return relativePath && !relativePath.startsWith("..") && relativePath !== ""
-    ? relativePath
-    : outputPath;
-}
-
-async function writeWebResearchArtifact(
-  result: WebResearchResult,
-  reportText: string,
-): Promise<void> {
-  await mkdir(dirname(result.outputPath), { recursive: true });
-  await writeFile(
-    result.outputPath,
-    formatWebResearchArtifact(result, reportText),
-    "utf-8",
-  );
-}
-
-function formatWebResearchArtifact(
-  result: WebResearchResult,
-  reportText: string,
-): string {
-  const providerLabel =
-    PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
-  const lines = [
-    "# Web research report",
-    "",
-    "## Query",
-    result.input,
-    "",
-    "## Provider",
-    providerLabel,
-    "",
-    "## Status",
-    result.status,
-    "",
-    "## Started",
-    result.startedAt,
-    "",
-    "## Completed",
-    result.completedAt,
-    "",
-    "## Elapsed",
-    formatElapsed(result.elapsedMs),
-  ];
-
-  if (typeof result.itemCount === "number") {
-    lines.push("", "## Items", String(result.itemCount));
-  }
-
-  if (result.error) {
-    lines.push("", "## Error", result.error);
-  }
-
-  if (reportText) {
-    lines.push("", "## Report", reportText);
-  }
-
-  return `${lines.join("\n")}\n`;
-}
-
-function trackPendingResearchTask(task: Promise<void>): void {
-  const tracked = task
-    .catch(() => {})
-    .finally(() => {
-      pendingResearchTasks.delete(tracked);
-    });
-  pendingResearchTasks.add(tracked);
 }
 
 async function executeBatchedContentsTool({
@@ -3093,300 +2666,6 @@ function stripDuplicatePolicyOverrides(config: WebProviders): void {
     if (Object.keys(providerConfig.settings).length === 0) {
       delete providerConfig.settings;
     }
-  }
-}
-
-async function loadWebResearchHistory(
-  cwd: string,
-  maxItems = MAX_RESEARCH_HISTORY_ITEMS,
-): Promise<WebResearchHistoryItem[]> {
-  const dir = join(cwd, RESEARCH_ARTIFACTS_DIR);
-  let entries: string[];
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return [];
-  }
-
-  const markdown = entries.filter((name) => name.endsWith(".md"));
-  const withStats = await Promise.all(
-    markdown.map(async (fileName) => {
-      const outputPath = join(dir, fileName);
-      try {
-        return { fileName, outputPath, stat: await stat(outputPath) };
-      } catch {
-        return undefined;
-      }
-    }),
-  );
-
-  const newest = withStats
-    .filter((item): item is NonNullable<typeof item> => item !== undefined)
-    .sort((left, right) => right.stat.mtimeMs - left.stat.mtimeMs)
-    .slice(0, maxItems);
-
-  return Promise.all(
-    newest.map(async ({ fileName, outputPath, stat }) => {
-      let content = "";
-      try {
-        content = await readFile(outputPath, "utf-8");
-      } catch {}
-      const metadata = parseWebResearchArtifactMetadata(content);
-      return {
-        outputPath,
-        fileName,
-        query: metadata.Query ?? "",
-        provider: metadata.Provider ?? "",
-        status: metadata.Status ?? "unknown",
-        startedAt: metadata.Started ?? "",
-        completedAt: metadata.Completed ?? "",
-        mtimeMs: stat.mtimeMs,
-      };
-    }),
-  );
-}
-
-function parseWebResearchArtifactMetadata(
-  content: string,
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  const metadataHeadings = new Set([
-    "Query",
-    "Provider",
-    "Status",
-    "Started",
-    "Completed",
-  ]);
-  const artifactBodyHeadings = new Set(["Elapsed", "Items", "Error", "Report"]);
-  const lines = content.split(/\r?\n/u);
-  for (let index = 0; index < lines.length; index++) {
-    const match = /^##\s+(.+)$/u.exec(lines[index] ?? "");
-    if (!match) continue;
-    const heading = match[1];
-    if (artifactBodyHeadings.has(heading)) break;
-    if (!metadataHeadings.has(heading) || result[heading] !== undefined)
-      continue;
-    const values: string[] = [];
-    for (let next = index + 1; next < lines.length; next++) {
-      if (/^##\s+/u.test(lines[next] ?? "")) break;
-      if ((lines[next] ?? "").trim() || values.length > 0)
-        values.push(lines[next] ?? "");
-    }
-    result[heading] = values.join("\n").trim();
-  }
-  return result;
-}
-
-async function loadWebResearchPreview(outputPath: string): Promise<string> {
-  const buffer = await readFile(outputPath);
-  const truncated = buffer.byteLength > RESEARCH_PREVIEW_MAX_BYTES;
-  const text = buffer.subarray(0, RESEARCH_PREVIEW_MAX_BYTES).toString("utf-8");
-  return truncated
-    ? `${text}\n\n---\nPreview truncated. Open the full report at \`${outputPath}\`.`
-    : `${text}\n\n---\nFull report: \`${outputPath}\``;
-}
-
-class WebResearchManagerView implements Component {
-  private activeSection: "running" | "history" = "running";
-  private selection = { running: 0, history: 0 };
-  private history: WebResearchHistoryItem[] = [];
-  private confirmCancelId: string | undefined;
-  private preview: string | undefined;
-  private previewError: string | undefined;
-
-  constructor(
-    private readonly tui: TUI,
-    private readonly theme: Theme,
-    private readonly done: (result: undefined) => void,
-    private readonly cwd: string,
-    private readonly tasks: Map<string, ActiveWebResearchTask>,
-    private readonly onChange: () => void,
-  ) {
-    void this.reloadHistory();
-  }
-
-  render(width: number): string[] {
-    if (this.preview !== undefined || this.previewError !== undefined) {
-      const text = this.previewError ?? this.preview ?? "";
-      return [
-        this.theme.fg("accent", "Web research report preview"),
-        "",
-        ...text
-          .split("\n")
-          .slice(0, 200)
-          .map((line) => truncateToWidth(line, width)),
-        "",
-        this.theme.fg("dim", "Esc back"),
-      ];
-    }
-
-    this.clampSelections();
-    const lines: string[] = [this.theme.fg("accent", "Web research jobs"), ""];
-    lines.push(...this.renderRunning(width));
-    lines.push("");
-    lines.push(...this.renderHistory(width));
-    lines.push("");
-    lines.push(
-      this.theme.fg(
-        "dim",
-        "↑↓ move · Tab switch section · Enter open/cancel · Esc close",
-      ),
-    );
-    return lines;
-  }
-
-  invalidate(): void {}
-
-  handleInput(data: string): void {
-    const kb = getKeybindings();
-    if (this.preview !== undefined || this.previewError !== undefined) {
-      if (kb.matches(data, "tui.select.cancel")) {
-        this.preview = undefined;
-        this.previewError = undefined;
-      }
-      this.tui.requestRender();
-      return;
-    }
-    if (kb.matches(data, "tui.select.up")) this.move(-1);
-    else if (kb.matches(data, "tui.select.down")) this.move(1);
-    else if (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")))
-      this.switchSection();
-    else if (kb.matches(data, "tui.select.confirm")) void this.activate();
-    else if (kb.matches(data, "tui.select.cancel")) {
-      if (this.confirmCancelId) this.confirmCancelId = undefined;
-      else return this.done(undefined);
-    }
-    this.tui.requestRender();
-  }
-
-  refresh(): void {
-    this.clampSelections();
-    void this.reloadHistory();
-    this.tui.requestRender();
-  }
-
-  private async reloadHistory(): Promise<void> {
-    this.history = await loadWebResearchHistory(this.cwd);
-    this.clampSelections();
-    this.tui.requestRender();
-  }
-
-  private renderRunning(width: number): string[] {
-    const snapshots = getWebResearchTaskSnapshots(this.tasks);
-    const lines = [this.sectionTitle("Running", "running")];
-    if (snapshots.length === 0)
-      return [...lines, this.theme.fg("muted", "  No running jobs")];
-    snapshots.forEach((snapshot, index) => {
-      const selected =
-        this.activeSection === "running" && this.selection.running === index
-          ? "›"
-          : " ";
-      const request = snapshot.request;
-      const provider =
-        PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
-      const elapsed = formatCompactElapsed(
-        Date.now() - Date.parse(request.startedAt),
-      );
-      const progress = snapshot.cancelRequestedAt
-        ? "cancelling"
-        : (request.progress ?? "running");
-      lines.push(
-        truncateToWidth(
-          `${selected} ${provider} ${elapsed} ${progress} — ${cleanSingleLine(request.input)}`,
-          width,
-        ),
-      );
-      if (this.confirmCancelId === request.id)
-        lines.push(
-          this.theme.fg(
-            "warning",
-            truncateToWidth(
-              `  Press Enter again to cancel ${provider}: ${truncateInline(cleanSingleLine(request.input), 80)}`,
-              width,
-            ),
-          ),
-        );
-    });
-    return lines;
-  }
-
-  private renderHistory(width: number): string[] {
-    const lines = [this.sectionTitle("History", "history")];
-    if (this.history.length === 0)
-      return [...lines, this.theme.fg("muted", "  No saved reports")];
-    this.history.forEach((item, index) => {
-      const selected =
-        this.activeSection === "history" && this.selection.history === index
-          ? "›"
-          : " ";
-      lines.push(
-        truncateToWidth(
-          `${selected} ${item.status} ${item.provider} ${item.completedAt} — ${cleanSingleLine(item.query)}`,
-          width,
-        ),
-      );
-    });
-    return lines;
-  }
-
-  private sectionTitle(title: string, section: "running" | "history"): string {
-    return this.activeSection === section
-      ? this.theme.fg("accent", title)
-      : title;
-  }
-
-  private move(delta: number): void {
-    const count =
-      this.activeSection === "running" ? this.tasks.size : this.history.length;
-    if (count === 0) return;
-    this.selection[this.activeSection] =
-      (this.selection[this.activeSection] + delta + count) % count;
-    this.confirmCancelId = undefined;
-  }
-
-  private switchSection(): void {
-    this.activeSection =
-      this.activeSection === "running" ? "history" : "running";
-    this.confirmCancelId = undefined;
-    this.clampSelections();
-  }
-
-  private async activate(): Promise<void> {
-    if (this.activeSection === "running") {
-      const snapshot = getWebResearchTaskSnapshots(this.tasks)[
-        this.selection.running
-      ];
-      if (!snapshot) return;
-      if (this.confirmCancelId !== snapshot.request.id) {
-        this.confirmCancelId = snapshot.request.id;
-        return;
-      }
-      cancelWebResearchTask(this.tasks, snapshot.request.id);
-      this.confirmCancelId = undefined;
-      this.onChange();
-      return;
-    }
-    const item = this.history[this.selection.history];
-    if (!item) return;
-    try {
-      this.preview = await loadWebResearchPreview(item.outputPath);
-      this.previewError = undefined;
-    } catch (error) {
-      this.preview = undefined;
-      this.previewError = `Failed to read ${item.outputPath}: ${formatErrorMessage(error)}`;
-    }
-    this.tui.requestRender();
-  }
-
-  private clampSelections(): void {
-    this.selection.running = Math.min(
-      Math.max(0, this.selection.running),
-      Math.max(0, this.tasks.size - 1),
-    );
-    this.selection.history = Math.min(
-      Math.max(0, this.selection.history),
-      Math.max(0, this.history.length - 1),
-    );
   }
 }
 
@@ -5199,9 +4478,7 @@ export const __test__ = {
   renderProviderToolResult,
   renderWebResearchDispatchResult,
   renderWebResearchResultMessage,
-  waitForPendingResearchTasks: async () => {
-    await Promise.all([...pendingResearchTasks]);
-  },
+  waitForPendingResearchTasks,
   formatSearchResponses,
   formatAnswerResponses,
 };
