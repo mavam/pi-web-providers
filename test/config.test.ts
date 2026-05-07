@@ -392,40 +392,6 @@ describe("config parsing", () => {
     });
   });
 
-  it("accepts nullable rendering symbols", () => {
-    const parsed = parseConfig(
-      JSON.stringify({
-        settings: {
-          symbols: {
-            success: "OK",
-            failure: null,
-          },
-        },
-      }),
-      "test-config.json",
-    );
-
-    expect(parsed.settings?.symbols).toEqual({
-      success: "OK",
-      failure: null,
-    });
-  });
-
-  it("rejects unknown rendering symbol settings", () => {
-    expect(() =>
-      parseConfig(
-        JSON.stringify({
-          settings: {
-            symbols: {
-              pending: "~",
-            },
-          },
-        }),
-        "test-config.json",
-      ),
-    ).toThrow(/Unknown rendering symbols/);
-  });
-
   it("parses custom CLI command config", () => {
     const parsed = parseConfig(
       JSON.stringify({
@@ -635,10 +601,6 @@ describe("config parsing", () => {
         maxUrls: 2,
         ttlMs: 60000,
       },
-      symbols: {
-        success: "OK",
-        failure: null,
-      },
     };
 
     await writeFile(getConfigPath(), serializeConfig(config), "utf-8");
@@ -679,10 +641,6 @@ describe("config parsing", () => {
       provider: "exa",
       maxUrls: 2,
       ttlMs: 60000,
-    });
-    expect(loaded.settings?.symbols).toEqual({
-      success: "OK",
-      failure: null,
     });
   });
 

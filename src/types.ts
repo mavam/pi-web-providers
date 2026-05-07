@@ -31,9 +31,33 @@ export interface SearchSettings {
   ttlMs?: number;
 }
 
-export interface RenderingSymbols {
-  success?: string | null;
-  failure?: string | null;
+export type SummaryTone = "success" | "failure" | "warning" | "neutral";
+
+export interface SummaryClause {
+  tone: SummaryTone;
+  text: string;
+}
+
+export interface ToolOutcomeSummary {
+  primary: SummaryClause;
+  secondary?: SummaryClause[];
+}
+
+export interface ToolProgressSummary {
+  action: string;
+  context?: string;
+}
+
+export interface ToolDisplayDetails {
+  provider?: {
+    id: ProviderId | string;
+    label: string;
+  };
+  outcome?: ToolOutcomeSummary;
+  progress?: ToolProgressSummary;
+  expanded?: {
+    kind: "markdown" | "text";
+  };
 }
 
 export interface SearchResult {
@@ -79,9 +103,6 @@ export interface ToolDetails {
   tool: string;
   provider: ProviderId;
   itemCount?: number;
-  failedItemCount?: number;
-  outputBytes?: number;
-  outputTruncated?: boolean;
   queryCount?: number;
   failedQueryCount?: number;
 }
@@ -357,7 +378,6 @@ export interface Valyu extends Provider<ValyuOptions> {
 
 export interface Settings extends ExecutionSettings {
   search?: SearchSettings;
-  symbols?: RenderingSymbols;
 }
 
 export interface ProviderConfigMap {

@@ -181,28 +181,6 @@ describe("web_search renderer", () => {
     expect(summary).not.toContain("undefined");
   });
 
-  it("omits configured search summary symbols when they are null", () => {
-    const summary = renderComponentText(
-      __test__.renderCollapsedSearchSummary(
-        {
-          tool: "web_search",
-          queryCount: 2,
-          failedQueryCount: 1,
-          provider: "exa",
-          resultCount: 12,
-        },
-        undefined,
-        createTheme(),
-        { success: null, failure: null },
-      ),
-      120,
-    );
-
-    expect(summary).toContain("12 results, 1 of 2 queries failed");
-    expect(summary).not.toContain("✔");
-    expect(summary).not.toContain("✘");
-  });
-
   it("renders failed searches as one-line provider failures", () => {
     const rendered = renderComponentText(
       __test__.renderSearchToolResult(
@@ -568,9 +546,12 @@ describe("provider tool summaries", () => {
             tool: "web_contents",
             provider: "exa",
             itemCount: 2,
-            failedItemCount: 1,
-            outputBytes: 7500,
-            outputTruncated: true,
+          },
+          display: {
+            outcome: {
+              primary: { tone: "success", text: "7.3KB (truncated)" },
+              secondary: [{ tone: "failure", text: "1 of 2 pages failed" }],
+            },
           },
         },
         false,
