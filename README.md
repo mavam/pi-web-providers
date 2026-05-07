@@ -83,9 +83,10 @@ Each managed tool maps to one provider id under the top-level `tools` key.
 Removing a tool mapping turns that tool off. A tool is only exposed when it is
 mapped to a compatible provider and that provider is currently available.
 Shared defaults and tool-specific settings live under `settings`; search-specific
-settings live under `settings.search`, and async research uses
-`settings.researchTimeoutMs`. Provider option schemas are strict: only the keys
-shown for the active provider are accepted.
+settings live under `settings.search`, collapsed-result symbols live under
+`settings.symbols`, and async research uses `settings.researchTimeoutMs`.
+Provider option schemas are strict: only the keys shown for the active provider
+are accepted.
 
 #### `web_search`
 
@@ -617,7 +618,8 @@ wrapper files.
 ### Settings
 
 The `settings` block holds shared execution defaults that apply to all
-providers unless overridden in a provider's own `settings` block:
+providers unless overridden in a provider's own `settings` block. It also holds
+global rendering settings for collapsed tool summaries:
 
 | Field               | Default   | Description                                                 |
 | ------------------- | --------- | ----------------------------------------------------------- |
@@ -625,6 +627,21 @@ providers unless overridden in a provider's own `settings` block:
 | `retryCount`        | `3`       | Retries for transient failures                              |
 | `retryDelayMs`      | `2000`    | Initial delay before retrying                               |
 | `researchTimeoutMs` | `1800000` | Maximum total time for an async `web_research` job (30 min) |
+| `symbols.success`   | `"✔"`     | Symbol before successful and mixed-result summaries         |
+| `symbols.failure`   | `"✘"`     | Symbol before failed summaries and failed mixed clauses     |
+
+Set either symbol to `null` to hide it:
+
+```json
+{
+  "settings": {
+    "symbols": {
+      "success": null,
+      "failure": null
+    }
+  }
+}
+```
 
 ## 🔎 Live smoke tests
 

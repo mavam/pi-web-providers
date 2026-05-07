@@ -250,7 +250,7 @@ describe("provider tool output", () => {
         ],
       }),
     ).rejects.toThrow(
-      'All 2 web_search queries failed: 1. "exa sdk" — Exa: timeout.; 2. "exa pricing" — Exa: rate limited.',
+      'Exa search failed for 2 queries: 1. "exa sdk" — Exa: timeout.; 2. "exa pricing" — Exa: rate limited.',
     );
   });
 
@@ -457,7 +457,7 @@ describe("provider tool output", () => {
         ],
       }),
     ).rejects.toThrow(
-      'All 2 web_answer queries failed: 1. "What are common ACME platform use cases?" — Gemini: timeout.; 2. "How can an ACME platform help with tool…" — Gemini: rate limited.',
+      'Gemini answer failed for 2 questions: 1. "What are common ACME platform use cases?" — Gemini: timeout.; 2. "How can an ACME platform help with tool…" — Gemini: rate limited.',
     );
   });
 

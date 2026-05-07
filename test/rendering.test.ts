@@ -92,7 +92,7 @@ describe("web_search renderer", () => {
     expect(rendered).not.toContain("maxResults=");
   });
 
-  it("summarizes single-query search results with the resolved provider", () => {
+  it("summarizes single-query search results without provider noise", () => {
     const summary = renderComponentText(
       __test__.renderCollapsedSearchSummary(
         {
@@ -108,7 +108,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 results via Exa");
+    expect(summary).toContain("✔ 3 results");
     expect(summary).toContain("to expand");
     expect(summary).not.toContain("https://exa.ai/docs");
   });
@@ -129,7 +129,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("2 queries, 5 results via Exa");
+    expect(summary).toContain("✔ 5 results");
     expect(summary).toContain("to expand");
   });
 
@@ -149,7 +149,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 queries, 4 results via Exa, 1 failed");
+    expect(summary).toContain("✔ 4 results, ✘ 1 of 3 queries failed");
     expect(summary).toContain("to expand");
   });
 
@@ -163,7 +163,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("2 queries, 1 result, 1 failed");
+    expect(summary).toContain("✔ 1 result, ✘ 1 of 2 queries failed");
     expect(summary).not.toContain("undefined");
   });
 
@@ -177,8 +177,54 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("1 result");
+    expect(summary).toContain("✔ 1 result");
     expect(summary).not.toContain("undefined");
+  });
+
+  it("omits configured search summary symbols when they are null", () => {
+    const summary = renderComponentText(
+      __test__.renderCollapsedSearchSummary(
+        {
+          tool: "web_search",
+          queryCount: 2,
+          failedQueryCount: 1,
+          provider: "exa",
+          resultCount: 12,
+        },
+        undefined,
+        createTheme(),
+        { success: null, failure: null },
+      ),
+      120,
+    );
+
+    expect(summary).toContain("12 results, 1 of 2 queries failed");
+    expect(summary).not.toContain("✔");
+    expect(summary).not.toContain("✘");
+  });
+
+  it("renders failed searches as one-line provider failures", () => {
+    const rendered = renderComponentText(
+      __test__.renderSearchToolResult(
+        {
+          content: [{ type: "text", text: "Exa: rate limited." }],
+          details: {
+            tool: "web_search",
+            queryCount: 1,
+            failedQueryCount: 1,
+            provider: "exa",
+            resultCount: 0,
+          },
+          isError: true,
+        },
+        false,
+        false,
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered.trimEnd()).toBe("✘ Exa search failed: rate limited");
   });
 });
 
@@ -263,7 +309,7 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Started web research via Gemini");
+    expect(rendered).toContain("✔ research started");
     expect(rendered).toContain("ctrl+o to expand");
   });
 
@@ -337,11 +383,8 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Web research completed via Gemini");
-    expect(rendered).toContain("○ start: 2026-03-31T12:00:00.000Z");
-    expect(rendered).toContain("◴ duration: 5m");
     expect(rendered).toContain(
-      "↳ file: /tmp/project/.pi/artifacts/research/report.md",
+      "✔ research completed in 5m ↳ /tmp/project/.pi/artifacts/research/report.md",
     );
     expect(rendered).toContain("ctrl+o to expand");
     expect(rendered).not.toContain("# Web research report");
@@ -403,6 +446,40 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("Gemini: rate limited.");
     expect(rendered).not.toContain("○ start:");
   });
+
+  it("renders collapsed failed completion messages on one line", () => {
+    const rendered = renderComponentText(
+      __test__.renderWebResearchResultMessage(
+        {
+          content: `Gemini: rate limited.`,
+          details: {
+            tool: "web_research",
+            id: "job-1",
+            provider: "gemini",
+            input: "Investigate the topic",
+            outputPath: "/tmp/project/.pi/artifacts/research/report.md",
+            startedAt: "2026-03-31T12:00:00.000Z",
+            completedAt: "2026-03-31T12:02:00.000Z",
+            elapsedMs: 120000,
+            status: "failed",
+            error: "Gemini: rate limited.",
+          },
+        },
+        { expanded: false },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain(
+      "✘ Gemini research failed after 2m: rate limited",
+    );
+    const summaryLines = rendered
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    expect(summaryLines).toHaveLength(1);
+  });
 });
 
 describe("partial tool rendering", () => {
@@ -420,7 +497,8 @@ describe("partial tool rendering", () => {
       120,
     );
 
-    expect(rendered).toContain("Searching via Exa: exa sdk");
+    expect(rendered).toContain("Searching via Exa");
+    expect(rendered).not.toContain("exa sdk");
   });
 
   it("shows provider tool progress updates in warning text", () => {
@@ -440,7 +518,30 @@ describe("partial tool rendering", () => {
       120,
     );
 
-    expect(rendered).toContain("Fetching contents via Exa for 2 URL(s)");
+    expect(rendered).toContain("Fetching 2 pages via Exa");
+  });
+
+  it("shows batched progress counts before the dim provider suffix", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "Fetching contents via Exa: 1/2 completed, 1 failed",
+            },
+          ],
+          details: {},
+        },
+        false,
+        true,
+        "web_contents failed",
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered).toContain("Fetching 1/2 pages via Exa");
   });
 });
 
@@ -455,7 +556,32 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("2 pages via Gemini");
+    expect(summary).toBe("2 pages");
+  });
+
+  it("summarizes contents bytes and mixed page failures", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [{ type: "text", text: "contents" }],
+          details: {
+            tool: "web_contents",
+            provider: "exa",
+            itemCount: 2,
+            failedItemCount: 1,
+            outputBytes: 7500,
+            outputTruncated: true,
+          },
+        },
+        false,
+        false,
+        "web_contents failed",
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered).toContain("✔ 7.3KB (truncated), ✘ 1 of 2 pages failed");
   });
 
   it("keeps the dedicated multi-question answer summary format", () => {
@@ -469,7 +595,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("3 questions via Gemini, 1 failed");
+    expect(summary).toBe("2 answers, 1 of 3 questions failed");
   });
 
   it("normalizes research summaries without duplicating the provider", () => {
@@ -481,7 +607,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("Research via Gemini");
+    expect(summary).toBe("Research");
   });
 });
 

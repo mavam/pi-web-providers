@@ -31,6 +31,11 @@ export interface SearchSettings {
   ttlMs?: number;
 }
 
+export interface RenderingSymbols {
+  success?: string | null;
+  failure?: string | null;
+}
+
 export interface SearchResult {
   title: string;
   url: string;
@@ -74,6 +79,9 @@ export interface ToolDetails {
   tool: string;
   provider: ProviderId;
   itemCount?: number;
+  failedItemCount?: number;
+  outputBytes?: number;
+  outputTruncated?: boolean;
   queryCount?: number;
   failedQueryCount?: number;
 }
@@ -349,6 +357,7 @@ export interface Valyu extends Provider<ValyuOptions> {
 
 export interface Settings extends ExecutionSettings {
   search?: SearchSettings;
+  symbols?: RenderingSymbols;
 }
 
 export interface ProviderConfigMap {

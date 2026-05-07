@@ -393,7 +393,7 @@ function parseExecutionSettings(
       key !== "retryCount" &&
       key !== "retryDelayMs" &&
       key !== "researchTimeoutMs" &&
-      (!allowSearch || key !== "search"),
+      (!allowSearch || (key !== "search" && key !== "symbols")),
   );
   if (unknownKeys.length > 0) {
     throw new Error(`'${field}' in ${source} must be a JSON object.`);
@@ -442,6 +442,54 @@ function parseExecutionSettings(
       source,
       `${field}.search`,
     );
+  }
+
+  if (allowSearch && settings.symbols !== undefined) {
+    parsed.symbols = parseRenderingSymbols(
+      settings.symbols,
+      source,
+      `${field}.symbols`,
+    );
+  }
+
+  return parsed;
+}
+
+function parseRenderingSymbols(
+  value: unknown,
+  source: string,
+  field: string,
+): Settings["symbols"] {
+  const symbols = requireObject(
+    value,
+    `'${field}' in ${source} must be a JSON object.`,
+  );
+  const unknownFields = Object.keys(symbols).filter(
+    (key) => key !== "success" && key !== "failure",
+  );
+  if (unknownFields.length > 0) {
+    throw new Error(
+      `Unknown rendering symbols in ${source}: ${unknownFields.join(", ")}.`,
+    );
+  }
+
+  const parsed: NonNullable<Settings["symbols"]> = {};
+  const success = parseOptionalNullableSymbol(
+    symbols.success,
+    source,
+    `${field}.success`,
+  );
+  if (success !== undefined) {
+    parsed.success = success;
+  }
+
+  const failure = parseOptionalNullableSymbol(
+    symbols.failure,
+    source,
+    `${field}.failure`,
+  );
+  if (failure !== undefined) {
+    parsed.failure = failure;
   }
 
   return parsed;
@@ -671,6 +719,25 @@ function readOptionalString(
   return value;
 }
 
+function parseOptionalNullableSymbol(
+  value: unknown,
+  source: string,
+  field: string,
+): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(
+      `'${field}' in ${source} must be a non-empty string or null.`,
+    );
+  }
+  return value;
+}
+
 function readOptionalObject(
   value: unknown,
   source: string,
@@ -791,6 +858,13 @@ function cleanupConfig(config: WebProviders): void {
       Object.keys(config.settings.search).length === 0
     ) {
       delete config.settings.search;
+    }
+
+    if (
+      config.settings.symbols &&
+      Object.keys(config.settings.symbols).length === 0
+    ) {
+      delete config.settings.symbols;
     }
 
     if (Object.keys(config.settings).length === 0) {
