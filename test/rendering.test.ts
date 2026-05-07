@@ -280,6 +280,12 @@ describe("web_research renderer", () => {
             outputPath: "/tmp/report.md",
             startedAt: "2026-03-31T12:00:00.000Z",
           },
+          display: {
+            provider: { id: "gemini", label: "Gemini" },
+            outcome: {
+              primary: { tone: "success", text: "research started" },
+            },
+          },
         },
         false,
         createTheme(),
@@ -289,6 +295,7 @@ describe("web_research renderer", () => {
 
     expect(rendered).toContain("✔ research started");
     expect(rendered).toContain("ctrl+o to expand");
+    expect(rendered.split("\n")[0]).toContain("✔ research started");
   });
 
   it("keeps long research prompts compact in the call header", () => {

@@ -729,6 +729,10 @@ describe("provider tool output", () => {
     });
 
     expect(result.content[0]?.text).toBe("Started web research via Gemini.");
+    expect(result.display).toMatchObject({
+      provider: { id: "gemini", label: "Gemini" },
+      outcome: { primary: { tone: "success", text: "research started" } },
+    });
     expect(sendMessage).not.toHaveBeenCalled();
     expect(setWidget).toHaveBeenCalledWith("web-research-jobs", [
       "Research jobs running: 1",

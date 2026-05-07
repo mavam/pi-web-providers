@@ -1684,6 +1684,12 @@ async function dispatchWebResearchInternal({
       },
     ],
     details: request,
+    display: buildProviderToolDisplay({
+      capability: "research",
+      providerId: provider.id,
+      details: { tool: "web_research", provider: provider.id },
+      text: "research started",
+    }),
   };
 }
 
@@ -2394,6 +2400,7 @@ function renderWebResearchDispatchResult(
     content?: Array<{ type: string; text?: string }>;
     details?: unknown;
     display?: ToolDisplayDetails;
+    isError?: boolean;
   },
   expanded: boolean,
   theme: Theme,
@@ -2404,27 +2411,37 @@ function renderWebResearchDispatchResult(
     ? result.details
     : undefined;
 
-  if (expanded) {
-    const expandedText = details
-      ? [
-          text,
-          "",
-          "## Research brief",
-          "",
-          details.input,
-          "",
-          "## Report path",
-          "",
-          `\`${details.outputPath}\``,
-        ].join("\n")
-      : text;
-    return renderMarkdownBlock(expandedText);
+  if (!expanded) {
+    return renderProviderToolResult(
+      {
+        ...result,
+        content: result.content ?? [{ type: "text", text }],
+        details: details
+          ? { tool: "web_research", provider: details.provider }
+          : result.details,
+      },
+      expanded,
+      false,
+      "web_research failed",
+      theme,
+      { symbols },
+    );
   }
 
-  const summary = details ? "research started" : text;
-  let summaryText = renderSuccessSummary(summary, theme, symbols);
-  summaryText += theme.fg("muted", ` (${getExpandHint()})`);
-  return new Text(summaryText, 0, 0);
+  const expandedText = details
+    ? [
+        text,
+        "",
+        "## Research brief",
+        "",
+        details.input,
+        "",
+        "## Report path",
+        "",
+        `\`${details.outputPath}\``,
+      ].join("\n")
+    : text;
+  return renderMarkdownBlock(expandedText);
 }
 
 function renderWebResearchResultMessage(
@@ -2677,7 +2694,9 @@ function buildProviderToolDisplay({
           outputTruncated,
           failedItemCount,
         })
-      : buildCollapsedProviderToolSummary(details, text);
+      : capability === "research" && text
+        ? { success: text }
+        : buildCollapsedProviderToolSummary(details, text);
   return {
     provider: { id: providerId, label: provider?.label ?? providerId },
     outcome: {
