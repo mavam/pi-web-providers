@@ -121,7 +121,9 @@ type ToolUpdateCallback =
     }) => void)
   | undefined;
 
-type ProgressCallback = ((message: string) => void) | undefined;
+type ProgressCallback =
+  | ((message: string, display?: ToolDisplayDetails) => void)
+  | undefined;
 
 interface ToolExecutionContext {
   cwd: string;
@@ -854,6 +856,7 @@ async function executeSearchToolInternal({
     searchQueries.length > 1
       ? createBatchCompletionReporter(
           "Searching",
+          provider.id,
           provider.label,
           searchQueries.length,
           progressReporter.report,
@@ -1164,6 +1167,7 @@ async function executeAnswerToolInternal({
     answerQueries.length > 1
       ? createBatchCompletionReporter(
           "Answering",
+          provider.id,
           provider.label,
           answerQueries.length,
           progressReporter.report,
@@ -1325,7 +1329,7 @@ async function executeProviderOperation({
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
   urls?: string[];
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<"contents">;
 }): Promise<ContentsResponse>;
 async function executeProviderOperation({
@@ -1350,7 +1354,7 @@ async function executeProviderOperation({
   options: Record<string, unknown> | undefined;
   query?: string;
   input?: string;
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<Exclude<Tool, "search" | "contents">>;
 }): Promise<ToolOutput>;
 async function executeProviderOperation({
@@ -1377,7 +1381,7 @@ async function executeProviderOperation({
   urls?: string[];
   query?: string;
   input?: string;
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<Exclude<Tool, "search">>;
 }): Promise<ContentsResponse | ToolOutput> {
   const request = buildOperationRequest(capability, {
@@ -1404,13 +1408,24 @@ async function executeProviderOperation({
   }
 
   if (capability === "contents") {
+    const urlCount = (urls ?? []).length;
     onProgress?.(
-      `Fetching contents via ${provider.label} for ${(urls ?? []).length} URL(s)`,
+      `Fetching contents via ${provider.label} for ${urlCount} URL(s)`,
+      buildProgressDisplay(
+        provider.id,
+        urlCount === 1 ? "Fetching page" : `Fetching ${urlCount} pages`,
+      ),
     );
   } else if (capability === "answer") {
-    onProgress?.(`Answering via ${provider.label}`);
+    onProgress?.(
+      `Answering via ${provider.label}`,
+      buildProgressDisplay(provider.id, "Answering"),
+    );
   } else if (capability === "research") {
-    onProgress?.(`Researching via ${provider.label}`);
+    onProgress?.(
+      `Researching via ${provider.label}`,
+      buildProgressDisplay(provider.id, "Researching"),
+    );
   }
 
   const result = executionOverride
@@ -1994,7 +2009,7 @@ async function executeBatchedContentsTool({
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
   urls: string[];
-  progressReport: ((message: string) => void) | undefined;
+  progressReport: ProgressCallback;
   executionOverrides?: ProviderExecution<"contents">[];
 }): Promise<ContentsResponse> {
   if (
@@ -2008,6 +2023,7 @@ async function executeBatchedContentsTool({
 
   const batchProgress = createBatchCompletionReporter(
     "Fetching contents",
+    provider.id,
     provider.label,
     urls.length,
     progressReport,
@@ -2173,10 +2189,11 @@ function createProgressEmitter(onUpdate: ToolUpdateCallback): ProgressCallback {
     return undefined;
   }
 
-  return (message: string) => {
+  return (message: string, display?: ToolDisplayDetails) => {
     onUpdate({
       content: [{ type: "text", text: message }],
       details: {},
+      display,
     });
   };
 }
@@ -2193,7 +2210,8 @@ function createToolProgressReporter(
     return { report: undefined, stop: () => {} };
   }
 
-  const emit = (message: string) => progress(message);
+  const emit = (message: string, display?: ToolDisplayDetails) =>
+    progress(message, display);
 
   const startedAt = Date.now();
   let lastUpdateAt = startedAt;
@@ -2207,15 +2225,18 @@ function createToolProgressReporter(
 
       const providerLabel = PROVIDERS_BY_ID[providerId]?.label ?? providerId;
       const elapsed = formatElapsed(Date.now() - startedAt);
-      emit(`Researching via ${providerLabel} (${elapsed} elapsed)`);
+      emit(
+        `Researching via ${providerLabel} (${elapsed} elapsed)`,
+        buildProgressDisplay(providerId, `Researching ${elapsed}`),
+      );
       lastUpdateAt = Date.now();
     }, RESEARCH_HEARTBEAT_MS);
   }
 
   return {
-    report: (message: string) => {
+    report: (message: string, display?: ToolDisplayDetails) => {
       lastUpdateAt = Date.now();
-      emit(message);
+      emit(message, display);
     },
     stop: () => {
       if (timer) {
@@ -2341,7 +2362,7 @@ function renderSearchToolResult(
   const isError = Boolean((result as { isError?: boolean }).isError);
 
   if (isPartial) {
-    return renderProgressText(text ?? "Working…", theme);
+    return renderToolProgress(result.display, text, theme);
   }
 
   if (isError) {
@@ -2513,7 +2534,7 @@ function renderProviderToolResult(
   const symbols = options.symbols ?? DEFAULT_SUMMARY_SYMBOLS;
 
   if (isPartial) {
-    return renderProgressText(text ?? "Working…", theme);
+    return renderToolProgress(result.display, text, theme);
   }
 
   if (result.isError) {
@@ -2617,6 +2638,17 @@ function buildSearchToolDisplay(details: WebSearchDetails): ToolDisplayDetails {
         : undefined,
     },
     expanded: { kind: "markdown" },
+  };
+}
+
+function buildProgressDisplay(
+  providerId: ProviderId,
+  action: string,
+): ToolDisplayDetails {
+  const provider = PROVIDERS_BY_ID[providerId];
+  return {
+    provider: { id: providerId, label: provider?.label ?? providerId },
+    progress: { action },
   };
 }
 
@@ -4137,9 +4169,10 @@ function getAnswerQueriesForDisplay(queries: string[]): string[] {
 
 function createBatchCompletionReporter(
   verb: string,
+  providerId: ProviderId,
   providerLabel: string,
   total: number,
-  report: ((message: string) => void) | undefined,
+  report: ProgressCallback,
 ): {
   start: () => void;
   markCompleted: () => void;
@@ -4161,7 +4194,11 @@ function createBatchCompletionReporter(
     if (failedCount > 0) {
       message += `, ${failedCount} failed`;
     }
-    report(message);
+    const action =
+      verb === "Fetching contents"
+        ? `Fetching ${completedCount}/${total} pages`
+        : `${verb} ${completedCount}/${total}`;
+    report(message, buildProgressDisplay(providerId, action));
   };
 
   return {
@@ -4304,95 +4341,22 @@ function prefixWithSymbol(text: string, symbol: string | null): string {
   return symbol ? `${symbol} ${text}` : text;
 }
 
-function renderProgressText(text: string, theme: Pick<Theme, "fg">): Text {
-  const parsed = parseProgressText(text);
-  if (!parsed) {
-    return renderSimpleText(text, theme, "warning");
+function renderToolProgress(
+  display: ToolDisplayDetails | undefined,
+  fallbackText: string | undefined,
+  theme: Pick<Theme, "fg">,
+): Text {
+  const progress = display?.progress;
+  const providerLabel = display?.provider?.label;
+  if (!progress || !providerLabel) {
+    return renderSimpleText(fallbackText ?? "Working…", theme, "warning");
   }
 
   return new Text(
-    `${theme.fg("warning", parsed.action)} ${theme.fg("muted", `via ${parsed.provider}`)}`,
+    `${theme.fg("warning", progress.action)} ${theme.fg("muted", `via ${providerLabel}`)}`,
     0,
     0,
   );
-}
-
-function parseProgressText(
-  text: string,
-): { action: string; provider: string } | undefined {
-  const trimmed = cleanSingleLine(text);
-
-  const search = trimmed.match(
-    /^Searching via (.*?): (?:(\d+)\/(\d+) completed(?:, \d+ failed)?|.+)$/u,
-  );
-  if (search) {
-    const provider = search[1];
-    const completed = search[2];
-    const total = search[3];
-    return provider
-      ? {
-          action:
-            completed && total
-              ? `Searching ${completed}/${total}`
-              : "Searching",
-          provider,
-        }
-      : undefined;
-  }
-
-  const fetchingBatch = trimmed.match(
-    /^Fetching contents via (.*?): (\d+)\/(\d+) completed(?:, \d+ failed)?$/u,
-  );
-  if (fetchingBatch?.[1]) {
-    return {
-      action: `Fetching ${fetchingBatch[2]}/${fetchingBatch[3]} pages`,
-      provider: fetchingBatch[1],
-    };
-  }
-
-  const fetchingSingle = trimmed.match(
-    /^Fetching contents via (.*?) for (\d+) URL\(s\)$/u,
-  );
-  if (fetchingSingle?.[1]) {
-    const count = Number(fetchingSingle[2]);
-    return {
-      action: count === 1 ? "Fetching page" : `Fetching ${count} pages`,
-      provider: fetchingSingle[1],
-    };
-  }
-
-  const answering = trimmed.match(
-    /^Answering via (.*?)(?:: (\d+)\/(\d+) completed(?:, \d+ failed)?)?$/u,
-  );
-  if (answering?.[1]) {
-    return {
-      action:
-        answering[2] && answering[3]
-          ? `Answering ${answering[2]}/${answering[3]}`
-          : "Answering",
-      provider: answering[1],
-    };
-  }
-
-  const startingResearch = trimmed.match(/^Starting research via (.*?)$/u);
-  if (startingResearch?.[1]) {
-    return {
-      action: "Starting research",
-      provider: startingResearch[1],
-    };
-  }
-
-  const researching = trimmed.match(
-    /^Researching via (.*?)(?: \((.*?) elapsed\))?$/u,
-  );
-  if (researching?.[1]) {
-    return {
-      action: researching[2] ? `Researching ${researching[2]}` : "Researching",
-      provider: researching[1],
-    };
-  }
-
-  return undefined;
 }
 
 function renderCollapsedSearchSummary(

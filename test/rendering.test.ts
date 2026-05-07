@@ -467,6 +467,10 @@ describe("partial tool rendering", () => {
         {
           content: [{ type: "text", text: "Searching via Exa: exa sdk" }],
           details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Searching" },
+          },
         },
         false,
         true,
@@ -479,14 +483,16 @@ describe("partial tool rendering", () => {
     expect(rendered).not.toContain("exa sdk");
   });
 
-  it("shows provider tool progress updates in warning text", () => {
+  it("shows provider tool progress updates from display details", () => {
     const rendered = renderComponentText(
       __test__.renderProviderToolResult(
         {
-          content: [
-            { type: "text", text: "Fetching contents via Exa for 2 URL(s)" },
-          ],
+          content: [{ type: "text", text: "raw progress text" }],
           details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Fetching 2 pages" },
+          },
         },
         false,
         true,
@@ -497,6 +503,7 @@ describe("partial tool rendering", () => {
     );
 
     expect(rendered).toContain("Fetching 2 pages via Exa");
+    expect(rendered).not.toContain("raw progress text");
   });
 
   it("shows batched progress counts before the dim provider suffix", () => {
@@ -506,10 +513,14 @@ describe("partial tool rendering", () => {
           content: [
             {
               type: "text",
-              text: "Fetching contents via Exa: 1/2 completed, 1 failed",
+              text: "raw progress text",
             },
           ],
           details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Fetching 1/2 pages" },
+          },
         },
         false,
         true,
