@@ -626,7 +626,6 @@ providers unless overridden in a provider's own `settings` block:
 | `retryDelayMs`      | `2000`    | Initial delay before retrying                               |
 | `researchTimeoutMs` | `1800000` | Maximum total time for an async `web_research` job (30 min) |
 
-
 ## 🔎 Live smoke tests
 
 Use the opt-in live smoke runner to validate the configured providers with the
