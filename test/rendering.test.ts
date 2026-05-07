@@ -325,10 +325,10 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered.startsWith("web_research ACME platform use cases:")).toBe(
+    expect(rendered.startsWith('web_research "ACME platform use cases:')).toBe(
       true,
     );
-    expect(rendered).not.toContain('web_research "');
+    expect(rendered).toContain('web_research "');
     expect(rendered).not.toContain("provider=");
   });
 
@@ -358,9 +358,9 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("✔ research started");
+    expect(rendered).toContain("✔ started");
     expect(rendered).toContain("ctrl+o to expand");
-    expect(rendered.split("\n")[0]).toContain("✔ research started");
+    expect(rendered.split("\n")[0]).toContain("✔ started");
   });
 
   it("keeps long research prompts compact in the call header", () => {
@@ -375,7 +375,7 @@ describe("web_research renderer", () => {
       60,
     );
 
-    expect(rendered).toContain("web_research What is pi coding agent?");
+    expect(rendered).toContain('web_research "What is pi coding agent?');
     expect(rendered).toContain("...");
     expect(rendered).not.toContain("typical workflows.");
   });
@@ -401,12 +401,12 @@ describe("web_research renderer", () => {
       200,
     );
 
-    expect(rendered).toContain("Started web research via Gemini.");
-    expect(rendered).toContain("Research brief");
+    expect(rendered).toContain("Web research");
+    expect(rendered).toContain("Brief");
     expect(rendered).toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
-    expect(rendered).toContain("Report path");
+    expect(rendered).toContain("Artifact");
     expect(rendered).toContain("/tmp/report.md");
   });
 
@@ -433,9 +433,7 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain(
-      "✔ research completed in 5m ↳ /tmp/project/.pi/artifacts/research/report.md",
-    );
+    expect(rendered).toContain("✔ 5m · report.md");
     expect(rendered).toContain("ctrl+o to expand");
     expect(rendered).not.toContain("# Web research report");
   });
@@ -463,9 +461,9 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Web research report");
+    expect(rendered).toContain("Web research");
     expect(rendered).toContain("Investigate the topic");
-    expect(rendered).toContain("Item one");
+    expect(rendered).toContain("Artifact");
     expect(rendered).not.toContain("○ start:");
   });
 

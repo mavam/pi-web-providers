@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -408,11 +408,13 @@ function registerWebContentsTool(
       });
     },
     renderCall(args, theme) {
-      return renderListCallHeader(
-        "web_contents",
-        Array.isArray((args as { urls?: string[] }).urls)
-          ? ((args as { urls?: string[] }).urls ?? [])
-          : [],
+      return renderWebToolCallHeader(
+        {
+          toolName: "web_contents",
+          items: Array.isArray((args as { urls?: string[] }).urls)
+            ? ((args as { urls?: string[] }).urls ?? [])
+            : [],
+        },
         theme,
       );
     },
@@ -1689,7 +1691,7 @@ async function dispatchWebResearchInternal({
       capability: "research",
       providerId: provider.id,
       details: { tool: "web_research", provider: provider.id },
-      text: "research started",
+      text: "started",
     }),
   };
 }
@@ -2315,17 +2317,41 @@ function renderListCallHeader(
   };
 }
 
+function renderWebToolCallHeader(
+  config: {
+    toolName: string;
+    items: string[];
+    suffix?: string;
+    quoteSingleItem?: boolean;
+    forceMultiline?: boolean;
+  },
+  theme: Theme,
+): Component {
+  return renderListCallHeader(
+    config.toolName,
+    config.items,
+    theme,
+    config.suffix,
+    {
+      quoteSingleItem: config.quoteSingleItem,
+      forceMultiline: config.forceMultiline,
+    },
+  );
+}
+
 function renderToolCallHeader(
   toolName: string,
   primary: string,
   details: string[],
   theme: Theme,
 ): Component {
-  return renderListCallHeader(
-    toolName,
-    primary.trim().length > 0 ? [primary] : [],
+  return renderWebToolCallHeader(
+    {
+      toolName,
+      items: primary.trim().length > 0 ? [primary] : [],
+      suffix: details.length > 0 ? ` ${details.join(" ")}` : undefined,
+    },
     theme,
-    details.length > 0 ? ` ${details.join(" ")}` : undefined,
   );
 }
 
@@ -2335,12 +2361,13 @@ function renderQuestionCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderListCallHeader(
-    "web_answer",
-    getAnswerQueriesForDisplay(params.queries),
+  return renderWebToolCallHeader(
+    {
+      toolName: "web_answer",
+      items: getAnswerQueriesForDisplay(params.queries),
+      quoteSingleItem: true,
+    },
     theme,
-    undefined,
-    { quoteSingleItem: true },
   );
 }
 
@@ -2350,99 +2377,124 @@ function renderResearchCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderListCallHeader("web_research", [params.input], theme);
+  return renderWebToolCallHeader(
+    { toolName: "web_research", items: [params.input], quoteSingleItem: true },
+    theme,
+  );
 }
 
-function renderSearchToolResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    display?: ToolDisplayDetails;
-    isError?: boolean;
-  },
-  expanded: boolean,
-  isPartial: boolean,
+type WebToolResult = {
+  content?: Array<{ type: string; text?: string }>;
+  details?: unknown;
+  display?: ToolDisplayDetails;
+  isError?: boolean;
+};
+
+interface WebToolRenderConfig<TDetails> {
+  capability: Tool;
+  failureText: string;
+  getDetails(details: unknown): TDetails | undefined;
+  getCollapsedSummary(
+    details: TDetails | undefined,
+    text: string | undefined,
+  ): SummaryParts;
+  renderExpanded(
+    details: TDetails | undefined,
+    text: string | undefined,
+  ): Component;
+  preferDisplaySummary?: boolean;
+}
+
+function renderWebToolResult<TDetails>(
+  result: WebToolResult,
+  state: { expanded: boolean; isPartial?: boolean },
   theme: Theme,
+  config: WebToolRenderConfig<TDetails>,
   symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Component {
   const text = extractTextContent(result.content);
-  const isError = Boolean((result as { isError?: boolean }).isError);
 
-  if (isPartial) {
+  if (state.isPartial) {
     return renderToolProgress(result.display, text, theme);
   }
 
-  if (isError) {
+  if (result.isError) {
     return renderFailureText(
       buildFailureSummary({
         text,
         details: result.details as ToolDetails | WebSearchDetails | undefined,
-        capability: "search",
-        fallback: "web_search failed",
+        capability: config.capability,
+        fallback: config.failureText,
       }),
       theme,
       symbols,
     );
   }
 
-  const details = result.details as WebSearchDetails | undefined;
-  if (!details || expanded) {
-    return renderMarkdownBlock(text ?? "");
+  const details = config.getDetails(result.details);
+  if (state.expanded) {
+    return config.renderExpanded(details, text);
   }
 
-  const displaySummary = getDisplaySummaryParts(result.display);
-  return displaySummary
-    ? renderCollapsedSummary(displaySummary, theme, symbols)
-    : renderCollapsedSearchSummary(details, text, theme, symbols);
+  const summary =
+    config.preferDisplaySummary === false
+      ? config.getCollapsedSummary(details, text)
+      : (getDisplaySummaryParts(result.display) ??
+        config.getCollapsedSummary(details, text));
+  return renderCollapsedSummary(summary, theme, symbols);
+}
+
+function renderSearchToolResult(
+  result: WebToolResult,
+  expanded: boolean,
+  isPartial: boolean,
+  theme: Theme,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
+): Component {
+  return renderWebToolResult(
+    result,
+    { expanded, isPartial },
+    theme,
+    {
+      capability: "search",
+      failureText: "web_search failed",
+      getDetails: (details) => details as WebSearchDetails | undefined,
+      getCollapsedSummary: (details, text) =>
+        details
+          ? buildSearchSummaryParts(details)
+          : { success: getFirstLine(text) ?? "web_search output available" },
+      renderExpanded: (_details, text) => renderMarkdownBlock(text ?? ""),
+    },
+    symbols,
+  );
 }
 
 function renderWebResearchDispatchResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    display?: ToolDisplayDetails;
-    isError?: boolean;
-  },
+  result: WebToolResult,
   expanded: boolean,
   theme: Theme,
   symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Component {
-  const text = extractTextContent(result.content) ?? "Started web research.";
-  const details = isWebResearchRequest(result.details)
-    ? result.details
-    : undefined;
-
-  if (!expanded) {
-    return renderProviderToolResult(
-      {
-        ...result,
-        content: result.content ?? [{ type: "text", text }],
-        details: details
-          ? { tool: "web_research", provider: details.provider }
-          : result.details,
-      },
-      expanded,
-      false,
-      "web_research failed",
-      theme,
-      { symbols },
-    );
-  }
-
-  const expandedText = details
-    ? [
-        text,
-        "",
-        "## Research brief",
-        "",
-        details.input,
-        "",
-        "## Report path",
-        "",
-        `\`${details.outputPath}\``,
-      ].join("\n")
-    : text;
-  return renderMarkdownBlock(expandedText);
+  return renderWebToolResult(
+    result,
+    { expanded },
+    theme,
+    {
+      capability: "research",
+      failureText: "web_research failed",
+      getDetails: (details) =>
+        isWebResearchRequest(details) ? details : undefined,
+      getCollapsedSummary: () => ({ success: "started" }),
+      renderExpanded: (details, text) =>
+        renderMarkdownBlock(
+          details
+            ? renderWebResearchRequestMarkdown(details)
+            : (text ?? "Started web research."),
+        ),
+      preferDisplaySummary: false,
+    },
+    symbols,
+  );
 }
 
 function renderWebResearchResultMessage(
@@ -2476,11 +2528,39 @@ function renderWebResearchResultMessage(
   }
 
   box.addChild(
-    isSuccess
-      ? renderMarkdownBlock(text ?? "")
-      : renderBlockText(text ?? "", theme, "error"),
+    details
+      ? renderMarkdownBlock(renderWebResearchResultMarkdown(details))
+      : isSuccess
+        ? renderMarkdownBlock(text ?? "")
+        : renderBlockText(text ?? "", theme, "error"),
   );
   return box;
+}
+
+function renderWebResearchRequestMarkdown(request: WebResearchRequest): string {
+  return [
+    "### Web research",
+    "",
+    `**Brief:** ${request.input}`,
+    "",
+    "**Status:** running  ",
+    `**Elapsed:** ${formatSummaryElapsed(Date.now() - Date.parse(request.startedAt))}  `,
+    `**Artifact:** \`${request.outputPath}\``,
+  ].join("\n");
+}
+
+function renderWebResearchResultMarkdown(result: WebResearchResult): string {
+  const status = result.status === "completed" ? "completed" : result.status;
+  return [
+    "### Web research",
+    "",
+    `**Brief:** ${result.input}`,
+    "",
+    `**Status:** ${status}  `,
+    `**Duration:** ${formatSummaryElapsed(result.elapsedMs)}  `,
+    `**Artifact:** \`${result.outputPath}\``,
+    ...(result.error ? ["", `**Error:** ${result.error}`] : []),
+  ].join("\n");
 }
 
 function buildWebResearchResultSummaryLine(
@@ -2493,7 +2573,7 @@ function buildWebResearchResultSummaryLine(
 
   if (result.status === "completed") {
     return renderSuccessSummary(
-      `research completed in ${formatSummaryElapsed(result.elapsedMs)} ↳ ${result.outputPath}`,
+      `${formatSummaryElapsed(result.elapsedMs)} · ${basename(result.outputPath)}`,
       theme,
       symbols,
     );
@@ -2533,12 +2613,7 @@ function isWebResearchResult(details: unknown): details is WebResearchResult {
 }
 
 function renderProviderToolResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    display?: ToolDisplayDetails;
-    isError?: boolean;
-  },
+  result: WebToolResult,
   expanded: boolean,
   isPartial: boolean,
   failureText: string,
@@ -2548,39 +2623,22 @@ function renderProviderToolResult(
     symbols?: SummarySymbols;
   } = {},
 ): Component {
-  const text = extractTextContent(result.content);
-  const symbols = options.symbols ?? DEFAULT_SUMMARY_SYMBOLS;
-
-  if (isPartial) {
-    return renderToolProgress(result.display, text, theme);
-  }
-
-  if (result.isError) {
-    return renderFailureText(
-      buildFailureSummary({
-        text,
-        details: result.details as ToolDetails | undefined,
-        capability: toolFromFailureText(failureText),
-        fallback: failureText,
-      }),
-      theme,
-      symbols,
-    );
-  }
-
-  if (expanded) {
-    return options.markdownWhenExpanded
-      ? renderMarkdownBlock(text ?? "")
-      : renderBlockText(text ?? "", theme, "toolOutput");
-  }
-
-  const details = result.details as ToolDetails | undefined;
-  const summary =
-    getDisplaySummaryParts(result.display) ??
-    buildCollapsedProviderToolSummary(details, text);
-  let summaryText = renderSummary(summary, theme, symbols);
-  summaryText += theme.fg("muted", ` (${getExpandHint()})`);
-  return new Text(summaryText, 0, 0);
+  return renderWebToolResult(
+    result,
+    { expanded, isPartial },
+    theme,
+    {
+      capability: toolFromFailureText(failureText),
+      failureText,
+      getDetails: (details) => details as ToolDetails | undefined,
+      getCollapsedSummary: buildCollapsedProviderToolSummary,
+      renderExpanded: (_details, text) =>
+        options.markdownWhenExpanded
+          ? renderMarkdownBlock(text ?? "")
+          : renderBlockText(text ?? "", theme, "toolOutput"),
+    },
+    options.symbols,
+  );
 }
 
 function renderCollapsedProviderToolSummary(
@@ -4296,12 +4354,14 @@ function renderCallHeader(
       ? ` (max ${params.maxResults})`
       : undefined;
 
-  return renderListCallHeader(
-    "web_search",
-    getSearchQueriesForDisplay(params.queries),
+  return renderWebToolCallHeader(
+    {
+      toolName: "web_search",
+      items: getSearchQueriesForDisplay(params.queries),
+      suffix: maxResultsSuffix,
+      quoteSingleItem: true,
+    },
     theme,
-    maxResultsSuffix,
-    { quoteSingleItem: true },
   );
 }
 
