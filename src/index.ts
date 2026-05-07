@@ -2684,15 +2684,7 @@ function renderCollapsedSummary(
 function getDisplaySummaryParts(
   display: ToolDisplayDetails | undefined,
 ): SummaryParts | undefined {
-  const outcome = display?.outcome;
-  if (!outcome) {
-    return undefined;
-  }
-  const failure = outcome.secondary
-    ?.filter((clause) => clause.tone === "failure")
-    .map((clause) => clause.text)
-    .join(", ");
-  return { success: outcome.primary.text, failure: failure || undefined };
+  return display?.outcome;
 }
 
 function buildSearchToolDisplay(details: WebSearchDetails): ToolDisplayDetails {
@@ -2703,13 +2695,7 @@ function buildSearchToolDisplay(details: WebSearchDetails): ToolDisplayDetails {
       id: details.provider,
       label: provider?.label ?? details.provider,
     },
-    outcome: {
-      primary: { tone: "success", text: summary.success },
-      secondary: summary.failure
-        ? [{ tone: "failure", text: summary.failure }]
-        : undefined,
-    },
-    expanded: { kind: "markdown" },
+    outcome: summary,
   };
 }
 
@@ -2754,18 +2740,7 @@ function buildProviderToolDisplay({
         : buildCollapsedProviderToolSummary(details, text);
   return {
     provider: { id: providerId, label: provider?.label ?? providerId },
-    outcome: {
-      primary: { tone: "success", text: summary.success },
-      secondary: summary.failure
-        ? [{ tone: "failure", text: summary.failure }]
-        : undefined,
-    },
-    expanded: {
-      kind:
-        capability === "contents" || capability === "answer"
-          ? "markdown"
-          : "text",
-    },
+    outcome: summary,
   };
 }
 

@@ -347,9 +347,7 @@ describe("web_research renderer", () => {
           },
           display: {
             provider: { id: "gemini", label: "Gemini" },
-            outcome: {
-              primary: { tone: "success", text: "research started" },
-            },
+            outcome: { success: "research started" },
           },
         },
         false,
@@ -630,8 +628,8 @@ describe("provider tool summaries", () => {
           },
           display: {
             outcome: {
-              primary: { tone: "success", text: "7.3KB (truncated)" },
-              secondary: [{ tone: "failure", text: "1 of 2 pages failed" }],
+              success: "7.3KB (truncated)",
+              failure: "1 of 2 pages failed",
             },
           },
         },

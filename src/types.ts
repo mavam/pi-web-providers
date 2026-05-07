@@ -31,21 +31,9 @@ export interface SearchSettings {
   ttlMs?: number;
 }
 
-export type SummaryTone = "success" | "failure" | "warning" | "neutral";
-
-export interface SummaryClause {
-  tone: SummaryTone;
-  text: string;
-}
-
 export interface ToolOutcomeSummary {
-  primary: SummaryClause;
-  secondary?: SummaryClause[];
-}
-
-export interface ToolProgressSummary {
-  action: string;
-  context?: string;
+  success: string;
+  failure?: string;
 }
 
 export interface ToolDisplayDetails {
@@ -54,9 +42,8 @@ export interface ToolDisplayDetails {
     label: string;
   };
   outcome?: ToolOutcomeSummary;
-  progress?: ToolProgressSummary;
-  expanded?: {
-    kind: "markdown" | "text";
+  progress?: {
+    action: string;
   };
 }
 
