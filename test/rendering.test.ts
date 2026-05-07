@@ -245,6 +245,71 @@ describe("web_answer renderer", () => {
     );
     expect(rendered).not.toContain("provider=");
   });
+
+  it("renders a single-answer excerpt in collapsed results", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "example.com is reserved for documentation and examples.\n\nSources:\n1. IANA\n   https://www.iana.org/help/example-domains",
+            },
+          ],
+          details: {
+            tool: "web_answer",
+            provider: "gemini",
+            queryCount: 1,
+            failedQueryCount: 0,
+          },
+        },
+        false,
+        false,
+        "web_answer failed",
+        createTheme(),
+      )!,
+      200,
+    );
+
+    expect(rendered).toContain(
+      "✔ example.com is reserved for documentation and examples.",
+    );
+    expect(rendered).toContain("ctrl+o to expand");
+    expect(rendered).not.toContain("✔ Answer");
+    expect(rendered).not.toContain("Sources");
+    expect(rendered).not.toContain("…");
+  });
+
+  it("adds an ellipsis only when the answer excerpt is truncated", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "ACME platforms help teams route, normalize, enrich, transform, and govern operational data across migrations, analytics workflows, and compliance reporting.",
+            },
+          ],
+          details: {
+            tool: "web_answer",
+            provider: "gemini",
+            queryCount: 1,
+            failedQueryCount: 0,
+          },
+        },
+        false,
+        false,
+        "web_answer failed",
+        createTheme(),
+      )!,
+      200,
+    );
+
+    expect(rendered).toContain("✔ ACME platforms help teams route");
+    expect(rendered).toContain("operational data across m…");
+    expect(rendered).not.toContain("analytics workflows");
+    expect(rendered).not.toContain("...");
+  });
 });
 
 describe("web_research renderer", () => {

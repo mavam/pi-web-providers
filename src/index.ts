@@ -100,6 +100,7 @@ import type {
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
 const MAX_SEARCH_QUERIES = 10;
+const ANSWER_EXCERPT_MAX_LENGTH = 100;
 const RESEARCH_HEARTBEAT_MS = 15000;
 const WEB_RESEARCH_RESULT_MESSAGE_TYPE = "web-research-result";
 const WEB_RESEARCH_WIDGET_KEY = "web-research-jobs";
@@ -2596,12 +2597,8 @@ function buildCollapsedProviderToolSummary(
   details: ToolDetails | undefined,
   text: string | undefined,
 ): SummaryParts {
-  if (
-    details?.tool === "web_answer" &&
-    typeof details.queryCount === "number" &&
-    details.queryCount > 1
-  ) {
-    return buildAnswerSummary(details);
+  if (details?.tool === "web_answer") {
+    return buildAnswerCollapsedSummary(details, text);
   }
 
   if (details?.tool === "web_contents") {
@@ -2751,6 +2748,20 @@ function buildContentsDisplaySummary(
   return { success };
 }
 
+function buildAnswerCollapsedSummary(
+  details: ToolDetails,
+  text: string | undefined,
+): SummaryParts {
+  if (
+    typeof details.queryCount === "number" &&
+    (details.queryCount > 1 || (details.failedQueryCount ?? 0) > 0)
+  ) {
+    return buildAnswerSummary(details);
+  }
+
+  return { success: buildAnswerExcerpt(text) ?? "Answer output available" };
+}
+
 function buildAnswerSummary(details: ToolDetails): SummaryParts {
   const queryCount = details.queryCount ?? 0;
   const failedQueryCount = details.failedQueryCount ?? 0;
@@ -2765,6 +2776,19 @@ function buildAnswerSummary(details: ToolDetails): SummaryParts {
   }
 
   return { success };
+}
+
+function buildAnswerExcerpt(text: string | undefined): string | undefined {
+  const excerpt = getFirstLine(text);
+  if (!excerpt) {
+    return undefined;
+  }
+
+  if (excerpt.length <= ANSWER_EXCERPT_MAX_LENGTH) {
+    return excerpt;
+  }
+
+  return `${excerpt.slice(0, ANSWER_EXCERPT_MAX_LENGTH - 1).trimEnd()}…`;
 }
 
 function buildContentsSummary(
@@ -2807,10 +2831,6 @@ function getCompactProviderToolSummary(
     typeof details.itemCount === "number"
   ) {
     return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
-  }
-
-  if (details.tool === "web_answer") {
-    return "Answer";
   }
 
   if (details.tool === "web_research") {
