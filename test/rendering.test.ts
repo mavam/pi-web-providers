@@ -92,7 +92,7 @@ describe("web_search renderer", () => {
     expect(rendered).not.toContain("maxResults=");
   });
 
-  it("summarizes single-query search results with the resolved provider", () => {
+  it("summarizes single-query search results without provider noise", () => {
     const summary = renderComponentText(
       __test__.renderCollapsedSearchSummary(
         {
@@ -108,7 +108,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 results via Exa");
+    expect(summary).toContain("✔ 3 results");
     expect(summary).toContain("to expand");
     expect(summary).not.toContain("https://exa.ai/docs");
   });
@@ -129,7 +129,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("2 queries, 5 results via Exa");
+    expect(summary).toContain("✔ 5 results");
     expect(summary).toContain("to expand");
   });
 
@@ -149,7 +149,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("3 queries, 4 results via Exa, 1 failed");
+    expect(summary).toContain("✔ 4 results, ✘ 1 of 3 queries failed");
     expect(summary).toContain("to expand");
   });
 
@@ -163,7 +163,7 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("2 queries, 1 result, 1 failed");
+    expect(summary).toContain("✔ 1 result, ✘ 1 of 2 queries failed");
     expect(summary).not.toContain("undefined");
   });
 
@@ -177,8 +177,32 @@ describe("web_search renderer", () => {
       120,
     );
 
-    expect(summary).toContain("1 result");
+    expect(summary).toContain("✔ 1 result");
     expect(summary).not.toContain("undefined");
+  });
+
+  it("renders failed searches as one-line provider failures", () => {
+    const rendered = renderComponentText(
+      __test__.renderSearchToolResult(
+        {
+          content: [{ type: "text", text: "Exa: rate limited." }],
+          details: {
+            tool: "web_search",
+            queryCount: 1,
+            failedQueryCount: 1,
+            provider: "exa",
+            resultCount: 0,
+          },
+          isError: true,
+        },
+        false,
+        false,
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered.trimEnd()).toBe("✘ Exa search failed: rate limited");
   });
 });
 
@@ -221,6 +245,71 @@ describe("web_answer renderer", () => {
     );
     expect(rendered).not.toContain("provider=");
   });
+
+  it("renders a single-answer excerpt in collapsed results", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "example.com is reserved for documentation and examples.\n\nSources:\n1. IANA\n   https://www.iana.org/help/example-domains",
+            },
+          ],
+          details: {
+            tool: "web_answer",
+            provider: "gemini",
+            queryCount: 1,
+            failedQueryCount: 0,
+          },
+        },
+        false,
+        false,
+        "web_answer failed",
+        createTheme(),
+      )!,
+      200,
+    );
+
+    expect(rendered).toContain(
+      "✔ example.com is reserved for documentation and examples.",
+    );
+    expect(rendered).toContain("ctrl+o to expand");
+    expect(rendered).not.toContain("✔ Answer");
+    expect(rendered).not.toContain("Sources");
+    expect(rendered).not.toContain("…");
+  });
+
+  it("adds an ellipsis only when the answer excerpt is truncated", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "ACME platforms help teams route, normalize, enrich, transform, and govern operational data across migrations, analytics workflows, and compliance reporting.",
+            },
+          ],
+          details: {
+            tool: "web_answer",
+            provider: "gemini",
+            queryCount: 1,
+            failedQueryCount: 0,
+          },
+        },
+        false,
+        false,
+        "web_answer failed",
+        createTheme(),
+      )!,
+      200,
+    );
+
+    expect(rendered).toContain("✔ ACME platforms help teams route");
+    expect(rendered).toContain("operational data across m…");
+    expect(rendered).not.toContain("analytics workflows");
+    expect(rendered).not.toContain("...");
+  });
 });
 
 describe("web_research renderer", () => {
@@ -236,10 +325,10 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered.startsWith("web_research ACME platform use cases:")).toBe(
+    expect(rendered.startsWith('web_research "ACME platform use cases:')).toBe(
       true,
     );
-    expect(rendered).not.toContain('web_research "');
+    expect(rendered).toContain('web_research "');
     expect(rendered).not.toContain("provider=");
   });
 
@@ -256,6 +345,10 @@ describe("web_research renderer", () => {
             outputPath: "/tmp/report.md",
             startedAt: "2026-03-31T12:00:00.000Z",
           },
+          display: {
+            provider: { id: "gemini", label: "Gemini" },
+            outcome: { success: "research started" },
+          },
         },
         false,
         createTheme(),
@@ -263,8 +356,9 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Started web research via Gemini");
+    expect(rendered).toContain("✔ started");
     expect(rendered).toContain("ctrl+o to expand");
+    expect(rendered.split("\n")[0]).toContain("✔ started");
   });
 
   it("keeps long research prompts compact in the call header", () => {
@@ -279,7 +373,7 @@ describe("web_research renderer", () => {
       60,
     );
 
-    expect(rendered).toContain("web_research What is pi coding agent?");
+    expect(rendered).toContain('web_research "What is pi coding agent?');
     expect(rendered).toContain("...");
     expect(rendered).not.toContain("typical workflows.");
   });
@@ -305,12 +399,12 @@ describe("web_research renderer", () => {
       200,
     );
 
-    expect(rendered).toContain("Started web research via Gemini.");
-    expect(rendered).toContain("Research brief");
+    expect(rendered).toContain("Web research");
+    expect(rendered).toContain("Brief");
     expect(rendered).toContain(
       "ACME platform landscape: What are the main categories of products in this space, and how do they compare on positioning, capabilities, and deployment model?",
     );
-    expect(rendered).toContain("Report path");
+    expect(rendered).toContain("Artifact");
     expect(rendered).toContain("/tmp/report.md");
   });
 
@@ -337,12 +431,7 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Web research completed via Gemini");
-    expect(rendered).toContain("○ start: 2026-03-31T12:00:00.000Z");
-    expect(rendered).toContain("◴ duration: 5m");
-    expect(rendered).toContain(
-      "↳ file: /tmp/project/.pi/artifacts/research/report.md",
-    );
+    expect(rendered).toContain("✔ 5m · report.md");
     expect(rendered).toContain("ctrl+o to expand");
     expect(rendered).not.toContain("# Web research report");
   });
@@ -370,9 +459,9 @@ describe("web_research renderer", () => {
       120,
     );
 
-    expect(rendered).toContain("Web research report");
+    expect(rendered).toContain("Web research");
     expect(rendered).toContain("Investigate the topic");
-    expect(rendered).toContain("Item one");
+    expect(rendered).toContain("Artifact");
     expect(rendered).not.toContain("○ start:");
   });
 
@@ -403,6 +492,40 @@ describe("web_research renderer", () => {
     expect(rendered).toContain("Gemini: rate limited.");
     expect(rendered).not.toContain("○ start:");
   });
+
+  it("renders collapsed failed completion messages on one line", () => {
+    const rendered = renderComponentText(
+      __test__.renderWebResearchResultMessage(
+        {
+          content: `Gemini: rate limited.`,
+          details: {
+            tool: "web_research",
+            id: "job-1",
+            provider: "gemini",
+            input: "Investigate the topic",
+            outputPath: "/tmp/project/.pi/artifacts/research/report.md",
+            startedAt: "2026-03-31T12:00:00.000Z",
+            completedAt: "2026-03-31T12:02:00.000Z",
+            elapsedMs: 120000,
+            status: "failed",
+            error: "Gemini: rate limited.",
+          },
+        },
+        { expanded: false },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain(
+      "✘ Gemini research failed after 2m: rate limited",
+    );
+    const summaryLines = rendered
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+    expect(summaryLines).toHaveLength(1);
+  });
 });
 
 describe("partial tool rendering", () => {
@@ -412,6 +535,10 @@ describe("partial tool rendering", () => {
         {
           content: [{ type: "text", text: "Searching via Exa: exa sdk" }],
           details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Searching" },
+          },
         },
         false,
         true,
@@ -420,17 +547,20 @@ describe("partial tool rendering", () => {
       120,
     );
 
-    expect(rendered).toContain("Searching via Exa: exa sdk");
+    expect(rendered).toContain("Searching via Exa");
+    expect(rendered).not.toContain("exa sdk");
   });
 
-  it("shows provider tool progress updates in warning text", () => {
+  it("shows provider tool progress updates from display details", () => {
     const rendered = renderComponentText(
       __test__.renderProviderToolResult(
         {
-          content: [
-            { type: "text", text: "Fetching contents via Exa for 2 URL(s)" },
-          ],
+          content: [{ type: "text", text: "raw progress text" }],
           details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Fetching 2 pages" },
+          },
         },
         false,
         true,
@@ -440,7 +570,35 @@ describe("partial tool rendering", () => {
       120,
     );
 
-    expect(rendered).toContain("Fetching contents via Exa for 2 URL(s)");
+    expect(rendered).toContain("Fetching 2 pages via Exa");
+    expect(rendered).not.toContain("raw progress text");
+  });
+
+  it("shows batched progress counts before the dim provider suffix", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [
+            {
+              type: "text",
+              text: "raw progress text",
+            },
+          ],
+          details: {},
+          display: {
+            provider: { id: "exa", label: "Exa" },
+            progress: { action: "Fetching 1/2 pages" },
+          },
+        },
+        false,
+        true,
+        "web_contents failed",
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered).toContain("Fetching 1/2 pages via Exa");
   });
 });
 
@@ -455,7 +613,35 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("2 pages via Gemini");
+    expect(summary).toBe("2 pages");
+  });
+
+  it("summarizes contents bytes and mixed page failures", () => {
+    const rendered = renderComponentText(
+      __test__.renderProviderToolResult(
+        {
+          content: [{ type: "text", text: "contents" }],
+          details: {
+            tool: "web_contents",
+            provider: "exa",
+            itemCount: 2,
+          },
+          display: {
+            outcome: {
+              success: "7.3KB (truncated)",
+              failure: "1 of 2 pages failed",
+            },
+          },
+        },
+        false,
+        false,
+        "web_contents failed",
+        createTheme(),
+      )!,
+      120,
+    );
+
+    expect(rendered).toContain("✔ 7.3KB (truncated), ✘ 1 of 2 pages failed");
   });
 
   it("keeps the dedicated multi-question answer summary format", () => {
@@ -469,7 +655,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("3 questions via Gemini, 1 failed");
+    expect(summary).toBe("2 answers, 1 of 3 questions failed");
   });
 
   it("normalizes research summaries without duplicating the provider", () => {
@@ -481,7 +667,7 @@ describe("provider tool summaries", () => {
       undefined,
     );
 
-    expect(summary).toBe("Research via Gemini");
+    expect(summary).toBe("Research");
   });
 });
 

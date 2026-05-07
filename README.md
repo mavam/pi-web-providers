@@ -143,6 +143,8 @@ investigations.
 When you ask more than one question, the response is grouped into per-question
 sections. Batch related questions when the answers belong together; split them
 into sibling calls when earlier independent answers can unblock the next step.
+Collapsed results show a short answer preview; expand the tool result to read the
+full answer.
 
 <details>
 <summary><strong>Parameters and behavior</strong></summary>

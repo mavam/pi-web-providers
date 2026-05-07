@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -73,6 +73,14 @@ import {
   PROVIDER_LIST,
   PROVIDERS_BY_ID,
 } from "./providers/index.js";
+import {
+  buildCollapsedProviderToolSummary as buildDisplayCollapsedProviderToolSummary,
+  buildCollapsedProviderToolSummaryParts as buildDisplayCollapsedProviderToolSummaryParts,
+  buildProgressDisplay as buildDisplayProgress,
+  buildProviderToolDisplay as buildDisplayProviderToolDisplay,
+  buildSearchSummaryParts as buildDisplaySearchSummaryParts,
+  buildSearchToolDisplay as buildDisplaySearchToolDisplay,
+} from "./tool-display.js";
 import type {
   Claude,
   Codex,
@@ -88,6 +96,7 @@ import type {
   Settings,
   Tool,
   ToolDetails,
+  ToolDisplayDetails,
   ToolOutput,
   Valyu,
   WebProviders,
@@ -116,10 +125,13 @@ type ToolUpdateCallback =
   | ((update: {
       content: Array<{ type: "text"; text: string }>;
       details: {};
+      display?: ToolDisplayDetails;
     }) => void)
   | undefined;
 
-type ProgressCallback = ((message: string) => void) | undefined;
+type ProgressCallback =
+  | ((message: string, display?: ToolDisplayDetails) => void)
+  | undefined;
 
 interface ToolExecutionContext {
   cwd: string;
@@ -150,6 +162,13 @@ interface ResearchToolRequest {
   input: string;
   options?: ToolOptionsFor<"research">;
 }
+
+const DEFAULT_SUMMARY_SYMBOLS = {
+  success: "✔",
+  failure: "✘",
+};
+
+type SummarySymbols = typeof DEFAULT_SUMMARY_SYMBOLS;
 
 export default function webProvidersExtension(pi: ExtensionAPI) {
   const activeWebResearchRequests = new Map<string, WebResearchRequest>();
@@ -205,7 +224,8 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
   if ("registerMessageRenderer" in pi) {
     pi.registerMessageRenderer(
       WEB_RESEARCH_RESULT_MESSAGE_TYPE,
-      renderWebResearchResultMessage,
+      (message, state, theme) =>
+        renderWebResearchResultMessage(message, state, theme),
     );
   }
 
@@ -844,6 +864,7 @@ async function executeSearchToolInternal({
     searchQueries.length > 1
       ? createBatchCompletionReporter(
           "Searching",
+          provider.id,
           provider.label,
           searchQueries.length,
           progressReporter.report,
@@ -898,7 +919,7 @@ async function executeSearchToolInternal({
   }
 
   if (outcomes.every((outcome) => outcome.error !== undefined)) {
-    throw buildSearchBatchError(outcomes);
+    throw buildSearchBatchError(outcomes, provider.label);
   }
 
   const prefetch =
@@ -916,9 +937,11 @@ async function executeSearchToolInternal({
     "web-search",
   );
 
+  const details = buildWebSearchDetails(provider.id, outcomes);
   return {
     content: [{ type: "text" as const, text: rendered }],
-    details: buildWebSearchDetails(provider.id, outcomes),
+    details,
+    display: buildSearchToolDisplay(details),
   };
 }
 
@@ -1015,10 +1038,19 @@ type SearchQueryOutcome =
   | { query: string; response: SearchResponse; error?: undefined }
   | { query: string; error: string; response?: undefined };
 
-function buildSearchBatchError(outcomes: SearchQueryOutcome[]): Error {
+function buildSearchBatchError(
+  outcomes: SearchQueryOutcome[],
+  providerLabel: string,
+): Error {
   const failed = outcomes.filter((outcome) => outcome.error !== undefined);
   if (failed.length === 1) {
-    return new Error(failed[0]?.error ?? "web_search failed.");
+    return new Error(
+      formatProviderCapabilityFailure(
+        providerLabel,
+        "search",
+        failed[0]?.error ?? "",
+      ),
+    );
   }
 
   const summary = failed
@@ -1028,7 +1060,7 @@ function buildSearchBatchError(outcomes: SearchQueryOutcome[]): Error {
     )
     .join("; ");
   return new Error(
-    `All ${failed.length} web_search queries failed: ${summary}`,
+    `${providerLabel} search failed for ${failed.length} queries: ${summary}`,
   );
 }
 
@@ -1143,6 +1175,7 @@ async function executeAnswerToolInternal({
     answerQueries.length > 1
       ? createBatchCompletionReporter(
           "Answering",
+          provider.id,
           provider.label,
           answerQueries.length,
           progressReporter.report,
@@ -1190,7 +1223,7 @@ async function executeAnswerToolInternal({
   }
 
   if (outcomes.every((outcome) => outcome.error !== undefined)) {
-    throw buildAnswerBatchError(outcomes);
+    throw buildAnswerBatchError(outcomes, provider.label);
   }
 
   const text = await truncateAndSave(
@@ -1202,13 +1235,28 @@ async function executeAnswerToolInternal({
   return {
     content: [{ type: "text" as const, text }],
     details,
+    display: buildProviderToolDisplay({
+      capability: "answer",
+      providerId: provider.id,
+      details,
+      text,
+    }),
   };
 }
 
-function buildAnswerBatchError(outcomes: AnswerQueryOutcome[]): Error {
+function buildAnswerBatchError(
+  outcomes: AnswerQueryOutcome[],
+  providerLabel: string,
+): Error {
   const failed = outcomes.filter((outcome) => outcome.error !== undefined);
   if (failed.length === 1) {
-    return new Error(failed[0]?.error ?? "web_answer failed.");
+    return new Error(
+      formatProviderCapabilityFailure(
+        providerLabel,
+        "answer",
+        failed[0]?.error ?? "",
+      ),
+    );
   }
 
   const summary = failed
@@ -1218,7 +1266,7 @@ function buildAnswerBatchError(outcomes: AnswerQueryOutcome[]): Error {
     )
     .join("; ");
   return new Error(
-    `All ${failed.length} web_answer queries failed: ${summary}`,
+    `${providerLabel} answer failed for ${failed.length} questions: ${summary}`,
   );
 }
 
@@ -1289,7 +1337,7 @@ async function executeProviderOperation({
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
   urls?: string[];
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<"contents">;
 }): Promise<ContentsResponse>;
 async function executeProviderOperation({
@@ -1314,7 +1362,7 @@ async function executeProviderOperation({
   options: Record<string, unknown> | undefined;
   query?: string;
   input?: string;
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<Exclude<Tool, "search" | "contents">>;
 }): Promise<ToolOutput>;
 async function executeProviderOperation({
@@ -1341,7 +1389,7 @@ async function executeProviderOperation({
   urls?: string[];
   query?: string;
   input?: string;
-  onProgress?: (message: string) => void;
+  onProgress?: ProgressCallback;
   executionOverride?: ProviderExecution<Exclude<Tool, "search">>;
 }): Promise<ContentsResponse | ToolOutput> {
   const request = buildOperationRequest(capability, {
@@ -1368,13 +1416,24 @@ async function executeProviderOperation({
   }
 
   if (capability === "contents") {
+    const urlCount = (urls ?? []).length;
     onProgress?.(
-      `Fetching contents via ${provider.label} for ${(urls ?? []).length} URL(s)`,
+      `Fetching contents via ${provider.label} for ${urlCount} URL(s)`,
+      buildProgressDisplay(
+        provider.id,
+        urlCount === 1 ? "Fetching page" : `Fetching ${urlCount} pages`,
+      ),
     );
   } else if (capability === "answer") {
-    onProgress?.(`Answering via ${provider.label}`);
+    onProgress?.(
+      `Answering via ${provider.label}`,
+      buildProgressDisplay(provider.id, "Answering"),
+    );
   } else if (capability === "research") {
-    onProgress?.(`Researching via ${provider.label}`);
+    onProgress?.(
+      `Researching via ${provider.label}`,
+      buildProgressDisplay(provider.id, "Researching"),
+    );
   }
 
   const result = executionOverride
@@ -1513,23 +1572,46 @@ async function executeProviderToolInternal({
     progressReporter.stop();
   }
 
-  const details: ToolDetails = {
-    tool: `web_${capability}`,
-    provider: response.provider,
-    itemCount: isContentsResponse(response)
-      ? response.answers.length
-      : response.itemCount,
-  };
-  const text = await truncateAndSave(
+  const rendered = await truncateAndSaveWithMetadata(
     isContentsResponse(response)
       ? formatContentsResponse(response)
       : response.text,
     capability,
   );
+  const details: ToolDetails = isContentsResponse(response)
+    ? {
+        tool: "web_contents",
+        provider: response.provider,
+        itemCount: response.answers.length,
+      }
+    : capability === "answer"
+      ? {
+          tool: "web_answer",
+          provider: response.provider,
+          itemCount: response.itemCount,
+          queryCount: 1,
+          failedQueryCount: 0,
+        }
+      : {
+          tool: "web_research",
+          provider: response.provider,
+        };
 
   return {
-    content: [{ type: "text" as const, text }],
+    content: [{ type: "text" as const, text: rendered.text }],
     details,
+    display: buildProviderToolDisplay({
+      capability,
+      providerId: response.provider,
+      details,
+      text: rendered.text,
+      outputBytes: capability === "contents" ? rendered.totalBytes : undefined,
+      outputTruncated:
+        capability === "contents" ? rendered.truncated : undefined,
+      failedItemCount: isContentsResponse(response)
+        ? response.answers.filter((answer) => answer.error !== undefined).length
+        : undefined,
+    }),
   };
 }
 
@@ -1621,6 +1703,12 @@ async function dispatchWebResearchInternal({
       },
     ],
     details: request,
+    display: buildProviderToolDisplay({
+      capability: "research",
+      providerId: provider.id,
+      details: { tool: "web_research", provider: provider.id },
+      text: "started",
+    }),
   };
 }
 
@@ -1946,7 +2034,7 @@ async function executeBatchedContentsTool({
   signal: AbortSignal | null | undefined;
   options: Record<string, unknown> | undefined;
   urls: string[];
-  progressReport: ((message: string) => void) | undefined;
+  progressReport: ProgressCallback;
   executionOverrides?: ProviderExecution<"contents">[];
 }): Promise<ContentsResponse> {
   if (
@@ -1960,6 +2048,7 @@ async function executeBatchedContentsTool({
 
   const batchProgress = createBatchCompletionReporter(
     "Fetching contents",
+    provider.id,
     provider.label,
     urls.length,
     progressReport,
@@ -2026,8 +2115,12 @@ async function executeBatchedContentsTool({
   if (successful.length === 0 && failures.length > 0) {
     throw new Error(
       failures.length === 1
-        ? (failures[0]?.error ?? "web_contents failed.")
-        : `web_contents failed for all ${failures.length} URL(s): ${failures
+        ? formatProviderCapabilityFailure(
+            provider.label,
+            "contents",
+            failures[0]?.error ?? "",
+          )
+        : `${provider.label} fetch failed for ${failures.length} pages: ${failures
             .map(
               (failure, index) =>
                 `${index + 1}. ${failure.url} — ${failure.error}`,
@@ -2121,10 +2214,11 @@ function createProgressEmitter(onUpdate: ToolUpdateCallback): ProgressCallback {
     return undefined;
   }
 
-  return (message: string) => {
+  return (message: string, display?: ToolDisplayDetails) => {
     onUpdate({
       content: [{ type: "text", text: message }],
       details: {},
+      display,
     });
   };
 }
@@ -2141,7 +2235,8 @@ function createToolProgressReporter(
     return { report: undefined, stop: () => {} };
   }
 
-  const emit = (message: string) => progress(message);
+  const emit = (message: string, display?: ToolDisplayDetails) =>
+    progress(message, display);
 
   const startedAt = Date.now();
   let lastUpdateAt = startedAt;
@@ -2155,15 +2250,18 @@ function createToolProgressReporter(
 
       const providerLabel = PROVIDERS_BY_ID[providerId]?.label ?? providerId;
       const elapsed = formatElapsed(Date.now() - startedAt);
-      emit(`Researching via ${providerLabel} (${elapsed} elapsed)`);
+      emit(
+        `Researching via ${providerLabel} (${elapsed} elapsed)`,
+        buildProgressDisplay(providerId, `Researching ${elapsed}`),
+      );
       lastUpdateAt = Date.now();
     }, RESEARCH_HEARTBEAT_MS);
   }
 
   return {
-    report: (message: string) => {
+    report: (message: string, display?: ToolDisplayDetails) => {
       lastUpdateAt = Date.now();
-      emit(message);
+      emit(message, display);
     },
     stop: () => {
       if (timer) {
@@ -2270,74 +2368,127 @@ function renderResearchCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderListCallHeader("web_research", [params.input], theme);
+  return renderListCallHeader(
+    "web_research",
+    [params.input],
+    theme,
+    undefined,
+    { quoteSingleItem: true },
+  );
+}
+
+type WebToolResult = {
+  content?: Array<{ type: string; text?: string }>;
+  details?: unknown;
+  display?: ToolDisplayDetails;
+  isError?: boolean;
+};
+
+interface WebToolRenderConfig<TDetails> {
+  capability: Tool;
+  failureText: string;
+  getDetails(details: unknown): TDetails | undefined;
+  getCollapsedSummary(
+    details: TDetails | undefined,
+    text: string | undefined,
+  ): SummaryParts;
+  renderExpanded(
+    details: TDetails | undefined,
+    text: string | undefined,
+  ): Component;
+  preferDisplaySummary?: boolean;
+}
+
+function renderWebToolResult<TDetails>(
+  result: WebToolResult,
+  state: { expanded: boolean; isPartial?: boolean },
+  theme: Theme,
+  config: WebToolRenderConfig<TDetails>,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
+): Component {
+  const text = extractTextContent(result.content);
+
+  if (state.isPartial) {
+    return renderToolProgress(result.display, text, theme);
+  }
+
+  if (result.isError) {
+    return renderFailureText(
+      buildFailureSummary({
+        text,
+        details: result.details as ToolDetails | WebSearchDetails | undefined,
+        capability: config.capability,
+        fallback: config.failureText,
+      }),
+      theme,
+      symbols,
+    );
+  }
+
+  const details = config.getDetails(result.details);
+  if (state.expanded) {
+    return config.renderExpanded(details, text);
+  }
+
+  const summary =
+    config.preferDisplaySummary === false
+      ? config.getCollapsedSummary(details, text)
+      : (getDisplaySummaryParts(result.display) ??
+        config.getCollapsedSummary(details, text));
+  return renderCollapsedSummary(summary, theme, symbols);
 }
 
 function renderSearchToolResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    isError?: boolean;
-  },
+  result: WebToolResult,
   expanded: boolean,
   isPartial: boolean,
   theme: Theme,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Component {
-  const text = extractTextContent(result.content);
-  const isError = Boolean((result as { isError?: boolean }).isError);
-
-  if (isPartial) {
-    return renderSimpleText(text ?? "Working…", theme, "warning");
-  }
-
-  if (isError) {
-    return renderBlockText(text ?? "web_search failed", theme, "error");
-  }
-
-  const details = result.details as WebSearchDetails | undefined;
-  if (!details || expanded) {
-    return renderMarkdownBlock(text ?? "");
-  }
-
-  return renderCollapsedSearchSummary(details, text, theme);
+  return renderWebToolResult(
+    result,
+    { expanded, isPartial },
+    theme,
+    {
+      capability: "search",
+      failureText: "web_search failed",
+      getDetails: (details) => details as WebSearchDetails | undefined,
+      getCollapsedSummary: (details, text) =>
+        details
+          ? buildSearchSummaryParts(details)
+          : { success: getFirstLine(text) ?? "web_search output available" },
+      renderExpanded: (_details, text) => renderMarkdownBlock(text ?? ""),
+    },
+    symbols,
+  );
 }
 
 function renderWebResearchDispatchResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-  },
+  result: WebToolResult,
   expanded: boolean,
   theme: Theme,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Component {
-  const text = extractTextContent(result.content) ?? "Started web research.";
-  const details = isWebResearchRequest(result.details)
-    ? result.details
-    : undefined;
-
-  if (expanded) {
-    const expandedText = details
-      ? [
-          text,
-          "",
-          "## Research brief",
-          "",
-          details.input,
-          "",
-          "## Report path",
-          "",
-          `\`${details.outputPath}\``,
-        ].join("\n")
-      : text;
-    return renderMarkdownBlock(expandedText);
-  }
-
-  const summary = details
-    ? `Started web research via ${PROVIDERS_BY_ID[details.provider]?.label ?? details.provider}`
-    : text;
-  let summaryText = theme.fg("success", summary);
-  summaryText += theme.fg("muted", ` (${getExpandHint()})`);
-  return new Text(summaryText, 0, 0);
+  return renderWebToolResult(
+    result,
+    { expanded },
+    theme,
+    {
+      capability: "research",
+      failureText: "web_research failed",
+      getDetails: (details) =>
+        isWebResearchRequest(details) ? details : undefined,
+      getCollapsedSummary: () => ({ success: "started" }),
+      renderExpanded: (details, text) =>
+        renderMarkdownBlock(
+          details
+            ? renderWebResearchRequestMarkdown(details)
+            : (text ?? "Started web research."),
+        ),
+      preferDisplaySummary: false,
+    },
+    symbols,
+  );
 }
 
 function renderWebResearchResultMessage(
@@ -2347,6 +2498,7 @@ function renderWebResearchResultMessage(
   },
   { expanded }: { expanded: boolean },
   theme: Theme,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Component {
   const text =
     typeof message.content === "string"
@@ -2360,45 +2512,75 @@ function renderWebResearchResultMessage(
   const box = new Box(1, 1, (value) => theme.bg("customMessageBg", value));
 
   if (!expanded) {
-    const lines = details
-      ? buildWebResearchResultSummaryLines(details, theme)
-      : [theme.fg(accent, "Web research update")];
-    lines.push(theme.fg("muted", `(${getExpandHint()})`));
-    box.addChild(new Text(lines.join("\n"), 0, 0));
+    const summary = details
+      ? buildWebResearchResultSummaryLine(details, theme, symbols)
+      : theme.fg(accent, "Web research update");
+    box.addChild(
+      new Text(`${summary}${theme.fg("muted", ` (${getExpandHint()})`)}`, 0, 0),
+    );
     return box;
   }
 
   box.addChild(
-    isSuccess
-      ? renderMarkdownBlock(text ?? "")
-      : renderBlockText(text ?? "", theme, "error"),
+    details
+      ? renderMarkdownBlock(renderWebResearchResultMarkdown(details))
+      : isSuccess
+        ? renderMarkdownBlock(text ?? "")
+        : renderBlockText(text ?? "", theme, "error"),
   );
   return box;
 }
 
-function buildWebResearchResultSummaryLines(
+function renderWebResearchRequestMarkdown(request: WebResearchRequest): string {
+  return [
+    "### Web research",
+    "",
+    `**Brief:** ${request.input}`,
+    "",
+    "**Status:** running  ",
+    `**Elapsed:** ${formatSummaryElapsed(Date.now() - Date.parse(request.startedAt))}  `,
+    `**Artifact:** \`${request.outputPath}\``,
+  ].join("\n");
+}
+
+function renderWebResearchResultMarkdown(result: WebResearchResult): string {
+  const status = result.status === "completed" ? "completed" : result.status;
+  return [
+    "### Web research",
+    "",
+    `**Brief:** ${result.input}`,
+    "",
+    `**Status:** ${status}  `,
+    `**Duration:** ${formatSummaryElapsed(result.elapsedMs)}  `,
+    `**Artifact:** \`${result.outputPath}\``,
+    ...(result.error ? ["", `**Error:** ${result.error}`] : []),
+  ].join("\n");
+}
+
+function buildWebResearchResultSummaryLine(
   result: WebResearchResult,
   theme: Pick<Theme, "fg">,
-): string[] {
+  symbols: SummarySymbols,
+): string {
   const providerLabel =
     PROVIDERS_BY_ID[result.provider]?.label ?? result.provider;
-  const statusLine =
-    result.status === "completed"
-      ? `Web research completed via ${providerLabel}`
-      : `Web research failed via ${providerLabel}`;
 
-  const lines = [
-    theme.fg(result.status === "completed" ? "success" : "error", statusLine),
-  ];
-  lines.push(
-    theme.fg("muted", `○ start: ${result.startedAt}`),
-    theme.fg("muted", `◴ duration: ${formatElapsed(result.elapsedMs)}`),
-    theme.fg("muted", `↳ file: ${result.outputPath}`),
-  );
-  if (result.error) {
-    lines.push(theme.fg("muted", `✕ error: ${result.error}`));
+  if (result.status === "completed") {
+    return renderSuccessSummary(
+      `${formatSummaryElapsed(result.elapsedMs)} · ${basename(result.outputPath)}`,
+      theme,
+      symbols,
+    );
   }
-  return lines;
+
+  const statusText =
+    result.status === "cancelled"
+      ? `${providerLabel} research canceled after ${formatSummaryElapsed(result.elapsedMs)}`
+      : `${providerLabel} research failed after ${formatSummaryElapsed(result.elapsedMs)}`;
+  const errorSuffix = result.error
+    ? `: ${normalizeProviderFailureDetail(providerLabel, result.error)}`
+    : "";
+  return renderFailureSummary(`${statusText}${errorSuffix}`, theme, symbols);
 }
 
 function isWebResearchRequest(details: unknown): details is WebResearchRequest {
@@ -2425,95 +2607,101 @@ function isWebResearchResult(details: unknown): details is WebResearchResult {
 }
 
 function renderProviderToolResult(
-  result: {
-    content?: Array<{ type: string; text?: string }>;
-    details?: unknown;
-    isError?: boolean;
-  },
+  result: WebToolResult,
   expanded: boolean,
   isPartial: boolean,
   failureText: string,
   theme: Theme,
   options: {
     markdownWhenExpanded?: boolean;
+    symbols?: SummarySymbols;
   } = {},
 ): Component {
-  const text = extractTextContent(result.content);
-
-  if (isPartial) {
-    return renderSimpleText(text ?? "Working…", theme, "warning");
-  }
-
-  if (result.isError) {
-    return renderBlockText(text ?? failureText, theme, "error");
-  }
-
-  if (expanded) {
-    return options.markdownWhenExpanded
-      ? renderMarkdownBlock(text ?? "")
-      : renderBlockText(text ?? "", theme, "toolOutput");
-  }
-
-  const details = result.details as ToolDetails | undefined;
-  const summary = renderCollapsedProviderToolSummary(details, text);
-  let summaryText = theme.fg("success", summary);
-  summaryText += theme.fg("muted", ` (${getExpandHint()})`);
-  return new Text(summaryText, 0, 0);
+  return renderWebToolResult(
+    result,
+    { expanded, isPartial },
+    theme,
+    {
+      capability: toolFromFailureText(failureText),
+      failureText,
+      getDetails: (details) => details as ToolDetails | undefined,
+      getCollapsedSummary: buildCollapsedProviderToolSummary,
+      renderExpanded: (_details, text) =>
+        options.markdownWhenExpanded
+          ? renderMarkdownBlock(text ?? "")
+          : renderBlockText(text ?? "", theme, "toolOutput"),
+    },
+    options.symbols,
+  );
 }
 
 function renderCollapsedProviderToolSummary(
   details: ToolDetails | undefined,
   text: string | undefined,
 ): string {
-  if (
-    details?.tool === "web_answer" &&
-    typeof details.queryCount === "number" &&
-    details.queryCount > 1
-  ) {
-    const providerLabel =
-      PROVIDERS_BY_ID[details.provider]?.label ?? details.provider;
-    const failureSuffix =
-      details.failedQueryCount && details.failedQueryCount > 0
-        ? `, ${details.failedQueryCount} failed`
-        : "";
-    return `${details.queryCount} questions via ${providerLabel}${failureSuffix}`;
-  }
-
-  const baseSummary =
-    getCompactProviderToolSummary(details) ??
-    getFirstLine(text) ??
-    `${details?.tool ?? "tool"} output available`;
-
-  if (!details?.provider) {
-    return baseSummary;
-  }
-
-  return appendProviderSummary(baseSummary, details.provider);
+  return buildDisplayCollapsedProviderToolSummary(details, text);
 }
 
-function getCompactProviderToolSummary(
+function buildCollapsedProviderToolSummary(
   details: ToolDetails | undefined,
-): string | undefined {
-  if (!details) {
-    return undefined;
-  }
+  text: string | undefined,
+): SummaryParts {
+  return buildDisplayCollapsedProviderToolSummaryParts(details, text);
+}
 
-  if (
-    details.tool === "web_contents" &&
-    typeof details.itemCount === "number"
-  ) {
-    return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
-  }
+function renderCollapsedSummary(
+  summary: SummaryParts,
+  theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
+): Text {
+  let rendered = renderSummary(summary, theme, symbols);
+  rendered += theme.fg("muted", ` (${getExpandHint()})`);
+  return new Text(rendered, 0, 0);
+}
 
-  if (details.tool === "web_answer") {
-    return "Answer";
-  }
+function getDisplaySummaryParts(
+  display: ToolDisplayDetails | undefined,
+): SummaryParts | undefined {
+  return display?.outcome;
+}
 
-  if (details.tool === "web_research") {
-    return "Research";
-  }
+function buildSearchToolDisplay(details: WebSearchDetails): ToolDisplayDetails {
+  return buildDisplaySearchToolDisplay(details);
+}
 
-  return undefined;
+function buildProgressDisplay(
+  providerId: ProviderId,
+  action: string,
+): ToolDisplayDetails {
+  return buildDisplayProgress(providerId, action);
+}
+
+function buildProviderToolDisplay({
+  capability,
+  providerId,
+  details,
+  text,
+  outputBytes,
+  outputTruncated,
+  failedItemCount,
+}: {
+  capability: Exclude<Tool, "search">;
+  providerId: ProviderId;
+  details: ToolDetails;
+  text: string | undefined;
+  outputBytes?: number;
+  outputTruncated?: boolean;
+  failedItemCount?: number;
+}): ToolDisplayDetails {
+  return buildDisplayProviderToolDisplay({
+    capability,
+    providerId,
+    details,
+    text,
+    outputBytes,
+    outputTruncated,
+    failedItemCount,
+  });
 }
 
 interface SettingsEntry {
@@ -2676,7 +2864,6 @@ const SETTING_IDS = [
 ] as const satisfies readonly (keyof ExecutionSettings)[];
 
 type SettingId = (typeof SETTING_IDS)[number];
-
 const SETTING_META: Record<
   SettingId,
   {
@@ -2745,6 +2932,12 @@ function ensureSettings(config: WebProviders): Settings {
 }
 
 function cleanupSettings(config: WebProviders): void {
+  if (
+    config.settings?.search &&
+    Object.keys(config.settings.search).length === 0
+  ) {
+    delete config.settings.search;
+  }
   if (config.settings && Object.keys(config.settings).length === 0) {
     delete config.settings;
   }
@@ -2930,13 +3123,15 @@ class WebProvidersSettingsView implements Component {
   }
 
   private buildSettingsSectionItems(): SettingsEntry[] {
-    return SETTING_IDS.map((id) => ({
-      id: `settings:${id}`,
-      label: SETTING_META[id].label,
-      currentValue: getSharedSettingDisplayValue(this.config, id),
-      description: SETTING_META[id].help,
-      kind: "text",
-    }));
+    return [
+      ...SETTING_IDS.map((id) => ({
+        id: `settings:${id}`,
+        label: SETTING_META[id].label,
+        currentValue: getSharedSettingDisplayValue(this.config, id),
+        description: SETTING_META[id].help,
+        kind: "text" as const,
+      })),
+    ];
   }
 
   private getSectionEntries(
@@ -3877,9 +4072,10 @@ function getAnswerQueriesForDisplay(queries: string[]): string[] {
 
 function createBatchCompletionReporter(
   verb: string,
+  providerId: ProviderId,
   providerLabel: string,
   total: number,
-  report: ((message: string) => void) | undefined,
+  report: ProgressCallback,
 ): {
   start: () => void;
   markCompleted: () => void;
@@ -3901,7 +4097,11 @@ function createBatchCompletionReporter(
     if (failedCount > 0) {
       message += `, ${failedCount} failed`;
     }
-    report(message);
+    const action =
+      verb === "Fetching contents"
+        ? `Fetching ${completedCount}/${total} pages`
+        : `${verb} ${completedCount}/${total}`;
+    report(message, buildProgressDisplay(providerId, action));
   };
 
   return {
@@ -3999,10 +4199,74 @@ function renderSimpleText(
   return new Text(theme.fg(color, text), 0, 0);
 }
 
+interface SummaryParts {
+  success: string;
+  failure?: string;
+}
+
+function renderSummary(
+  summary: SummaryParts,
+  theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols,
+): string {
+  let rendered = renderSuccessSummary(summary.success, theme, symbols);
+  if (summary.failure) {
+    rendered += `, ${renderFailureSummary(summary.failure, theme, symbols)}`;
+  }
+  return rendered;
+}
+
+function renderSuccessSummary(
+  text: string,
+  theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols,
+): string {
+  return theme.fg("success", prefixWithSymbol(text, symbols.success));
+}
+
+function renderFailureSummary(
+  text: string,
+  theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols,
+): string {
+  return theme.fg("error", prefixWithSymbol(text, symbols.failure));
+}
+
+function renderFailureText(
+  text: string,
+  theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols,
+): Text {
+  return new Text(renderFailureSummary(text, theme, symbols), 0, 0);
+}
+
+function prefixWithSymbol(text: string, symbol: string | null): string {
+  return symbol ? `${symbol} ${text}` : text;
+}
+
+function renderToolProgress(
+  display: ToolDisplayDetails | undefined,
+  fallbackText: string | undefined,
+  theme: Pick<Theme, "fg">,
+): Text {
+  const progress = display?.progress;
+  const providerLabel = display?.provider?.label;
+  if (!progress || !providerLabel) {
+    return renderSimpleText(fallbackText ?? "Working…", theme, "warning");
+  }
+
+  return new Text(
+    `${theme.fg("warning", progress.action)} ${theme.fg("muted", `via ${providerLabel}`)}`,
+    0,
+    0,
+  );
+}
+
 function renderCollapsedSearchSummary(
   details: WebSearchDetails,
   text: string | undefined,
   theme: Pick<Theme, "fg">,
+  symbols: SummarySymbols = DEFAULT_SUMMARY_SYMBOLS,
 ): Text {
   const queryCount =
     typeof details?.queryCount === "number"
@@ -4016,46 +4280,23 @@ function renderCollapsedSearchSummary(
     typeof details?.failedQueryCount === "number"
       ? details.failedQueryCount
       : inferSearchFailureCount(text);
-  const providerLabel =
-    typeof details?.provider === "string"
-      ? (PROVIDERS_BY_ID[details.provider]?.label ?? details.provider)
-      : undefined;
-
-  let base = buildSearchSummaryText({
+  const summary = buildSearchSummaryParts({
     queryCount,
     resultCount,
+    failedQueryCount,
   });
 
-  if (providerLabel) {
-    base = `${base} via ${providerLabel}`;
-  }
-
-  if (failedQueryCount && failedQueryCount > 0) {
-    base += `, ${failedQueryCount} failed`;
-  }
-
-  let summary = theme.fg("success", base);
-  summary += theme.fg("muted", ` (${getExpandHint()})`);
-  return new Text(summary, 0, 0);
+  let rendered = renderSummary(summary, theme, symbols);
+  rendered += theme.fg("muted", ` (${getExpandHint()})`);
+  return new Text(rendered, 0, 0);
 }
 
-function buildSearchSummaryText({
-  queryCount,
-  resultCount,
-}: {
+function buildSearchSummaryParts(options: {
   queryCount?: number;
   resultCount?: number;
-}): string {
-  const countSummary =
-    typeof resultCount === "number"
-      ? `${resultCount} result${resultCount === 1 ? "" : "s"}`
-      : "Search output available";
-
-  if (queryCount && queryCount > 1) {
-    return `${queryCount} queries, ${countSummary}`;
-  }
-
-  return countSummary;
+  failedQueryCount?: number;
+}): SummaryParts {
+  return buildDisplaySearchSummaryParts(options);
 }
 
 function inferSearchQueryCount(text: string | undefined): number | undefined {
@@ -4089,12 +4330,106 @@ function inferSearchFailureCount(text: string | undefined): number | undefined {
   return failureMatches?.length;
 }
 
-function appendProviderSummary(summary: string, provider: ProviderId): string {
-  const providerLabel = PROVIDERS_BY_ID[provider]?.label ?? provider;
-  const providerSuffix = `via ${providerLabel}`;
-  return summary.toLowerCase().includes(providerSuffix.toLowerCase())
-    ? summary
-    : `${summary} ${providerSuffix}`;
+function buildFailureSummary({
+  text,
+  details,
+  capability,
+  fallback,
+}: {
+  text: string | undefined;
+  details: ToolDetails | WebSearchDetails | undefined;
+  capability: Tool;
+  fallback: string;
+}): string {
+  const detail = stripTrailingSentencePunctuation(getFirstLine(text) ?? "");
+  const providerLabel =
+    details?.provider !== undefined
+      ? (PROVIDERS_BY_ID[details.provider]?.label ?? details.provider)
+      : undefined;
+
+  if (!providerLabel) {
+    return detail || fallback;
+  }
+
+  return formatProviderCapabilityFailure(providerLabel, capability, detail);
+}
+
+function formatProviderCapabilityFailure(
+  providerLabel: string,
+  capability: Tool,
+  detail: string,
+): string {
+  const action = getFailureAction(capability);
+  const base = `${providerLabel} ${action} failed`;
+  if (!detail || detail === base) {
+    return base;
+  }
+
+  if (detail.toLowerCase().startsWith(base.toLowerCase())) {
+    return detail;
+  }
+
+  const normalizedDetail = normalizeProviderFailureDetail(
+    providerLabel,
+    detail,
+  );
+
+  return `${base}: ${normalizedDetail}`;
+}
+
+function normalizeProviderFailureDetail(
+  providerLabel: string,
+  detail: string,
+): string {
+  const normalized = stripTrailingSentencePunctuation(detail);
+  const providerPrefix = `${providerLabel}:`;
+  return normalized.toLowerCase().startsWith(providerPrefix.toLowerCase())
+    ? normalized.slice(providerPrefix.length).trim()
+    : normalized;
+}
+
+function getFailureAction(capability: Tool): string {
+  switch (capability) {
+    case "contents":
+      return "fetch";
+    case "search":
+    case "answer":
+    case "research":
+      return capability;
+  }
+}
+
+function toolFromFailureText(text: string): Tool {
+  if (text.startsWith("web_contents")) {
+    return "contents";
+  }
+  if (text.startsWith("web_answer")) {
+    return "answer";
+  }
+  if (text.startsWith("web_research")) {
+    return "research";
+  }
+  return "search";
+}
+
+function stripTrailingSentencePunctuation(text: string): string {
+  return text.trim().replace(/[.\s]+$/u, "");
+}
+
+function formatSummaryElapsed(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes > 0 && seconds === 0) {
+    return `${minutes}m`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+
+  return `${seconds}s`;
 }
 
 function getFirstLine(text: string | undefined): string | undefined {
@@ -4209,24 +4544,41 @@ function escapeMarkdownText(text: string): string {
 }
 
 async function truncateAndSave(text: string, prefix: string): Promise<string> {
+  return (await truncateAndSaveWithMetadata(text, prefix)).text;
+}
+
+async function truncateAndSaveWithMetadata(
+  text: string,
+  prefix: string,
+): Promise<{ text: string; totalBytes: number; truncated: boolean }> {
+  const totalBytes = Buffer.byteLength(text, "utf-8");
   const truncation = truncateHead(text, {
     maxLines: DEFAULT_MAX_LINES,
     maxBytes: DEFAULT_MAX_BYTES,
   });
 
-  if (!truncation.truncated) return truncation.content;
+  if (!truncation.truncated) {
+    return {
+      text: truncation.content,
+      totalBytes,
+      truncated: false,
+    };
+  }
 
   const dir = join(tmpdir(), `pi-web-providers-${prefix}-${Date.now()}`);
   await mkdir(dir, { recursive: true });
   const fullPath = join(dir, "output.txt");
   await writeFile(fullPath, text, "utf-8");
 
-  return (
-    truncation.content +
-    `\n\n[Output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines ` +
-    `(${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). ` +
-    `Full output saved to: ${fullPath}]`
-  );
+  return {
+    text:
+      truncation.content +
+      `\n\n[Output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines ` +
+      `(${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). ` +
+      `Full output saved to: ${fullPath}]`,
+    totalBytes,
+    truncated: true,
+  };
 }
 
 function renderExpandableText(
