@@ -73,6 +73,14 @@ import {
   PROVIDER_LIST,
   PROVIDERS_BY_ID,
 } from "./providers/index.js";
+import {
+  buildCollapsedProviderToolSummary as buildDisplayCollapsedProviderToolSummary,
+  buildCollapsedProviderToolSummaryParts as buildDisplayCollapsedProviderToolSummaryParts,
+  buildProgressDisplay as buildDisplayProgress,
+  buildProviderToolDisplay as buildDisplayProviderToolDisplay,
+  buildSearchSummaryParts as buildDisplaySearchSummaryParts,
+  buildSearchToolDisplay as buildDisplaySearchToolDisplay,
+} from "./tool-display.js";
 import type {
   Claude,
   Codex,
@@ -100,7 +108,6 @@ import type {
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
 const MAX_SEARCH_QUERIES = 10;
-const ANSWER_EXCERPT_MAX_LENGTH = 100;
 const RESEARCH_HEARTBEAT_MS = 15000;
 const WEB_RESEARCH_RESULT_MESSAGE_TYPE = "web-research-result";
 const WEB_RESEARCH_WIDGET_KEY = "web-research-jobs";
@@ -408,13 +415,11 @@ function registerWebContentsTool(
       });
     },
     renderCall(args, theme) {
-      return renderWebToolCallHeader(
-        {
-          toolName: "web_contents",
-          items: Array.isArray((args as { urls?: string[] }).urls)
-            ? ((args as { urls?: string[] }).urls ?? [])
-            : [],
-        },
+      return renderListCallHeader(
+        "web_contents",
+        Array.isArray((args as { urls?: string[] }).urls)
+          ? ((args as { urls?: string[] }).urls ?? [])
+          : [],
         theme,
       );
     },
@@ -1573,13 +1578,24 @@ async function executeProviderToolInternal({
       : response.text,
     capability,
   );
-  const details: ToolDetails = {
-    tool: `web_${capability}`,
-    provider: response.provider,
-    itemCount: isContentsResponse(response)
-      ? response.answers.length
-      : response.itemCount,
-  };
+  const details: ToolDetails = isContentsResponse(response)
+    ? {
+        tool: "web_contents",
+        provider: response.provider,
+        itemCount: response.answers.length,
+      }
+    : capability === "answer"
+      ? {
+          tool: "web_answer",
+          provider: response.provider,
+          itemCount: response.itemCount,
+          queryCount: 1,
+          failedQueryCount: 0,
+        }
+      : {
+          tool: "web_research",
+          provider: response.provider,
+        };
 
   return {
     content: [{ type: "text" as const, text: rendered.text }],
@@ -2317,41 +2333,17 @@ function renderListCallHeader(
   };
 }
 
-function renderWebToolCallHeader(
-  config: {
-    toolName: string;
-    items: string[];
-    suffix?: string;
-    quoteSingleItem?: boolean;
-    forceMultiline?: boolean;
-  },
-  theme: Theme,
-): Component {
-  return renderListCallHeader(
-    config.toolName,
-    config.items,
-    theme,
-    config.suffix,
-    {
-      quoteSingleItem: config.quoteSingleItem,
-      forceMultiline: config.forceMultiline,
-    },
-  );
-}
-
 function renderToolCallHeader(
   toolName: string,
   primary: string,
   details: string[],
   theme: Theme,
 ): Component {
-  return renderWebToolCallHeader(
-    {
-      toolName,
-      items: primary.trim().length > 0 ? [primary] : [],
-      suffix: details.length > 0 ? ` ${details.join(" ")}` : undefined,
-    },
+  return renderListCallHeader(
+    toolName,
+    primary.trim().length > 0 ? [primary] : [],
     theme,
+    details.length > 0 ? ` ${details.join(" ")}` : undefined,
   );
 }
 
@@ -2361,13 +2353,12 @@ function renderQuestionCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderWebToolCallHeader(
-    {
-      toolName: "web_answer",
-      items: getAnswerQueriesForDisplay(params.queries),
-      quoteSingleItem: true,
-    },
+  return renderListCallHeader(
+    "web_answer",
+    getAnswerQueriesForDisplay(params.queries),
     theme,
+    undefined,
+    { quoteSingleItem: true },
   );
 }
 
@@ -2377,9 +2368,12 @@ function renderResearchCallHeader(
   },
   theme: Theme,
 ): Component {
-  return renderWebToolCallHeader(
-    { toolName: "web_research", items: [params.input], quoteSingleItem: true },
+  return renderListCallHeader(
+    "web_research",
+    [params.input],
     theme,
+    undefined,
+    { quoteSingleItem: true },
   );
 }
 
@@ -2645,30 +2639,14 @@ function renderCollapsedProviderToolSummary(
   details: ToolDetails | undefined,
   text: string | undefined,
 ): string {
-  const summary = buildCollapsedProviderToolSummary(details, text);
-  return summary.failure
-    ? `${summary.success}, ${summary.failure}`
-    : summary.success;
+  return buildDisplayCollapsedProviderToolSummary(details, text);
 }
 
 function buildCollapsedProviderToolSummary(
   details: ToolDetails | undefined,
   text: string | undefined,
 ): SummaryParts {
-  if (details?.tool === "web_answer") {
-    return buildAnswerCollapsedSummary(details, text);
-  }
-
-  if (details?.tool === "web_contents") {
-    return buildContentsSummary(details, text);
-  }
-
-  const baseSummary =
-    getCompactProviderToolSummary(details) ??
-    getFirstLine(text) ??
-    `${details?.tool ?? "tool"} output available`;
-
-  return { success: baseSummary };
+  return buildDisplayCollapsedProviderToolSummaryParts(details, text);
 }
 
 function renderCollapsedSummary(
@@ -2688,26 +2666,14 @@ function getDisplaySummaryParts(
 }
 
 function buildSearchToolDisplay(details: WebSearchDetails): ToolDisplayDetails {
-  const summary = buildSearchSummaryParts(details);
-  const provider = PROVIDERS_BY_ID[details.provider];
-  return {
-    provider: {
-      id: details.provider,
-      label: provider?.label ?? details.provider,
-    },
-    outcome: summary,
-  };
+  return buildDisplaySearchToolDisplay(details);
 }
 
 function buildProgressDisplay(
   providerId: ProviderId,
   action: string,
 ): ToolDisplayDetails {
-  const provider = PROVIDERS_BY_ID[providerId];
-  return {
-    provider: { id: providerId, label: provider?.label ?? providerId },
-    progress: { action },
-  };
+  return buildDisplayProgress(providerId, action);
 }
 
 function buildProviderToolDisplay({
@@ -2727,150 +2693,15 @@ function buildProviderToolDisplay({
   outputTruncated?: boolean;
   failedItemCount?: number;
 }): ToolDisplayDetails {
-  const provider = PROVIDERS_BY_ID[providerId];
-  const summary =
-    capability === "contents"
-      ? buildContentsDisplaySummary(details, text, {
-          outputBytes,
-          outputTruncated,
-          failedItemCount,
-        })
-      : capability === "research" && text
-        ? { success: text }
-        : buildCollapsedProviderToolSummary(details, text);
-  return {
-    provider: { id: providerId, label: provider?.label ?? providerId },
-    outcome: summary,
-  };
-}
-
-function buildContentsDisplaySummary(
-  details: ToolDetails,
-  text: string | undefined,
-  metadata: {
-    outputBytes?: number;
-    outputTruncated?: boolean;
-    failedItemCount?: number;
-  },
-): SummaryParts {
-  const totalCount = details.itemCount ?? inferContentsPageCount(text);
-  const failedCount =
-    metadata.failedItemCount ?? inferContentsFailureCount(text);
-  const successCount =
-    totalCount === undefined
-      ? undefined
-      : Math.max(0, totalCount - (failedCount ?? 0));
-  const sizeSummary =
-    typeof metadata.outputBytes === "number"
-      ? `${formatSize(metadata.outputBytes)}${metadata.outputTruncated ? " (truncated)" : ""}`
-      : undefined;
-  const success =
-    successCount === undefined
-      ? (sizeSummary ?? "Contents output available")
-      : successCount === 1 && sizeSummary
-        ? sizeSummary
-        : `${successCount} page${successCount === 1 ? "" : "s"}${sizeSummary ? `, ${sizeSummary}` : ""}`;
-
-  if (failedCount && failedCount > 0 && totalCount) {
-    return {
-      success,
-      failure: `${failedCount} of ${totalCount} ${totalCount === 1 ? "page" : "pages"} failed`,
-    };
-  }
-
-  return { success };
-}
-
-function buildAnswerCollapsedSummary(
-  details: ToolDetails,
-  text: string | undefined,
-): SummaryParts {
-  if (
-    typeof details.queryCount === "number" &&
-    (details.queryCount > 1 || (details.failedQueryCount ?? 0) > 0)
-  ) {
-    return buildAnswerSummary(details);
-  }
-
-  return { success: buildAnswerExcerpt(text) ?? "Answer output available" };
-}
-
-function buildAnswerSummary(details: ToolDetails): SummaryParts {
-  const queryCount = details.queryCount ?? 0;
-  const failedQueryCount = details.failedQueryCount ?? 0;
-  const answerCount = Math.max(0, queryCount - failedQueryCount);
-  const success = `${answerCount} answer${answerCount === 1 ? "" : "s"}`;
-
-  if (failedQueryCount > 0) {
-    return {
-      success,
-      failure: `${failedQueryCount} of ${queryCount} ${queryCount === 1 ? "question" : "questions"} failed`,
-    };
-  }
-
-  return { success };
-}
-
-function buildAnswerExcerpt(text: string | undefined): string | undefined {
-  const excerpt = getFirstLine(text);
-  if (!excerpt) {
-    return undefined;
-  }
-
-  if (excerpt.length <= ANSWER_EXCERPT_MAX_LENGTH) {
-    return excerpt;
-  }
-
-  return `${excerpt.slice(0, ANSWER_EXCERPT_MAX_LENGTH - 1).trimEnd()}…`;
-}
-
-function buildContentsSummary(
-  details: ToolDetails,
-  text: string | undefined,
-): SummaryParts {
-  const totalCount = details.itemCount ?? inferContentsPageCount(text);
-  const failedCount = inferContentsFailureCount(text);
-  const successCount =
-    totalCount === undefined
-      ? undefined
-      : Math.max(0, totalCount - (failedCount ?? 0));
-  const sizeSummary = undefined;
-  const success =
-    successCount === undefined
-      ? (sizeSummary ?? "Contents output available")
-      : successCount === 1 && sizeSummary
-        ? sizeSummary
-        : `${successCount} page${successCount === 1 ? "" : "s"}${sizeSummary ? `, ${sizeSummary}` : ""}`;
-
-  if (failedCount && failedCount > 0 && totalCount) {
-    return {
-      success,
-      failure: `${failedCount} of ${totalCount} ${totalCount === 1 ? "page" : "pages"} failed`,
-    };
-  }
-
-  return { success };
-}
-
-function getCompactProviderToolSummary(
-  details: ToolDetails | undefined,
-): string | undefined {
-  if (!details) {
-    return undefined;
-  }
-
-  if (
-    details.tool === "web_contents" &&
-    typeof details.itemCount === "number"
-  ) {
-    return `${details.itemCount} page${details.itemCount === 1 ? "" : "s"}`;
-  }
-
-  if (details.tool === "web_research") {
-    return "Research";
-  }
-
-  return undefined;
+  return buildDisplayProviderToolDisplay({
+    capability,
+    providerId,
+    details,
+    text,
+    outputBytes,
+    outputTruncated,
+    failedItemCount,
+  });
 }
 
 interface SettingsEntry {
@@ -4329,14 +4160,12 @@ function renderCallHeader(
       ? ` (max ${params.maxResults})`
       : undefined;
 
-  return renderWebToolCallHeader(
-    {
-      toolName: "web_search",
-      items: getSearchQueriesForDisplay(params.queries),
-      suffix: maxResultsSuffix,
-      quoteSingleItem: true,
-    },
+  return renderListCallHeader(
+    "web_search",
+    getSearchQueriesForDisplay(params.queries),
     theme,
+    maxResultsSuffix,
+    { quoteSingleItem: true },
   );
 }
 
@@ -4462,28 +4291,12 @@ function renderCollapsedSearchSummary(
   return new Text(rendered, 0, 0);
 }
 
-function buildSearchSummaryParts({
-  queryCount,
-  resultCount,
-  failedQueryCount,
-}: {
+function buildSearchSummaryParts(options: {
   queryCount?: number;
   resultCount?: number;
   failedQueryCount?: number;
 }): SummaryParts {
-  const success =
-    typeof resultCount === "number"
-      ? `${resultCount} result${resultCount === 1 ? "" : "s"}`
-      : "Search output available";
-
-  if (failedQueryCount && failedQueryCount > 0 && queryCount) {
-    return {
-      success,
-      failure: `${failedQueryCount} of ${queryCount} ${queryCount === 1 ? "query" : "queries"} failed`,
-    };
-  }
-
-  return { success };
+  return buildDisplaySearchSummaryParts(options);
 }
 
 function inferSearchQueryCount(text: string | undefined): number | undefined {
@@ -4514,26 +4327,6 @@ function inferSearchFailureCount(text: string | undefined): number | undefined {
   }
 
   const failureMatches = text.match(/^Search failed:/gm);
-  return failureMatches?.length;
-}
-
-function inferContentsPageCount(text: string | undefined): number | undefined {
-  if (!text) {
-    return undefined;
-  }
-
-  const pageMatches = text.match(/^##\s+/gm);
-  return pageMatches?.length;
-}
-
-function inferContentsFailureCount(
-  text: string | undefined,
-): number | undefined {
-  if (!text) {
-    return undefined;
-  }
-
-  const failureMatches = text.match(/^##\s+(?:\d+\.\s+)?Error:/gm);
   return failureMatches?.length;
 }
 

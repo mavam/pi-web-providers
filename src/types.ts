@@ -78,7 +78,7 @@ export interface ResearchPollResult {
   error?: string;
 }
 
-export interface WebSearchDetails {
+export interface SearchDetails {
   tool: "web_search";
   queryCount: number;
   failedQueryCount: number;
@@ -86,13 +86,27 @@ export interface WebSearchDetails {
   resultCount: number;
 }
 
-export interface ToolDetails {
-  tool: string;
+export interface ContentsDetails {
+  tool: "web_contents";
   provider: ProviderId;
   itemCount?: number;
-  queryCount?: number;
-  failedQueryCount?: number;
 }
+
+export interface AnswerDetails {
+  tool: "web_answer";
+  provider: ProviderId;
+  itemCount?: number;
+  queryCount: number;
+  failedQueryCount: number;
+}
+
+export interface ResearchDetails {
+  tool: "web_research";
+  provider: ProviderId;
+}
+
+export type ToolDetails = ContentsDetails | AnswerDetails | ResearchDetails;
+export type WebSearchDetails = SearchDetails;
 
 export interface WebResearchRequest {
   tool: "web_research";
