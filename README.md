@@ -630,19 +630,6 @@ global rendering settings for collapsed tool summaries:
 | `symbols.success`   | `"✔"`     | Symbol before successful and mixed-result summaries         |
 | `symbols.failure`   | `"✘"`     | Symbol before failed summaries and failed mixed clauses     |
 
-Set either symbol to `null` to hide it:
-
-```json
-{
-  "settings": {
-    "symbols": {
-      "success": null,
-      "failure": null
-    }
-  }
-}
-```
-
 ## 🔎 Live smoke tests
 
 Use the opt-in live smoke runner to validate the configured providers with the
