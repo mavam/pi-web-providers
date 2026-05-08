@@ -1,4 +1,4 @@
-import { formatSize } from "@mariozechner/pi-coding-agent";
+import { formatSize } from "@earendil-works/pi-coding-agent";
 import { PROVIDERS_BY_ID } from "./providers/index.js";
 import type {
   ContentsDetails,

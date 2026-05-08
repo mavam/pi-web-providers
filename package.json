@@ -54,7 +54,7 @@
     ]
   },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@mariozechner/pi-coding-agent --external:@mariozechner/pi-ai --external:@mariozechner/pi-tui --external:typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@mendable/firecrawl-js --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:@tavily/core --external:cloudflare --external:exa-js --external:linkup-sdk --external:openai --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-ai --external:@earendil-works/pi-tui --external:typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@mendable/firecrawl-js --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:@tavily/core --external:cloudflare --external:exa-js --external:linkup-sdk --external:openai --external:parallel-web --external:valyu-js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
@@ -80,9 +80,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
-    "@mariozechner/pi-ai": "^0.70.6",
-    "@mariozechner/pi-coding-agent": "^0.70.6",
-    "@mariozechner/pi-tui": "^0.70.6",
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@earendil-works/pi-tui": "^0.74.0",
     "@types/node": "^25.6.0",
     "esbuild": "^0.28.0",
     "typebox": "^1.1.34",
@@ -90,8 +90,8 @@
     "vitest": "^4.1.5"
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@mariozechner/pi-tui": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
     "typebox": "*"
   }
 }

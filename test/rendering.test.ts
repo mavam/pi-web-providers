@@ -1,9 +1,9 @@
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   initTheme,
   stopThemeWatcher,
-} from "../node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+} from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { __test__ } from "../src/index.js";
 
 beforeAll(() => {
