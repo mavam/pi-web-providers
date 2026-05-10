@@ -1215,10 +1215,10 @@ function ensureOpenAIResearchOptions(config: OpenAI): OpenAIResearchOptions {
   return config.options.research ?? (config.options.research = {});
 }
 
-function getValyuCapabilityOptions(
+function getValyuCapabilityOptions<TCapability extends keyof ValyuOptions>(
   config: Valyu | undefined,
-  capability: keyof ValyuOptions,
-) {
+  capability: TCapability,
+): ValyuOptions[TCapability] | undefined {
   return config?.options?.[capability];
 }
 

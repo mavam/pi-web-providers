@@ -9,10 +9,10 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const SEARCH_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -111,6 +111,12 @@ const claudeOptionsSchema = Type.Object(
   },
   { description: "Claude options." },
 );
+
+const claudeSearchPromptGuidelines = [
+  "Use Claude search when Claude Code's agentic web-browsing and synthesis are useful for finding likely sources.",
+  "Increase effort or maxTurns only for difficult, ambiguous, or multi-step source discovery; keep defaults for simple searches.",
+  "Prefer web_contents after Claude search when the task requires direct inspection of a small set of selected URLs.",
+] as const;
 
 const claudeImplementation = {
   id: "claude" as const,
@@ -447,6 +453,7 @@ export const claudeProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: claudeImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: claudeSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await claudeImplementation.search!(

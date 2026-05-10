@@ -1,5 +1,5 @@
-import { type TObject, Type } from "typebox";
 import OpenAI from "openai";
+import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import { executeAsyncResearch } from "../execution-policy.js";
 import type {
@@ -15,9 +15,9 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
 const DEFAULT_ANSWER_MODEL = "gpt-4.1";
 const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
@@ -39,6 +39,12 @@ const openaiSearchOptionsSchema = Type.Object(
   },
   { description: "OpenAI search options." },
 );
+
+const openaiSearchPromptGuidelines = [
+  "Use OpenAI web search when an LLM-mediated search pass should identify likely sources from the live web.",
+  "Use instructions to constrain source selection, freshness, geography, or output style only when the user explicitly needs that control.",
+  "Prefer web_contents after OpenAI search when the task requires direct inspection of selected primary sources.",
+] as const;
 
 const openaiAnswerOptionsSchema = Type.Object(
   {
@@ -696,6 +702,7 @@ export const openaiProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: openaiImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: openaiSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await openaiImplementation.search!(

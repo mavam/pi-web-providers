@@ -287,6 +287,9 @@ describe("config parsing", () => {
               answer: {
                 responseLength: "medium",
               },
+              contents: {
+                responseLength: "medium",
+              },
               research: {
                 responseLength: "large",
               },
@@ -304,6 +307,9 @@ describe("config parsing", () => {
           searchType: "all",
         },
         answer: {
+          responseLength: "medium",
+        },
+        contents: {
           responseLength: "medium",
         },
         research: {

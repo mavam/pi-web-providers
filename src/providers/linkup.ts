@@ -15,10 +15,10 @@ import type {
   SearchResult,
   Tool,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
-import { defineCapability, defineProvider } from "./definition.js";
 type LinkupSearchOptions = {
   depth?: SearchDepth;
   includeImages?: boolean;
@@ -70,6 +70,13 @@ const linkupSearchOptionsSchema = Type.Object(
   },
   { description: "Linkup search options." },
 );
+
+const linkupSearchPromptGuidelines = [
+  "Use Linkup depth='deep' for exploratory or high-recall source discovery, and 'standard' for quick direct searches.",
+  "Use includeDomains or excludeDomains when the user names source constraints or when limiting the search space improves precision.",
+  "Use fromDate and toDate when the user asks for recent, historical, or bounded-by-date results.",
+  "Enable includeImages only when images are directly useful; otherwise keep search focused on textual source discovery.",
+] as const;
 
 const linkupContentsOptionsSchema = Type.Object(
   {
@@ -333,6 +340,7 @@ export const linkupProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: linkupImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: linkupSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await linkupImplementation.search!(

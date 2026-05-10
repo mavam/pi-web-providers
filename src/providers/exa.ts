@@ -13,6 +13,7 @@ import type {
   Tool,
   ToolOutput,
 } from "../types.js";
+import { defineCapability, defineProvider } from "./definition.js";
 import { literalUnion } from "./schema.js";
 import {
   asJsonObject,
@@ -20,8 +21,6 @@ import {
   getApiKeyStatus,
   trimSnippet,
 } from "./shared.js";
-
-import { defineCapability, defineProvider } from "./definition.js";
 
 const exaSearchOptionsSchema = Type.Object(
   {
@@ -104,6 +103,13 @@ const exaSearchOptionsSchema = Type.Object(
   },
   { description: "Exa search options." },
 );
+
+const exaSearchPromptGuidelines = [
+  "Use Exa's neural/auto search modes for semantic source discovery where exact keywords are uncertain; use keyword mode when exact terms, names, or identifiers matter.",
+  "Use Exa category filters such as 'research paper' or 'company' when the user asks for a specific source type.",
+  "Set includeDomains or excludeDomains when the task names preferred sources, requires primary sources, or needs noisy domains filtered out.",
+  "Request contents.text, contents.highlights, or contents.summary only when snippets are insufficient and richer source context is needed directly in search results.",
+] as const;
 
 const exaImplementation = {
   id: "exa" as const,
@@ -348,6 +354,7 @@ export const exaProvider = defineProvider({
   capabilities: {
     search: defineCapability({
       options: exaImplementation.getToolOptionsSchema?.("search"),
+      promptGuidelines: exaSearchPromptGuidelines,
       async execute(input: any, ctx) {
         const { query, maxResults, options } = input;
         return await exaImplementation.search!(
