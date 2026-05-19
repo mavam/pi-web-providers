@@ -2,6 +2,7 @@ import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type {
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   SearchResult,
@@ -234,8 +235,13 @@ const serperImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Serper | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Serper | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -777,11 +783,12 @@ export const serperProvider = defineProvider({
     fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (serperImplementation.getCapabilityStatus as any)(
       config as Serper | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

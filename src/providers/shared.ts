@@ -1,5 +1,8 @@
 import { resolveConfigValue } from "../config-values.js";
-import type { ProviderCapabilityStatus } from "../types.js";
+import type {
+  ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
+} from "../types.js";
 
 export function trimSnippet(
   input: string | undefined,
@@ -46,7 +49,14 @@ export function formatJson(value: unknown): string {
 
 export function getApiKeyStatus(
   apiKeyReference: string | undefined,
+  options: ProviderCapabilityStatusOptions = {},
 ): ProviderCapabilityStatus {
+  if (!apiKeyReference) {
+    return { state: "missing_api_key" };
+  }
+  if (options.resolveSecrets === false && isSecretReference(apiKeyReference)) {
+    return { state: "deferred_secret" };
+  }
   try {
     return resolveConfigValue(apiKeyReference)
       ? { state: "ready" }
@@ -57,6 +67,10 @@ export function getApiKeyStatus(
       detail: formatConfigValueError(error),
     };
   }
+}
+
+export function isSecretReference(reference: string): boolean {
+  return reference.startsWith("!") || /^[A-Z][A-Z0-9_]*$/.test(reference);
 }
 
 export function formatConfigValueError(error: unknown): string {

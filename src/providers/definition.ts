@@ -1,6 +1,7 @@
 import type { TObject } from "typebox";
 import type {
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderConfig,
   ProviderContext,
   ProviderId,
@@ -83,6 +84,7 @@ export interface ProviderDefinition<
     config: TConfig | undefined,
     cwd: string,
     tool?: Tool,
+    options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus;
 }
 

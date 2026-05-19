@@ -1,4 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
@@ -310,6 +317,120 @@ describe("managed tool availability", () => {
         "search",
       ),
     ).toEqual(["codex"]);
+  });
+
+  it("registers mapped command-backed secret tools without resolving the command on startup", async () => {
+    const { command, markerPath } = createCommandBackedSecret();
+    const config = createConfig({
+      tools: {
+        search: "exa",
+      },
+      providers: {
+        exa: {
+          credentials: { api: command },
+        },
+      },
+    });
+
+    writeConfig(config);
+
+    const tools = await captureRegisteredTools();
+
+    expect(tools.map((tool) => tool.name)).toContain("web_search");
+    expect(existsSync(markerPath)).toBe(false);
+
+    await __test__.executeSearchTool({
+      config,
+      ctx: { cwd: process.cwd() },
+      signal: null,
+      onUpdate: undefined,
+      options: undefined,
+      queries: ["lazy secrets"],
+      executionOverrides: [
+        {
+          capability: "search",
+          providerLabel: "Exa",
+          async execute() {
+            return { provider: "exa", results: [] };
+          },
+        },
+      ],
+    });
+    await __test__.executeSearchTool({
+      config,
+      ctx: { cwd: process.cwd() },
+      signal: null,
+      onUpdate: undefined,
+      options: undefined,
+      queries: ["lazy secrets again"],
+      executionOverrides: [
+        {
+          capability: "search",
+          providerLabel: "Exa",
+          async execute() {
+            return { provider: "exa", results: [] };
+          },
+        },
+      ],
+    });
+
+    expect(readFileSync(markerPath, "utf-8")).toBe("x");
+  });
+
+  it("exposes mapped env-backed secret tools at startup but fails on execution when the env var is missing", async () => {
+    const config = createConfig({
+      tools: {
+        search: "exa",
+      },
+      providers: {
+        exa: {
+          credentials: { api: "EXA_API_KEY" },
+        },
+      },
+    });
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual(["web_search"]);
+
+    await expect(
+      __test__.executeSearchTool({
+        config,
+        ctx: { cwd: process.cwd() },
+        signal: null,
+        onUpdate: undefined,
+        options: undefined,
+        queries: ["missing env"],
+        executionOverrides: [
+          {
+            capability: "search",
+            providerLabel: "Exa",
+            async execute() {
+              return { provider: "exa", results: [] };
+            },
+          },
+        ],
+      }),
+    ).rejects.toThrow(/Provider 'exa' is not available: missing API key/);
+  });
+
+  it("does not defer Cloudflare account ID validation when the API token secret is lazy", () => {
+    const { command, markerPath } = createCommandBackedSecret();
+    const config = createConfig({
+      tools: {
+        contents: "cloudflare",
+      },
+      providers: {
+        cloudflare: {
+          credentials: { api: command },
+        },
+      },
+    });
+
+    expect(
+      __test__.getAvailableManagedToolNames(config, process.cwd()),
+    ).toEqual([]);
+    expect(existsSync(markerPath)).toBe(false);
   });
 
   it("only exposes tools whose mapped providers are available", () => {
@@ -805,6 +926,28 @@ function writeConfig(config: WebProviders): void {
   const agentDir = join(process.env.HOME!, ".pi", "agent");
   mkdirSync(agentDir, { recursive: true });
   writeFileSync(join(agentDir, "web-providers.json"), JSON.stringify(config));
+}
+
+function createCommandBackedSecret(): {
+  command: string;
+  markerPath: string;
+} {
+  const root = mkdtempSync(join(tmpdir(), "pi-web-providers-secret-"));
+  cleanupDirs.push(root);
+  const markerPath = join(root, "marker.txt");
+  const scriptPath = join(root, "secret.js");
+  writeFileSync(
+    scriptPath,
+    [
+      'const { appendFileSync } = require("node:fs");',
+      'appendFileSync(process.argv[2], "x");',
+      'process.stdout.write("secret-key");',
+    ].join("\n"),
+  );
+  return {
+    command: `!${JSON.stringify(process.execPath)} ${JSON.stringify(scriptPath)} ${JSON.stringify(markerPath)}`,
+    markerPath,
+  };
 }
 
 async function captureRegisteredTools(): Promise<

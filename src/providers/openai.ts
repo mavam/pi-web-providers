@@ -8,6 +8,7 @@ import type {
   OpenAIResearchOptions,
   OpenAISearchOptions,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   ResearchJob,
   ResearchPollResult,
@@ -171,8 +172,11 @@ const openaiImplementation = {
 
   getCapabilityStatus(
     config: OpenAIConfig | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -687,11 +691,12 @@ export const openaiProvider = defineProvider({
     fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (openaiImplementation.getCapabilityStatus as any)(
-      config as OpenAI | undefined,
+      config as OpenAIConfig | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

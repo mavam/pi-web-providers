@@ -4,6 +4,7 @@ import { resolveConfigValue } from "../config-values.js";
 import type {
   Perplexity,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   Tool,
@@ -108,8 +109,11 @@ const perplexityImplementation = {
 
   getCapabilityStatus(
     config: Perplexity | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -433,11 +437,12 @@ export const perplexityProvider = defineProvider({
     createTemplate: () => perplexityImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (perplexityImplementation.getCapabilityStatus as any)(
       config as Perplexity | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

@@ -5,6 +5,7 @@ import type { ContentsResponse } from "../contents.js";
 import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   ResearchJob,
   ResearchPollResult,
@@ -100,8 +101,13 @@ const valyuImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Valyu | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Valyu | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -357,11 +363,12 @@ export const valyuProvider = defineProvider({
     fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search", "answer", "research"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (valyuImplementation.getCapabilityStatus as any)(
       config as Valyu | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

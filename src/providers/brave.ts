@@ -3,13 +3,14 @@ import { resolveConfigValue } from "../config-values.js";
 import type {
   Brave,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   Tool,
   ToolOutput,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
-import { asJsonObject, formatConfigValueError, trimSnippet } from "./shared.js";
+import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_BASE_URL = "https://api.search.brave.com";
 const BRAVE_API_VERSION: string | undefined = undefined;
@@ -348,26 +349,28 @@ const braveImplementation = {
     config: Brave | undefined,
     _cwd: string,
     tool?: Tool,
+    options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus {
     const key =
       tool === "answer" || tool === "research"
         ? config?.credentials?.answers
         : config?.credentials?.search;
-    try {
-      if (tool)
-        return resolveConfigValue(key)
-          ? { state: "ready" }
-          : { state: "missing_api_key" };
-      return [
-        config?.credentials?.search,
-        config?.credentials?.answers,
-        config?.credentials?.autosuggest,
-      ].some((v) => resolveConfigValue(v))
-        ? { state: "ready" }
-        : { state: "missing_api_key" };
-    } catch (error) {
-      return { state: "invalid_config", detail: formatConfigValueError(error) };
+    if (tool) {
+      return getApiKeyStatus(key, options);
     }
+
+    const statuses = [
+      config?.credentials?.search,
+      config?.credentials?.answers,
+      config?.credentials?.autosuggest,
+    ].map((value) => getApiKeyStatus(value, options));
+    return (
+      statuses.find((status) => status.state === "ready") ??
+      statuses.find((status) => status.state === "deferred_secret") ??
+      statuses.find((status) => status.state === "invalid_config") ?? {
+        state: "missing_api_key",
+      }
+    );
   },
 
   async search(
@@ -1319,11 +1322,12 @@ export const braveProvider = defineProvider({
     },
     optionCapabilities: ["search", "answer", "research"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     braveImplementation.getCapabilityStatus(
       config as Brave | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({
