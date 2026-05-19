@@ -182,7 +182,14 @@ in tool calls.
 Unlike the other managed tools, `web_research` does not accept local timeout,
 retry, polling, or resume controls. Research has one opinionated execution
 style: pi starts it asynchronously, tracks it locally, and saves the final
-report under `.pi/artifacts/research/`.
+report under `.pi/artifacts/research/`. Saved research reports are Markdown
+files with YAML frontmatter for job metadata such as query, provider, status,
+and timestamps.
+
+Use `/web-research` in interactive pi sessions to inspect running research jobs
+and recent saved reports. The manager can cancel a running local job after
+confirmation; cancellation aborts the provider call and records a durable
+`cancelled` artifact under `.pi/artifacts/research/`.
 
 </details>
 

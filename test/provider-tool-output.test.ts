@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -752,8 +752,10 @@ describe("provider tool output", () => {
     };
     expect(details.status).toBe("completed");
     const report = await readFile(details.outputPath, "utf-8");
+    expect(report).toContain("---\n");
+    expect(report).toContain('query: "Investigate the topic"');
+    expect(report).toContain('status: "completed"');
     expect(report).toContain("# Web research report");
-    expect(report).toContain("## Report");
     expect(report).toContain("Detailed report text");
   });
 
@@ -829,9 +831,147 @@ describe("provider tool output", () => {
     expect(details.error).toBe("Gemini: rate limited.");
 
     const report = await readFile(details.outputPath, "utf-8");
+    expect(report).toContain('status: "failed"');
+    expect(report).toContain('error: "Gemini: rate limited."');
     expect(report).toContain("# Web research report");
-    expect(report).toContain("## Error");
-    expect(report).toContain("Gemini: rate limited.");
+  });
+
+  it("records cancellation even when the provider resolves after abort", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-web-research-"));
+    cleanupDirs.push(cwd);
+
+    const config: WebProviders = {
+      providers: {
+        gemini: {
+          credentials: { api: "literal-key" },
+        },
+      },
+    };
+    const sendMessage = vi.fn();
+    const setWidget = vi.fn();
+    const activeWebResearchRequests = new Map();
+    const updateWebResearchWidget = vi.fn();
+    let resolveResearch:
+      | ((value: { provider: "gemini"; text: string }) => void)
+      | undefined;
+
+    const result = await __test__.dispatchWebResearch({
+      pi: { sendMessage },
+      activeWebResearchRequests,
+      updateWebResearchWidget,
+      config,
+      explicitProvider: "gemini",
+      ctx: {
+        cwd,
+        hasUI: true,
+        ui: {
+          setWidget,
+          theme: { fg: (_color: string, text: string) => text } as any,
+        },
+      } as any,
+      options: undefined,
+      input: "Investigate the topic",
+      executionOverride: {
+        capability: "research",
+        providerLabel: "Gemini",
+        execute: async () =>
+          new Promise((resolve) => {
+            resolveResearch = resolve;
+          }),
+      },
+    });
+
+    expect(
+      __test__.cancelWebResearchTask(
+        activeWebResearchRequests,
+        result.details.id,
+      ),
+    ).toBe(true);
+    resolveResearch?.({ provider: "gemini", text: "Late successful report" });
+
+    await __test__.waitForPendingResearchTasks();
+
+    const message = sendMessage.mock.calls[0]?.[0];
+    const details = message?.details as {
+      outputPath: string;
+      status: string;
+      error: string;
+    };
+    expect(details.status).toBe("cancelled");
+    expect(details.error).toBe("web research was cancelled by the user.");
+    expect(message?.content).toBe("web research was cancelled by the user.\n");
+    expect(activeWebResearchRequests.size).toBe(0);
+
+    const report = await readFile(details.outputPath, "utf-8");
+    expect(report).toContain('status: "cancelled"');
+    expect(report).not.toContain("Late successful report");
+  });
+
+  it("loads research history and report previews from artifacts", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pi-web-research-"));
+    cleanupDirs.push(cwd);
+    const artifactsDir = join(cwd, ".pi", "artifacts", "research");
+    await mkdir(artifactsDir, { recursive: true });
+    const olderPath = join(artifactsDir, "older.md");
+    const newerPath = join(artifactsDir, "newer.md");
+    await writeFile(
+      olderPath,
+      [
+        "# Web research report",
+        "",
+        "## Query",
+        "Older topic",
+        "",
+        "## Provider",
+        "Gemini",
+        "",
+        "## Status",
+        "completed",
+        "",
+        "## Started",
+        "2026-01-01T00:00:00.000Z",
+        "",
+        "## Completed",
+        "2026-01-01T00:00:01.000Z",
+        "",
+        "## Report",
+        "Older report",
+        "",
+        "## Status",
+        "This report section must not override artifact metadata.",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await writeFile(
+      newerPath,
+      [
+        "---",
+        'query: "Newer topic"',
+        'provider: "Gemini"',
+        'status: "cancelled"',
+        'startedAt: "2026-01-02T00:00:00.000Z"',
+        'completedAt: "2026-01-02T00:00:01.000Z"',
+        "---",
+        "",
+        "# Web research report",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const history = await __test__.loadWebResearchHistory(cwd);
+
+    expect(history.map((item) => item.query)).toEqual([
+      "Newer topic",
+      "Older topic",
+    ]);
+    expect(history[0]?.status).toBe("cancelled");
+    expect(history[1]?.status).toBe("completed");
+
+    const preview = await __test__.loadWebResearchPreview(olderPath);
+    expect(preview).toContain("Older report");
+    expect(preview).toContain(`Full report: \`${olderPath}\``);
   });
 
   it("cleans up active research jobs even when result delivery throws", async () => {
