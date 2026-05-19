@@ -27,6 +27,53 @@ afterEach(() => {
 });
 
 describe("providerHarness(firecrawlProvider)", () => {
+  it("reports ready for a custom base URL without an API key", () => {
+    expect(
+      firecrawlProvider.getCapabilityStatus(
+        {
+          baseUrl: "http://localhost:3002",
+        },
+        process.cwd(),
+      ),
+    ).toEqual({ state: "ready" });
+  });
+
+  it("reports missing_api_key for Firecrawl Cloud without an API key", () => {
+    expect(firecrawlProvider.getCapabilityStatus({}, process.cwd())).toEqual({
+      state: "missing_api_key",
+    });
+    expect(
+      firecrawlProvider.getCapabilityStatus(
+        {
+          baseUrl: "https://api.firecrawl.dev",
+        },
+        process.cwd(),
+      ),
+    ).toEqual({ state: "missing_api_key" });
+  });
+
+  it("searches with a custom base URL without an API key", async () => {
+    firecrawlSearchMock.mockResolvedValue({ web: [] });
+
+    const response = await providerHarness(firecrawlProvider).search(
+      "firecrawl sdk",
+      4,
+      {
+        baseUrl: "http://localhost:3002",
+      },
+      { cwd: process.cwd() },
+    );
+
+    expect(firecrawlCtorMock).toHaveBeenCalledWith({
+      apiKey: undefined,
+      apiUrl: "http://localhost:3002",
+    });
+    expect(firecrawlSearchMock).toHaveBeenCalledWith("firecrawl sdk", {
+      limit: 4,
+    });
+    expect(response.results).toEqual([]);
+  });
+
   it("merges search options and maps results", async () => {
     process.env.FIRECRAWL_API_KEY = "test-key";
 
