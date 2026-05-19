@@ -237,7 +237,7 @@ describe("providerHarness(braveProvider)", () => {
     ]);
   });
 
-  it("sends Brave Answers options at the top level and parses streamed tags", async () => {
+  it("sends Brave Answers search options under web_search_options and parses streamed tags", async () => {
     process.env.BRAVE_ANSWERS_API_KEY = "answers-key";
     const fetchMock = vi
       .fn()
@@ -262,7 +262,12 @@ describe("providerHarness(braveProvider)", () => {
         baseUrl: "https://api.search.brave.test",
       },
       { cwd: process.cwd() },
-      { country: "US", language: "en", enable_entities: true },
+      {
+        model: "brave-pro",
+        country: "US",
+        language: "en",
+        enable_entities: true,
+      },
     );
 
     const [, init] = fetchMock.mock.calls[0];
@@ -278,13 +283,15 @@ describe("providerHarness(braveProvider)", () => {
       }),
     );
     expect(JSON.parse(String(init.body))).toEqual({
-      model: "brave",
+      model: "brave-pro",
       messages: [{ role: "user", content: "what happened?" }],
       stream: true,
-      country: "US",
-      language: "en",
-      enable_entities: true,
-      enable_citations: true,
+      web_search_options: {
+        country: "US",
+        language: "en",
+        enable_entities: true,
+        enable_citations: true,
+      },
     });
     expect(response).toEqual({
       provider: "brave",
@@ -349,10 +356,12 @@ describe("providerHarness(braveProvider)", () => {
       messages: [{ role: "user", content: "research this topic" }],
       stream: true,
       max_completion_tokens: 1000,
-      country: "US",
-      research_maximum_number_of_queries: 3,
-      enable_research: true,
-      enable_citations: false,
+      web_search_options: {
+        country: "US",
+        research_maximum_number_of_queries: 3,
+        enable_research: true,
+        enable_citations: false,
+      },
     });
     expect(response.text).toBe("Research report");
   });

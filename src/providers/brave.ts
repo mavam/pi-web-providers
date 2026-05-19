@@ -275,8 +275,14 @@ const braveSearchPromptGuidelines = [
 
 const braveAnswerOptionsSchema = Type.Object(
   {
+    model: Type.Optional(
+      Type.Enum({ brave: "brave", bravePro: "brave-pro" } as const, {
+        description: "Brave Answers model. Defaults to 'brave'.",
+      }),
+    ),
     country: Type.Optional(Type.String()),
     language: Type.Optional(Type.String()),
+    safesearch: safesearchOption,
     enable_citations: Type.Optional(Type.Boolean()),
     enable_entities: Type.Optional(Type.Boolean()),
     max_completion_tokens: Type.Optional(Type.Integer({ minimum: 1 })),
@@ -286,8 +292,14 @@ const braveAnswerOptionsSchema = Type.Object(
 
 const braveResearchOptionsSchema = Type.Object(
   {
+    model: Type.Optional(
+      Type.Enum({ brave: "brave", bravePro: "brave-pro" } as const, {
+        description: "Brave Answers model. Defaults to 'brave'.",
+      }),
+    ),
     country: Type.Optional(Type.String()),
     language: Type.Optional(Type.String()),
+    safesearch: safesearchOption,
     enable_entities: Type.Optional(Type.Boolean()),
     enable_citations: Type.Optional(
       Type.Boolean({
@@ -1014,30 +1026,30 @@ function placeRating(
 function buildAnswerRequest(
   raw: Record<string, unknown>,
 ): Record<string, unknown> {
-  const answerOptions = pick(raw, [
+  const webSearchOptions = pick(raw, [
     "country",
     "language",
     "safesearch",
     "enable_entities",
     "enable_citations",
   ]);
-  if (answerOptions.enable_citations === undefined) {
-    answerOptions.enable_citations = true;
+  if (webSearchOptions.enable_citations === undefined) {
+    webSearchOptions.enable_citations = true;
   }
   const stream =
-    answerOptions.enable_citations === true ||
-    answerOptions.enable_entities === true;
+    webSearchOptions.enable_citations === true ||
+    webSearchOptions.enable_entities === true;
   return {
     stream,
-    ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
-    ...answerOptions,
+    ...pick(raw, ["model", "max_completion_tokens", "metadata", "seed"]),
+    web_search_options: webSearchOptions,
   };
 }
 
 function buildResearchRequest(
   raw: Record<string, unknown>,
 ): Record<string, unknown> {
-  const researchOptions = pick(raw, [
+  const webSearchOptions = pick(raw, [
     "country",
     "language",
     "safesearch",
@@ -1049,12 +1061,12 @@ function buildResearchRequest(
     "research_maximum_number_of_seconds",
     "research_maximum_number_of_results_per_query",
   ]);
+  webSearchOptions.enable_research = true;
+  webSearchOptions.enable_citations = false;
   return {
     stream: true,
-    ...pick(raw, ["max_completion_tokens", "metadata", "seed"]),
-    ...researchOptions,
-    enable_research: true,
-    enable_citations: false,
+    ...pick(raw, ["model", "max_completion_tokens", "metadata", "seed"]),
+    web_search_options: webSearchOptions,
   };
 }
 

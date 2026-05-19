@@ -287,16 +287,20 @@ export interface BraveSearchOptions {
 }
 
 export interface BraveAnswerOptions {
+  model?: "brave" | "brave-pro";
   country?: string;
   language?: string;
+  safesearch?: "off" | "moderate" | "strict";
   enable_citations?: boolean;
   enable_entities?: boolean;
   max_completion_tokens?: number;
 }
 
 export interface BraveResearchOptions {
+  model?: "brave" | "brave-pro";
   country?: string;
   language?: string;
+  safesearch?: "off" | "moderate" | "strict";
   enable_entities?: boolean;
   enable_citations?: boolean;
   max_completion_tokens?: number;
