@@ -1,0 +1,10 @@
+created: 2026-05-19
+title: Expanded provider compatibility
+intro: >-
+  This release expands web provider coverage with Serper vertical search modes while
+  keeping Brave, Firecrawl, and current Pi installations working with their latest
+  APIs and package scope. It also improves startup behavior by resolving provider
+  secrets only when a web tool runs.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.0.0
