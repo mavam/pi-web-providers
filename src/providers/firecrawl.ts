@@ -19,6 +19,8 @@ import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
 
+const FIRECRAWL_CLOUD_HOST = "api.firecrawl.dev";
+
 const firecrawlSearchOptionsSchema = Type.Object(
   {
     lang: Type.Optional(
@@ -161,7 +163,7 @@ const firecrawlImplementation = {
     _tool: Tool | undefined,
     options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api, options);
+    return getFirecrawlCapabilityStatus(config, options);
   },
 
   async search(
@@ -234,15 +236,34 @@ const firecrawlImplementation = {
 };
 
 function createClient(config: Firecrawl): FirecrawlClient {
+  const apiUrl = resolveConfigValue(config.baseUrl);
   const apiKey = resolveConfigValue(config.credentials?.api);
-  if (!apiKey) {
+  if (isFirecrawlCloudApiUrl(apiUrl) && !apiKey) {
     throw new Error("is missing an API key");
   }
 
   return new FirecrawlClient({
     apiKey,
-    apiUrl: resolveConfigValue(config.baseUrl),
+    apiUrl,
   });
+}
+
+function getFirecrawlCapabilityStatus(
+  config: Firecrawl | undefined,
+  options?: ProviderCapabilityStatusOptions,
+): ProviderCapabilityStatus {
+  if (!config?.baseUrl || isFirecrawlCloudApiUrl(config.baseUrl)) {
+    return getApiKeyStatus(config?.credentials?.api, options);
+  }
+
+  const apiKeyStatus = getApiKeyStatus(config.credentials?.api, options);
+  return apiKeyStatus.state === "missing_api_key"
+    ? { state: "ready" }
+    : apiKeyStatus;
+}
+
+function isFirecrawlCloudApiUrl(apiUrl: string | undefined): boolean {
+  return !apiUrl || apiUrl.includes(FIRECRAWL_CLOUD_HOST);
 }
 
 function flattenSearchResults(response: SearchData): SearchResult[] {

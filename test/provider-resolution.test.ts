@@ -22,6 +22,7 @@ import {
   getEffectiveProviderConfig,
   getEffectiveSharedSettings,
   getProviderCapabilityStatus,
+  getProviderSetupState,
   resolveProviderForTool,
   resolveSearchProvider,
 } from "../src/provider-resolution.js";
@@ -288,6 +289,18 @@ describe("provider resolution", () => {
       state: "invalid_config",
       detail: expect.stringContaining("Command failed"),
     });
+  });
+
+  it("treats Firecrawl with only a base URL as configured", () => {
+    const config = createConfig({
+      providers: {
+        firecrawl: {
+          baseUrl: "http://localhost:3002",
+        },
+      },
+    });
+
+    expect(getProviderSetupState(config, "firecrawl")).toBe("configured");
   });
 
   it("rejects Custom when the mapped capability has no command configured", () => {

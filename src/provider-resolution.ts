@@ -181,6 +181,13 @@ export function getProviderSetupState(
       : "none";
   }
 
+  if (providerId === "firecrawl") {
+    return providerConfig.credentials !== undefined ||
+      providerConfig.baseUrl !== undefined
+      ? "configured"
+      : "none";
+  }
+
   return providerConfig.credentials !== undefined ? "configured" : "none";
 }
 

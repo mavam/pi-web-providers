@@ -322,6 +322,10 @@ scope, or account ID is usually wrong.
   `location`, `timeout`, and `scrapeOptions`
 - Exposes contents options such as `formats`, `onlyMainContent`, `includeTags`,
   `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
+- Optional `baseUrl` overrides are supported for self-hosted Firecrawl
+  instances, proxies, and testing. API keys are required for Firecrawl Cloud,
+  but can be omitted for self-hosted endpoints that do not enforce
+  authentication.
 
 </details>
 
