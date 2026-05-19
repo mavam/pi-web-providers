@@ -6,6 +6,7 @@ import { DEFAULT_GEMINI_RESEARCH_MAX_CONSECUTIVE_POLL_ERRORS } from "../executio
 import type {
   Gemini,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   ResearchJob,
   ResearchPollResult,
@@ -152,8 +153,13 @@ export const geminiImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Gemini | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Gemini | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -1085,11 +1091,12 @@ export const geminiProvider = defineProvider({
     createTemplate: () => geminiImplementation.createTemplate(),
     fields: ["credentials", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (geminiImplementation.getCapabilityStatus as any)(
       config as Gemini | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

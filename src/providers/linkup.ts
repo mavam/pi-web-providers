@@ -10,6 +10,7 @@ import type { ContentsResponse } from "../contents.js";
 import type {
   Linkup,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   SearchResult,
@@ -110,8 +111,13 @@ const linkupImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Linkup | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Linkup | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -324,11 +330,12 @@ export const linkupProvider = defineProvider({
     createTemplate: () => linkupImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (linkupImplementation.getCapabilityStatus as any)(
       config as Linkup | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

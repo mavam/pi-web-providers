@@ -8,6 +8,7 @@ import type { ContentsResponse } from "../contents.js";
 import type {
   Firecrawl,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   SearchResult,
@@ -154,8 +155,13 @@ const firecrawlImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Firecrawl | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Firecrawl | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -321,11 +327,12 @@ export const firecrawlProvider = defineProvider({
     createTemplate: () => firecrawlImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (firecrawlImplementation.getCapabilityStatus as any)(
       config as Firecrawl | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

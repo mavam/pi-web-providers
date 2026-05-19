@@ -6,6 +6,7 @@ import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   Exa,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   ResearchJob,
   ResearchPollResult,
@@ -133,8 +134,13 @@ const exaImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Exa | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Exa | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -339,11 +345,12 @@ export const exaProvider = defineProvider({
     fields: ["credentials", "baseUrl", "options", "settings"],
     optionCapabilities: ["search"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (exaImplementation.getCapabilityStatus as any)(
       config as Exa | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

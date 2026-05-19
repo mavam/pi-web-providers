@@ -5,6 +5,7 @@ import type { ContentsResponse } from "../contents.js";
 import type {
   Cloudflare,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   Tool,
 } from "../types.js";
@@ -68,10 +69,15 @@ const cloudflareImplementation = {
 
   getCapabilityStatus(
     config: Cloudflare | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
   ): ProviderCapabilityStatus {
-    const apiTokenStatus = getApiKeyStatus(config?.credentials?.api);
+    const apiTokenStatus = getApiKeyStatus(config?.credentials?.api, options);
     if (apiTokenStatus.state !== "ready") {
-      return apiTokenStatus;
+      if (apiTokenStatus.state !== "deferred_secret") {
+        return apiTokenStatus;
+      }
     }
 
     try {
@@ -85,7 +91,9 @@ const cloudflareImplementation = {
       };
     }
 
-    return { state: "ready" };
+    return apiTokenStatus.state === "deferred_secret"
+      ? apiTokenStatus
+      : { state: "ready" };
   },
 
   async contents(
@@ -160,11 +168,12 @@ export const cloudflareProvider = defineProvider({
     createTemplate: () => cloudflareImplementation.createTemplate(),
     fields: ["credentials", "accountId", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (cloudflareImplementation.getCapabilityStatus as any)(
       config as Cloudflare | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     contents: defineCapability({

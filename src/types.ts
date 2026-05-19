@@ -419,10 +419,15 @@ export type ProviderSetupState = "builtin" | "configured" | "none";
 
 export type ProviderCapabilityStatus =
   | { state: "ready" }
+  | { state: "deferred_secret" }
   | { state: "missing_api_key" }
   | { state: "missing_executable" }
   | { state: "missing_command" }
   | { state: "invalid_config"; detail: string };
+
+export interface ProviderCapabilityStatusOptions {
+  resolveSecrets?: boolean;
+}
 
 export interface ProviderContext {
   cwd: string;

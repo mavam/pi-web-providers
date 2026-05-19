@@ -4,6 +4,7 @@ import { PROVIDERS } from "./providers/index.js";
 import type {
   ExecutionSettings,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderConfig,
   ProviderId,
   ProviderSetupState,
@@ -131,12 +132,14 @@ export function getProviderCapabilityStatus<TProviderId extends ProviderId>(
   cwd: string,
   providerId: TProviderId,
   tool?: Tool,
+  options?: ProviderCapabilityStatusOptions,
 ): ProviderCapabilityStatus {
   const provider = PROVIDERS[providerId];
   return provider.getCapabilityStatus(
     getEffectiveProviderConfig(config, providerId) as never,
     cwd,
     tool,
+    options,
   );
 }
 
@@ -144,6 +147,12 @@ export function isProviderCapabilityReady(
   status: ProviderCapabilityStatus,
 ): boolean {
   return status.state === "ready";
+}
+
+export function isProviderCapabilityExposable(
+  status: ProviderCapabilityStatus,
+): boolean {
+  return status.state === "ready" || status.state === "deferred_secret";
 }
 
 export function getProviderSetupState(
@@ -183,6 +192,8 @@ export function formatProviderCapabilityStatus(
   switch (status.state) {
     case "ready":
       return "Ready";
+    case "deferred_secret":
+      return "Secret resolved on first use";
     case "missing_api_key":
       return "Missing API key";
     case "missing_executable":

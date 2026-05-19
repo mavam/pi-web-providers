@@ -5,6 +5,7 @@ import type { ContentsResponse } from "../contents.js";
 import type {
   Parallel,
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   Tool,
@@ -75,8 +76,13 @@ const parallelImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Parallel | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Parallel | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -188,11 +194,12 @@ export const parallelProvider = defineProvider({
     createTemplate: () => parallelImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (parallelImplementation.getCapabilityStatus as any)(
       config as Parallel | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

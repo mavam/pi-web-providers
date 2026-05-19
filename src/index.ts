@@ -53,7 +53,7 @@ import {
   getMappedProviderIdForTool,
   getProviderCapabilityStatus,
   getProviderSetupState,
-  isProviderCapabilityReady,
+  isProviderCapabilityExposable,
   resolveProviderForTool,
   resolveSearchProvider,
   supportsTool,
@@ -611,12 +611,21 @@ function getAvailableProviderIdsForCapability(
     return [];
   }
 
-  try {
-    resolveProviderForTool(config, cwd, capability);
-    return [providerId];
-  } catch {
+  const provider = PROVIDERS_BY_ID[providerId];
+  if (!supportsTool(provider, capability)) {
     return [];
   }
+
+  const status = getProviderCapabilityStatus(
+    config,
+    cwd,
+    providerId,
+    capability,
+    {
+      resolveSecrets: false,
+    },
+  );
+  return isProviderCapabilityExposable(status) ? [providerId] : [];
 }
 
 function getProviderStatusForTool(
@@ -2811,12 +2820,19 @@ function getReadyCompatibleProvidersForTool(
   cwd: string,
   toolId: Tool,
 ): ProviderId[] {
+  const mappedProviderId = getMappedProviderIdForTool(config, toolId);
   return sortProviderIdsForSettings(
-    getCompatibleProviders(toolId).filter((providerId) =>
-      isProviderCapabilityReady(
-        getProviderCapabilityStatus(config, cwd, providerId, toolId),
-      ),
-    ),
+    getCompatibleProviders(toolId).filter((providerId) => {
+      const setupState = getProviderSetupState(config, providerId);
+      if (setupState === "none" && providerId !== mappedProviderId) {
+        return false;
+      }
+      return isProviderCapabilityExposable(
+        getProviderCapabilityStatus(config, cwd, providerId, toolId, {
+          resolveSecrets: false,
+        }),
+      );
+    }),
   );
 }
 
@@ -3115,7 +3131,7 @@ class WebProvidersSettingsView implements Component {
         description:
           `Press Enter to configure web_${toolId}. ${TOOL_INFO[toolId].help} Route web_${toolId} to one compatible provider or turn it off.` +
           (compatibleLabels.length > 0
-            ? ` Ready compatible providers: ${compatibleLabels.join(", ")}.`
+            ? ` Compatible providers: ${compatibleLabels.join(", ")}.`
             : ""),
         kind: "action",
       };
@@ -3500,7 +3516,7 @@ class ToolSettingsSubmenu implements Component {
         id: "provider",
         label: "Provider",
         currentValue: currentProviderValue,
-        description: `Route web_${this.toolId} to one compatible ready provider or turn it off.`,
+        description: `Route web_${this.toolId} to one compatible provider or turn it off.`,
         kind: "cycle",
         values: providerValues,
       },
@@ -3986,10 +4002,15 @@ function getProviderReadinessSummary(
 ): string {
   const tools = getProviderTools(providerId);
   const statuses = tools.map((tool) =>
-    getProviderCapabilityStatus(config, cwd, providerId, tool),
+    getProviderCapabilityStatus(config, cwd, providerId, tool, {
+      resolveSecrets: false,
+    }),
   );
   if (statuses.some((status) => status.state === "ready")) {
     return "Ready";
+  }
+  if (statuses.some((status) => status.state === "deferred_secret")) {
+    return "Secrets resolved on first use";
   }
   return formatProviderCapabilityStatus(statuses[0], providerId, tools[0]);
 }
@@ -4002,6 +4023,8 @@ function getProviderReadinessSummaryForProviderConfig(
     (providerConfig ??
       PROVIDERS_BY_ID[providerId].config.createTemplate()) as never,
     "",
+    undefined,
+    { resolveSecrets: false },
   );
   return formatProviderCapabilityStatus(status, providerId);
 }

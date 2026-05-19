@@ -9,6 +9,7 @@ import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
 import type {
   ProviderCapabilityStatus,
+  ProviderCapabilityStatusOptions,
   ProviderContext,
   SearchResponse,
   Tavily,
@@ -130,8 +131,13 @@ const tavilyImplementation = {
     };
   },
 
-  getCapabilityStatus(config: Tavily | undefined): ProviderCapabilityStatus {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Tavily | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ): ProviderCapabilityStatus {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   async search(
@@ -268,11 +274,12 @@ export const tavilyProvider = defineProvider({
     createTemplate: () => tavilyImplementation.createTemplate(),
     fields: ["credentials", "baseUrl", "options", "settings"],
   },
-  getCapabilityStatus: (config, cwd, tool) =>
+  getCapabilityStatus: (config, cwd, tool, options) =>
     (tavilyImplementation.getCapabilityStatus as any)(
       config as Tavily | undefined,
       cwd,
       tool,
+      options,
     ),
   capabilities: {
     search: defineCapability({

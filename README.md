@@ -46,6 +46,12 @@ settings UI mirrors the three sections below: tools, providers, and settings.
 
 Each tool can be routed to any compatible provider:
 
+Provider credentials can be literal values, environment variable names, or
+`!command` references. pi-web-providers resolves those secrets lazily on the
+first matching tool use, not when a session starts. This avoids startup delays
+from password-manager commands such as `op`; missing or failing secrets are
+reported when the tool is actually called.
+
 **Built-in local providers**
 
 | Provider   | search | contents | answer | research | Auth                   |

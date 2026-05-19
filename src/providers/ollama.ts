@@ -1,6 +1,12 @@
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
-import type { Ollama, ProviderContext, SearchResponse } from "../types.js";
+import type {
+  Ollama,
+  ProviderCapabilityStatusOptions,
+  ProviderContext,
+  SearchResponse,
+  Tool,
+} from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
 import {
   getApiKeyStatus,
@@ -26,8 +32,13 @@ export const ollamaProvider = defineProvider({
     fields: ["credentials", "baseUrl", "settings"],
   },
 
-  getCapabilityStatus(config: Ollama | undefined) {
-    return getApiKeyStatus(config?.credentials?.api);
+  getCapabilityStatus(
+    config: Ollama | undefined,
+    _cwd: string,
+    _tool: Tool | undefined,
+    options?: ProviderCapabilityStatusOptions,
+  ) {
+    return getApiKeyStatus(config?.credentials?.api, options);
   },
 
   capabilities: {
