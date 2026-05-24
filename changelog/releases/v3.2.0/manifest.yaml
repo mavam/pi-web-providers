@@ -1,0 +1,10 @@
+created: 2026-05-24
+title: Linkup research provider support
+intro: >-
+  Linkup can now power web research in addition to search and contents, giving users
+  a single Linkup-backed provider for sourced investigations. The release adds structured
+  answer modes and investigation controls such as reasoning depth, domains, and date
+  filters.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.1.0
