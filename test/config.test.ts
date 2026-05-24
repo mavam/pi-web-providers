@@ -165,6 +165,10 @@ describe("config parsing", () => {
               fetch: {
                 renderJs: true,
               },
+              research: {
+                mode: "investigate",
+                reasoningDepth: "L",
+              },
             },
             settings: {
               requestTimeoutMs: 45000,
@@ -184,6 +188,10 @@ describe("config parsing", () => {
         },
         fetch: {
           renderJs: true,
+        },
+        research: {
+          mode: "investigate",
+          reasoningDepth: "L",
         },
       },
       settings: {

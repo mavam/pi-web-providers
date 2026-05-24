@@ -68,7 +68,7 @@ reported when the tool is actually called.
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
 | **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
-| **Linkup**     |   ✔    |    ✔     |        |          | `LINKUP_API_KEY`                                 |
+| **Linkup**     |   ✔    |    ✔     |        |    ✔     | `LINKUP_API_KEY`                                 |
 | **Ollama**     |   ✔    |    ✔     |        |          | `OLLAMA_API_KEY`                                 |
 | **OpenAI**     |   ✔    |          |   ✔    |    ✔     | `OPENAI_API_KEY`                                 |
 | **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
@@ -352,10 +352,17 @@ scope, or account ID is usually wrong.
 - SDK: `linkup-sdk`
 - Supports `web_search` via Linkup Search with fixed `searchResults` output
 - Supports `web_contents` via Linkup Fetch and always returns markdown
+- Supports `web_research` via Linkup's async Research API
 - Exposes search options `depth`, `includeImages`, `includeDomains`,
   `excludeDomains`, `fromDate`, and `toDate`
 - Exposes contents options `renderJs`, `includeRawHtml`, and `extractImages`
-- Good fit for a simple search-plus-markdown setup without extra provider wiring
+- Exposes research options `outputType`, `mode`, `reasoningDepth`,
+  `includeDomains`, `excludeDomains`, `fromDate`, `toDate`, and
+  `structuredOutputSchema`
+- Research defaults to `sourcedAnswer`; provide `structuredOutputSchema` for
+  structured output
+- Good fit for search, markdown extraction, and long-running sourced research
+  without extra provider wiring
 
 </details>
 

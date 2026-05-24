@@ -73,7 +73,7 @@
     "@tavily/core": "^0.7.3",
     "cloudflare": "^5.2.0",
     "exa-js": "^2.12.1",
-    "linkup-sdk": "^2.7.0",
+    "linkup-sdk": "^3.2.0",
     "openai": "^6.35.0",
     "parallel-web": "^0.4.1",
     "valyu-js": "^2.7.14"

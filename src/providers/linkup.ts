@@ -1,23 +1,36 @@
 import {
   type FetchParams,
   LinkupClient,
+  type ResearchMode,
+  type ResearchParams,
+  type ResearchReasoningDepth,
+  type ResearchTask,
   type SearchDepth,
   type SearchParams,
 } from "linkup-sdk";
 import { type TObject, Type } from "typebox";
 import { resolveConfigValue } from "../config-values.js";
 import type { ContentsResponse } from "../contents.js";
+import { executeAsyncResearch } from "../execution-policy.js";
 import type {
   Linkup,
   ProviderCapabilityStatus,
   ProviderCapabilityStatusOptions,
   ProviderContext,
+  ResearchJob,
+  ResearchPollResult,
   SearchResponse,
   SearchResult,
   Tool,
+  ToolOutput,
 } from "../types.js";
 import { literalUnion } from "./schema.js";
-import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  formatJson,
+  getApiKeyStatus,
+  trimSnippet,
+} from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
 type LinkupSearchOptions = {
@@ -43,6 +56,22 @@ type ManagedLinkupSearchParams = Extract<
   SearchParams,
   { outputType: "searchResults" }
 >;
+
+type ManagedLinkupResearchParams = ResearchParams;
+
+type LinkupResearchOptions = {
+  outputType?: "sourcedAnswer" | "structured";
+  mode?: ResearchMode;
+  reasoningDepth?: ResearchReasoningDepth;
+  includeDomains?: string[];
+  excludeDomains?: string[];
+  fromDate?: string | number | Date;
+  toDate?: string | number | Date;
+  structuredOutputSchema?: unknown;
+  q?: string;
+  query?: string;
+  input?: string;
+};
 
 const linkupSearchOptionsSchema = Type.Object(
   {
@@ -89,6 +118,50 @@ const linkupContentsOptionsSchema = Type.Object(
   { description: "Linkup fetch options." },
 );
 
+const linkupResearchOptionsSchema = Type.Object(
+  {
+    outputType: Type.Optional(
+      literalUnion(["sourcedAnswer", "structured"], {
+        description:
+          "Research output type. Defaults to 'sourcedAnswer' unless structuredOutputSchema is provided.",
+      }),
+    ),
+    mode: Type.Optional(
+      literalUnion(["answer", "auto", "investigate", "research"], {
+        description:
+          "Research mode. Use 'answer' for precise verified answers, 'investigate' for focused deep dives, 'research' for broad reports, or omit/auto to let Linkup classify the task.",
+      }),
+    ),
+    reasoningDepth: Type.Optional(
+      literalUnion(["S", "M", "L", "XL"], {
+        description:
+          "Reasoning depth. Higher values trade latency for more thorough investigation.",
+      }),
+    ),
+    includeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict research to these domains.",
+      }),
+    ),
+    excludeDomains: Type.Optional(
+      Type.Array(Type.String(), { description: "Exclude these domains." }),
+    ),
+    fromDate: Type.Optional(
+      Type.String({ description: "ISO date string for earliest result date." }),
+    ),
+    toDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest result date." }),
+    ),
+    structuredOutputSchema: Type.Optional(
+      Type.Record(Type.String(), Type.Any(), {
+        description:
+          "JSON schema object required when outputType is 'structured'.",
+      }),
+    ),
+  },
+  { description: "Linkup research options." },
+);
+
 const linkupImplementation = {
   id: "linkup" as const,
   label: "Linkup",
@@ -100,6 +173,8 @@ const linkupImplementation = {
         return linkupSearchOptionsSchema;
       case "contents":
         return linkupContentsOptionsSchema;
+      case "research":
+        return linkupResearchOptionsSchema;
       default:
         return undefined;
     }
@@ -185,6 +260,74 @@ const linkupImplementation = {
       ),
     };
   },
+
+  async research(
+    input: string,
+    config: Linkup,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput> {
+    return await executeAsyncResearch({
+      providerLabel: linkupImplementation.label,
+      providerId: linkupImplementation.id,
+      context,
+      start: (researchContext) =>
+        linkupImplementation.startResearch(
+          input,
+          config,
+          researchContext,
+          options,
+        ),
+      poll: (id, researchContext) =>
+        linkupImplementation.pollResearch(id, config, researchContext),
+    });
+  },
+
+  async startResearch(
+    input: string,
+    config: Linkup,
+    _context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchJob> {
+    const client = createClient(config);
+    const defaults = asJsonObject(config.options?.research) ?? {};
+    const task = await client.research(
+      buildResearchParams(input, {
+        ...defaults,
+        ...(options ?? {}),
+      }),
+    );
+
+    return { id: task.id };
+  },
+
+  async pollResearch(
+    id: string,
+    config: Linkup,
+    _context: ProviderContext,
+  ): Promise<ResearchPollResult> {
+    const client = createClient(config);
+    const task = await client.getResearch(id);
+
+    if (task.status === "completed") {
+      return {
+        status: "completed",
+        output: formatResearchTaskOutput(task),
+      };
+    }
+
+    if (task.status === "failed") {
+      return {
+        status: "failed",
+        error: task.error ?? "research failed",
+      };
+    }
+
+    return {
+      status: "in_progress",
+      statusText: task.status,
+    };
+  },
 };
 
 function buildSearchParams(
@@ -265,6 +408,82 @@ function buildFetchParams(
   };
 }
 
+function buildResearchParams(
+  input: string,
+  options: Record<string, unknown>,
+): ManagedLinkupResearchParams {
+  const researchOptions = options as LinkupResearchOptions;
+
+  if (
+    researchOptions.q !== undefined ||
+    researchOptions.query !== undefined ||
+    researchOptions.input !== undefined
+  ) {
+    throw new Error(
+      "Linkup research options cannot override the managed input.",
+    );
+  }
+
+  const outputType =
+    researchOptions.outputType ??
+    (researchOptions.structuredOutputSchema !== undefined
+      ? "structured"
+      : "sourcedAnswer");
+
+  if (
+    outputType === "structured" &&
+    researchOptions.structuredOutputSchema === undefined
+  ) {
+    throw new Error(
+      "Linkup research outputType 'structured' requires structuredOutputSchema.",
+    );
+  }
+
+  if (
+    outputType === "sourcedAnswer" &&
+    researchOptions.structuredOutputSchema !== undefined
+  ) {
+    throw new Error(
+      "Linkup research structuredOutputSchema requires outputType 'structured'.",
+    );
+  }
+
+  const commonParams = {
+    query: input,
+    ...(researchOptions.includeDomains !== undefined
+      ? { includeDomains: researchOptions.includeDomains }
+      : {}),
+    ...(researchOptions.excludeDomains !== undefined
+      ? { excludeDomains: researchOptions.excludeDomains }
+      : {}),
+    ...(researchOptions.fromDate !== undefined
+      ? { fromDate: toDate(researchOptions.fromDate, "fromDate") }
+      : {}),
+    ...(researchOptions.toDate !== undefined
+      ? { toDate: toDate(researchOptions.toDate, "toDate") }
+      : {}),
+    ...(researchOptions.mode !== undefined
+      ? { mode: researchOptions.mode }
+      : {}),
+    ...(researchOptions.reasoningDepth !== undefined
+      ? { reasoningDepth: researchOptions.reasoningDepth }
+      : {}),
+  };
+
+  if (outputType === "structured") {
+    return {
+      ...commonParams,
+      outputType,
+      structuredOutputSchema: researchOptions.structuredOutputSchema,
+    } as ManagedLinkupResearchParams;
+  }
+
+  return {
+    ...commonParams,
+    outputType,
+  } as ManagedLinkupResearchParams;
+}
+
 function createClient(config: Linkup): LinkupClient {
   const apiKey = resolveConfigValue(config.credentials?.api);
   if (!apiKey) {
@@ -275,6 +494,47 @@ function createClient(config: Linkup): LinkupClient {
     apiKey,
     baseUrl: resolveConfigValue(config.baseUrl),
   });
+}
+
+function formatResearchTaskOutput(task: ResearchTask): ToolOutput {
+  const output = task.output;
+  if (!output) {
+    return {
+      provider: linkupImplementation.id,
+      text: "Linkup research completed without textual output.",
+    };
+  }
+
+  const outputRecord = asRecord(output);
+  const inputRecord = asRecord(task.input);
+  const outputType = inputRecord
+    ? readString(inputRecord.outputType)
+    : undefined;
+  const answer = outputRecord ? readString(outputRecord.answer) : undefined;
+  const sources = outputRecord ? readSources(outputRecord.sources) : [];
+
+  if (outputType !== "structured" && answer !== undefined) {
+    const lines = [answer];
+    if (sources.length > 0) {
+      lines.push("");
+      lines.push("Sources:");
+      for (const [index, source] of sources.entries()) {
+        lines.push(`${index + 1}. ${source.title}`);
+        lines.push(`   ${source.url}`);
+      }
+    }
+
+    return {
+      provider: linkupImplementation.id,
+      text: lines.join("\n").trimEnd(),
+      itemCount: sources.length,
+    };
+  }
+
+  return {
+    provider: linkupImplementation.id,
+    text: formatJson(output),
+  };
 }
 
 function toSearchResult(value: unknown): SearchResult | null {
@@ -300,6 +560,31 @@ function toSearchResult(value: unknown): SearchResult | null {
     snippet,
     metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
   };
+}
+
+function readSources(value: unknown): Array<{ title: string; url: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.flatMap((entry) => {
+    const source = asRecord(entry);
+    if (!source) {
+      return [];
+    }
+
+    const url = readString(source.url);
+    if (!url) {
+      return [];
+    }
+
+    return [
+      {
+        title: readString(source.name) ?? url,
+        url,
+      },
+    ];
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -356,6 +641,17 @@ export const linkupProvider = defineProvider({
       async execute(input: any, ctx) {
         return await linkupImplementation.contents!(
           input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    research: defineCapability({
+      options: linkupImplementation.getToolOptionsSchema?.("research"),
+      async execute(input: any, ctx) {
+        return await linkupImplementation.research!(
+          input.input,
           ctx.config as never,
           ctx,
           input.options,

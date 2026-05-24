@@ -1,18 +1,26 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { linkupCtorMock, linkupFetchMock, linkupSearchMock } = vi.hoisted(
-  () => ({
-    linkupCtorMock: vi.fn(),
-    linkupFetchMock: vi.fn(),
-    linkupSearchMock: vi.fn(),
-  }),
-);
+const {
+  linkupCtorMock,
+  linkupFetchMock,
+  linkupGetResearchMock,
+  linkupResearchMock,
+  linkupSearchMock,
+} = vi.hoisted(() => ({
+  linkupCtorMock: vi.fn(),
+  linkupFetchMock: vi.fn(),
+  linkupGetResearchMock: vi.fn(),
+  linkupResearchMock: vi.fn(),
+  linkupSearchMock: vi.fn(),
+}));
 
 vi.mock("linkup-sdk", () => ({
   LinkupClient: linkupCtorMock.mockImplementation(function MockLinkup() {
     return {
       search: linkupSearchMock,
       fetch: linkupFetchMock,
+      research: linkupResearchMock,
+      getResearch: linkupGetResearchMock,
     };
   }),
 }));
@@ -25,6 +33,9 @@ afterEach(() => {
   linkupCtorMock.mockClear();
   linkupSearchMock.mockReset();
   linkupFetchMock.mockReset();
+  linkupResearchMock.mockReset();
+  linkupGetResearchMock.mockReset();
+  vi.useRealTimers();
 });
 
 describe("providerHarness(linkupProvider)", () => {
@@ -202,6 +213,206 @@ describe("providerHarness(linkupProvider)", () => {
         error: "No content returned for this URL.",
       },
     ]);
+  });
+
+  it("starts Linkup research, polls by id, and formats sourced answers", async () => {
+    vi.useFakeTimers();
+
+    process.env.LINKUP_API_KEY = "test-key";
+    linkupResearchMock.mockResolvedValue({
+      id: "linkup-research-1",
+      status: "pending",
+    });
+    linkupGetResearchMock
+      .mockResolvedValueOnce({
+        id: "linkup-research-1",
+        status: "processing",
+        output: null,
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        id: "linkup-research-1",
+        status: "completed",
+        output: {
+          answer: "Linkup research result",
+          sources: [
+            {
+              name: "Source A",
+              url: "https://example.com/a",
+              snippet: "A",
+              favicon: "https://example.com/favicon.ico",
+            },
+          ],
+        },
+        error: null,
+      });
+
+    const promise = providerHarness(linkupProvider).research(
+      "Investigate Linkup research",
+      {
+        credentials: { api: "LINKUP_API_KEY" },
+        baseUrl: "https://api.linkup.test/v1",
+        options: {
+          research: {
+            includeDomains: ["docs.linkup.so"],
+            reasoningDepth: "M",
+          },
+        },
+      },
+      { cwd: process.cwd() },
+      {
+        mode: "investigate",
+        reasoningDepth: "L",
+        excludeDomains: ["example.net"],
+        fromDate: "2026-01-02T03:04:05.000Z",
+      },
+    );
+
+    await vi.advanceTimersByTimeAsync(3000);
+    const response = await promise;
+
+    expect(linkupResearchMock).toHaveBeenCalledTimes(1);
+    expect(linkupResearchMock).toHaveBeenCalledWith({
+      query: "Investigate Linkup research",
+      outputType: "sourcedAnswer",
+      includeDomains: ["docs.linkup.so"],
+      excludeDomains: ["example.net"],
+      fromDate: expect.any(Date),
+      mode: "investigate",
+      reasoningDepth: "L",
+    });
+    expect(
+      (
+        linkupResearchMock.mock.calls[0]?.[0] as { fromDate: Date }
+      ).fromDate.toISOString(),
+    ).toBe("2026-01-02T03:04:05.000Z");
+    expect(linkupGetResearchMock).toHaveBeenCalledTimes(2);
+    expect(linkupGetResearchMock).toHaveBeenNthCalledWith(
+      1,
+      "linkup-research-1",
+    );
+    expect(response).toEqual({
+      provider: "linkup",
+      text: "Linkup research result\n\nSources:\n1. Source A\n   https://example.com/a",
+      itemCount: 1,
+    });
+  });
+
+  it("infers structured Linkup research output from structuredOutputSchema", async () => {
+    linkupResearchMock.mockResolvedValue({
+      id: "linkup-research-structured",
+      status: "pending",
+    });
+    linkupGetResearchMock.mockResolvedValue({
+      id: "linkup-research-structured",
+      status: "completed",
+      output: {
+        companies: [
+          {
+            name: "Example Corp",
+            score: 0.9,
+          },
+        ],
+      },
+      error: null,
+    });
+
+    const response = await providerHarness(linkupProvider).research(
+      "Find companies",
+      {
+        credentials: { api: "literal-key" },
+      },
+      { cwd: process.cwd() },
+      {
+        structuredOutputSchema: {
+          type: "object",
+          properties: {
+            companies: {
+              type: "array",
+            },
+          },
+        },
+      },
+    );
+
+    expect(linkupResearchMock).toHaveBeenCalledWith({
+      query: "Find companies",
+      outputType: "structured",
+      structuredOutputSchema: {
+        type: "object",
+        properties: {
+          companies: {
+            type: "array",
+          },
+        },
+      },
+    });
+    expect(response).toEqual({
+      provider: "linkup",
+      text: JSON.stringify(
+        {
+          companies: [
+            {
+              name: "Example Corp",
+              score: 0.9,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    });
+  });
+
+  it("maps failed Linkup research tasks to terminal research errors", async () => {
+    linkupResearchMock.mockResolvedValue({
+      id: "linkup-research-failed",
+      status: "pending",
+    });
+    linkupGetResearchMock.mockResolvedValue({
+      id: "linkup-research-failed",
+      status: "failed",
+      output: null,
+      error: "quota exceeded",
+    });
+
+    await expect(
+      providerHarness(linkupProvider).research(
+        "Investigate failure",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+      ),
+    ).rejects.toThrow(/Linkup research failed: quota exceeded/);
+  });
+
+  it("rejects incompatible Linkup research option overrides", async () => {
+    await expect(
+      providerHarness(linkupProvider).research(
+        "Investigate Linkup",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+        {
+          query: "override",
+        },
+      ),
+    ).rejects.toThrow(/cannot override the managed input/);
+
+    await expect(
+      providerHarness(linkupProvider).research(
+        "Investigate Linkup",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+        {
+          outputType: "structured",
+        },
+      ),
+    ).rejects.toThrow(/requires structuredOutputSchema/);
   });
 
   it("requires an API key", async () => {

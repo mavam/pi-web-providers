@@ -887,6 +887,7 @@ describe("managed tool availability", () => {
       tools: {
         search: "linkup",
         contents: "linkup",
+        research: "linkup",
       },
       providers: {
         linkup: {
@@ -910,8 +911,15 @@ describe("managed tool availability", () => {
       ),
     ).toEqual(["linkup"]);
     expect(
+      __test__.getAvailableProviderIdsForCapability(
+        config,
+        process.cwd(),
+        "research",
+      ),
+    ).toEqual(["linkup"]);
+    expect(
       __test__.getAvailableManagedToolNames(config, process.cwd()),
-    ).toEqual(["web_search", "web_contents"]);
+    ).toEqual(["web_search", "web_contents", "web_research"]);
   });
 });
 

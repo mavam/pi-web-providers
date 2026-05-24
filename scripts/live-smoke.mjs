@@ -10,14 +10,15 @@ const PROVIDERS_BY_TOOL = {
     "custom",
     "exa",
     "gemini",
+    "linkup",
     "perplexity",
     "parallel",
     "serper",
     "valyu",
   ],
-  contents: ["custom", "exa", "parallel", "valyu"],
+  contents: ["custom", "exa", "linkup", "parallel", "valyu"],
   answer: ["claude", "custom", "exa", "gemini", "perplexity", "valyu"],
-  research: ["custom", "exa", "gemini", "perplexity", "valyu"],
+  research: ["custom", "exa", "gemini", "linkup", "perplexity", "valyu"],
 };
 
 const PROBE_INPUTS = {
@@ -33,6 +34,9 @@ const PROBE_INPUTS = {
     urlsByProvider: {
       custom: ["https://platform.openai.com/docs/overview"],
       exa: ["https://platform.openai.com/docs/overview"],
+      linkup: [
+        "https://docs.linkup.so/pages/documentation/endpoints/research/overview",
+      ],
       parallel: ["https://openai.com/api/"],
       valyu: ["https://github.com/openai/openai-python"],
     },
@@ -50,7 +54,13 @@ const PROBE_INPUTS = {
       pollIntervalMs: 3_000,
       maxConsecutivePollErrors: 2,
     },
-    timeoutMs: 240_000,
+    optionsByProvider: {
+      linkup: {
+        mode: "answer",
+        reasoningDepth: "S",
+      },
+    },
+    timeoutMs: 360_000,
   },
 };
 
@@ -68,11 +78,11 @@ for (const probe of probes) {
     probe.providerId,
     probe.capability,
   );
-  if (!status.available) {
+  if (!isProviderStatusAvailable(status)) {
     const outcome = {
       probe,
       status: "skipped",
-      message: status.summary,
+      message: formatProviderStatus(status),
     };
     outcomes.push(outcome);
     printOutcome(outcome);
@@ -164,6 +174,17 @@ function parseArgs(args) {
   return filters;
 }
 
+function isProviderStatusAvailable(status) {
+  return status.state === "ready" || status.state === "deferred_secret";
+}
+
+function formatProviderStatus(status) {
+  if (status.detail) {
+    return `${status.state}: ${status.detail}`;
+  }
+  return status.state;
+}
+
 function printHelp() {
   console.log(
     [
@@ -231,7 +252,10 @@ function buildProbe(capability, providerId) {
     capability,
     providerId,
     input: PROBE_INPUTS.research.input,
-    options: PROBE_INPUTS.research.options,
+    options: {
+      ...PROBE_INPUTS.research.options,
+      ...(PROBE_INPUTS.research.optionsByProvider[providerId] ?? {}),
+    },
     timeoutMs: PROBE_INPUTS.research.timeoutMs,
   };
 }

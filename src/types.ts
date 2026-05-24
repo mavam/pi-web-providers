@@ -151,6 +151,7 @@ export interface GeminiOptions {
 export interface LinkupOptions {
   search?: Record<string, unknown>;
   fetch?: Record<string, unknown>;
+  research?: Record<string, unknown>;
 }
 
 export interface PerplexityOptions {
