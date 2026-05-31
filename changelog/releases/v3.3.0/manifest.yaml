@@ -1,0 +1,9 @@
+created: 2026-05-31
+title: Firecrawl page-scoped answers
+intro: >-
+  Firecrawl can now answer questions against a specific page through its question
+  format. This lets users ask for concise page-scoped answers without first fetching
+  full page contents.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.2.0
