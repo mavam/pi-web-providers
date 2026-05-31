@@ -12,14 +12,22 @@ import type {
   ProviderContext,
   SearchResponse,
   SearchResult,
+  ToolOutput,
   Tool,
 } from "../types.js";
 import { literalUnion } from "./schema.js";
-import { asJsonObject, getApiKeyStatus, trimSnippet } from "./shared.js";
+import {
+  asJsonObject,
+  formatJson,
+  getApiKeyStatus,
+  trimSnippet,
+} from "./shared.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
 
 const FIRECRAWL_CLOUD_HOST = "api.firecrawl.dev";
+const FIRECRAWL_DEFAULT_API_URL = "https://api.firecrawl.dev";
+const FIRECRAWL_QUESTION_LIMIT = 10_000;
 
 const firecrawlSearchOptionsSchema = Type.Object(
   {
@@ -129,6 +137,57 @@ const firecrawlScrapeOptionsSchema = Type.Object(
   { description: "Firecrawl scrape options." },
 );
 
+const firecrawlAnswerOptionsSchema = Type.Object(
+  {
+    url: Type.String({
+      minLength: 1,
+      description: "URL of the page to ask about.",
+    }),
+    onlyMainContent: Type.Optional(
+      Type.Boolean({ description: "Extract only the main content." }),
+    ),
+    includeTags: Type.Optional(
+      Type.Array(Type.String(), { description: "CSS selectors to include." }),
+    ),
+    excludeTags: Type.Optional(
+      Type.Array(Type.String(), { description: "CSS selectors to exclude." }),
+    ),
+    waitFor: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        description: "Milliseconds to wait before scraping.",
+      }),
+    ),
+    headers: Type.Optional(
+      Type.Record(Type.String(), Type.String(), {
+        description: "Headers to send when scraping.",
+      }),
+    ),
+    location: Type.Optional(
+      Type.Object(
+        {
+          country: Type.Optional(Type.String({ description: "Country hint." })),
+          region: Type.Optional(Type.String({ description: "Region hint." })),
+          city: Type.Optional(Type.String({ description: "City hint." })),
+        },
+        { description: "Location hint for scraping." },
+      ),
+    ),
+    mobile: Type.Optional(
+      Type.Boolean({ description: "Use a mobile browser profile." }),
+    ),
+    proxy: Type.Optional(
+      Type.String({
+        description: "Proxy mode passed through to Firecrawl.",
+      }),
+    ),
+  },
+  {
+    description:
+      "Firecrawl page-question options. The URL is required; the question comes from the web_answer query.",
+  },
+);
+
 const firecrawlImplementation = {
   id: "firecrawl" as const,
   label: "Firecrawl",
@@ -140,6 +199,8 @@ const firecrawlImplementation = {
         return firecrawlSearchOptionsSchema;
       case "contents":
         return firecrawlScrapeOptionsSchema;
+      case "answer":
+        return firecrawlAnswerOptionsSchema;
       default:
         return undefined;
     }
@@ -233,6 +294,44 @@ const firecrawlImplementation = {
       ),
     };
   },
+
+  async answer(
+    query: string,
+    config: Firecrawl,
+    _context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput> {
+    const question = validateQuestion(query);
+    const defaults = asJsonObject(config.options?.scrape);
+    const answerDefaults = asJsonObject(config.options?.answer);
+    const mergedOptions: Record<string, unknown> = {
+      onlyMainContent: true,
+      ...defaults,
+      ...answerDefaults,
+      ...(options ?? {}),
+    };
+    const url = validateUrl(mergedOptions.url);
+    const scrapeOptions = stripAnswerOnlyOptions(mergedOptions);
+    const response = await scrapeQuestion(config, url, question, scrapeOptions);
+    const document = getFirecrawlDocument(response);
+    const answer = readString(document.answer);
+
+    if (!answer?.trim()) {
+      throw new Error("No answer returned for this URL.");
+    }
+
+    return {
+      provider: firecrawlImplementation.id,
+      text: answer.trim(),
+      itemCount: 1,
+      metadata: {
+        url,
+        ...(asRecord(document.metadata)
+          ? { metadata: document.metadata as Record<string, unknown> }
+          : {}),
+      },
+    };
+  },
 };
 
 function createClient(config: Firecrawl): FirecrawlClient {
@@ -264,6 +363,112 @@ function getFirecrawlCapabilityStatus(
 
 function isFirecrawlCloudApiUrl(apiUrl: string | undefined): boolean {
   return !apiUrl || apiUrl.includes(FIRECRAWL_CLOUD_HOST);
+}
+
+function validateQuestion(query: string): string {
+  const question = query.trim();
+  if (!question) {
+    throw new Error("question must be a non-empty string.");
+  }
+  if (question.length > FIRECRAWL_QUESTION_LIMIT) {
+    throw new Error(
+      `Firecrawl question must be at most ${FIRECRAWL_QUESTION_LIMIT} characters.`,
+    );
+  }
+  return question;
+}
+
+function validateUrl(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("Firecrawl answer requires options.url.");
+  }
+  return value.trim();
+}
+
+function stripAnswerOnlyOptions(
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const { url: _url, formats: _formats, ...scrapeOptions } = options;
+  return scrapeOptions;
+}
+
+async function scrapeQuestion(
+  config: Firecrawl,
+  url: string,
+  question: string,
+  options: Record<string, unknown>,
+): Promise<unknown> {
+  const apiUrl =
+    resolveConfigValue(config.baseUrl) ?? FIRECRAWL_DEFAULT_API_URL;
+  const apiKey = resolveConfigValue(config.credentials?.api);
+  if (isFirecrawlCloudApiUrl(apiUrl) && !apiKey) {
+    throw new Error("is missing an API key");
+  }
+
+  const response = await fetch(joinUrl(apiUrl, "/v2/scrape"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    },
+    body: JSON.stringify({
+      ...options,
+      url,
+      formats: [{ type: "question", question }],
+    }),
+  });
+
+  const payload = await readJsonResponse(response);
+  if (!response.ok) {
+    throw new Error(readFirecrawlError(payload, response.statusText));
+  }
+  if (isFirecrawlFailure(payload)) {
+    throw new Error(readFirecrawlError(payload, "Firecrawl scrape failed."));
+  }
+  return payload;
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+  return `${baseUrl.replace(/\/+$/g, "")}/${path.replace(/^\/+/g, "")}`;
+}
+
+async function readJsonResponse(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) {
+    return {};
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function isFirecrawlFailure(value: unknown): boolean {
+  const record = asRecord(value);
+  return record?.success === false || record?.error !== undefined;
+}
+
+function readFirecrawlError(value: unknown, fallback: string): string {
+  const record = asRecord(value);
+  return (
+    readString(record?.error) ??
+    readString(record?.message) ??
+    (typeof value === "string" ? value : undefined) ??
+    fallback
+  );
+}
+
+function getFirecrawlDocument(value: unknown): Record<string, unknown> {
+  const record = asRecord(value);
+  const data = asRecord(record?.data);
+  if (data) {
+    return data;
+  }
+  if (record) {
+    return record;
+  }
+  throw new Error(`Unexpected Firecrawl response: ${formatJson(value)}`);
 }
 
 function flattenSearchResults(response: SearchData): SearchResult[] {
@@ -374,6 +579,21 @@ export const firecrawlProvider = defineProvider({
       async execute(input: any, ctx) {
         return await firecrawlImplementation.contents!(
           input.urls,
+          ctx.config as never,
+          ctx,
+          input.options,
+        );
+      },
+    }),
+    answer: defineCapability({
+      options: firecrawlImplementation.getToolOptionsSchema?.("answer"),
+      promptGuidelines: [
+        "Firecrawl web_answer is page-scoped: set options.url to the specific page URL to ask about.",
+        "Do not use Firecrawl web_answer for general multi-source answers; use web_search plus web_contents or web_research instead.",
+      ],
+      async execute(input: any, ctx) {
+        return await firecrawlImplementation.answer!(
+          input.query,
           ctx.config as never,
           ctx,
           input.options,
