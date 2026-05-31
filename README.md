@@ -66,7 +66,7 @@ reported when the tool is actually called.
 | **Brave**      |   ✔    |          |   ✔    |    ✔     | `BRAVE_SEARCH_API_KEY` / `BRAVE_ANSWERS_API_KEY` |
 | **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
 | **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
-| **Firecrawl**  |   ✔    |    ✔     |        |          | `FIRECRAWL_API_KEY`                              |
+| **Firecrawl**  |   ✔    |    ✔     |   ✔    |          | `FIRECRAWL_API_KEY`                              |
 | **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
 | **Linkup**     |   ✔    |    ✔     |        |    ✔     | `LINKUP_API_KEY`                                 |
 | **Ollama**     |   ✔    |    ✔     |        |          | `OLLAMA_API_KEY`                                 |
@@ -315,13 +315,19 @@ scope, or account ID is usually wrong.
 <summary><strong>Firecrawl</strong></summary>
 
 - SDK: `@mendable/firecrawl-js`
-- Supports `web_search` and `web_contents`
+- Supports `web_search`, `web_contents`, and page-scoped `web_answer`
 - Search can optionally include Firecrawl scrape-backed result enrichment
 - Contents extraction uses Firecrawl scrape with markdown-first defaults
+- Answers use Firecrawl scrape's `question` format against one explicit page URL;
+  set `options.url` in the `web_answer` call or
+  `providers.firecrawl.options.answer.url` as a default
 - Exposes search options such as `lang`, `country`, `sources`, `categories`,
   `location`, `timeout`, and `scrapeOptions`
 - Exposes contents options such as `formats`, `onlyMainContent`, `includeTags`,
   `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
+- Exposes answer options `url`, `onlyMainContent`, `includeTags`,
+  `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
+- Firecrawl charges 5 credits per page for the `question` format
 - Optional `baseUrl` overrides are supported for self-hosted Firecrawl
   instances, proxies, and testing. API keys are required for Firecrawl Cloud,
   but can be omitted for self-hosted endpoints that do not enforce

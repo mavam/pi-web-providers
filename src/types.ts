@@ -194,6 +194,7 @@ export interface ExaOptions {
 export interface FirecrawlOptions {
   search?: Record<string, unknown>;
   scrape?: Record<string, unknown>;
+  answer?: Record<string, unknown>;
 }
 
 export interface TavilyOptions {

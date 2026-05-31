@@ -24,6 +24,7 @@ afterEach(() => {
   firecrawlCtorMock.mockClear();
   firecrawlSearchMock.mockReset();
   firecrawlScrapeMock.mockReset();
+  vi.unstubAllGlobals();
 });
 
 describe("providerHarness(firecrawlProvider)", () => {
@@ -294,5 +295,157 @@ describe("providerHarness(firecrawlProvider)", () => {
         },
       },
     ]);
+  });
+
+  it("answers a question about one URL using Firecrawl's question scrape format", async () => {
+    process.env.FIRECRAWL_API_KEY = "test-key";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            answer: "The page says Firecrawl supports question scraping.",
+            metadata: {
+              title: "Firecrawl Docs",
+            },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await providerHarness(firecrawlProvider).answer(
+      "What does the page say about question scraping?",
+      {
+        credentials: { api: "FIRECRAWL_API_KEY" },
+        options: {
+          scrape: {
+            formats: ["markdown"],
+            onlyMainContent: false,
+            waitFor: 100,
+          },
+          answer: {
+            url: "https://docs.firecrawl.dev/features/scrape",
+            mobile: true,
+          },
+        },
+      },
+      { cwd: process.cwd() },
+      {
+        url: "https://docs.firecrawl.dev/features/scrape#question-format",
+        waitFor: 250,
+      },
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.firecrawl.dev/v2/scrape",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer test-key",
+        },
+        body: JSON.stringify({
+          onlyMainContent: false,
+          waitFor: 250,
+          mobile: true,
+          url: "https://docs.firecrawl.dev/features/scrape#question-format",
+          formats: [
+            {
+              type: "question",
+              question: "What does the page say about question scraping?",
+            },
+          ],
+        }),
+      },
+    );
+    expect(response).toEqual({
+      provider: "firecrawl",
+      text: "The page says Firecrawl supports question scraping.",
+      itemCount: 1,
+      metadata: {
+        url: "https://docs.firecrawl.dev/features/scrape#question-format",
+        metadata: {
+          title: "Firecrawl Docs",
+        },
+      },
+    });
+  });
+
+  it("requires a URL for Firecrawl answers", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      providerHarness(firecrawlProvider).answer(
+        "What does this page say?",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+      ),
+    ).rejects.toThrow("Firecrawl answer requires options.url.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("requires a non-empty Firecrawl answer question", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      providerHarness(firecrawlProvider).answer(
+        "   ",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+        { url: "https://example.com" },
+      ),
+    ).rejects.toThrow("question must be a non-empty string.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects Firecrawl answer questions over 10000 characters", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      providerHarness(firecrawlProvider).answer(
+        "A".repeat(10_001),
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+        { url: "https://example.com" },
+      ),
+    ).rejects.toThrow("Firecrawl question must be at most 10000 characters.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("propagates Firecrawl answer API errors", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            success: false,
+            error: "question format is unavailable",
+          }),
+          { status: 400, statusText: "Bad Request" },
+        ),
+      ),
+    );
+
+    await expect(
+      providerHarness(firecrawlProvider).answer(
+        "What changed?",
+        {
+          credentials: { api: "literal-key" },
+        },
+        { cwd: process.cwd() },
+        { url: "https://example.com" },
+      ),
+    ).rejects.toThrow("question format is unavailable");
   });
 });
