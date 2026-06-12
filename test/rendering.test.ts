@@ -575,7 +575,7 @@ describe("web_research injected report renderer", () => {
       120,
     );
 
-    expect(rendered).toContain('Saved web research report');
+    expect(rendered).toContain("Saved web research report");
     expect(rendered).toContain("Quantum networking overview");
     expect(rendered).toContain("Entanglement is neat.");
   });
