@@ -140,11 +140,19 @@ export class WebResearchManagerView implements Component {
     return rows;
   }
 
+  private border(width: number): string {
+    return this.theme.fg("border", "─".repeat(Math.max(1, width)));
+  }
+
   private renderTable(width: number): string[] {
     const rows = this.getRows();
     this.selectedIndex = clamp(this.selectedIndex, 0, rows.length - 1);
 
-    const lines: string[] = [this.theme.fg("accent", "Web research"), ""];
+    const lines: string[] = [
+      this.border(width),
+      this.theme.fg("accent", " Web research"),
+      "",
+    ];
     if (rows.length === 0) {
       lines.push(this.theme.fg("muted", "  No research jobs or reports"));
     } else {
@@ -178,13 +186,14 @@ export class WebResearchManagerView implements Component {
     }
     lines.push("");
     if (this.statusMessage) {
-      lines.push(this.theme.fg("accent", this.statusMessage));
+      lines.push(this.theme.fg("accent", ` ${this.statusMessage}`));
     }
     lines.push(
       this.theme.fg(
         "dim",
-        "↑↓ move · Enter open · c cancel running · Esc close",
+        " ↑↓ move · Enter open · c cancel running · Esc close",
       ),
+      this.border(width),
     );
     return lines;
   }
@@ -262,11 +271,13 @@ export class WebResearchManagerView implements Component {
     width: number,
   ): string[] {
     const lines: string[] = [
-      this.theme.fg("accent", truncateToWidth(open.title, width)),
+      this.border(width),
+      this.theme.fg("accent", truncateToWidth(` ${open.title}`, width)),
       this.theme.fg(
         "dim",
-        "c copy markdown · i inject into context · ↑↓/PgUp/PgDn scroll · Esc back",
+        " c copy markdown · i inject into context · ↑↓/PgUp/PgDn scroll · Esc back",
       ),
+      this.border(width),
       "",
     ];
 
@@ -292,13 +303,14 @@ export class WebResearchManagerView implements Component {
       footer.push(`report truncated · full text: ${open.item.outputPath}`);
     }
     if (this.statusMessage) {
-      lines.push(this.theme.fg("accent", this.statusMessage));
+      lines.push(this.theme.fg("accent", ` ${this.statusMessage}`));
     }
     if (footer.length > 0) {
       lines.push(
-        this.theme.fg("dim", truncateToWidth(footer.join(" · "), width)),
+        this.theme.fg("dim", truncateToWidth(` ${footer.join(" · ")}`, width)),
       );
     }
+    lines.push(this.border(width));
     return lines;
   }
 
@@ -314,33 +326,36 @@ export class WebResearchManagerView implements Component {
       ? "cancelling"
       : (request.progress ?? "running");
     const lines: string[] = [
+      this.border(width),
       this.theme.fg(
         "accent",
         truncateToWidth(
-          `Running research via ${providerLabel(request.provider)}`,
+          ` Running research via ${providerLabel(request.provider)}`,
           width,
         ),
       ),
-      this.theme.fg("dim", "c cancel · Esc back"),
+      this.theme.fg("dim", " c cancel · Esc back"),
+      this.border(width),
       "",
-      truncateToWidth(`Status: ${progress} (${elapsed} elapsed)`, width),
-      truncateToWidth(`Report path: ${request.outputPath}`, width),
+      truncateToWidth(` Status: ${progress} (${elapsed} elapsed)`, width),
+      truncateToWidth(` Report path: ${request.outputPath}`, width),
       "",
-      this.theme.fg("accent", "Research brief"),
+      this.theme.fg("accent", " Research brief"),
       "",
     ];
     for (const line of request.input.split("\n").slice(0, 100)) {
-      lines.push(truncateToWidth(line, width));
+      lines.push(truncateToWidth(` ${line}`, width));
     }
     if (this.confirmCancelId === request.id) {
       lines.push(
         "",
-        this.theme.fg("warning", "Press c again to cancel this research"),
+        this.theme.fg("warning", " Press c again to cancel this research"),
       );
     }
     if (this.statusMessage) {
-      lines.push("", this.theme.fg("accent", this.statusMessage));
+      lines.push("", this.theme.fg("accent", ` ${this.statusMessage}`));
     }
+    lines.push(this.border(width));
     return lines;
   }
 
@@ -435,6 +450,7 @@ export interface ResearchTableLayout {
   provider: number;
   duration: number;
   title: number;
+  total: number;
 }
 
 export function computeTableLayout(
@@ -455,13 +471,14 @@ export function computeTableLayout(
     provider: providerWidth,
     duration,
     title: Math.max(10, width - fixed),
+    total: width,
   };
 }
 
 export function formatResearchTableRow(
   row: ResearchRow,
   layout: ResearchTableLayout,
-  theme: Pick<Theme, "fg">,
+  theme: Pick<Theme, "fg" | "bg">,
   selected: boolean,
   now = Date.now(),
 ): string {
@@ -479,7 +496,13 @@ export function formatResearchTableRow(
   const title = truncateToWidth(rowTitle(row), layout.title);
   const dim = (text: string) =>
     row.kind === "history" ? text : theme.fg("dim", text);
-  return `${cursor}${glyph} ${dim(date)} ${provider} ${theme.fg("muted", duration)} ${title}`;
+  const line = `${cursor}${glyph} ${dim(date)} ${provider} ${theme.fg("muted", duration)} ${title}`;
+  if (!selected) {
+    return line;
+  }
+  // Highlight the whole row; theme.fg resets only the foreground, so nested
+  // cell colors keep the background intact.
+  return theme.bg("selectedBg", padCell(line, layout.total));
 }
 
 function statusGlyph(
@@ -532,13 +555,25 @@ function rowDuration(row: ResearchRow, now: number): string {
     : formatCompactElapsed(row.item.elapsedMs);
 }
 
+// Bare status words restate what the status glyph already shows; only
+// informative progress (e.g. "started: analyzing sources") earns a prefix.
+const REDUNDANT_PROGRESS = new Set([
+  "in_progress",
+  "running",
+  "starting",
+  "queued",
+  "cancelling",
+]);
+
 function rowTitle(row: ResearchRow): string {
   if (row.kind === "running") {
     const request = row.snapshot.request;
     const progress = row.snapshot.cancelRequestedAt
-      ? "cancelling"
-      : (request.progress ?? "running");
-    return `${progress} — ${cleanSingleLine(request.input)}`;
+      ? undefined
+      : request.progress;
+    const prefix =
+      progress && !REDUNDANT_PROGRESS.has(progress) ? `${progress} — ` : "";
+    return `${prefix}${cleanSingleLine(request.input)}`;
   }
   return row.item.title || cleanSingleLine(row.item.query);
 }

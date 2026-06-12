@@ -149,8 +149,22 @@ describe("research table formatting", () => {
       },
     ];
     const layout = computeTableLayout(rows, 100);
-    const first = formatResearchTableRow(rows[0]!, layout, createTheme(), true, now);
-    const second = formatResearchTableRow(rows[1]!, layout, createTheme(), false, now);
+    const [firstRow, secondRow] = rows;
+    if (!firstRow || !secondRow) throw new Error("expected two rows");
+    const first = formatResearchTableRow(
+      firstRow,
+      layout,
+      createTheme(),
+      true,
+      now,
+    );
+    const second = formatResearchTableRow(
+      secondRow,
+      layout,
+      createTheme(),
+      false,
+      now,
+    );
     expect(first.indexOf("AAA")).toBeGreaterThan(0);
     expect(first.indexOf("AAA")).toBe(second.indexOf("BBB"));
     expect(visibleWidth(first)).toBeLessThanOrEqual(100);
@@ -172,7 +186,27 @@ describe("research table formatting", () => {
       now,
     );
     expect(running).toContain("2m0s");
-    expect(running).toContain("starting — Compare SIEM platforms in 2026");
+    expect(running).toContain("Compare SIEM platforms in 2026");
+    // The spinner glyph already conveys the running state; bare status words
+    // like "starting" must not prefix the title.
+    expect(running).not.toContain("starting");
+
+    const informative = formatResearchTableRow(
+      {
+        kind: "running",
+        snapshot: {
+          request: {
+            ...createTask("b", "2026-06-12T11:58:00.000Z").request,
+            progress: "started: analyzing sources",
+          },
+        },
+      },
+      layout,
+      createTheme(),
+      false,
+      now,
+    );
+    expect(informative).toContain("started: analyzing sources — Compare");
 
     const failed = formatResearchTableRow(
       { kind: "history", item: createHistoryItem({ status: "failed" }) },
@@ -208,12 +242,12 @@ describe("research table formatting", () => {
     expect(formatRelativeDate(now - 5 * 60_000, now)).toBe("5m ago");
     expect(formatRelativeDate(now - 3 * 3_600_000, now)).toBe("3h ago");
     expect(formatRelativeDate(now - 2 * 86_400_000, now)).toBe("2d ago");
-    expect(formatRelativeDate(Date.parse("2026-01-05T00:00:00.000Z"), now)).toBe(
-      "01-05",
-    );
-    expect(formatRelativeDate(Date.parse("2025-12-31T00:00:00.000Z"), now)).toBe(
-      "2025-12-31",
-    );
+    expect(
+      formatRelativeDate(Date.parse("2026-01-05T00:00:00.000Z"), now),
+    ).toBe("01-05");
+    expect(
+      formatRelativeDate(Date.parse("2025-12-31T00:00:00.000Z"), now),
+    ).toBe("2025-12-31");
     expect(formatRelativeDate(Number.NaN, now)).toBe("?");
   });
 });
@@ -236,9 +270,9 @@ describe("WebResearchManagerView", () => {
       "running",
       "history",
     ]);
-    expect(
-      rows[0]?.kind === "running" && rows[0].snapshot.request.id,
-    ).toBe("a");
+    expect(rows[0]?.kind === "running" && rows[0].snapshot.request.id).toBe(
+      "a",
+    );
 
     const rendered = view.render(100).join("\n");
     expect(rendered).toContain("Web research");
