@@ -10,7 +10,7 @@ afterEach(() => {
 describe("Gemini provider search", () => {
   it("forces Google Search via interactions and returns search results", async () => {
     const create = vi.fn().mockResolvedValue({
-      outputs: [
+      steps: [
         {
           type: "google_search_result",
           result: [
@@ -76,7 +76,7 @@ describe("Gemini provider search", () => {
     const provider = createProvider({
       interactions: {
         create: vi.fn().mockResolvedValue({
-          outputs: [
+          steps: [
             {
               type: "google_search_result",
               result: [
@@ -119,7 +119,7 @@ describe("Gemini provider search", () => {
         ),
       )
       .mockResolvedValueOnce({
-        outputs: [
+        steps: [
           {
             type: "google_search_result",
             result: [
@@ -177,7 +177,7 @@ describe("Gemini provider search", () => {
     const provider = createProvider({
       interactions: {
         create: vi.fn().mockResolvedValue({
-          outputs: [
+          steps: [
             {
               type: "google_search_result",
               result: [
@@ -213,7 +213,7 @@ describe("Gemini provider search", () => {
     const provider = createProvider({
       interactions: {
         create: vi.fn().mockResolvedValue({
-          outputs: [
+          steps: [
             {
               type: "google_search_result",
               result: [
@@ -266,7 +266,7 @@ describe("Gemini provider search", () => {
     const provider = createProvider({
       interactions: {
         create: vi.fn().mockResolvedValue({
-          outputs: [
+          steps: [
             {
               type: "google_search_result",
               result: [
@@ -307,7 +307,7 @@ describe("Gemini provider search", () => {
     const provider = createProvider({
       interactions: {
         create: vi.fn().mockResolvedValue({
-          outputs: [
+          steps: [
             {
               type: "google_search_result",
               result: [
@@ -347,7 +347,7 @@ describe("Gemini provider search", () => {
 
   it("forwards only model and generation_config for Gemini search", async () => {
     const create = vi.fn().mockResolvedValue({
-      outputs: [
+      steps: [
         {
           type: "google_search_result",
           result: [
@@ -601,7 +601,13 @@ describe("Gemini provider research", () => {
   it("formats completed Gemini research output from polling", async () => {
     const get = vi.fn().mockResolvedValue({
       status: "completed",
-      outputs: [{ type: "text", text: "Research result" }],
+      steps: [
+        { type: "user_input" },
+        {
+          type: "model_output",
+          content: [{ type: "text", text: "Research result" }],
+        },
+      ],
     });
 
     const provider = createProvider({
@@ -695,7 +701,7 @@ describe("Gemini provider research", () => {
   it("treats requires_action Gemini research as terminal failure", async () => {
     const get = vi.fn().mockResolvedValue({
       status: "requires_action",
-      outputs: [{ type: "function_call" }],
+      steps: [{ type: "user_input" }, { type: "function_call" }],
     });
 
     const provider = createProvider({

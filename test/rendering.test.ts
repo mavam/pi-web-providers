@@ -528,6 +528,120 @@ describe("web_research renderer", () => {
   });
 });
 
+describe("web_research injected report renderer", () => {
+  const message = {
+    content: __test__.formatWebResearchReportMessage(
+      "Quantum networking overview",
+      "# Quantum networking overview\n\nEntanglement is neat.",
+      {
+        outputPath: "/tmp/project/.pi/artifacts/research/report.md",
+        provider: "Gemini",
+        status: "completed",
+      },
+    ),
+    details: {
+      title: "Quantum networking overview",
+      outputPath: "/tmp/project/.pi/artifacts/research/report.md",
+      provider: "Gemini",
+      query: "Explain quantum networking",
+      status: "completed",
+    },
+  };
+
+  it("renders a one-line collapsed summary with the report title", () => {
+    const rendered = renderComponentText(
+      __test__.renderWebResearchReportMessage(
+        message,
+        { expanded: false },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain(
+      "Injected research report: Quantum networking overview",
+    );
+    expect(rendered).toContain("ctrl+o to expand");
+    expect(rendered).not.toContain("Entanglement is neat.");
+  });
+
+  it("renders the full report with provenance when expanded", () => {
+    const rendered = renderComponentText(
+      __test__.renderWebResearchReportMessage(
+        message,
+        { expanded: true },
+        createTheme(),
+      ),
+      120,
+    );
+
+    expect(rendered).toContain("Saved web research report");
+    expect(rendered).toContain("Quantum networking overview");
+    expect(rendered).toContain("Entanglement is neat.");
+  });
+});
+
+describe("web research widget", () => {
+  it("summarizes running researches on a single line", () => {
+    const now = Date.parse("2026-06-12T12:00:00.000Z");
+    const requests = [
+      {
+        tool: "web_research" as const,
+        id: "a",
+        provider: "gemini" as const,
+        input: "First brief",
+        outputPath: "/tmp/a.md",
+        startedAt: "2026-06-12T11:58:00.000Z",
+        progress: "starting",
+      },
+      {
+        tool: "web_research" as const,
+        id: "b",
+        provider: "brave" as const,
+        input: "Second brief with a very long text that must not appear",
+        outputPath: "/tmp/b.md",
+        startedAt: "2026-06-12T11:59:15.000Z",
+        progress: "queued",
+      },
+    ];
+
+    const lines = __test__.buildWebResearchWidgetLines(
+      requests,
+      createTheme(),
+      now,
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("2 researches running");
+    expect(lines[0]).toContain("Gemini 2m0s");
+    expect(lines[0]).toContain("Brave 45s");
+    expect(lines[0]).toContain("/web-research");
+    expect(lines[0]).not.toContain("Second brief");
+  });
+
+  it("collapses overflow beyond three jobs into a counter", () => {
+    const now = Date.parse("2026-06-12T12:00:00.000Z");
+    const requests = Array.from({ length: 5 }, (_, index) => ({
+      tool: "web_research" as const,
+      id: `job-${index}`,
+      provider: "gemini" as const,
+      input: `Brief ${index}`,
+      outputPath: `/tmp/${index}.md`,
+      startedAt: "2026-06-12T11:59:00.000Z",
+    }));
+
+    const lines = __test__.buildWebResearchWidgetLines(
+      requests,
+      createTheme(),
+      now,
+    );
+
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("5 researches running");
+    expect(lines[0]).toContain("+2 more");
+  });
+});
+
 describe("partial tool rendering", () => {
   it("shows web_search progress updates in warning text", () => {
     const rendered = renderComponentText(
