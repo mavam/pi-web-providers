@@ -1,10 +1,12 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getConfigPath, loadConfig } from "./config.js";
 import {
   getMappedProviderIdForTool,
   getProviderCapabilityStatus,
-  resolveProviderForTool,
+  isProviderCapabilityExposable,
+  supportsTool,
 } from "./provider-resolution.js";
+import { PROVIDERS_BY_ID } from "./providers/index.js";
 import type { ProviderId, Tool, WebProviders } from "./types.js";
 
 export const CAPABILITY_TOOL_NAMES: Record<Tool, string> = {
@@ -37,12 +39,21 @@ export function getAvailableProviderIdsForCapability(
     return [];
   }
 
-  try {
-    resolveProviderForTool(config, cwd, capability);
-    return [providerId];
-  } catch {
+  const provider = PROVIDERS_BY_ID[providerId];
+  if (!supportsTool(provider, capability)) {
     return [];
   }
+
+  const status = getProviderCapabilityStatus(
+    config,
+    cwd,
+    providerId,
+    capability,
+    {
+      resolveSecrets: false,
+    },
+  );
+  return isProviderCapabilityExposable(status) ? [providerId] : [];
 }
 
 export function getProviderStatusForTool(
