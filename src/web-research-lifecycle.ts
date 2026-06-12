@@ -341,6 +341,32 @@ function slugifyWebResearchInput(input: string): string {
   return slug.length > 0 ? slug : "research";
 }
 
+/**
+ * Progress icon for a running research request, shared by the editor widget
+ * and the research table so both surfaces speak the same iconography.
+ */
+export function getWebResearchProgressIcon(
+  request: Pick<WebResearchRequest, "progress">,
+): string {
+  if (request.progress === "poll retrying after transient errors") {
+    return "⟳";
+  }
+
+  if (request.progress === "queued" || request.progress === "cancelling") {
+    return "◌";
+  }
+
+  if (request.progress === "starting") {
+    return "◔";
+  }
+
+  if (request.progress?.startsWith("started:")) {
+    return "◑";
+  }
+
+  return "●";
+}
+
 export function summarizeWebResearchProgress(
   message: string,
   providerLabel: string,

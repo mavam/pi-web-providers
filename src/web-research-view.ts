@@ -16,6 +16,7 @@ import type {
 } from "./web-research-lifecycle.js";
 import {
   cancelWebResearchTask,
+  getWebResearchProgressIcon,
   getWebResearchTaskSnapshots,
   loadWebResearchHistory,
   loadWebResearchReport,
@@ -52,7 +53,6 @@ type OpenView =
     }
   | { kind: "detail"; taskId: string };
 
-const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
 const STATUS_MESSAGE_TTL_MS = 1500;
 const PAGE_JUMP = 10;
 
@@ -450,7 +450,6 @@ export interface ResearchTableLayout {
   provider: number;
   duration: number;
   title: number;
-  total: number;
 }
 
 export function computeTableLayout(
@@ -471,19 +470,18 @@ export function computeTableLayout(
     provider: providerWidth,
     duration,
     title: Math.max(10, width - fixed),
-    total: width,
   };
 }
 
 export function formatResearchTableRow(
   row: ResearchRow,
   layout: ResearchTableLayout,
-  theme: Pick<Theme, "fg" | "bg">,
+  theme: Pick<Theme, "fg">,
   selected: boolean,
   now = Date.now(),
 ): string {
   const cursor = selected ? "› " : "  ";
-  const glyph = statusGlyph(row, theme, now);
+  const glyph = statusGlyph(row, theme);
   const date = padCell(
     formatRelativeDate(rowTimestampMs(row), now),
     layout.date,
@@ -496,32 +494,23 @@ export function formatResearchTableRow(
   const title = truncateToWidth(rowTitle(row), layout.title);
   const dim = (text: string) =>
     row.kind === "history" ? text : theme.fg("dim", text);
-  const line = `${cursor}${glyph} ${dim(date)} ${provider} ${theme.fg("muted", duration)} ${title}`;
-  if (!selected) {
-    return line;
-  }
-  // Highlight the whole row; theme.fg resets only the foreground, so nested
-  // cell colors keep the background intact.
-  return theme.bg("selectedBg", padCell(line, layout.total));
+  return `${cursor}${glyph} ${dim(date)} ${provider} ${theme.fg("muted", duration)} ${title}`;
 }
 
-function statusGlyph(
-  row: ResearchRow,
-  theme: Pick<Theme, "fg">,
-  now: number,
-): string {
+function statusGlyph(row: ResearchRow, theme: Pick<Theme, "fg">): string {
   if (row.kind === "running") {
-    const frame =
-      SPINNER_FRAMES[Math.floor(now / 1000) % SPINNER_FRAMES.length] ?? "◐";
-    return theme.fg("accent", row.snapshot.cancelRequestedAt ? "◌" : frame);
+    const icon = row.snapshot.cancelRequestedAt
+      ? "◌"
+      : getWebResearchProgressIcon(row.snapshot.request);
+    return theme.fg("accent", icon);
   }
   switch (row.item.status) {
     case "completed":
-      return theme.fg("success", "✓");
+      return theme.fg("success", "✔");
     case "failed":
-      return theme.fg("error", "✗");
+      return theme.fg("error", "✘");
     case "cancelled":
-      return theme.fg("warning", "⊘");
+      return theme.fg("warning", "✘");
     default:
       return theme.fg("dim", "?");
   }

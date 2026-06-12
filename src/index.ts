@@ -121,6 +121,7 @@ import {
   dispatchWebResearch as dispatchWebResearchLifecycle,
   formatWebResearchResultMessage,
   getActiveWebResearchRequests,
+  getWebResearchProgressIcon,
   getWebResearchTaskSnapshots,
   loadWebResearchHistory,
   loadWebResearchPreview,
@@ -1703,7 +1704,7 @@ function buildWebResearchWidgetLines(
     const providerLabel =
       PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
-    const icon = getWebResearchWidgetIcon(request, now).trim();
+    const icon = getWebResearchProgressIcon(request);
     const status = request.progress === "cancelling" ? " cancelling" : "";
     return `${icon} ${providerLabel} ${elapsed}${status}`;
   });
@@ -1718,28 +1719,6 @@ function buildWebResearchWidgetLines(
   ];
 }
 
-function getWebResearchWidgetIcon(
-  request: WebResearchRequest,
-  _now: number,
-): string {
-  if (request.progress === "poll retrying after transient errors") {
-    return "⟳ ";
-  }
-
-  if (request.progress === "queued" || request.progress === "cancelling") {
-    return "◌ ";
-  }
-
-  if (request.progress === "starting") {
-    return "◔ ";
-  }
-
-  if (request.progress?.startsWith("started:")) {
-    return "◑ ";
-  }
-
-  return "● ";
-}
 
 function formatCompactElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));

@@ -122,7 +122,11 @@ function createView(options: {
 }
 
 async function settle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  // A few macrotask turns so async work behind handleInput (file reads,
+  // history loads) finishes regardless of scheduling.
+  for (let i = 0; i < 5; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
 }
 
 describe("research table formatting", () => {
@@ -215,7 +219,7 @@ describe("research table formatting", () => {
       false,
       now,
     );
-    expect(failed).toContain("✗");
+    expect(failed).toContain("✘");
 
     const cancelled = formatResearchTableRow(
       { kind: "history", item: createHistoryItem({ status: "cancelled" }) },
@@ -224,7 +228,7 @@ describe("research table formatting", () => {
       false,
       now,
     );
-    expect(cancelled).toContain("⊘");
+    expect(cancelled).toContain("✘");
 
     const noDuration = formatResearchTableRow(
       { kind: "history", item: createHistoryItem({ elapsedMs: undefined }) },
