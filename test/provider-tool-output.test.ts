@@ -960,18 +960,60 @@ describe("provider tool output", () => {
       "utf-8",
     );
 
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const titledPath = join(artifactsDir, "titled.md");
+    await writeFile(
+      titledPath,
+      [
+        "---",
+        'query: "Titled topic"',
+        'provider: "Gemini"',
+        'status: "completed"',
+        'startedAt: "2026-01-03T00:00:00.000Z"',
+        'completedAt: "2026-01-03T00:00:05.000Z"',
+        "elapsedMs: 4567",
+        "---",
+        "",
+        "# Web research report",
+        "",
+        "# Quantum networking overview",
+        "",
+        "Report body",
+      ].join("\n"),
+      "utf-8",
+    );
+
     const history = await __test__.loadWebResearchHistory(cwd);
 
     expect(history.map((item) => item.query)).toEqual([
+      "Titled topic",
       "Newer topic",
       "Older topic",
     ]);
-    expect(history[0]?.status).toBe("cancelled");
-    expect(history[1]?.status).toBe("completed");
+    expect(history[0]?.status).toBe("completed");
+    expect(history[1]?.status).toBe("cancelled");
+    expect(history[2]?.status).toBe("completed");
+
+    // Display titles: first non-boilerplate heading, falling back to the query.
+    expect(history[0]?.title).toBe("Quantum networking overview");
+    expect(history[1]?.title).toBe("Newer topic");
+    expect(history[2]?.title).toBe("Older topic");
+
+    // Durations: frontmatter elapsedMs wins; legacy artifacts compute from timestamps.
+    expect(history[0]?.elapsedMs).toBe(4567);
+    expect(history[1]?.elapsedMs).toBe(1000);
+    expect(history[2]?.elapsedMs).toBe(1000);
 
     const preview = await __test__.loadWebResearchPreview(olderPath);
     expect(preview).toContain("Older report");
     expect(preview).toContain(`Full report: \`${olderPath}\``);
+
+    const report = await __test__.loadWebResearchReport(titledPath);
+    expect(report.truncated).toBe(false);
+    expect(report.body).not.toContain("---");
+    expect(report.body).not.toContain("elapsedMs");
+    expect(report.body).toContain("# Quantum networking overview");
+    expect(report.metadata.status).toBe("completed");
   });
 
   it("cleans up active research jobs even when result delivery throws", async () => {

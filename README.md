@@ -192,10 +192,18 @@ report under `.pi/artifacts/research/`. Saved research reports are Markdown
 files with YAML frontmatter for job metadata such as query, provider, status,
 and timestamps.
 
-Use `/web-research` in interactive pi sessions to inspect running research jobs
-and recent saved reports. The manager can cancel a running local job after
-confirmation; cancellation aborts the provider call and records a durable
-`cancelled` artifact under `.pi/artifacts/research/`.
+Use `/web-research` in interactive pi sessions to browse and manage researches.
+The command opens a table of running and finished researches with status, date,
+provider, duration, and title. Running researches show a live spinner and
+elapsed time; press `c` twice to cancel one. Cancellation aborts the provider
+call and records a durable `cancelled` artifact under
+`.pi/artifacts/research/`. Press `Enter` on a finished research to read the
+report in a scrollable Markdown overlay; from there, `c` copies the report as
+Markdown to the clipboard and `i` injects it into the current conversation so
+the agent can build on earlier research.
+
+While researches run, a one-line summary above the editor shows the number of
+active researches with their status and elapsed time.
 
 </details>
 

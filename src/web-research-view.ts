@@ -1,225 +1,582 @@
-import type { Theme } from "@mariozechner/pi-coding-agent";
+import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   getKeybindings,
   Key,
+  Markdown,
   matchesKey,
-  type TUI,
   truncateToWidth,
-} from "@mariozechner/pi-tui";
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { formatErrorMessage } from "./execution-policy.js";
 import { PROVIDERS_BY_ID } from "./providers/index.js";
-import type { ActiveWebResearchTask } from "./web-research-lifecycle.js";
+import type {
+  ActiveWebResearchTask,
+  WebResearchTaskSnapshot,
+} from "./web-research-lifecycle.js";
 import {
   cancelWebResearchTask,
   getWebResearchTaskSnapshots,
   loadWebResearchHistory,
-  loadWebResearchPreview,
+  loadWebResearchReport,
   type WebResearchHistoryItem,
 } from "./web-research-lifecycle.js";
 
+export interface WebResearchViewActions {
+  copyToClipboard(text: string): Promise<void>;
+  injectReport(report: {
+    title: string;
+    body: string;
+    item: WebResearchHistoryItem;
+  }): void;
+  notify(message: string, type?: "info" | "warning" | "error"): void;
+}
+
+export interface WebResearchViewHost {
+  requestRender(): void;
+  terminal: { rows: number; columns: number };
+}
+
+export type ResearchRow =
+  | { kind: "running"; snapshot: WebResearchTaskSnapshot }
+  | { kind: "history"; item: WebResearchHistoryItem };
+
+type OpenView =
+  | {
+      kind: "report";
+      title: string;
+      body: string;
+      truncated: boolean;
+      item: WebResearchHistoryItem;
+      markdown: Markdown;
+    }
+  | { kind: "detail"; taskId: string };
+
+const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"];
+const STATUS_MESSAGE_TTL_MS = 1500;
+const PAGE_JUMP = 10;
+
 export class WebResearchManagerView implements Component {
-  private activeSection: "running" | "history" = "running";
-  private selection = { running: 0, history: 0 };
+  private selectedIndex = 0;
   private history: WebResearchHistoryItem[] = [];
   private confirmCancelId: string | undefined;
-  private preview: string | undefined;
-  private previewError: string | undefined;
+  private open: OpenView | undefined;
+  private scrollOffset = 0;
+  private statusMessage: string | undefined;
+  private statusMessageTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
-    private readonly tui: TUI,
+    private readonly tui: WebResearchViewHost,
     private readonly theme: Theme,
     private readonly done: (result: undefined) => void,
     private readonly cwd: string,
     private readonly tasks: Map<string, ActiveWebResearchTask>,
     private readonly onChange: () => void,
+    private readonly actions: WebResearchViewActions,
+    private readonly loadHistory: (
+      cwd: string,
+    ) => Promise<WebResearchHistoryItem[]> = loadWebResearchHistory,
   ) {
     void this.reloadHistory();
   }
 
-  render(width: number): string[] {
-    if (this.preview !== undefined || this.previewError !== undefined) {
-      const text = this.previewError ?? this.preview ?? "";
-      return [
-        this.theme.fg("accent", "Web research report preview"),
-        "",
-        ...text
-          .split("\n")
-          .slice(0, 200)
-          .map((line) => truncateToWidth(line, width)),
-        "",
-        this.theme.fg("dim", "Esc back"),
-      ];
-    }
+  isReportOpen(): boolean {
+    return this.open !== undefined;
+  }
 
-    this.clampSelections();
-    const lines: string[] = [this.theme.fg("accent", "Web research jobs"), ""];
-    lines.push(...this.renderRunning(width));
-    lines.push("");
-    lines.push(...this.renderHistory(width));
-    lines.push("");
-    lines.push(
-      this.theme.fg(
-        "dim",
-        "↑↓ move · Tab switch section · Enter open/cancel · Esc close",
-      ),
-    );
-    return lines;
+  render(width: number): string[] {
+    if (this.open?.kind === "report") {
+      return this.renderReport(this.open, width);
+    }
+    if (this.open?.kind === "detail") {
+      const snapshot = this.findSnapshot(this.open.taskId);
+      if (snapshot) return this.renderDetail(snapshot, width);
+      this.open = undefined;
+    }
+    return this.renderTable(width);
   }
 
   invalidate(): void {}
 
+  dispose(): void {
+    if (this.statusMessageTimer) clearTimeout(this.statusMessageTimer);
+  }
+
   handleInput(data: string): void {
-    const kb = getKeybindings();
-    if (this.preview !== undefined || this.previewError !== undefined) {
-      if (kb.matches(data, "tui.select.cancel")) {
-        this.preview = undefined;
-        this.previewError = undefined;
-      }
-      this.tui.requestRender();
-      return;
-    }
-    if (kb.matches(data, "tui.select.up")) this.move(-1);
-    else if (kb.matches(data, "tui.select.down")) this.move(1);
-    else if (matchesKey(data, Key.tab) || matchesKey(data, Key.shift("tab")))
-      this.switchSection();
-    else if (kb.matches(data, "tui.select.confirm")) void this.activate();
-    else if (kb.matches(data, "tui.select.cancel")) {
-      if (this.confirmCancelId) this.confirmCancelId = undefined;
-      else return this.done(undefined);
+    if (this.open) {
+      this.handleOpenInput(data);
+    } else {
+      this.handleTableInput(data);
     }
     this.tui.requestRender();
   }
 
   refresh(): void {
-    this.clampSelections();
+    if (this.open?.kind === "detail" && !this.findSnapshot(this.open.taskId)) {
+      this.open = undefined;
+      this.confirmCancelId = undefined;
+    }
     void this.reloadHistory();
     this.tui.requestRender();
   }
 
-  private async reloadHistory(): Promise<void> {
-    this.history = await loadWebResearchHistory(this.cwd);
-    this.clampSelections();
-    this.tui.requestRender();
+  // --- table mode ---
+
+  getRows(): ResearchRow[] {
+    const snapshots = getWebResearchTaskSnapshots(this.tasks).sort((a, b) =>
+      a.request.startedAt.localeCompare(b.request.startedAt),
+    );
+    const runningPaths = new Set(
+      snapshots.map((snapshot) => snapshot.request.outputPath),
+    );
+    const rows: ResearchRow[] = snapshots.map((snapshot) => ({
+      kind: "running",
+      snapshot,
+    }));
+    for (const item of this.history) {
+      if (runningPaths.has(item.outputPath)) continue;
+      rows.push({ kind: "history", item });
+    }
+    return rows;
   }
 
-  private renderRunning(width: number): string[] {
-    const snapshots = getWebResearchTaskSnapshots(this.tasks);
-    const lines = [this.sectionTitle("Running", "running")];
-    if (snapshots.length === 0)
-      return [...lines, this.theme.fg("muted", "  No running jobs")];
-    snapshots.forEach((snapshot, index) => {
-      const selected =
-        this.activeSection === "running" && this.selection.running === index
-          ? "›"
-          : " ";
-      const request = snapshot.request;
-      const provider =
-        PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
-      const elapsed = formatCompactElapsed(
-        Date.now() - Date.parse(request.startedAt),
-      );
-      const progress = snapshot.cancelRequestedAt
-        ? "cancelling"
-        : (request.progress ?? "running");
-      lines.push(
-        truncateToWidth(
-          `${selected} ${provider} ${elapsed} ${progress} — ${cleanSingleLine(request.input)}`,
-          width,
-        ),
-      );
-      if (this.confirmCancelId === request.id)
+  private renderTable(width: number): string[] {
+    const rows = this.getRows();
+    this.selectedIndex = clamp(this.selectedIndex, 0, rows.length - 1);
+
+    const lines: string[] = [this.theme.fg("accent", "Web research"), ""];
+    if (rows.length === 0) {
+      lines.push(this.theme.fg("muted", "  No research jobs or reports"));
+    } else {
+      const layout = computeTableLayout(rows, width);
+      const now = Date.now();
+      rows.forEach((row, index) => {
         lines.push(
-          this.theme.fg(
-            "warning",
-            truncateToWidth(
-              `  Press Enter again to cancel ${provider}: ${truncateInline(cleanSingleLine(request.input), 80)}`,
-              width,
-            ),
+          formatResearchTableRow(
+            row,
+            layout,
+            this.theme,
+            index === this.selectedIndex,
+            now,
           ),
         );
-    });
+        if (
+          row.kind === "running" &&
+          this.confirmCancelId === row.snapshot.request.id
+        ) {
+          lines.push(
+            this.theme.fg(
+              "warning",
+              truncateToWidth(
+                `     Press c again to cancel this ${providerLabel(row.snapshot.request.provider)} research`,
+                width,
+              ),
+            ),
+          );
+        }
+      });
+    }
+    lines.push("");
+    if (this.statusMessage) {
+      lines.push(this.theme.fg("accent", this.statusMessage));
+    }
+    lines.push(
+      this.theme.fg(
+        "dim",
+        "↑↓ move · Enter open · c cancel running · Esc close",
+      ),
+    );
     return lines;
   }
 
-  private renderHistory(width: number): string[] {
-    const lines = [this.sectionTitle("History", "history")];
-    if (this.history.length === 0)
-      return [...lines, this.theme.fg("muted", "  No saved reports")];
-    this.history.forEach((item, index) => {
-      const selected =
-        this.activeSection === "history" && this.selection.history === index
-          ? "›"
-          : " ";
-      lines.push(
-        truncateToWidth(
-          `${selected} ${item.status} ${item.provider} ${item.completedAt} — ${cleanSingleLine(item.query)}`,
-          width,
-        ),
-      );
-    });
-    return lines;
+  private handleTableInput(data: string): void {
+    const kb = getKeybindings();
+    const rows = this.getRows();
+    if (kb.matches(data, "tui.select.up")) this.move(rows.length, -1);
+    else if (kb.matches(data, "tui.select.down")) this.move(rows.length, 1);
+    else if (kb.matches(data, "tui.select.pageUp"))
+      this.move(rows.length, -PAGE_JUMP, false);
+    else if (kb.matches(data, "tui.select.pageDown"))
+      this.move(rows.length, PAGE_JUMP, false);
+    else if (kb.matches(data, "tui.select.confirm"))
+      void this.openRow(rows[this.selectedIndex]);
+    else if (data === "c") this.cancelRow(rows[this.selectedIndex]);
+    else if (kb.matches(data, "tui.select.cancel")) {
+      if (this.confirmCancelId) this.confirmCancelId = undefined;
+      else this.done(undefined);
+    }
   }
 
-  private sectionTitle(title: string, section: "running" | "history"): string {
-    return this.activeSection === section
-      ? this.theme.fg("accent", title)
-      : title;
-  }
-
-  private move(delta: number): void {
-    const count =
-      this.activeSection === "running" ? this.tasks.size : this.history.length;
+  private move(count: number, delta: number, wrap = true): void {
+    this.confirmCancelId = undefined;
     if (count === 0) return;
-    this.selection[this.activeSection] =
-      (this.selection[this.activeSection] + delta + count) % count;
-    this.confirmCancelId = undefined;
+    const next = this.selectedIndex + delta;
+    this.selectedIndex = wrap
+      ? (next + count) % count
+      : clamp(next, 0, count - 1);
   }
 
-  private switchSection(): void {
-    this.activeSection =
-      this.activeSection === "running" ? "history" : "running";
+  private async openRow(row: ResearchRow | undefined): Promise<void> {
+    if (!row) return;
     this.confirmCancelId = undefined;
-    this.clampSelections();
-  }
-
-  private async activate(): Promise<void> {
-    if (this.activeSection === "running") {
-      const snapshot = getWebResearchTaskSnapshots(this.tasks)[
-        this.selection.running
-      ];
-      if (!snapshot) return;
-      if (this.confirmCancelId !== snapshot.request.id) {
-        this.confirmCancelId = snapshot.request.id;
-        return;
-      }
-      cancelWebResearchTask(this.tasks, snapshot.request.id);
-      this.confirmCancelId = undefined;
-      this.onChange();
+    if (row.kind === "running") {
+      this.open = { kind: "detail", taskId: row.snapshot.request.id };
+      this.scrollOffset = 0;
       return;
     }
-    const item = this.history[this.selection.history];
-    if (!item) return;
     try {
-      this.preview = await loadWebResearchPreview(item.outputPath);
-      this.previewError = undefined;
+      const report = await loadWebResearchReport(row.item.outputPath);
+      this.open = {
+        kind: "report",
+        title: row.item.title || row.item.query,
+        body: report.body,
+        truncated: report.truncated,
+        item: row.item,
+        markdown: new Markdown(report.body, 1, 0, getMarkdownTheme()),
+      };
+      this.scrollOffset = 0;
     } catch (error) {
-      this.preview = undefined;
-      this.previewError = `Failed to read ${item.outputPath}: ${formatErrorMessage(error)}`;
+      this.showStatusMessage(
+        `Failed to read ${row.item.outputPath}: ${formatErrorMessage(error)}`,
+      );
     }
     this.tui.requestRender();
   }
 
-  private clampSelections(): void {
-    this.selection.running = Math.min(
-      Math.max(0, this.selection.running),
-      Math.max(0, this.tasks.size - 1),
+  private cancelRow(row: ResearchRow | undefined): void {
+    if (!row || row.kind !== "running") return;
+    const id = row.snapshot.request.id;
+    if (this.confirmCancelId !== id) {
+      this.confirmCancelId = id;
+      return;
+    }
+    cancelWebResearchTask(this.tasks, id);
+    this.confirmCancelId = undefined;
+    this.onChange();
+  }
+
+  // --- report / detail mode ---
+
+  private renderReport(
+    open: Extract<OpenView, { kind: "report" }>,
+    width: number,
+  ): string[] {
+    const lines: string[] = [
+      this.theme.fg("accent", truncateToWidth(open.title, width)),
+      this.theme.fg(
+        "dim",
+        "c copy markdown · i inject into context · ↑↓/PgUp/PgDn scroll · Esc back",
+      ),
+      "",
+    ];
+
+    let body: string[];
+    try {
+      body = open.markdown.render(Math.max(20, width - 2));
+    } catch {
+      body = open.body.split("\n").map((line) => truncateToWidth(line, width));
+    }
+
+    const viewport = this.viewportHeight();
+    const maxOffset = Math.max(0, body.length - viewport);
+    this.scrollOffset = clamp(this.scrollOffset, 0, maxOffset);
+    lines.push(...body.slice(this.scrollOffset, this.scrollOffset + viewport));
+
+    lines.push("");
+    const footer: string[] = [];
+    if (body.length > viewport) {
+      const end = Math.min(body.length, this.scrollOffset + viewport);
+      footer.push(`lines ${this.scrollOffset + 1}–${end} of ${body.length}`);
+    }
+    if (open.truncated) {
+      footer.push(`report truncated · full text: ${open.item.outputPath}`);
+    }
+    if (this.statusMessage) {
+      lines.push(this.theme.fg("accent", this.statusMessage));
+    }
+    if (footer.length > 0) {
+      lines.push(
+        this.theme.fg("dim", truncateToWidth(footer.join(" · "), width)),
+      );
+    }
+    return lines;
+  }
+
+  private renderDetail(
+    snapshot: WebResearchTaskSnapshot,
+    width: number,
+  ): string[] {
+    const request = snapshot.request;
+    const elapsed = formatCompactElapsed(
+      Date.now() - Date.parse(request.startedAt),
     );
-    this.selection.history = Math.min(
-      Math.max(0, this.selection.history),
-      Math.max(0, this.history.length - 1),
+    const progress = snapshot.cancelRequestedAt
+      ? "cancelling"
+      : (request.progress ?? "running");
+    const lines: string[] = [
+      this.theme.fg(
+        "accent",
+        truncateToWidth(
+          `Running research via ${providerLabel(request.provider)}`,
+          width,
+        ),
+      ),
+      this.theme.fg("dim", "c cancel · Esc back"),
+      "",
+      truncateToWidth(`Status: ${progress} (${elapsed} elapsed)`, width),
+      truncateToWidth(`Report path: ${request.outputPath}`, width),
+      "",
+      this.theme.fg("accent", "Research brief"),
+      "",
+    ];
+    for (const line of request.input.split("\n").slice(0, 100)) {
+      lines.push(truncateToWidth(line, width));
+    }
+    if (this.confirmCancelId === request.id) {
+      lines.push(
+        "",
+        this.theme.fg("warning", "Press c again to cancel this research"),
+      );
+    }
+    if (this.statusMessage) {
+      lines.push("", this.theme.fg("accent", this.statusMessage));
+    }
+    return lines;
+  }
+
+  private handleOpenInput(data: string): void {
+    const kb = getKeybindings();
+    const open = this.open;
+    if (!open) return;
+
+    if (kb.matches(data, "tui.select.cancel")) {
+      if (this.confirmCancelId) {
+        this.confirmCancelId = undefined;
+        return;
+      }
+      this.open = undefined;
+      this.scrollOffset = 0;
+      return;
+    }
+
+    if (open.kind === "detail") {
+      if (data === "c") {
+        const snapshot = this.findSnapshot(open.taskId);
+        if (!snapshot) return;
+        if (this.confirmCancelId !== open.taskId) {
+          this.confirmCancelId = open.taskId;
+          return;
+        }
+        cancelWebResearchTask(this.tasks, open.taskId);
+        this.confirmCancelId = undefined;
+        this.onChange();
+        this.showStatusMessage("Cancellation requested");
+      }
+      return;
+    }
+
+    if (kb.matches(data, "tui.select.up")) this.scrollOffset -= 1;
+    else if (kb.matches(data, "tui.select.down")) this.scrollOffset += 1;
+    else if (kb.matches(data, "tui.select.pageUp"))
+      this.scrollOffset -= this.viewportHeight();
+    else if (kb.matches(data, "tui.select.pageDown"))
+      this.scrollOffset += this.viewportHeight();
+    else if (matchesKey(data, Key.home)) this.scrollOffset = 0;
+    else if (matchesKey(data, Key.end))
+      this.scrollOffset = Number.MAX_SAFE_INTEGER;
+    else if (data === "c") {
+      void this.actions
+        .copyToClipboard(open.body)
+        .then(() => this.showStatusMessage("Copied report to clipboard"))
+        .catch((error: unknown) => {
+          const message = `Copy failed: ${formatErrorMessage(error)}`;
+          this.showStatusMessage(message);
+          this.actions.notify(message, "error");
+        });
+    } else if (data === "i") {
+      this.actions.injectReport({
+        title: open.title,
+        body: open.body,
+        item: open.item,
+      });
+      this.showStatusMessage("Report added to conversation context");
+    }
+    // scrollOffset is clamped in renderReport
+  }
+
+  private viewportHeight(): number {
+    return Math.max(5, Math.floor(this.tui.terminal.rows * 0.85) - 6);
+  }
+
+  private showStatusMessage(message: string): void {
+    this.statusMessage = message;
+    if (this.statusMessageTimer) clearTimeout(this.statusMessageTimer);
+    this.statusMessageTimer = setTimeout(() => {
+      this.statusMessage = undefined;
+      this.statusMessageTimer = undefined;
+      this.tui.requestRender();
+    }, STATUS_MESSAGE_TTL_MS);
+  }
+
+  private findSnapshot(taskId: string): WebResearchTaskSnapshot | undefined {
+    return getWebResearchTaskSnapshots(this.tasks).find(
+      (snapshot) => snapshot.request.id === taskId,
     );
   }
+
+  private async reloadHistory(): Promise<void> {
+    this.history = await this.loadHistory(this.cwd);
+    this.tui.requestRender();
+  }
+}
+
+export interface ResearchTableLayout {
+  date: number;
+  provider: number;
+  duration: number;
+  title: number;
+}
+
+export function computeTableLayout(
+  rows: ResearchRow[],
+  width: number,
+): ResearchTableLayout {
+  const providerWidth = clamp(
+    Math.max(0, ...rows.map((row) => visibleWidth(rowProvider(row)))),
+    4,
+    12,
+  );
+  const date = 10;
+  const duration = 7;
+  // cursor(2) + glyph(2) + gaps between the remaining columns
+  const fixed = 2 + 2 + date + 1 + providerWidth + 1 + duration + 1;
+  return {
+    date,
+    provider: providerWidth,
+    duration,
+    title: Math.max(10, width - fixed),
+  };
+}
+
+export function formatResearchTableRow(
+  row: ResearchRow,
+  layout: ResearchTableLayout,
+  theme: Pick<Theme, "fg">,
+  selected: boolean,
+  now = Date.now(),
+): string {
+  const cursor = selected ? "› " : "  ";
+  const glyph = statusGlyph(row, theme, now);
+  const date = padCell(
+    formatRelativeDate(rowTimestampMs(row), now),
+    layout.date,
+  );
+  const provider = padCell(
+    truncateToWidth(rowProvider(row), layout.provider),
+    layout.provider,
+  );
+  const duration = padCell(rowDuration(row, now), layout.duration, "right");
+  const title = truncateToWidth(rowTitle(row), layout.title);
+  const dim = (text: string) =>
+    row.kind === "history" ? text : theme.fg("dim", text);
+  return `${cursor}${glyph} ${dim(date)} ${provider} ${theme.fg("muted", duration)} ${title}`;
+}
+
+function statusGlyph(
+  row: ResearchRow,
+  theme: Pick<Theme, "fg">,
+  now: number,
+): string {
+  if (row.kind === "running") {
+    const frame =
+      SPINNER_FRAMES[Math.floor(now / 1000) % SPINNER_FRAMES.length] ?? "◐";
+    return theme.fg("accent", row.snapshot.cancelRequestedAt ? "◌" : frame);
+  }
+  switch (row.item.status) {
+    case "completed":
+      return theme.fg("success", "✓");
+    case "failed":
+      return theme.fg("error", "✗");
+    case "cancelled":
+      return theme.fg("warning", "⊘");
+    default:
+      return theme.fg("dim", "?");
+  }
+}
+
+function rowProvider(row: ResearchRow): string {
+  return row.kind === "running"
+    ? providerLabel(row.snapshot.request.provider)
+    : row.item.provider || "?";
+}
+
+function rowTimestampMs(row: ResearchRow): number {
+  if (row.kind === "running") {
+    return Date.parse(row.snapshot.request.startedAt);
+  }
+  const completed = Date.parse(row.item.completedAt);
+  if (Number.isFinite(completed)) return completed;
+  const started = Date.parse(row.item.startedAt);
+  if (Number.isFinite(started)) return started;
+  return row.item.mtimeMs;
+}
+
+function rowDuration(row: ResearchRow, now: number): string {
+  if (row.kind === "running") {
+    return formatCompactElapsed(
+      now - Date.parse(row.snapshot.request.startedAt),
+    );
+  }
+  return row.item.elapsedMs === undefined
+    ? "—"
+    : formatCompactElapsed(row.item.elapsedMs);
+}
+
+function rowTitle(row: ResearchRow): string {
+  if (row.kind === "running") {
+    const request = row.snapshot.request;
+    const progress = row.snapshot.cancelRequestedAt
+      ? "cancelling"
+      : (request.progress ?? "running");
+    return `${progress} — ${cleanSingleLine(request.input)}`;
+  }
+  return row.item.title || cleanSingleLine(row.item.query);
+}
+
+export function formatRelativeDate(timestampMs: number, now: number): string {
+  if (!Number.isFinite(timestampMs)) return "?";
+  const diff = Math.max(0, now - timestampMs);
+  if (diff < 60_000) return "now";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+  const date = new Date(timestampMs);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  if (date.getFullYear() === new Date(now).getFullYear()) {
+    return `${month}-${day}`;
+  }
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function providerLabel(providerId: string): string {
+  return (
+    PROVIDERS_BY_ID[providerId as keyof typeof PROVIDERS_BY_ID]?.label ??
+    providerId
+  );
+}
+
+function padCell(
+  text: string,
+  width: number,
+  align: "left" | "right" = "left",
+): string {
+  const pad = " ".repeat(Math.max(0, width - visibleWidth(text)));
+  return align === "left" ? `${text}${pad}` : `${pad}${text}`;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), Math.max(min, max));
 }
 
 function formatCompactElapsed(ms: number): string {
@@ -236,9 +593,4 @@ function formatCompactElapsed(ms: number): string {
 
 function cleanSingleLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
-}
-
-function truncateInline(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 1)}…`;
 }

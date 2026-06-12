@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
+  copyToClipboard,
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   type ExtensionAPI,
@@ -38,9 +39,9 @@ import {
   getProviderStatusForTool,
   getSyncedActiveTools,
   MANAGED_TOOL_NAMES,
+  type ManagedToolRegistration,
   refreshManagedTools as refreshManagedToolsAvailability,
   refreshManagedToolsOnStartup as refreshManagedToolsOnStartupAvailability,
-  type ManagedToolRegistration,
 } from "./managed-tools.js";
 import { buildToolOptionsSchema, type ToolOptionsFor } from "./options.js";
 import {
@@ -91,18 +92,6 @@ import {
   buildSearchSummaryParts as buildDisplaySearchSummaryParts,
   buildSearchToolDisplay as buildDisplaySearchToolDisplay,
 } from "./tool-display.js";
-import {
-  type ActiveWebResearchTask,
-  cancelWebResearchTask,
-  dispatchWebResearch as dispatchWebResearchLifecycle,
-  formatWebResearchResultMessage,
-  getActiveWebResearchRequests,
-  getWebResearchTaskSnapshots,
-  loadWebResearchHistory,
-  loadWebResearchPreview,
-  waitForPendingResearchTasks,
-} from "./web-research-lifecycle.js";
-import { WebResearchManagerView } from "./web-research-view.js";
 import type {
   Claude,
   Codex,
@@ -126,12 +115,29 @@ import type {
   WebResearchResult,
   WebSearchDetails,
 } from "./types.js";
+import {
+  type ActiveWebResearchTask,
+  cancelWebResearchTask,
+  dispatchWebResearch as dispatchWebResearchLifecycle,
+  formatWebResearchResultMessage,
+  getActiveWebResearchRequests,
+  getWebResearchTaskSnapshots,
+  loadWebResearchHistory,
+  loadWebResearchPreview,
+  loadWebResearchReport,
+  waitForPendingResearchTasks,
+} from "./web-research-lifecycle.js";
+import {
+  WebResearchManagerView,
+  type WebResearchViewActions,
+} from "./web-research-view.js";
 
 const DEFAULT_MAX_RESULTS = 5;
 const MAX_ALLOWED_RESULTS = 20;
 const MAX_SEARCH_QUERIES = 10;
 const RESEARCH_HEARTBEAT_MS = 15000;
 const WEB_RESEARCH_RESULT_MESSAGE_TYPE = "web-research-result";
+const WEB_RESEARCH_REPORT_MESSAGE_TYPE = "web-research-report";
 const WEB_RESEARCH_WIDGET_KEY = "web-research-jobs";
 
 type ToolUpdateCallback =
@@ -240,6 +246,11 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
       (message, state, theme) =>
         renderWebResearchResultMessage(message, state, theme),
     );
+    pi.registerMessageRenderer(
+      WEB_RESEARCH_REPORT_MESSAGE_TYPE,
+      (message, state, theme) =>
+        renderWebResearchReportMessage(message, state, theme),
+    );
   }
 
   pi.registerCommand("web-providers", {
@@ -259,27 +270,65 @@ export default function webProvidersExtension(pi: ExtensionAPI) {
   });
 
   pi.registerCommand("web-research", {
-    description: "Manage web research jobs",
+    description: "Browse, inspect, and manage web researches",
     handler: async (_args, ctx: ExtensionCommandContext) => {
       if (!ctx.hasUI) {
         ctx.ui.notify("web-research requires interactive mode", "error");
         return;
       }
 
-      let timer: ReturnType<typeof setInterval> | undefined;
-      try {
-        await ctx.ui.custom((tui, theme, _keybindings, done) => {
-          const view = new WebResearchManagerView(
-            tui,
-            theme,
-            done,
-            ctx.cwd,
-            activeWebResearchRequests,
-            () => updateWebResearchWidget(ctx),
+      const actions: WebResearchViewActions = {
+        copyToClipboard,
+        injectReport: ({ title, body, item }) => {
+          pi.sendMessage(
+            {
+              customType: WEB_RESEARCH_REPORT_MESSAGE_TYPE,
+              content: formatWebResearchReportMessage(title, body, item),
+              display: true,
+              details: {
+                title,
+                outputPath: item.outputPath,
+                provider: item.provider,
+                query: item.query,
+                status: item.status,
+              },
+            },
+            { triggerTurn: false },
           );
-          timer = setInterval(() => view.refresh(), 1000);
-          return view;
-        });
+        },
+        notify: (message, type) => ctx.ui.notify(message, type ?? "info"),
+      };
+
+      let timer: ReturnType<typeof setInterval> | undefined;
+      let view: WebResearchManagerView | undefined;
+      try {
+        await ctx.ui.custom(
+          (tui, theme, _keybindings, done) => {
+            view = new WebResearchManagerView(
+              tui,
+              theme,
+              done,
+              ctx.cwd,
+              activeWebResearchRequests,
+              () => updateWebResearchWidget(ctx),
+              actions,
+            );
+            timer = setInterval(() => view?.refresh(), 1000);
+            return view;
+          },
+          {
+            overlay: true,
+            overlayOptions: () =>
+              view?.isReportOpen()
+                ? { anchor: "center", width: "85%", maxHeight: "85%" }
+                : {
+                    anchor: "center",
+                    width: "75%",
+                    maxHeight: "60%",
+                    minWidth: 60,
+                  },
+          },
+        );
       } finally {
         if (timer) clearInterval(timer);
       }
@@ -1647,27 +1696,26 @@ function buildWebResearchWidgetLines(
   theme: Pick<Theme, "fg">,
   now = Date.now(),
 ): string[] {
-  const lines = [theme.fg("accent", "Research jobs:")];
-
-  for (const request of requests
+  const sorted = requests
     .slice()
-    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
-    .slice(0, 3)) {
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt));
+  const jobs = sorted.slice(0, 3).map((request) => {
     const providerLabel =
       PROVIDERS_BY_ID[request.provider]?.label ?? request.provider;
     const elapsed = formatCompactElapsed(now - Date.parse(request.startedAt));
-    const icon = getWebResearchWidgetIcon(request, now);
-    const progress = request.progress ? `${request.progress} · ` : "";
-    lines.push(
-      `${icon}${providerLabel} ${theme.fg("muted", `(${elapsed}): `)}${theme.fg("muted", progress)}${truncateInline(cleanSingleLine(request.input), 70)}`,
-    );
+    const icon = getWebResearchWidgetIcon(request, now).trim();
+    const status = request.progress === "cancelling" ? " cancelling" : "";
+    return `${icon} ${providerLabel} ${elapsed}${status}`;
+  });
+  if (sorted.length > 3) {
+    jobs.push(`+${sorted.length - 3} more`);
   }
 
-  if (requests.length > 3) {
-    lines.push(theme.fg("muted", `+${requests.length - 3} more`));
-  }
-
-  return lines;
+  const count =
+    sorted.length === 1 ? "1 research" : `${sorted.length} researches`;
+  return [
+    `${theme.fg("accent", `${count} running`)}${theme.fg("muted", ` · ${jobs.join(" · ")} · /web-research`)}`,
+  ];
 }
 
 function getWebResearchWidgetIcon(
@@ -2227,6 +2275,68 @@ function renderWebResearchResultMessage(
           ),
   );
   return box;
+}
+
+interface WebResearchReportMessageDetails {
+  title: string;
+  outputPath: string;
+  provider: string;
+  query: string;
+  status: string;
+}
+
+function formatWebResearchReportMessage(
+  title: string,
+  body: string,
+  item: { outputPath: string; provider: string; status: string },
+): string {
+  const provenance = `Saved web research report "${title}" (provider: ${item.provider || "unknown"}, status: ${item.status}, artifact: \`${item.outputPath}\`):`;
+  return `${provenance}\n\n${body}\n`;
+}
+
+function renderWebResearchReportMessage(
+  message: {
+    content: string | Array<{ type: string; text?: string }>;
+    details?: unknown;
+  },
+  { expanded }: { expanded: boolean },
+  theme: Theme,
+): Component {
+  const text =
+    typeof message.content === "string"
+      ? message.content
+      : extractTextContent(message.content);
+  const details = isWebResearchReportDetails(message.details)
+    ? message.details
+    : undefined;
+  const box = new Box(1, 1, (value) => theme.bg("customMessageBg", value));
+
+  if (!expanded) {
+    const title = details?.title ?? "saved report";
+    box.addChild(
+      new Text(
+        `${theme.fg("success", `Injected research report: ${title}`)}${theme.fg("muted", ` (${getExpandHint()})`)}`,
+        0,
+        0,
+      ),
+    );
+    return box;
+  }
+
+  box.addChild(renderMarkdownBlock(text ?? ""));
+  return box;
+}
+
+function isWebResearchReportDetails(
+  details: unknown,
+): details is WebResearchReportMessageDetails {
+  return (
+    typeof details === "object" &&
+    details !== null &&
+    "title" in details &&
+    "outputPath" in details &&
+    !("tool" in details)
+  );
 }
 
 function renderWebResearchRequestMarkdown(request: WebResearchRequest): string {
@@ -4461,6 +4571,7 @@ export const __test__ = {
   cancelWebResearchTask,
   loadWebResearchHistory,
   loadWebResearchPreview,
+  loadWebResearchReport,
   getAvailableManagedToolNames,
   getReadyCompatibleProvidersForTool,
   getEnabledCompatibleProvidersForTool: getReadyCompatibleProvidersForTool,
@@ -4478,6 +4589,9 @@ export const __test__ = {
   renderProviderToolResult,
   renderWebResearchDispatchResult,
   renderWebResearchResultMessage,
+  renderWebResearchReportMessage,
+  formatWebResearchReportMessage,
+  buildWebResearchWidgetLines,
   waitForPendingResearchTasks,
   formatSearchResponses,
   formatAnswerResponses,

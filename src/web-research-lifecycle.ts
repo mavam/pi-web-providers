@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { formatElapsed, formatErrorMessage } from "./execution-policy.js";
+import { formatErrorMessage } from "./execution-policy.js";
 import { cleanupContentStore } from "./prefetch-manager.js";
 import {
   getEffectiveProviderConfig,
   resolveProviderForTool,
 } from "./provider-resolution.js";
 import type { ProviderExecution } from "./provider-runtime.js";
-import { PROVIDER_LIST, PROVIDERS_BY_ID } from "./providers/index.js";
+import { type PROVIDER_LIST, PROVIDERS_BY_ID } from "./providers/index.js";
 import type {
   ProviderConfig,
   ProviderId,
@@ -22,6 +22,7 @@ import type {
 export const RESEARCH_ARTIFACTS_DIR = join(".pi", "artifacts", "research");
 export const MAX_RESEARCH_HISTORY_ITEMS = 20;
 export const RESEARCH_PREVIEW_MAX_BYTES = 50000;
+export const RESEARCH_REPORT_MAX_BYTES = 200000;
 
 export interface ActiveWebResearchTask {
   request: WebResearchRequest;
@@ -38,10 +39,12 @@ export interface WebResearchHistoryItem {
   outputPath: string;
   fileName: string;
   query: string;
+  title: string;
   provider: string;
   status: string;
   startedAt: string;
   completedAt: string;
+  elapsedMs?: number;
   mtimeMs: number;
 }
 
@@ -477,10 +480,12 @@ export async function loadWebResearchHistory(
         outputPath,
         fileName,
         query: metadata.query ?? "",
+        title: deriveWebResearchTitle(content, metadata.query ?? ""),
         provider: metadata.provider ?? "",
         status: metadata.status ?? "unknown",
         startedAt: metadata.startedAt ?? "",
         completedAt: metadata.completedAt ?? "",
+        elapsedMs: computeHistoryElapsedMs(metadata),
         mtimeMs: stat.mtimeMs,
       };
     }),
@@ -560,6 +565,93 @@ function parseLegacyWebResearchArtifactMetadata(
     result[key] = values.join("\n").trim();
   }
   return result;
+}
+
+const RESEARCH_TITLE_MAX_LENGTH = 80;
+
+// Headings that never make a useful display title: the boilerplate heading
+// written by formatWebResearchArtifact and the metadata/body headings of the
+// legacy artifact format.
+const NON_TITLE_HEADINGS = new Set([
+  "Web research report",
+  "Query",
+  "Provider",
+  "Status",
+  "Started",
+  "Completed",
+  "Elapsed",
+  "Items",
+  "Error",
+  "Report",
+]);
+
+export function deriveWebResearchTitle(content: string, query: string): string {
+  const body = getWebResearchBody(content);
+  for (const line of body.split(/\r?\n/u)) {
+    const match = /^#{1,2}\s+(.+?)\s*$/u.exec(line);
+    if (!match) continue;
+    const heading = (match[1] ?? "").trim();
+    if (heading.length > 0 && !NON_TITLE_HEADINGS.has(heading)) {
+      return heading;
+    }
+  }
+
+  const fallback = query.replace(/\s+/g, " ").trim();
+  if (fallback.length <= RESEARCH_TITLE_MAX_LENGTH) {
+    return fallback;
+  }
+  return `${fallback.slice(0, RESEARCH_TITLE_MAX_LENGTH - 1)}…`;
+}
+
+export function computeHistoryElapsedMs(
+  metadata: Record<string, string>,
+): number | undefined {
+  if (metadata.elapsedMs !== undefined) {
+    const parsed = Number(metadata.elapsedMs);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return parsed;
+    }
+  }
+
+  const started = Date.parse(metadata.startedAt ?? "");
+  const completed = Date.parse(metadata.completedAt ?? "");
+  if (Number.isFinite(started) && Number.isFinite(completed)) {
+    return Math.max(0, completed - started);
+  }
+  return undefined;
+}
+
+function getWebResearchBody(content: string): string {
+  if (!content.startsWith("---\n")) {
+    return content;
+  }
+  const end = content.indexOf("\n---", 4);
+  if (end === -1) {
+    return content;
+  }
+  const afterClose = content.indexOf("\n", end + 4);
+  return afterClose === -1 ? "" : content.slice(afterClose + 1);
+}
+
+export interface WebResearchReport {
+  body: string;
+  metadata: Record<string, string>;
+  truncated: boolean;
+}
+
+export async function loadWebResearchReport(
+  outputPath: string,
+): Promise<WebResearchReport> {
+  const buffer = await readFile(outputPath);
+  const truncated = buffer.byteLength > RESEARCH_REPORT_MAX_BYTES;
+  const content = buffer
+    .subarray(0, RESEARCH_REPORT_MAX_BYTES)
+    .toString("utf-8");
+  return {
+    body: getWebResearchBody(content).trim(),
+    metadata: parseWebResearchArtifactMetadata(content),
+    truncated,
+  };
 }
 
 export async function loadWebResearchPreview(
