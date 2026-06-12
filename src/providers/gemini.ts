@@ -184,7 +184,7 @@ export const geminiImplementation = {
     );
 
     const results = await Promise.all(
-      extractGoogleSearchResults(interaction.outputs)
+      extractGoogleSearchResults(interaction.steps)
         .slice(0, maxResults)
         .map(async (result) => {
           const resolvedUrl = await resolveGoogleSearchUrl(
@@ -309,7 +309,7 @@ export const geminiImplementation = {
     const status = readNonEmptyString(interaction.status) ?? "unknown";
 
     if (status === "completed") {
-      const text = formatInteractionOutputs(interaction.outputs);
+      const text = formatInteractionSteps(interaction.steps);
       return {
         status: "completed",
         output: {
@@ -343,7 +343,7 @@ export const geminiImplementation = {
     if (status === "requires_action") {
       return {
         status: "failed",
-        error: describeGeminiRequiredAction(interaction.outputs),
+        error: describeGeminiRequiredAction(interaction.steps),
       };
     }
 
@@ -394,7 +394,7 @@ function addAbortSignalToGeminiConfig(
 }
 
 function extractGoogleSearchResults(
-  outputs: unknown,
+  steps: unknown,
 ): Array<{ title?: string; url?: string; rendered_content?: string }> {
   const seen = new Set<string>();
   const results: Array<{
@@ -403,16 +403,16 @@ function extractGoogleSearchResults(
     rendered_content?: string;
   }> = [];
 
-  if (!Array.isArray(outputs)) {
+  if (!Array.isArray(steps)) {
     return results;
   }
 
-  for (const output of outputs) {
-    if (typeof output !== "object" || output === null) {
+  for (const step of steps) {
+    if (typeof step !== "object" || step === null) {
       continue;
     }
 
-    const content = output as { type?: unknown; result?: unknown };
+    const content = step as { type?: unknown; result?: unknown };
     if (content.type !== "google_search_result") {
       continue;
     }
@@ -676,25 +676,38 @@ function extractGroundingSources(
   return sources;
 }
 
-function formatInteractionOutputs(outputs: unknown): string {
+function formatInteractionSteps(steps: unknown): string {
   const lines: string[] = [];
 
-  if (!Array.isArray(outputs)) {
+  if (!Array.isArray(steps)) {
     return "";
   }
 
-  for (const output of outputs) {
+  for (const step of steps) {
     if (
-      typeof output === "object" &&
-      output !== null &&
-      "type" in output &&
-      output.type === "text" &&
-      "text" in output &&
-      typeof output.text === "string"
+      typeof step !== "object" ||
+      step === null ||
+      !("type" in step) ||
+      step.type !== "model_output" ||
+      !("content" in step) ||
+      !Array.isArray(step.content)
     ) {
-      const text = output.text.trim();
-      if (text) {
-        lines.push(text);
+      continue;
+    }
+
+    for (const part of step.content) {
+      if (
+        typeof part === "object" &&
+        part !== null &&
+        "type" in part &&
+        part.type === "text" &&
+        "text" in part &&
+        typeof part.text === "string"
+      ) {
+        const text = part.text.trim();
+        if (text) {
+          lines.push(text);
+        }
       }
     }
   }
@@ -978,15 +991,19 @@ function buildGeminiGenerateContentRequest({
   };
 }
 
-function describeGeminiRequiredAction(outputs: unknown): string {
-  if (!Array.isArray(outputs) || outputs.length === 0) {
+function describeGeminiRequiredAction(steps: unknown): string {
+  if (!Array.isArray(steps) || steps.length === 0) {
     return "research requires additional action";
   }
 
-  const firstOutput = outputs.find(
-    (value) => typeof value === "object" && value !== null,
-  ) as Record<string, unknown> | undefined;
-  const type = readNonEmptyString(firstOutput?.type);
+  // The interaction's steps start with the submitted input, so the step that
+  // demands action is the most recent one.
+  const lastStep = [...steps]
+    .reverse()
+    .find((value) => typeof value === "object" && value !== null) as
+    | Record<string, unknown>
+    | undefined;
+  const type = readNonEmptyString(lastStep?.type);
 
   if (!type) {
     return "research requires additional action";
