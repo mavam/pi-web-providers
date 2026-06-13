@@ -22,9 +22,9 @@ import {
 const parallelSearchOptionsSchema = Type.Object(
   {
     mode: Type.Optional(
-      literalUnion(["agentic", "one-shot"], {
+      literalUnion(["advanced", "basic", "turbo", "agentic", "one-shot"], {
         description:
-          "Parallel search mode. Use 'agentic' for exploratory or multi-step source discovery and 'one-shot' for direct, simple searches.",
+          "Parallel search mode. Use 'advanced' for higher quality, 'basic' for lower latency, or 'turbo' for the fastest responses. Legacy 'agentic' and 'one-shot' aliases are also accepted.",
       }),
     ),
   },
@@ -66,7 +66,7 @@ const parallelImplementation = {
       credentials: { api: "PARALLEL_API_KEY" },
       options: {
         search: {
-          mode: "agentic",
+          mode: "advanced",
         },
         extract: {
           excerpts: false,
@@ -95,15 +95,13 @@ const parallelImplementation = {
     const client = createClient(config);
     const defaults = asJsonObject(config.options?.search) ?? {};
 
-    const response = await client.beta.search(
-      {
+    const response = (await client.search(
+      buildParallelSearchParams(query, maxResults, {
         ...defaults,
         ...(options ?? {}),
-        objective: query,
-        max_results: maxResults,
-      },
+      }) as never,
       buildRequestOptions(context),
-    );
+    )) as ParallelSearchResponse;
 
     return {
       provider: parallelImplementation.id,
@@ -124,14 +122,13 @@ const parallelImplementation = {
     const client = createClient(config);
     const defaults = asJsonObject(config.options?.extract) ?? {};
 
-    const response = await client.beta.extract(
-      {
+    const response = (await client.extract(
+      buildParallelExtractParams(urls, {
         ...defaults,
         ...(options ?? {}),
-        urls,
-      },
+      }) as never,
       buildRequestOptions(context),
-    );
+    )) as unknown as ParallelExtractResponse;
 
     const resultsByUrl = new Map(
       response.results.map((result) => [result.url, result] as const),
@@ -167,6 +164,113 @@ const parallelImplementation = {
     };
   },
 };
+
+type ParallelSearchMode = "advanced" | "basic" | "turbo";
+
+interface ParallelSearchResponse {
+  results: Array<{
+    title?: string | null;
+    url: string;
+    excerpts?: string[] | null;
+  }>;
+}
+
+interface ParallelExtractResponse {
+  results: Array<{
+    url: string;
+    excerpts?: string[] | null;
+    full_content?: string | null;
+  }>;
+  errors: Array<{
+    url: string;
+  }>;
+}
+
+function buildParallelSearchParams(
+  query: string,
+  maxResults: number,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const {
+    advanced_settings: advancedSettingsValue,
+    max_results: _legacyMaxResults,
+    mode: modeValue,
+    objective: objectiveValue,
+    search_queries: _searchQueries,
+    ...rest
+  } = options;
+  const advancedSettings = readObjectOption(advancedSettingsValue);
+  const mode = normalizeParallelSearchMode(modeValue);
+  const objective =
+    typeof objectiveValue === "string" && objectiveValue.trim()
+      ? objectiveValue.trim()
+      : query;
+
+  return {
+    ...rest,
+    search_queries: [query],
+    objective,
+    ...(mode ? { mode } : {}),
+    advanced_settings: {
+      ...advancedSettings,
+      max_results: maxResults,
+    },
+  };
+}
+
+function buildParallelExtractParams(
+  urls: string[],
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const {
+    advanced_settings: advancedSettingsValue,
+    excerpts: excerptsValue,
+    full_content: fullContentValue,
+    ...rest
+  } = options;
+  const advancedSettings = readObjectOption(advancedSettingsValue);
+
+  if (typeof fullContentValue === "boolean") {
+    advancedSettings.full_content = fullContentValue;
+  }
+  if (
+    typeof excerptsValue === "boolean" &&
+    advancedSettings.excerpt_settings === undefined
+  ) {
+    advancedSettings.excerpt_settings = excerptsValue
+      ? {}
+      : { max_chars_per_result: 0 };
+  }
+
+  return {
+    ...rest,
+    urls,
+    advanced_settings: advancedSettings,
+  };
+}
+
+function normalizeParallelSearchMode(
+  value: unknown,
+): ParallelSearchMode | undefined {
+  switch (value) {
+    case "advanced":
+    case "basic":
+    case "turbo":
+      return value;
+    case "agentic":
+      return "advanced";
+    case "one-shot":
+      return "basic";
+    default:
+      return undefined;
+  }
+}
+
+function readObjectOption(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? { ...(value as Record<string, unknown>) }
+    : {};
+}
 
 function createClient(config: Parallel): ParallelClient {
   const apiKey = resolveConfigValue(config.credentials?.api);
