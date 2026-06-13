@@ -83,6 +83,63 @@ command using a JSON stdin/stdout contract.
 See [`example-config.json`](example-config.json) for the minimal default
 configuration.
 
+## 🧪 Testing
+
+The default test suite is deterministic and does not use the network or provider
+credentials:
+
+```sh
+npm test
+```
+
+Live provider coverage is opt-in and uses real API keys from environment
+variables. It runs the public routing and execution path for the selected
+providers, then asserts stable contracts such as provider readiness, result
+shape, non-empty useful content, and normalized failures. It intentionally does
+not snapshot exact rankings, generated text, timestamps, or full provider
+responses.
+
+```sh
+npm run test:live
+```
+
+`test:live` sets `LIVE_API_TESTS=1` and fails fast when any selected contract is
+missing its required environment variable. By default it runs `search`,
+`contents`, and `answer` contracts for all API-backed providers. Research
+contracts are slower and may cost more, so run them explicitly:
+
+```sh
+LIVE_API_CAPABILITIES=research npm run test:live
+```
+
+Use comma-separated filters to run a smaller subset:
+
+```sh
+LIVE_API_PROVIDERS=openai,tavily LIVE_API_CAPABILITIES=search,contents npm run test:live
+```
+
+GitHub Actions reads the same names from repository secrets:
+
+| Provider    | Required secret names                                      |
+| ----------- | ---------------------------------------------------------- |
+| Brave       | `BRAVE_SEARCH_API_KEY`, `BRAVE_ANSWERS_API_KEY`            |
+| Cloudflare  | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`            |
+| Exa         | `EXA_API_KEY`                                              |
+| Firecrawl   | `FIRECRAWL_API_KEY`                                        |
+| Gemini      | `GOOGLE_API_KEY`                                           |
+| Linkup      | `LINKUP_API_KEY`                                           |
+| Ollama      | `OLLAMA_API_KEY`                                           |
+| OpenAI      | `OPENAI_API_KEY`                                           |
+| Parallel    | `PARALLEL_API_KEY`                                         |
+| Perplexity  | `PERPLEXITY_API_KEY`                                       |
+| Serper      | `SERPER_API_KEY`                                           |
+| Tavily      | `TAVILY_API_KEY`                                           |
+| Valyu       | `VALYU_API_KEY`                                            |
+
+The live API workflow is separate from the normal CI job, runs on manual
+dispatch and a weekly schedule, and skips forked pull requests because GitHub
+does not expose repository secrets to them.
+
 ### Tools
 
 Each managed tool maps to one provider id under the top-level `tools` key.
