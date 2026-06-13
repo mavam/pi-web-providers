@@ -8,6 +8,7 @@ const {
   exaGetContentsMock,
   parallelCtorMock,
   parallelExtractMock,
+  parallelSearchMock,
   valyuCtorMock,
   valyuContentsMock,
   valyuWaitForJobMock,
@@ -18,6 +19,7 @@ const {
   exaGetContentsMock: vi.fn(),
   parallelCtorMock: vi.fn(),
   parallelExtractMock: vi.fn(),
+  parallelSearchMock: vi.fn(),
   valyuCtorMock: vi.fn(),
   valyuContentsMock: vi.fn(),
   valyuWaitForJobMock: vi.fn(),
@@ -52,10 +54,8 @@ vi.mock("exa-js", () => ({
 vi.mock("parallel-web", () => ({
   default: parallelCtorMock.mockImplementation(function MockParallel() {
     return {
-      beta: {
-        search: vi.fn(),
-        extract: parallelExtractMock,
-      },
+      search: parallelSearchMock,
+      extract: parallelExtractMock,
     };
   }),
 }));
@@ -78,6 +78,9 @@ vi.mock("valyu-js", () => ({
 afterEach(() => {
   cloudflareCtorMock.mockClear();
   cloudflareMarkdownCreateMock.mockReset();
+  parallelCtorMock.mockClear();
+  parallelExtractMock.mockReset();
+  parallelSearchMock.mockReset();
 });
 
 describe("contents providers", () => {
@@ -195,8 +198,12 @@ describe("contents providers", () => {
     expect(parallelExtractMock).toHaveBeenCalledWith(
       expect.objectContaining({
         urls: ["https://parallel.ai/docs"],
-        full_content: true,
-        excerpts: false,
+        advanced_settings: {
+          full_content: true,
+          excerpt_settings: {
+            max_chars_per_result: 0,
+          },
+        },
       }),
       undefined,
     );
@@ -210,6 +217,57 @@ describe("contents providers", () => {
         full_content: "Section 1\n\nSection 2",
       },
     });
+  });
+
+  it("maps Parallel search to the v1 search API and legacy modes", async () => {
+    const { parallelProvider } = await import("../src/providers/parallel.js");
+    const provider = providerHarness(parallelProvider);
+    const config = provider.createTemplate();
+    config.credentials = { api: "literal-key" };
+    config.options = {
+      search: {
+        mode: "agentic",
+      },
+    };
+
+    parallelSearchMock.mockResolvedValue({
+      results: [
+        {
+          title: "Parallel Docs",
+          url: "https://parallel.ai/docs",
+          excerpts: ["SDK reference"],
+        },
+      ],
+    });
+
+    const result = await provider.search(
+      "parallel sdk",
+      3,
+      config,
+      { cwd: process.cwd() },
+      {
+        mode: "one-shot",
+      },
+    );
+
+    expect(parallelSearchMock).toHaveBeenCalledWith(
+      {
+        search_queries: ["parallel sdk"],
+        objective: "parallel sdk",
+        mode: "basic",
+        advanced_settings: {
+          max_results: 3,
+        },
+      },
+      undefined,
+    );
+    expect(result.results).toEqual([
+      {
+        title: "Parallel Docs",
+        url: "https://parallel.ai/docs",
+        snippet: "SDK reference",
+      },
+    ]);
   });
 
   it("prefers Valyu content over summaries and preserves line breaks", async () => {

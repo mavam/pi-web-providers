@@ -496,7 +496,8 @@ call.
 <summary><strong>Parallel</strong></summary>
 
 - SDK: `parallel-web`
-- Agentic and one-shot search modes
+- Search modes `advanced`, `basic`, and `turbo`; legacy `agentic` and
+  `one-shot` configs are accepted as aliases
 - Page content extraction with excerpt and full-content toggles
 - Exposes search option `mode`
 - Exposes contents options `excerpts` and `full_content`

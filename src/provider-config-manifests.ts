@@ -647,8 +647,15 @@ const PROVIDER_SETTINGS = {
       valuesSetting<Parallel>({
         id: "parallelSearchMode",
         label: "Search mode",
-        help: "Parallel search mode. 'default' uses the SDK default.",
-        values: ["default", "agentic", "one-shot"],
+        help: "Parallel search mode. 'default' uses the SDK default. Legacy 'agentic' and 'one-shot' values are accepted as aliases.",
+        values: [
+          "default",
+          "advanced",
+          "basic",
+          "turbo",
+          "agentic",
+          "one-shot",
+        ],
         getValue: (config) =>
           readString(getParallelOptions(config)?.search?.mode) ?? "default",
         setValue: (config, value) => {
