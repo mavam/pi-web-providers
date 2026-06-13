@@ -184,7 +184,7 @@ export const geminiImplementation = {
     );
 
     const results = await Promise.all(
-      extractGoogleSearchResults(interaction.steps)
+      extractGoogleSearchResults(readInteractionSteps(interaction))
         .slice(0, maxResults)
         .map(async (result) => {
           const resolvedUrl = await resolveGoogleSearchUrl(
@@ -309,7 +309,7 @@ export const geminiImplementation = {
     const status = readNonEmptyString(interaction.status) ?? "unknown";
 
     if (status === "completed") {
-      const text = formatInteractionSteps(interaction.steps);
+      const text = formatInteractionSteps(readInteractionSteps(interaction));
       return {
         status: "completed",
         output: {
@@ -343,7 +343,7 @@ export const geminiImplementation = {
     if (status === "requires_action") {
       return {
         status: "failed",
-        error: describeGeminiRequiredAction(interaction.steps),
+        error: describeGeminiRequiredAction(readInteractionSteps(interaction)),
       };
     }
 
@@ -391,6 +391,12 @@ function addAbortSignalToGeminiConfig(
     ...(config ?? {}),
     abortSignal: signal,
   };
+}
+
+function readInteractionSteps(interaction: unknown): unknown {
+  return typeof interaction === "object" && interaction !== null
+    ? (interaction as { steps?: unknown }).steps
+    : undefined;
 }
 
 function extractGoogleSearchResults(
