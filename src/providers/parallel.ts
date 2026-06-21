@@ -22,9 +22,9 @@ import {
 const parallelSearchOptionsSchema = Type.Object(
   {
     mode: Type.Optional(
-      literalUnion(["advanced", "basic", "turbo", "agentic", "one-shot"], {
+      literalUnion(["advanced", "basic", "turbo"], {
         description:
-          "Parallel search mode. Use 'advanced' for higher quality, 'basic' for lower latency, or 'turbo' for the fastest responses. Legacy 'agentic' and 'one-shot' aliases are also accepted.",
+          "Parallel search mode. Use 'advanced' for higher quality, 'basic' for lower latency, or 'turbo' for the fastest responses.",
       }),
     ),
   },
@@ -32,8 +32,9 @@ const parallelSearchOptionsSchema = Type.Object(
 );
 
 const parallelSearchPromptGuidelines = [
-  "Use Parallel mode='agentic' for exploratory, ambiguous, or multi-hop source discovery where the provider should plan the search.",
-  "Use Parallel mode='one-shot' for direct factual lookups and simple source finding where low latency is preferred.",
+  "Use Parallel mode='advanced' for exploratory, ambiguous, or multi-hop source discovery where the provider should plan the search.",
+  "Use Parallel mode='basic' for direct factual lookups and simple source finding where low latency is preferred.",
+  "Use Parallel mode='turbo' only when fastest responses matter more than recall or depth.",
   "Prefer web_contents with Parallel extraction when a URL set is already known and the task needs full page content rather than more source discovery.",
 ] as const;
 
@@ -263,10 +264,6 @@ function normalizeParallelSearchMode(
     case "basic":
     case "turbo":
       return value;
-    case "agentic":
-      return "advanced";
-    case "one-shot":
-      return "basic";
     default:
       return undefined;
   }

@@ -272,7 +272,7 @@ describe("managed tool availability", () => {
       {
         provider: "parallel",
         env: "PARALLEL_API_KEY",
-        expected: "Parallel mode='agentic'",
+        expected: "Parallel mode='advanced'",
       },
       {
         provider: "perplexity",

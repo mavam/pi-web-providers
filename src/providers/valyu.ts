@@ -40,7 +40,10 @@ const valyuSearchOptionsSchema = Type.Object(
       Type.String({ description: "Country code to scope search results." }),
     ),
     maxPrice: Type.Optional(
-      Type.Number({ minimum: 0, description: "Maximum search cost in USD." }),
+      Type.Number({
+        minimum: 0,
+        description: "Maximum price per thousand characters (CPM).",
+      }),
     ),
     relevanceThreshold: Type.Optional(
       Type.Number({

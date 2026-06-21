@@ -564,7 +564,7 @@ describe("config parsing", () => {
       credentials: { api: "PARALLEL_API_KEY" },
       options: {
         search: {
-          mode: "one-shot",
+          mode: "basic",
         },
       },
     };
@@ -648,7 +648,7 @@ describe("config parsing", () => {
     expect(loaded.providers?.perplexity?.options?.research?.model).toBe(
       "sonar-deep-research",
     );
-    expect(loaded.providers?.parallel?.options?.search?.mode).toBe("one-shot");
+    expect(loaded.providers?.parallel?.options?.search?.mode).toBe("basic");
     expect(loaded.providers?.tavily?.options?.search?.topic).toBe("news");
     expect(loaded.providers?.tavily?.options?.extract?.format).toBe("text");
     expect(loaded.settings?.search).toEqual({
