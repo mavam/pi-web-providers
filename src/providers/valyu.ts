@@ -15,7 +15,7 @@ import type {
   Valyu,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
-import { literalUnion } from "./schema.js";
+import { boolOrConfig, literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -62,6 +62,11 @@ const valyuSearchOptionsSchema = Type.Object(
         description: "Exclude these Valyu sources.",
       }),
     ),
+    sourceBiases: Type.Optional(
+      Type.Record(Type.String(), Type.Number(), {
+        description: "Per-source relevance bias weights.",
+      }),
+    ),
     category: Type.Optional(
       Type.String({ description: "Valyu source category to search." }),
     ),
@@ -70,6 +75,11 @@ const valyuSearchOptionsSchema = Type.Object(
     ),
     endDate: Type.Optional(
       Type.String({ description: "ISO date string for latest result date." }),
+    ),
+    historicalCache: Type.Optional(
+      Type.Boolean({
+        description: "Allow Valyu historical cache usage when supported.",
+      }),
     ),
     fastMode: Type.Optional(
       Type.Boolean({
@@ -137,19 +147,69 @@ const valyuContentsOptionsSchema = Type.Object(
         description: "Include screenshot capture when supported.",
       }),
     ),
+    startDate: Type.Optional(
+      Type.String({
+        description: "ISO date string for earliest content date.",
+      }),
+    ),
+    endDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest content date." }),
+    ),
+    historicalCache: Type.Optional(
+      Type.Boolean({
+        description: "Allow Valyu historical cache usage when supported.",
+      }),
+    ),
   },
   { description: "Valyu contents options." },
 );
 
 const valyuAnswerOptionsSchema = Type.Object(
   {
-    responseLength: Type.Optional(
-      literalUnion(["short", "medium", "large", "max"], {
-        description: "Response length for answers.",
+    structuredOutput: Type.Optional(
+      Type.Record(Type.String(), Type.Any(), {
+        description: "JSON schema-like structured output specification.",
+      }),
+    ),
+    systemInstructions: Type.Optional(
+      Type.String({
+        description: "System instructions that guide Valyu answer generation.",
+      }),
+    ),
+    searchType: Type.Optional(
+      literalUnion(["all", "web", "proprietary", "news"], {
+        description: "Valyu search type for answer grounding.",
+      }),
+    ),
+    dataMaxPrice: Type.Optional(
+      Type.Number({
+        minimum: 0,
+        description: "Maximum data retrieval price for answer grounding.",
       }),
     ),
     countryCode: Type.Optional(
       Type.String({ description: "Country code to scope answer results." }),
+    ),
+    includedSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict answer grounding to these Valyu sources.",
+      }),
+    ),
+    excludedSources: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Exclude these Valyu sources from answer grounding.",
+      }),
+    ),
+    startDate: Type.Optional(
+      Type.String({ description: "ISO date string for earliest source date." }),
+    ),
+    endDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest source date." }),
+    ),
+    fastMode: Type.Optional(
+      Type.Boolean({
+        description: "Use Valyu fast mode when lower latency is preferred.",
+      }),
     ),
   },
   { description: "Valyu answer options." },
@@ -157,13 +217,58 @@ const valyuAnswerOptionsSchema = Type.Object(
 
 const valyuResearchOptionsSchema = Type.Object(
   {
-    responseLength: Type.Optional(
-      literalUnion(["short", "medium", "large", "max"], {
-        description: "Response length for research.",
+    mode: Type.Optional(
+      literalUnion(["fast", "standard", "lite", "heavy", "max"], {
+        description: "Valyu deep research mode.",
       }),
     ),
-    countryCode: Type.Optional(
-      Type.String({ description: "Country code to scope research results." }),
+    outputFormats: Type.Optional(
+      Type.Array(
+        Type.Union([
+          literalUnion(["markdown", "pdf", "toon"]),
+          Type.Record(Type.String(), Type.Any()),
+        ]),
+        { description: "Requested Valyu research output formats." },
+      ),
+    ),
+    search: Type.Optional(
+      Type.Object(
+        {
+          searchType: Type.Optional(
+            literalUnion(["all", "web", "proprietary"], {
+              description: "Valyu source pool for research.",
+            }),
+          ),
+          includedSources: Type.Optional(Type.Array(Type.String())),
+          excludedSources: Type.Optional(Type.Array(Type.String())),
+          sourceBiases: Type.Optional(
+            Type.Record(Type.String(), Type.Number()),
+          ),
+          startDate: Type.Optional(Type.String()),
+          endDate: Type.Optional(Type.String()),
+          historicalCache: Type.Optional(Type.Boolean()),
+          category: Type.Optional(Type.String()),
+          countryCode: Type.Optional(Type.String()),
+        },
+        {
+          additionalProperties: false,
+          description: "Valyu deep research search configuration.",
+        },
+      ),
+    ),
+    tools: Type.Optional(
+      Type.Object(
+        {
+          code_execution: Type.Optional(boolOrConfig()),
+          screenshots: Type.Optional(boolOrConfig()),
+          browser_use: Type.Optional(boolOrConfig()),
+          charts: Type.Optional(boolOrConfig()),
+        },
+        {
+          additionalProperties: false,
+          description: "Valyu deep research tool configuration.",
+        },
+      ),
     ),
   },
   { description: "Valyu research options." },

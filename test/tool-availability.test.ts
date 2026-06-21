@@ -389,10 +389,11 @@ describe("managed tool availability", () => {
     expect(exaOptions.additionalProperties).toBe(false);
     expect(exaOptions.properties).not.toHaveProperty("provider");
     expect(exaOptions.properties).not.toHaveProperty("runtime");
-    expect(exaOptions.properties?.userLocation?.additionalProperties).toBe(
-      false,
-    );
+    expect(exaOptions.properties).toHaveProperty("userLocation");
     expect(JSON.stringify(exaOptions)).toContain("includeDomains");
+    expect(JSON.stringify(exaOptions)).toContain("startCrawlDate");
+    expect(JSON.stringify(exaOptions)).toContain("maxAgeHours");
+    expect(JSON.stringify(exaOptions)).not.toContain("deep-max");
     expect(JSON.stringify(exaOptions)).not.toContain("gl");
     expect(
       (webSearch?.parameters?.properties?.maxResults as { maximum?: number })

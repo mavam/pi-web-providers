@@ -165,17 +165,29 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
-export interface OpenAISearchOptions {
+// Built-in `web_search` tool controls shared by every OpenAI capability.
+export interface OpenAIWebSearchToolOptions {
+  searchContextSize?: "low" | "medium" | "high";
+  allowedDomains?: string[];
+  userLocation?: {
+    city?: string;
+    country?: string;
+    region?: string;
+    timezone?: string;
+  };
+}
+
+export interface OpenAISearchOptions extends OpenAIWebSearchToolOptions {
   model?: string;
   instructions?: string;
 }
 
-export interface OpenAIAnswerOptions {
+export interface OpenAIAnswerOptions extends OpenAIWebSearchToolOptions {
   model?: string;
   instructions?: string;
 }
 
-export interface OpenAIResearchOptions {
+export interface OpenAIResearchOptions extends OpenAIWebSearchToolOptions {
   model?: string;
   instructions?: string;
   max_tool_calls?: number;
@@ -262,6 +274,7 @@ export interface ValyuSearchOptions extends Record<string, unknown> {
   category?: string;
   startDate?: string;
   endDate?: string;
+  historicalCache?: boolean;
   fastMode?: boolean;
   urlOnly?: boolean;
   instructions?: string;
@@ -273,13 +286,17 @@ export interface ValyuContentsOptions extends Record<string, unknown> {
   responseLength?: "short" | "medium" | "large" | "max" | number;
   maxPriceDollars?: number;
   screenshot?: boolean;
+  startDate?: string;
+  endDate?: string;
+  historicalCache?: boolean;
 }
 
 export interface ValyuAnswerOptions extends Record<string, unknown> {
-  responseLength?: "short" | "medium" | "large" | "max" | number;
-  countryCode?: string;
+  structuredOutput?: Record<string, unknown>;
+  systemInstructions?: string;
   searchType?: "all" | "web" | "proprietary" | "news";
   dataMaxPrice?: number;
+  countryCode?: string;
   includedSources?: string[];
   excludedSources?: string[];
   startDate?: string;
@@ -288,8 +305,25 @@ export interface ValyuAnswerOptions extends Record<string, unknown> {
 }
 
 export interface ValyuResearchOptions extends Record<string, unknown> {
-  responseLength?: "short" | "medium" | "large" | "max";
-  countryCode?: string;
+  mode?: "fast" | "standard" | "lite" | "heavy" | "max";
+  outputFormats?: Array<"markdown" | "pdf" | "toon" | Record<string, unknown>>;
+  search?: {
+    searchType?: "all" | "web" | "proprietary";
+    includedSources?: string[];
+    excludedSources?: string[];
+    sourceBiases?: Record<string, number>;
+    startDate?: string;
+    endDate?: string;
+    historicalCache?: boolean;
+    category?: string;
+    countryCode?: string;
+  };
+  tools?: {
+    code_execution?: boolean | Record<string, unknown>;
+    screenshots?: boolean | Record<string, unknown>;
+    browser_use?: boolean | Record<string, unknown>;
+    charts?: boolean | Record<string, unknown>;
+  };
 }
 
 export interface ValyuOptions {

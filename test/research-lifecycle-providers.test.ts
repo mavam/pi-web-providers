@@ -115,6 +115,12 @@ describe("OpenAI provider", () => {
       onUpdate: undefined,
       options: {
         instructions: "Prefer official sources.",
+        allowedDomains: ["platform.openai.com"],
+        searchContextSize: "high",
+        userLocation: {
+          country: "US",
+          region: "California",
+        },
       },
       maxResults: 3,
       queries: ["openai deep research"],
@@ -136,7 +142,18 @@ describe("OpenAI provider", () => {
           "",
           "User query: openai deep research",
         ].join("\n"),
-        tools: [{ type: "web_search_preview" }],
+        tools: [
+          {
+            type: "web_search",
+            filters: { allowed_domains: ["platform.openai.com"] },
+            search_context_size: "high",
+            user_location: {
+              type: "approximate",
+              country: "US",
+              region: "California",
+            },
+          },
+        ],
         text: {
           format: {
             type: "json_schema",
@@ -248,7 +265,7 @@ describe("OpenAI provider", () => {
       {
         model: "gpt-4.1",
         input: "What is the latest OpenAI deep research API?",
-        tools: [{ type: "web_search_preview" }],
+        tools: [{ type: "web_search" }],
         instructions: "Keep the answer concise and prefer primary sources.",
       },
       expect.objectContaining({
@@ -379,7 +396,7 @@ describe("async research providers", () => {
         model: "o3-deep-research",
         input: "Investigate OpenAI deep research polling",
         background: true,
-        tools: [{ type: "web_search_preview" }],
+        tools: [{ type: "web_search" }],
         instructions: "Prefer primary sources.",
         max_tool_calls: 12,
       },

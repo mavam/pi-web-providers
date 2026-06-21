@@ -7,6 +7,7 @@ import type {
   OpenAI as OpenAIConfig,
   OpenAIResearchOptions,
   OpenAISearchOptions,
+  OpenAIWebSearchToolOptions,
   ProviderCapabilityStatus,
   ProviderCapabilityStatusOptions,
   ProviderContext,
@@ -17,11 +18,44 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
+import { literalUnion } from "./schema.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
 const DEFAULT_ANSWER_MODEL = "gpt-4.1";
 const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
+
+// Built-in `web_search` tool controls shared by every OpenAI capability.
+const openaiWebSearchToolProperties = {
+  searchContextSize: Type.Optional(
+    literalUnion(["low", "medium", "high"], {
+      description:
+        "Amount of context OpenAI web search should retrieve per search.",
+    }),
+  ),
+  allowedDomains: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Restrict OpenAI web search to these domains.",
+    }),
+  ),
+  userLocation: Type.Optional(
+    Type.Object(
+      {
+        city: Type.Optional(Type.String({ description: "User city hint." })),
+        country: Type.Optional(
+          Type.String({ description: "Two-letter user country code." }),
+        ),
+        region: Type.Optional(
+          Type.String({ description: "User region hint." }),
+        ),
+        timezone: Type.Optional(
+          Type.String({ description: "IANA timezone hint." }),
+        ),
+      },
+      { description: "Approximate user location for OpenAI web search." },
+    ),
+  ),
+} as const;
 
 const openaiSearchOptionsSchema = Type.Object(
   {
@@ -37,6 +71,7 @@ const openaiSearchOptionsSchema = Type.Object(
           "Optional instructions that shape source selection and result style.",
       }),
     ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI search options." },
 );
@@ -44,6 +79,9 @@ const openaiSearchOptionsSchema = Type.Object(
 const openaiSearchPromptGuidelines = [
   "Use OpenAI web search when an LLM-mediated search pass should identify likely sources from the live web.",
   "Use instructions to constrain source selection, freshness, geography, or output style only when the user explicitly needs that control.",
+  "Use allowedDomains when the user asks to search only specific sites or primary-source domains.",
+  "Use searchContextSize='high' only when the query needs richer source context; use 'low' for quick source discovery.",
+  "Use userLocation for local, regional, or jurisdiction-specific searches.",
   "Prefer web_contents after OpenAI search when the task requires direct inspection of selected primary sources.",
 ] as const;
 
@@ -61,6 +99,7 @@ const openaiAnswerOptionsSchema = Type.Object(
           "Optional instructions that shape the answer structure, tone, and source selection.",
       }),
     ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI answer options." },
 );
@@ -86,6 +125,7 @@ const openaiResearchOptionsSchema = Type.Object(
           "Maximum number of built-in tool calls the model may make during the research run.",
       }),
     ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI deep research options." },
 );
@@ -338,7 +378,7 @@ function buildOpenAISearchRequest(
       "",
       `User query: ${query}`,
     ].join("\n"),
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     text: {
       format: {
         type: "json_schema" as const,
@@ -364,7 +404,7 @@ function buildOpenAIAnswerRequest(
   return {
     model,
     input: query,
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     ...(instructions ? { instructions } : {}),
   };
 }
@@ -384,9 +424,54 @@ function buildOpenAIResearchRequest(
     model,
     input,
     background: true,
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     ...(instructions ? { instructions } : {}),
     ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
+  };
+}
+
+function buildOpenAIWebSearchTool(options: OpenAIWebSearchToolOptions) {
+  const tool: {
+    type: "web_search";
+    search_context_size?: "low" | "medium" | "high";
+    filters?: { allowed_domains: string[] };
+    user_location?: {
+      type: "approximate";
+      city?: string;
+      country?: string;
+      region?: string;
+      timezone?: string;
+    };
+  } = { type: "web_search" };
+  if (options.searchContextSize) {
+    tool.search_context_size = options.searchContextSize;
+  }
+  if (options.allowedDomains && options.allowedDomains.length > 0) {
+    tool.filters = { allowed_domains: options.allowedDomains };
+  }
+  if (options.userLocation) {
+    tool.user_location = {
+      type: "approximate",
+      ...options.userLocation,
+    };
+  }
+  return tool;
+}
+
+function resolveOpenAIWebSearchToolOptions(
+  merged: Record<string, unknown>,
+): OpenAIWebSearchToolOptions {
+  const searchContextSize = readStringUnion(merged.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(merged.allowedDomains);
+  const userLocation = readUserLocation(merged.userLocation);
+  return {
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
   };
 }
 
@@ -404,6 +489,7 @@ function resolveOpenAISearchOptions(
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 
@@ -421,6 +507,7 @@ function resolveOpenAIAnswerOptions(
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 
@@ -440,6 +527,7 @@ function resolveOpenAIResearchOptions(
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
     ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 
@@ -674,6 +762,45 @@ function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
     ? value
     : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const strings = value.filter(
+    (item): item is string => typeof item === "string" && item.trim() !== "",
+  );
+  return strings.length > 0 ? strings : undefined;
+}
+
+function readStringUnion<const TValue extends string>(
+  value: unknown,
+  values: readonly TValue[],
+): TValue | undefined {
+  return typeof value === "string" && values.includes(value as TValue)
+    ? (value as TValue)
+    : undefined;
+}
+
+function readUserLocation(
+  value: unknown,
+): OpenAISearchOptions["userLocation"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const location = value as Record<string, unknown>;
+  const city = readNonEmptyString(location.city);
+  const country = readNonEmptyString(location.country);
+  const region = readNonEmptyString(location.region);
+  const timezone = readNonEmptyString(location.timezone);
+  const result = {
+    ...(city ? { city } : {}),
+    ...(country ? { country } : {}),
+    ...(region ? { region } : {}),
+    ...(timezone ? { timezone } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function readPositiveInteger(value: unknown): number | undefined {

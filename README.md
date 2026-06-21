@@ -317,10 +317,12 @@ scope, or account ID is usually wrong.
 - SDK: `exa-js`
 - Supports `web_search`, `web_contents`, `web_answer`, and `web_research`
 - `web_research` is exposed through pi's async research workflow
-- Neural, keyword, hybrid, and deep-research search modes
+- Neural, keyword, hybrid, and deep-search search modes
 - Inline text-content extraction on search results
-- Exposes search options such as `category`, `type`, date filters,
-  `includeDomains`, `excludeDomains`, `userLocation`, and `contents`
+- Exposes search options such as `category`, `type`, crawl and publish date
+  filters, `includeDomains`, `excludeDomains`, `includeText`, `excludeText`,
+  `userLocation`, `additionalQueries`, `systemPrompt`, and richer `contents`
+  controls such as `livecrawl`, `maxAgeHours`, `subpages`, and `extras`
 - Persisted Exa defaults are scoped under `providers.exa.options.search`
 - `web_contents`, `web_answer`, and `web_research` currently use fixed provider behavior with no extra per-call provider options
 
@@ -337,11 +339,15 @@ scope, or account ID is usually wrong.
   set `options.url` in the `web_answer` call or
   `providers.firecrawl.options.answer.url` as a default
 - Exposes search options such as `lang`, `country`, `sources`, `categories`,
-  `location`, `timeout`, and `scrapeOptions`
+  domain filters, `tbs`, `location`, `timeout`, and `scrapeOptions`
 - Exposes contents options such as `formats`, `onlyMainContent`, `includeTags`,
-  `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
+  `excludeTags`, `waitFor`, `timeout`, `headers`, `location`, `mobile`,
+  `proxy`, `fastMode`, `blockAds`, `removeBase64Images`, `redactPII`, and
+  cache controls
 - Exposes answer options `url`, `onlyMainContent`, `includeTags`,
-  `excludeTags`, `waitFor`, `headers`, `location`, `mobile`, and `proxy`
+  `excludeTags`, `waitFor`, `timeout`, `headers`, `location`, `mobile`,
+  `proxy`, `fastMode`, `blockAds`, `removeBase64Images`, `redactPII`, and
+  cache controls
 - Firecrawl charges 5 credits per page for the `question` format
 - Optional `baseUrl` overrides are supported for self-hosted Firecrawl
   instances, proxies, and testing. API keys are required for Firecrawl Cloud,
@@ -426,10 +432,12 @@ Minimal config:
 - Supports `web_search`, `web_answer`, and `web_research`
 - Uses the Responses API for structured web search, grounded answers, and
   deep-research runs
-- Always enables OpenAI's built-in `web_search_preview` tool for search,
-  answer, and research calls
-- Exposes `model` and `instructions` for `web_search` and `web_answer`
-- Exposes `model`, `instructions`, and `max_tool_calls` for `web_research`
+- Enables OpenAI's built-in `web_search` tool for search, answer, and research
+  calls
+- Exposes `model`, `instructions`, `searchContextSize`, `allowedDomains`, and
+  `userLocation` for `web_search` and `web_answer`
+- Exposes `model`, `instructions`, `max_tool_calls`, `searchContextSize`,
+  `allowedDomains`, and `userLocation` for `web_research`
 - Good fit when you want official OpenAI web-grounded search, answers, and deep
   research behind pi's managed tool abstractions
 
@@ -563,11 +571,16 @@ Minimal config:
 - `web_research` is exposed through pi's async research workflow
 - Web, proprietary, and news search types
 - Exposes search options such as `searchType`, `responseLength`,
-  `countryCode`, source filters, date filters, `fastMode`, `urlOnly`, and
-  `instructions`
+  `countryCode`, source filters, `sourceBiases`, date filters,
+  `historicalCache`, `fastMode`, `urlOnly`, and `instructions`
 - Exposes contents options such as `summary`, `extractEffort`,
-  `responseLength`, `maxPriceDollars`, and `screenshot`
-- Exposes answer and research options `responseLength` and `countryCode`
+  `responseLength`, `maxPriceDollars`, `screenshot`, date filters, and
+  `historicalCache`
+- Exposes answer options such as `structuredOutput`, `systemInstructions`,
+  `searchType`, `dataMaxPrice`, source filters, date filters, `countryCode`,
+  and `fastMode`
+- Exposes research options such as `mode`, `outputFormats`, `search`,
+  and `tools`
 - Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
   `providers.valyu.options.contents`, `providers.valyu.options.answer`, and
   `providers.valyu.options.research`
