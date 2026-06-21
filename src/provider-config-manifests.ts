@@ -647,15 +647,8 @@ const PROVIDER_SETTINGS = {
       valuesSetting<Parallel>({
         id: "parallelSearchMode",
         label: "Search mode",
-        help: "Parallel search mode. 'default' uses the SDK default. Legacy 'agentic' and 'one-shot' values are accepted as aliases.",
-        values: [
-          "default",
-          "advanced",
-          "basic",
-          "turbo",
-          "agentic",
-          "one-shot",
-        ],
+        help: "Parallel search mode. 'default' uses the SDK default.",
+        values: ["default", "advanced", "basic", "turbo"],
         getValue: (config) =>
           readString(getParallelOptions(config)?.search?.mode) ?? "default",
         setValue: (config, value) => {
@@ -1222,10 +1215,10 @@ function ensureOpenAIResearchOptions(config: OpenAI): OpenAIResearchOptions {
   return config.options.research ?? (config.options.research = {});
 }
 
-function getValyuCapabilityOptions(
+function getValyuCapabilityOptions<TCapability extends keyof ValyuOptions>(
   config: Valyu | undefined,
-  capability: keyof ValyuOptions,
-) {
+  capability: TCapability,
+): ValyuOptions[TCapability] | undefined {
   return config?.options?.[capability];
 }
 

@@ -496,8 +496,7 @@ call.
 <summary><strong>Parallel</strong></summary>
 
 - SDK: `parallel-web`
-- Search modes `advanced`, `basic`, and `turbo`; legacy `agentic` and
-  `one-shot` configs are accepted as aliases
+- Search modes `advanced`, `basic`, and `turbo`
 - Page content extraction with excerpt and full-content toggles
 - Exposes search option `mode`
 - Exposes contents options `excerpts` and `full_content`
@@ -563,12 +562,15 @@ Minimal config:
 - Supports `web_search`, `web_contents`, `web_answer`, and `web_research`
 - `web_research` is exposed through pi's async research workflow
 - Web, proprietary, and news search types
-- Exposes search options `searchType`, `responseLength`, and `countryCode`
+- Exposes search options such as `searchType`, `responseLength`,
+  `countryCode`, source filters, date filters, `fastMode`, `urlOnly`, and
+  `instructions`
+- Exposes contents options such as `summary`, `extractEffort`,
+  `responseLength`, `maxPriceDollars`, and `screenshot`
 - Exposes answer and research options `responseLength` and `countryCode`
 - Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
-  `providers.valyu.options.answer`, and `providers.valyu.options.research`
-- `web_contents` currently uses fixed provider behavior with no extra per-call
-  provider options
+  `providers.valyu.options.contents`, `providers.valyu.options.answer`, and
+  `providers.valyu.options.research`
 
 </details>
 

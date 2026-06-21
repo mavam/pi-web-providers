@@ -219,14 +219,14 @@ describe("contents providers", () => {
     });
   });
 
-  it("maps Parallel search to the v1 search API and legacy modes", async () => {
+  it("maps Parallel search to the v1 search API", async () => {
     const { parallelProvider } = await import("../src/providers/parallel.js");
     const provider = providerHarness(parallelProvider);
     const config = provider.createTemplate();
     config.credentials = { api: "literal-key" };
     config.options = {
       search: {
-        mode: "agentic",
+        mode: "advanced",
       },
     };
 
@@ -246,7 +246,7 @@ describe("contents providers", () => {
       config,
       { cwd: process.cwd() },
       {
-        mode: "one-shot",
+        mode: "basic",
       },
     );
 

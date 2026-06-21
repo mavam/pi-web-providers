@@ -65,18 +65,18 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.177",
-    "@google/genai": "^2.8.0",
-    "@mendable/firecrawl-js": "^4.25.4",
-    "@openai/codex-sdk": "^0.139.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.3.185",
+    "@google/genai": "^2.9.0",
+    "@mendable/firecrawl-js": "^4.28.2",
+    "@openai/codex-sdk": "^0.141.0",
     "@perplexity-ai/perplexity_ai": "^0.33.0",
     "@tavily/core": "^0.7.6",
     "cloudflare": "^6.4.0",
-    "exa-js": "^2.13.0",
+    "exa-js": "^2.14.0",
     "linkup-sdk": "^3.2.5",
-    "openai": "^6.42.0",
+    "openai": "^6.44.0",
     "parallel-web": "^1.1.0",
-    "valyu-js": "^2.8.0"
+    "valyu-js": "^2.9.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.13",
