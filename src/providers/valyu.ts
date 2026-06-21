@@ -98,10 +98,13 @@ const valyuSearchPromptGuidelines = [
 const valyuContentsOptionsSchema = Type.Object(
   {
     summary: Type.Optional(
-      Type.Union([Type.Boolean(), Type.String()], {
-        description:
-          "Whether to include a summary, or instructions for the summary.",
-      }),
+      Type.Union(
+        [Type.Boolean(), Type.String(), Type.Record(Type.String(), Type.Any())],
+        {
+          description:
+            "Whether to include a summary, or instructions for the summary.",
+        },
+      ),
     ),
     extractEffort: Type.Optional(
       literalUnion(["normal", "high", "auto"], {
@@ -110,9 +113,15 @@ const valyuContentsOptionsSchema = Type.Object(
       }),
     ),
     responseLength: Type.Optional(
-      literalUnion(["short", "medium", "large", "max"], {
-        description: "Content response length.",
-      }),
+      Type.Union(
+        [
+          literalUnion(["short", "medium", "large", "max"]),
+          Type.Number({ minimum: 0 }),
+        ],
+        {
+          description: "Content response length.",
+        },
+      ),
     ),
     maxPriceDollars: Type.Optional(
       Type.Number({

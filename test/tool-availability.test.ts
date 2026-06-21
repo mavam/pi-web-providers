@@ -311,6 +311,37 @@ describe("managed tool availability", () => {
     }
   });
 
+  it("registers Valyu contents schema with structured summaries and numeric response length", async () => {
+    process.env.VALYU_API_KEY = "test-key";
+    writeConfig({
+      tools: {
+        contents: "valyu",
+      },
+      providers: {
+        valyu: {
+          credentials: { api: "VALYU_API_KEY" },
+        },
+      },
+    });
+
+    const tools = await captureRegisteredTools();
+    const webContents = tools.find((tool) => tool.name === "web_contents");
+    const options = webContents?.parameters?.properties?.options as {
+      properties?: Record<string, { anyOf?: Array<{ type?: string }> }>;
+    };
+
+    expect(options.properties?.summary?.anyOf).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "boolean" }),
+        expect.objectContaining({ type: "string" }),
+        expect.objectContaining({ type: "object" }),
+      ]),
+    );
+    expect(options.properties?.responseLength?.anyOf).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: "number" })]),
+    );
+  });
+
   it("registers provider-bound search schemas from configuration", async () => {
     process.env.OLLAMA_API_KEY = "test-key";
     writeConfig({
