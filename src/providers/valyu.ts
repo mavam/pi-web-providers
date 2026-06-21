@@ -15,7 +15,7 @@ import type {
   Valyu,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
-import { literalUnion } from "./schema.js";
+import { boolOrConfig, literalUnion } from "./schema.js";
 import {
   asJsonObject,
   formatJson,
@@ -264,30 +264,10 @@ const valyuResearchOptionsSchema = Type.Object(
     tools: Type.Optional(
       Type.Object(
         {
-          code_execution: Type.Optional(
-            Type.Union([
-              Type.Boolean(),
-              Type.Record(Type.String(), Type.Any()),
-            ]),
-          ),
-          screenshots: Type.Optional(
-            Type.Union([
-              Type.Boolean(),
-              Type.Record(Type.String(), Type.Any()),
-            ]),
-          ),
-          browser_use: Type.Optional(
-            Type.Union([
-              Type.Boolean(),
-              Type.Record(Type.String(), Type.Any()),
-            ]),
-          ),
-          charts: Type.Optional(
-            Type.Union([
-              Type.Boolean(),
-              Type.Record(Type.String(), Type.Any()),
-            ]),
-          ),
+          code_execution: Type.Optional(boolOrConfig()),
+          screenshots: Type.Optional(boolOrConfig()),
+          browser_use: Type.Optional(boolOrConfig()),
+          charts: Type.Optional(boolOrConfig()),
         },
         {
           additionalProperties: false,

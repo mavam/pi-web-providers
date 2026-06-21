@@ -7,6 +7,7 @@ import type {
   OpenAI as OpenAIConfig,
   OpenAIResearchOptions,
   OpenAISearchOptions,
+  OpenAIWebSearchToolOptions,
   ProviderCapabilityStatus,
   ProviderCapabilityStatusOptions,
   ProviderContext,
@@ -24,6 +25,38 @@ const DEFAULT_SEARCH_MODEL = "gpt-4.1";
 const DEFAULT_ANSWER_MODEL = "gpt-4.1";
 const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
 
+// Built-in `web_search` tool controls shared by every OpenAI capability.
+const openaiWebSearchToolProperties = {
+  searchContextSize: Type.Optional(
+    literalUnion(["low", "medium", "high"], {
+      description:
+        "Amount of context OpenAI web search should retrieve per search.",
+    }),
+  ),
+  allowedDomains: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Restrict OpenAI web search to these domains.",
+    }),
+  ),
+  userLocation: Type.Optional(
+    Type.Object(
+      {
+        city: Type.Optional(Type.String({ description: "User city hint." })),
+        country: Type.Optional(
+          Type.String({ description: "Two-letter user country code." }),
+        ),
+        region: Type.Optional(
+          Type.String({ description: "User region hint." }),
+        ),
+        timezone: Type.Optional(
+          Type.String({ description: "IANA timezone hint." }),
+        ),
+      },
+      { description: "Approximate user location for OpenAI web search." },
+    ),
+  ),
+} as const;
+
 const openaiSearchOptionsSchema = Type.Object(
   {
     model: Type.Optional(
@@ -38,34 +71,7 @@ const openaiSearchOptionsSchema = Type.Object(
           "Optional instructions that shape source selection and result style.",
       }),
     ),
-    searchContextSize: Type.Optional(
-      literalUnion(["low", "medium", "high"], {
-        description:
-          "Amount of context OpenAI web search should retrieve for each search.",
-      }),
-    ),
-    allowedDomains: Type.Optional(
-      Type.Array(Type.String(), {
-        description: "Restrict OpenAI web search to these domains.",
-      }),
-    ),
-    userLocation: Type.Optional(
-      Type.Object(
-        {
-          city: Type.Optional(Type.String({ description: "User city hint." })),
-          country: Type.Optional(
-            Type.String({ description: "Two-letter user country code." }),
-          ),
-          region: Type.Optional(
-            Type.String({ description: "User region hint." }),
-          ),
-          timezone: Type.Optional(
-            Type.String({ description: "IANA timezone hint." }),
-          ),
-        },
-        { description: "Approximate user location for OpenAI web search." },
-      ),
-    ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI search options." },
 );
@@ -93,34 +99,7 @@ const openaiAnswerOptionsSchema = Type.Object(
           "Optional instructions that shape the answer structure, tone, and source selection.",
       }),
     ),
-    searchContextSize: Type.Optional(
-      literalUnion(["low", "medium", "high"], {
-        description:
-          "Amount of context OpenAI web search should retrieve for the grounded answer.",
-      }),
-    ),
-    allowedDomains: Type.Optional(
-      Type.Array(Type.String(), {
-        description: "Restrict OpenAI web search to these domains.",
-      }),
-    ),
-    userLocation: Type.Optional(
-      Type.Object(
-        {
-          city: Type.Optional(Type.String({ description: "User city hint." })),
-          country: Type.Optional(
-            Type.String({ description: "Two-letter user country code." }),
-          ),
-          region: Type.Optional(
-            Type.String({ description: "User region hint." }),
-          ),
-          timezone: Type.Optional(
-            Type.String({ description: "IANA timezone hint." }),
-          ),
-        },
-        { description: "Approximate user location for OpenAI web search." },
-      ),
-    ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI answer options." },
 );
@@ -146,34 +125,7 @@ const openaiResearchOptionsSchema = Type.Object(
           "Maximum number of built-in tool calls the model may make during the research run.",
       }),
     ),
-    searchContextSize: Type.Optional(
-      literalUnion(["low", "medium", "high"], {
-        description:
-          "Amount of context OpenAI web search should retrieve during research.",
-      }),
-    ),
-    allowedDomains: Type.Optional(
-      Type.Array(Type.String(), {
-        description: "Restrict OpenAI web search to these domains.",
-      }),
-    ),
-    userLocation: Type.Optional(
-      Type.Object(
-        {
-          city: Type.Optional(Type.String({ description: "User city hint." })),
-          country: Type.Optional(
-            Type.String({ description: "Two-letter user country code." }),
-          ),
-          region: Type.Optional(
-            Type.String({ description: "User region hint." }),
-          ),
-          timezone: Type.Optional(
-            Type.String({ description: "IANA timezone hint." }),
-          ),
-        },
-        { description: "Approximate user location for OpenAI web search." },
-      ),
-    ),
+    ...openaiWebSearchToolProperties,
   },
   { description: "OpenAI deep research options." },
 );
@@ -478,9 +430,7 @@ function buildOpenAIResearchRequest(
   };
 }
 
-function buildOpenAIWebSearchTool(
-  options: OpenAISearchOptions | OpenAIAnswerOptions | OpenAIResearchOptions,
-) {
+function buildOpenAIWebSearchTool(options: OpenAIWebSearchToolOptions) {
   const tool: {
     type: "web_search";
     search_context_size?: "low" | "medium" | "high";
@@ -508,6 +458,23 @@ function buildOpenAIWebSearchTool(
   return tool;
 }
 
+function resolveOpenAIWebSearchToolOptions(
+  merged: Record<string, unknown>,
+): OpenAIWebSearchToolOptions {
+  const searchContextSize = readStringUnion(merged.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(merged.allowedDomains);
+  const userLocation = readUserLocation(merged.userLocation);
+  return {
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
+  };
+}
+
 function resolveOpenAISearchOptions(
   config: OpenAIConfig,
   options?: Record<string, unknown>,
@@ -518,20 +485,11 @@ function resolveOpenAISearchOptions(
   };
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
-  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
-    "low",
-    "medium",
-    "high",
-  ]);
-  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
-  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(searchContextSize ? { searchContextSize } : {}),
-    ...(allowedDomains ? { allowedDomains } : {}),
-    ...(userLocation ? { userLocation } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 
@@ -545,20 +503,11 @@ function resolveOpenAIAnswerOptions(
   };
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
-  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
-    "low",
-    "medium",
-    "high",
-  ]);
-  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
-  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
-    ...(searchContextSize ? { searchContextSize } : {}),
-    ...(allowedDomains ? { allowedDomains } : {}),
-    ...(userLocation ? { userLocation } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 
@@ -573,21 +522,12 @@ function resolveOpenAIResearchOptions(
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
   const maxToolCalls = readPositiveInteger(mergedOptions.max_tool_calls);
-  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
-    "low",
-    "medium",
-    "high",
-  ]);
-  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
-  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
     ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
-    ...(searchContextSize ? { searchContextSize } : {}),
-    ...(allowedDomains ? { allowedDomains } : {}),
-    ...(userLocation ? { userLocation } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
   };
 }
 

@@ -165,9 +165,8 @@ export interface ParallelOptions {
   extract?: Record<string, unknown>;
 }
 
-export interface OpenAISearchOptions {
-  model?: string;
-  instructions?: string;
+// Built-in `web_search` tool controls shared by every OpenAI capability.
+export interface OpenAIWebSearchToolOptions {
   searchContextSize?: "low" | "medium" | "high";
   allowedDomains?: string[];
   userLocation?: {
@@ -178,31 +177,20 @@ export interface OpenAISearchOptions {
   };
 }
 
-export interface OpenAIAnswerOptions {
+export interface OpenAISearchOptions extends OpenAIWebSearchToolOptions {
   model?: string;
   instructions?: string;
-  searchContextSize?: "low" | "medium" | "high";
-  allowedDomains?: string[];
-  userLocation?: {
-    city?: string;
-    country?: string;
-    region?: string;
-    timezone?: string;
-  };
 }
 
-export interface OpenAIResearchOptions {
+export interface OpenAIAnswerOptions extends OpenAIWebSearchToolOptions {
+  model?: string;
+  instructions?: string;
+}
+
+export interface OpenAIResearchOptions extends OpenAIWebSearchToolOptions {
   model?: string;
   instructions?: string;
   max_tool_calls?: number;
-  searchContextSize?: "low" | "medium" | "high";
-  allowedDomains?: string[];
-  userLocation?: {
-    city?: string;
-    country?: string;
-    region?: string;
-    timezone?: string;
-  };
 }
 
 export interface OpenAIOptions {
