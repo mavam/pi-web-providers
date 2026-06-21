@@ -222,11 +222,6 @@ const valyuResearchOptionsSchema = Type.Object(
         description: "Valyu deep research mode.",
       }),
     ),
-    model: Type.Optional(
-      literalUnion(["fast", "standard", "lite", "heavy", "max"], {
-        description: "Valyu deep research model.",
-      }),
-    ),
     outputFormats: Type.Optional(
       Type.Array(
         Type.Union([

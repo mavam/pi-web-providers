@@ -306,7 +306,6 @@ export interface ValyuAnswerOptions extends Record<string, unknown> {
 
 export interface ValyuResearchOptions extends Record<string, unknown> {
   mode?: "fast" | "standard" | "lite" | "heavy" | "max";
-  model?: "fast" | "standard" | "lite" | "heavy" | "max";
   outputFormats?: Array<"markdown" | "pdf" | "toon" | Record<string, unknown>>;
   search?: {
     searchType?: "all" | "web" | "proprietary";

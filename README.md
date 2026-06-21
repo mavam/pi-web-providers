@@ -579,7 +579,7 @@ Minimal config:
 - Exposes answer options such as `structuredOutput`, `systemInstructions`,
   `searchType`, `dataMaxPrice`, source filters, date filters, `countryCode`,
   and `fastMode`
-- Exposes research options such as `mode`, `model`, `outputFormats`, `search`,
+- Exposes research options such as `mode`, `outputFormats`, `search`,
   and `tools`
 - Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
   `providers.valyu.options.contents`, `providers.valyu.options.answer`, and
