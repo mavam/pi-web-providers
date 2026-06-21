@@ -1,0 +1,10 @@
+created: 2026-06-21
+title: Provider-specific web tool guidance
+intro: >-
+  This release surfaces provider-specific web tool guidance so agents can choose the
+  right search and content options for each backend. It also refreshes provider SDK
+  dependencies and keeps Parallel-backed web search and contents compatible with the
+  current SDK.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.4.0
