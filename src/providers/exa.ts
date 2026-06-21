@@ -34,9 +34,9 @@ const exaSearchOptionsSchema = Type.Object(
           "hybrid",
           "fast",
           "instant",
+          "deep-lite",
           "deep",
           "deep-reasoning",
-          "deep-max",
         ],
         { description: "Exa search mode." },
       ),
@@ -54,6 +54,14 @@ const exaSearchOptionsSchema = Type.Object(
     excludeDomains: Type.Optional(
       Type.Array(Type.String(), { description: "Exclude these domains." }),
     ),
+    startCrawlDate: Type.Optional(
+      Type.String({
+        description: "ISO date string for earliest crawl date.",
+      }),
+    ),
+    endCrawlDate: Type.Optional(
+      Type.String({ description: "ISO date string for latest crawl date." }),
+    ),
     startPublishedDate: Type.Optional(
       Type.String({
         description: "ISO date string for earliest publish date.",
@@ -62,43 +70,166 @@ const exaSearchOptionsSchema = Type.Object(
     endPublishedDate: Type.Optional(
       Type.String({ description: "ISO date string for latest publish date." }),
     ),
+    includeText: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Require result page text to contain these terms. Exa currently supports one short phrase.",
+      }),
+    ),
+    excludeText: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Require result page text not to contain these terms. Exa currently supports one short phrase.",
+      }),
+    ),
+    systemPrompt: Type.Optional(
+      Type.String({
+        description:
+          "Additional Exa instructions for deep search source selection and synthesis.",
+      }),
+    ),
+    additionalQueries: Type.Optional(
+      Type.Array(Type.String(), {
+        maxItems: 5,
+        description:
+          "Alternative query formulations for Exa deep search variants.",
+      }),
+    ),
     userLocation: Type.Optional(
-      Type.Object(
-        {
-          country: Type.Optional(
-            Type.String({ description: "Country hint for the user location." }),
-          ),
-          region: Type.Optional(
-            Type.String({ description: "Region hint for the user location." }),
-          ),
-          city: Type.Optional(
-            Type.String({ description: "City hint for the user location." }),
-          ),
-          timezone: Type.Optional(
-            Type.String({
-              description: "Timezone hint for the user location.",
-            }),
-          ),
-        },
-        {
-          description: "User location hint passed through to the Exa SDK.",
-        },
-      ),
+      Type.String({
+        description:
+          "Two-letter ISO country code for the user location, such as 'US'.",
+      }),
     ),
     contents: Type.Optional(
       Type.Object(
         {
           text: Type.Optional(
-            Type.Boolean({ description: "Include text content." }),
+            Type.Union(
+              [
+                Type.Boolean(),
+                Type.Object(
+                  {
+                    maxCharacters: Type.Optional(
+                      Type.Integer({
+                        minimum: 1,
+                        description: "Maximum text characters per result.",
+                      }),
+                    ),
+                    includeHtmlTags: Type.Optional(
+                      Type.Boolean({
+                        description: "Include HTML tags in returned text.",
+                      }),
+                    ),
+                    verbosity: Type.Optional(
+                      literalUnion(["compact", "standard", "full"], {
+                        description: "Verbosity level for returned text.",
+                      }),
+                    ),
+                  },
+                  { additionalProperties: false },
+                ),
+              ],
+              { description: "Include text content." },
+            ),
           ),
           highlights: Type.Optional(
-            Type.Boolean({ description: "Include highlighted excerpts." }),
+            Type.Union(
+              [
+                Type.Boolean(),
+                Type.Object(
+                  {
+                    query: Type.Optional(
+                      Type.String({
+                        description: "Query to use for highlights.",
+                      }),
+                    ),
+                    maxCharacters: Type.Optional(
+                      Type.Integer({
+                        minimum: 1,
+                        description: "Maximum highlight characters.",
+                      }),
+                    ),
+                  },
+                  { additionalProperties: false },
+                ),
+              ],
+              { description: "Include highlighted excerpts." },
+            ),
           ),
           summary: Type.Optional(
-            Type.Boolean({ description: "Include AI-generated summary." }),
+            Type.Union(
+              [
+                Type.Boolean(),
+                Type.Object(
+                  {
+                    query: Type.Optional(
+                      Type.String({
+                        description: "Query to guide summary generation.",
+                      }),
+                    ),
+                  },
+                  { additionalProperties: false },
+                ),
+              ],
+              { description: "Include AI-generated summary." },
+            ),
+          ),
+          livecrawl: Type.Optional(
+            literalUnion(["never", "fallback", "always", "auto", "preferred"], {
+              description: "Livecrawl mode for fetching fresh content.",
+            }),
+          ),
+          livecrawlTimeout: Type.Optional(
+            Type.Integer({
+              minimum: 0,
+              description: "Livecrawl timeout in milliseconds.",
+            }),
+          ),
+          maxAgeHours: Type.Optional(
+            Type.Number({
+              description:
+                "Maximum age of cached content in hours. Use 0 to always fetch fresh content.",
+            }),
+          ),
+          filterEmptyResults: Type.Optional(
+            Type.Boolean({ description: "Filter results with no contents." }),
+          ),
+          subpages: Type.Optional(
+            Type.Integer({
+              minimum: 0,
+              description: "Number of subpages to return for each result.",
+            }),
+          ),
+          subpageTarget: Type.Optional(
+            Type.Union([Type.String(), Type.Array(Type.String())], {
+              description: "Text used to match/rank returned subpages.",
+            }),
+          ),
+          extras: Type.Optional(
+            Type.Object(
+              {
+                links: Type.Optional(
+                  Type.Integer({
+                    minimum: 0,
+                    description: "Number of page links to include.",
+                  }),
+                ),
+                imageLinks: Type.Optional(
+                  Type.Integer({
+                    minimum: 0,
+                    description: "Number of image links to include.",
+                  }),
+                ),
+              },
+              { additionalProperties: false },
+            ),
           ),
         },
-        { description: "What content to include in results." },
+        {
+          additionalProperties: false,
+          description: "What content to include in results.",
+        },
       ),
     ),
   },
@@ -109,6 +240,8 @@ const exaSearchPromptGuidelines = [
   "Use Exa's neural/auto search modes for semantic source discovery where exact keywords are uncertain; use keyword mode when exact terms, names, or identifiers matter.",
   "Use Exa category filters such as 'research paper' or 'company' when the user asks for a specific source type.",
   "Set includeDomains or excludeDomains when the task names preferred sources, requires primary sources, or needs noisy domains filtered out.",
+  "Use startCrawlDate/endCrawlDate or contents.maxAgeHours when freshness of Exa's crawled content matters.",
+  "Use includeText/excludeText for short required or forbidden phrases in page text.",
   "Request contents.text, contents.highlights, or contents.summary only when snippets are insufficient and richer source context is needed directly in search results.",
 ] as const;
 

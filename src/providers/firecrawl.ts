@@ -50,6 +50,26 @@ const firecrawlSearchOptionsSchema = Type.Object(
         description: "Search categories to include.",
       }),
     ),
+    includeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict results to these domains.",
+      }),
+    ),
+    excludeDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Exclude these domains.",
+      }),
+    ),
+    tbs: Type.Optional(
+      Type.String({
+        description: "Google-style time-based search filter.",
+      }),
+    ),
+    ignoreInvalidURLs: Type.Optional(
+      Type.Boolean({
+        description: "Ignore invalid result URLs returned by search.",
+      }),
+    ),
     location: Type.Optional(
       Type.Object(
         {
@@ -70,9 +90,22 @@ const firecrawlSearchOptionsSchema = Type.Object(
       Type.Object(
         {
           formats: Type.Optional(
-            Type.Array(literalUnion(["markdown", "html", "rawHtml"]), {
-              description: "Output formats.",
-            }),
+            Type.Array(
+              literalUnion([
+                "markdown",
+                "html",
+                "rawHtml",
+                "links",
+                "images",
+                "screenshot",
+                "summary",
+                "json",
+                "attributes",
+              ]),
+              {
+                description: "Output formats.",
+              },
+            ),
           ),
           onlyMainContent: Type.Optional(
             Type.Boolean({ description: "Extract only the main content." }),
@@ -90,6 +123,7 @@ const firecrawlSearchOptionsSchema = Type.Object(
 const firecrawlSearchPromptGuidelines = [
   "Use Firecrawl search when the task benefits from searchable results that can also include scraped page content through scrapeOptions.",
   "Set scrapeOptions.formats=['markdown'] and onlyMainContent=true when source snippets are not enough and the user needs extracted page context in the search results.",
+  "Use includeDomains/excludeDomains when search should stay within or avoid specific sites.",
   "Use lang, country, or location when the user asks for language-specific, country-specific, or local results.",
   "Prefer web_contents with Firecrawl scrape options after search when only a small set of known URLs needs full extraction.",
 ] as const;
@@ -97,9 +131,23 @@ const firecrawlSearchPromptGuidelines = [
 const firecrawlScrapeOptionsSchema = Type.Object(
   {
     formats: Type.Optional(
-      Type.Array(literalUnion(["markdown", "html", "rawHtml"]), {
-        description: "Output formats for scraping.",
-      }),
+      Type.Array(
+        literalUnion([
+          "markdown",
+          "html",
+          "rawHtml",
+          "links",
+          "images",
+          "screenshot",
+          "summary",
+          "json",
+          "attributes",
+          "changeTracking",
+        ]),
+        {
+          description: "Output formats for scraping.",
+        },
+      ),
     ),
     onlyMainContent: Type.Optional(
       Type.Boolean({ description: "Extract only the main content." }),
@@ -114,6 +162,12 @@ const firecrawlScrapeOptionsSchema = Type.Object(
       Type.Integer({
         minimum: 0,
         description: "Milliseconds to wait before scraping.",
+      }),
+    ),
+    timeout: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        description: "Request timeout in milliseconds.",
       }),
     ),
     headers: Type.Optional(
@@ -138,6 +192,58 @@ const firecrawlScrapeOptionsSchema = Type.Object(
       Type.String({
         description: "Proxy mode passed through to the Firecrawl SDK.",
       }),
+    ),
+    fastMode: Type.Optional(
+      Type.Boolean({ description: "Use Firecrawl fast mode." }),
+    ),
+    blockAds: Type.Optional(
+      Type.Boolean({ description: "Block ads while scraping." }),
+    ),
+    removeBase64Images: Type.Optional(
+      Type.Boolean({
+        description: "Remove base64 image data from scraped output.",
+      }),
+    ),
+    redactPII: Type.Optional(
+      Type.Union(
+        [
+          Type.Boolean(),
+          Type.Object(
+            {
+              entities: Type.Optional(
+                Type.Array(
+                  literalUnion([
+                    "PERSON",
+                    "EMAIL",
+                    "PHONE",
+                    "LOCATION",
+                    "FINANCIAL",
+                    "SECRET",
+                  ]),
+                ),
+              ),
+            },
+            { additionalProperties: false },
+          ),
+        ],
+        { description: "Redact personal or sensitive data from output." },
+      ),
+    ),
+    maxAge: Type.Optional(
+      Type.Number({
+        description: "Maximum age of cached scrape data in milliseconds.",
+      }),
+    ),
+    minAge: Type.Optional(
+      Type.Number({
+        description: "Minimum age of cached scrape data in milliseconds.",
+      }),
+    ),
+    storeInCache: Type.Optional(
+      Type.Boolean({ description: "Store scrape result in Firecrawl cache." }),
+    ),
+    skipTlsVerification: Type.Optional(
+      Type.Boolean({ description: "Skip TLS certificate verification." }),
     ),
   },
   { description: "Firecrawl scrape options." },
@@ -186,6 +292,58 @@ const firecrawlAnswerOptionsSchema = Type.Object(
       Type.String({
         description: "Proxy mode passed through to Firecrawl.",
       }),
+    ),
+    fastMode: Type.Optional(
+      Type.Boolean({ description: "Use Firecrawl fast mode." }),
+    ),
+    blockAds: Type.Optional(
+      Type.Boolean({ description: "Block ads while scraping." }),
+    ),
+    removeBase64Images: Type.Optional(
+      Type.Boolean({
+        description: "Remove base64 image data from scraped output.",
+      }),
+    ),
+    redactPII: Type.Optional(
+      Type.Union(
+        [
+          Type.Boolean(),
+          Type.Object(
+            {
+              entities: Type.Optional(
+                Type.Array(
+                  literalUnion([
+                    "PERSON",
+                    "EMAIL",
+                    "PHONE",
+                    "LOCATION",
+                    "FINANCIAL",
+                    "SECRET",
+                  ]),
+                ),
+              ),
+            },
+            { additionalProperties: false },
+          ),
+        ],
+        { description: "Redact personal or sensitive data from output." },
+      ),
+    ),
+    maxAge: Type.Optional(
+      Type.Number({
+        description: "Maximum age of cached scrape data in milliseconds.",
+      }),
+    ),
+    minAge: Type.Optional(
+      Type.Number({
+        description: "Minimum age of cached scrape data in milliseconds.",
+      }),
+    ),
+    storeInCache: Type.Optional(
+      Type.Boolean({ description: "Store scrape result in Firecrawl cache." }),
+    ),
+    skipTlsVerification: Type.Optional(
+      Type.Boolean({ description: "Skip TLS certificate verification." }),
     ),
   },
   {

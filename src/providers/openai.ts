@@ -17,6 +17,7 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { defineCapability, defineProvider } from "./definition.js";
+import { literalUnion } from "./schema.js";
 import { getApiKeyStatus, trimSnippet } from "./shared.js";
 
 const DEFAULT_SEARCH_MODEL = "gpt-4.1";
@@ -37,6 +38,34 @@ const openaiSearchOptionsSchema = Type.Object(
           "Optional instructions that shape source selection and result style.",
       }),
     ),
+    searchContextSize: Type.Optional(
+      literalUnion(["low", "medium", "high"], {
+        description:
+          "Amount of context OpenAI web search should retrieve for each search.",
+      }),
+    ),
+    allowedDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict OpenAI web search to these domains.",
+      }),
+    ),
+    userLocation: Type.Optional(
+      Type.Object(
+        {
+          city: Type.Optional(Type.String({ description: "User city hint." })),
+          country: Type.Optional(
+            Type.String({ description: "Two-letter user country code." }),
+          ),
+          region: Type.Optional(
+            Type.String({ description: "User region hint." }),
+          ),
+          timezone: Type.Optional(
+            Type.String({ description: "IANA timezone hint." }),
+          ),
+        },
+        { description: "Approximate user location for OpenAI web search." },
+      ),
+    ),
   },
   { description: "OpenAI search options." },
 );
@@ -44,6 +73,9 @@ const openaiSearchOptionsSchema = Type.Object(
 const openaiSearchPromptGuidelines = [
   "Use OpenAI web search when an LLM-mediated search pass should identify likely sources from the live web.",
   "Use instructions to constrain source selection, freshness, geography, or output style only when the user explicitly needs that control.",
+  "Use allowedDomains when the user asks to search only specific sites or primary-source domains.",
+  "Use searchContextSize='high' only when the query needs richer source context; use 'low' for quick source discovery.",
+  "Use userLocation for local, regional, or jurisdiction-specific searches.",
   "Prefer web_contents after OpenAI search when the task requires direct inspection of selected primary sources.",
 ] as const;
 
@@ -60,6 +92,34 @@ const openaiAnswerOptionsSchema = Type.Object(
         description:
           "Optional instructions that shape the answer structure, tone, and source selection.",
       }),
+    ),
+    searchContextSize: Type.Optional(
+      literalUnion(["low", "medium", "high"], {
+        description:
+          "Amount of context OpenAI web search should retrieve for the grounded answer.",
+      }),
+    ),
+    allowedDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict OpenAI web search to these domains.",
+      }),
+    ),
+    userLocation: Type.Optional(
+      Type.Object(
+        {
+          city: Type.Optional(Type.String({ description: "User city hint." })),
+          country: Type.Optional(
+            Type.String({ description: "Two-letter user country code." }),
+          ),
+          region: Type.Optional(
+            Type.String({ description: "User region hint." }),
+          ),
+          timezone: Type.Optional(
+            Type.String({ description: "IANA timezone hint." }),
+          ),
+        },
+        { description: "Approximate user location for OpenAI web search." },
+      ),
     ),
   },
   { description: "OpenAI answer options." },
@@ -85,6 +145,34 @@ const openaiResearchOptionsSchema = Type.Object(
         description:
           "Maximum number of built-in tool calls the model may make during the research run.",
       }),
+    ),
+    searchContextSize: Type.Optional(
+      literalUnion(["low", "medium", "high"], {
+        description:
+          "Amount of context OpenAI web search should retrieve during research.",
+      }),
+    ),
+    allowedDomains: Type.Optional(
+      Type.Array(Type.String(), {
+        description: "Restrict OpenAI web search to these domains.",
+      }),
+    ),
+    userLocation: Type.Optional(
+      Type.Object(
+        {
+          city: Type.Optional(Type.String({ description: "User city hint." })),
+          country: Type.Optional(
+            Type.String({ description: "Two-letter user country code." }),
+          ),
+          region: Type.Optional(
+            Type.String({ description: "User region hint." }),
+          ),
+          timezone: Type.Optional(
+            Type.String({ description: "IANA timezone hint." }),
+          ),
+        },
+        { description: "Approximate user location for OpenAI web search." },
+      ),
     ),
   },
   { description: "OpenAI deep research options." },
@@ -338,7 +426,7 @@ function buildOpenAISearchRequest(
       "",
       `User query: ${query}`,
     ].join("\n"),
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     text: {
       format: {
         type: "json_schema" as const,
@@ -364,7 +452,7 @@ function buildOpenAIAnswerRequest(
   return {
     model,
     input: query,
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     ...(instructions ? { instructions } : {}),
   };
 }
@@ -384,10 +472,40 @@ function buildOpenAIResearchRequest(
     model,
     input,
     background: true,
-    tools: [{ type: "web_search_preview" as const }],
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
     ...(instructions ? { instructions } : {}),
     ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
   };
+}
+
+function buildOpenAIWebSearchTool(
+  options: OpenAISearchOptions | OpenAIAnswerOptions | OpenAIResearchOptions,
+) {
+  const tool: {
+    type: "web_search";
+    search_context_size?: "low" | "medium" | "high";
+    filters?: { allowed_domains: string[] };
+    user_location?: {
+      type: "approximate";
+      city?: string;
+      country?: string;
+      region?: string;
+      timezone?: string;
+    };
+  } = { type: "web_search" };
+  if (options.searchContextSize) {
+    tool.search_context_size = options.searchContextSize;
+  }
+  if (options.allowedDomains && options.allowedDomains.length > 0) {
+    tool.filters = { allowed_domains: options.allowedDomains };
+  }
+  if (options.userLocation) {
+    tool.user_location = {
+      type: "approximate",
+      ...options.userLocation,
+    };
+  }
+  return tool;
 }
 
 function resolveOpenAISearchOptions(
@@ -400,10 +518,20 @@ function resolveOpenAISearchOptions(
   };
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
+  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
+  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
   };
 }
 
@@ -417,10 +545,20 @@ function resolveOpenAIAnswerOptions(
   };
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
+  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
+  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
   };
 }
 
@@ -435,11 +573,21 @@ function resolveOpenAIResearchOptions(
   const model = readNonEmptyString(mergedOptions.model);
   const instructions = readNonEmptyString(mergedOptions.instructions);
   const maxToolCalls = readPositiveInteger(mergedOptions.max_tool_calls);
+  const searchContextSize = readStringUnion(mergedOptions.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(mergedOptions.allowedDomains);
+  const userLocation = readUserLocation(mergedOptions.userLocation);
 
   return {
     ...(model ? { model } : {}),
     ...(instructions ? { instructions } : {}),
     ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
   };
 }
 
@@ -674,6 +822,45 @@ function readNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim().length > 0
     ? value
     : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const strings = value.filter(
+    (item): item is string => typeof item === "string" && item.trim() !== "",
+  );
+  return strings.length > 0 ? strings : undefined;
+}
+
+function readStringUnion<const TValue extends string>(
+  value: unknown,
+  values: readonly TValue[],
+): TValue | undefined {
+  return typeof value === "string" && values.includes(value as TValue)
+    ? (value as TValue)
+    : undefined;
+}
+
+function readUserLocation(
+  value: unknown,
+): OpenAISearchOptions["userLocation"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const location = value as Record<string, unknown>;
+  const city = readNonEmptyString(location.city);
+  const country = readNonEmptyString(location.country);
+  const region = readNonEmptyString(location.region);
+  const timezone = readNonEmptyString(location.timezone);
+  const result = {
+    ...(city ? { city } : {}),
+    ...(country ? { country } : {}),
+    ...(region ? { region } : {}),
+    ...(timezone ? { timezone } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 function readPositiveInteger(value: unknown): number | undefined {

@@ -414,9 +414,9 @@ const PROVIDER_SETTINGS = {
           "hybrid",
           "fast",
           "instant",
+          "deep-lite",
           "deep",
           "deep-reasoning",
-          "deep-max",
         ],
         getValue: (config) =>
           readString(getExaSearchOptions(config)?.type) ?? "default",
@@ -754,29 +754,21 @@ const PROVIDER_SETTINGS = {
         },
       }),
       valuesSetting<Valyu>({
-        id: "valyuAnswerResponseLength",
-        label: "Answer response length",
-        help: "Valyu answer response length. 'default' uses the SDK default.",
-        values: ["default", "short", "medium", "large", "max"],
+        id: "valyuResearchMode",
+        label: "Research mode",
+        help: "Valyu research mode. 'default' uses the SDK default.",
+        values: ["default", "fast", "standard", "lite", "heavy", "max"],
         getValue: (config) =>
-          readString(
-            getValyuCapabilityOptions(config, "answer")?.responseLength,
-          ) ?? "default",
+          readString(getValyuCapabilityOptions(config, "research")?.mode) ??
+          "default",
         setValue: (config, value) => {
-          setValyuResponseLength(config, "answer", value);
-        },
-      }),
-      valuesSetting<Valyu>({
-        id: "valyuResearchResponseLength",
-        label: "Research response length",
-        help: "Valyu research response length. 'default' uses the SDK default.",
-        values: ["default", "short", "medium", "large", "max"],
-        getValue: (config) =>
-          readString(
-            getValyuCapabilityOptions(config, "research")?.responseLength,
-          ) ?? "default",
-        setValue: (config, value) => {
-          setValyuResponseLength(config, "research", value);
+          const options = ensureValyuCapabilityOptions(config, "research");
+          if (value === "default") {
+            delete options.mode;
+          } else {
+            options.mode = value;
+          }
+          cleanupCapabilityOptions(config, ["search", "answer", "research"]);
         },
       }),
     ],

@@ -291,15 +291,24 @@ describe("config parsing", () => {
             options: {
               search: {
                 searchType: "all",
+                sourceBiases: {
+                  web: 0.5,
+                },
               },
               answer: {
-                responseLength: "medium",
+                searchType: "web",
+                includedSources: ["web"],
               },
               contents: {
                 responseLength: "medium",
+                historicalCache: true,
               },
               research: {
-                responseLength: "large",
+                mode: "heavy",
+                search: {
+                  searchType: "proprietary",
+                  historicalCache: true,
+                },
               },
             },
           },
@@ -313,15 +322,24 @@ describe("config parsing", () => {
       options: {
         search: {
           searchType: "all",
+          sourceBiases: {
+            web: 0.5,
+          },
         },
         answer: {
-          responseLength: "medium",
+          searchType: "web",
+          includedSources: ["web"],
         },
         contents: {
           responseLength: "medium",
+          historicalCache: true,
         },
         research: {
-          responseLength: "large",
+          mode: "heavy",
+          search: {
+            searchType: "proprietary",
+            historicalCache: true,
+          },
         },
       },
     });
