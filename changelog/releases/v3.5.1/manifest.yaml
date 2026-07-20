@@ -1,0 +1,8 @@
+created: 2026-07-20
+title: Dependency compatibility updates
+intro: >-
+  This release updates provider SDKs and development tooling to their latest compatible
+  versions. It keeps pi-web-providers aligned with current upstream APIs and runtimes.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.5.0
