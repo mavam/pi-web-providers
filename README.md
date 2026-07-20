@@ -684,12 +684,6 @@ providers unless overridden in a provider's own `settings` block:
 | `retryDelayMs`      | `2000`    | Initial delay before retrying                               |
 | `researchTimeoutMs` | `1800000` | Maximum total time for an async `web_research` job (30 min) |
 
-## 🧹 Uninstall
-
-```sh
-pi remove npm:pi-web-providers
-```
-
 ## 📄 License
 
 [MIT](LICENSE)
