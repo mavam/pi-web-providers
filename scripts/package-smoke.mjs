@@ -6,6 +6,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
+const sourcePackageJson = JSON.parse(
+  await readFile(join(root, "package.json"), "utf8"),
+);
+const expectedSchemaUrl = `https://unpkg.com/${sourcePackageJson.name}@${sourcePackageJson.version}/dist/config.schema.json`;
 const directory = await mkdtemp(join(tmpdir(), "web-mux-package-smoke-"));
 let archive;
 
@@ -41,6 +45,12 @@ try {
   });
   if (!help.includes("web-mux"))
     throw new Error("packed web --help did not run");
+  const version = execFileSync(executable, ["--version"], {
+    cwd: directory,
+    encoding: "utf8",
+  }).trim();
+  if (version !== sourcePackageJson.version)
+    throw new Error("packed web --version does not match package metadata");
 
   execFileSync(
     process.execPath,
@@ -50,6 +60,7 @@ try {
       [
         'const library = await import("web-mux");',
         'if (typeof library.createWebMux !== "function") throw new Error("missing createWebMux");',
+        `if (library.CONFIG_SCHEMA_URL !== ${JSON.stringify(expectedSchemaUrl)}) throw new Error("library schema version does not match package metadata");`,
         'await import("web-mux/pi");',
       ].join("\n"),
     ],
@@ -62,9 +73,20 @@ try {
       "utf8",
     ),
   );
-  if (packageJson.name !== "web-mux" || packageJson.version !== "0.1.0") {
+  if (
+    packageJson.name !== sourcePackageJson.name ||
+    packageJson.version !== sourcePackageJson.version
+  ) {
     throw new Error("packed metadata is incorrect");
   }
+  const schema = JSON.parse(
+    await readFile(
+      join(directory, "node_modules", "web-mux", "dist", "config.schema.json"),
+      "utf8",
+    ),
+  );
+  if (schema.$id !== expectedSchemaUrl)
+    throw new Error("packed schema version does not match package metadata");
   console.log("Packed package smoke test passed.");
 } finally {
   if (archive) await rm(archive, { force: true });

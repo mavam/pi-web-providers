@@ -3,6 +3,7 @@ import { Type, type TObject, type TSchema } from "typebox";
 import { createWebMux } from "./index.js";
 import { loadConfig } from "./web-mux/configuration.js";
 import { renderTextDocument } from "./web-mux/client.js";
+import { CAPABILITIES } from "./web-mux/public-types.js";
 import type {
   Capability,
   ProviderId,
@@ -10,14 +11,29 @@ import type {
   WebMuxConfig,
 } from "./web-mux/public-types.js";
 
+const NO_TOOLS_MESSAGE =
+  "web-mux registered no tools because no default providers are configured. Run `npx web-mux config init` (or `web config init` when installed globally), set `defaults.<capability>.provider`, then restart pi.";
+
 export default async function webMuxExtension(pi: ExtensionAPI): Promise<void> {
   const config = await loadConfig();
+  if (!hasBoundProvider(config)) {
+    pi.on("session_start", (_event, context) => {
+      context.ui.notify(NO_TOOLS_MESSAGE, "warning");
+    });
+    return;
+  }
   const client = createWebMux({ config });
 
   await registerSearch(pi, client, config);
   await registerContents(pi, client, config);
   await registerAnswer(pi, client, config);
   await registerResearch(pi, client, config);
+}
+
+function hasBoundProvider(config: WebMuxConfig): boolean {
+  return CAPABILITIES.some(
+    (capability) => boundProvider(config, capability) !== undefined,
+  );
 }
 
 async function registerSearch(

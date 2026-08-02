@@ -1,5 +1,7 @@
 import type { ProviderDefinition } from "../providers/definition.js";
 import type { ProviderConfig, Tool } from "../types.js";
+import { WebMuxError } from "./errors.js";
+import { PROVIDER_IDS } from "./public-types.js";
 import type { ProviderId } from "./public-types.js";
 
 type LoadedProvider = ProviderDefinition<
@@ -11,6 +13,9 @@ type LoadedProvider = ProviderDefinition<
 const cache = new Map<ProviderId, Promise<LoadedProvider>>();
 
 export function loadProvider(id: ProviderId): Promise<LoadedProvider> {
+  if (!PROVIDER_IDS.includes(id)) {
+    throw new WebMuxError("PROVIDER_UNAVAILABLE", `Unknown provider '${id}'`);
+  }
   const cached = cache.get(id);
   if (cached) return cached;
 
@@ -69,5 +74,7 @@ async function load(id: ProviderId): Promise<LoadedProvider> {
     case "valyu":
       return (await import("../providers/valyu.js"))
         .valyuProvider as LoadedProvider;
+    default:
+      throw new WebMuxError("PROVIDER_UNAVAILABLE", `Unknown provider '${id}'`);
   }
 }

@@ -2,7 +2,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createWebMux, type WebMuxConfig } from "../src/index.js";
 
-const fixture = resolve("test-new/fixtures/custom-provider.mjs");
+const fixture = resolve("test/fixtures/custom-provider.mjs");
 
 function config(): WebMuxConfig {
   const command = {
@@ -79,6 +79,32 @@ describe("web-mux client", () => {
       true,
       false,
       true,
+    ]);
+  });
+
+  it("keeps contents aligned when one URL is rewritten and answers are reordered", async () => {
+    const result = await createWebMux({ config: config() }).contents({
+      urls: ["https://redirected.test/article", "https://exact.test/article"],
+    });
+    expect(result.results.map((entry) => entry.input)).toEqual([
+      "https://redirected.test/article",
+      "https://exact.test/article",
+    ]);
+    expect(result.results.map((entry) => entry.value?.content)).toEqual([
+      "Contents of https://redirected.test/article",
+      "Contents of https://exact.test/article",
+    ]);
+  });
+
+  it("matches normalized content URLs before positional fallback", async () => {
+    const normalized =
+      "https://normalized.test/article/?utm_source=test#fragment";
+    const result = await createWebMux({ config: config() }).contents({
+      urls: [normalized, "https://exact.test/article"],
+    });
+    expect(result.results.map((entry) => entry.value?.content)).toEqual([
+      `Contents of ${normalized}`,
+      "Contents of https://exact.test/article",
     ]);
   });
 

@@ -29,17 +29,30 @@ switch (request.capability) {
     );
     break;
   case "contents":
+    const answers = request.input.urls.map((url) =>
+      url.includes("error")
+        ? { url, error: "could not fetch" }
+        : {
+            url: url.includes("redirected.test")
+              ? "https://canonical.test/article"
+              : url.includes("normalized.test")
+                ? "https://normalized.test/article"
+                : url,
+            content: `Contents of ${url}`,
+            metadata: { options: request.options },
+          },
+    );
+    if (
+      request.input.urls.some(
+        (url) =>
+          url.includes("redirected.test") || url.includes("normalized.test"),
+      )
+    ) {
+      answers.reverse();
+    }
     process.stdout.write(
       JSON.stringify({
-        answers: request.input.urls.map((url) =>
-          url.includes("error")
-            ? { url, error: "could not fetch" }
-            : {
-                url,
-                content: `Contents of ${url}`,
-                metadata: { options: request.options },
-              },
-        ),
+        answers,
       }),
     );
     break;

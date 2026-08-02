@@ -3,6 +3,7 @@
     "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "resolveJsonModule": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
@@ -22,12 +23,6 @@
     "src/provider-diagnostics.ts",
     "src/provider-runtime.ts",
     "src/options.ts",
-    "test-new/**/*.ts",
-    "test/*-provider.test.ts",
-    "test/contents-providers.test.ts",
-    "test/execution-policy.test.ts",
-    "test/provider-diagnostics.test.ts",
-    "test/provider-runtime.test.ts",
-    "test/research-lifecycle-providers.test.ts"
+    "test/**/*.ts"
   ]
 }

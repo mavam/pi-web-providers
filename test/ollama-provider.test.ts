@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { parseConfig } from "../src/config.js";
 import type { ContentsResponse } from "../src/contents.js";
-import {
-  getProviderConfigManifest,
-  type ProviderTextSettingDescriptor,
-} from "../src/provider-config-manifests.js";
 import { executeProviderCapability } from "../src/providers/definition.js";
 import { ollamaProvider } from "../src/providers/ollama.js";
 import type { Ollama, ProviderContext, SearchResponse } from "../src/types.js";
@@ -307,93 +302,9 @@ describe("ollamaProvider", () => {
 });
 
 describe("Ollama config", () => {
-  it("parses Ollama provider config", () => {
-    const parsed = parseConfig(
-      JSON.stringify({
-        providers: {
-          ollama: {
-            credentials: { api: "OLLAMA_API_KEY" },
-            baseUrl: "https://ollama-proxy.test",
-            settings: {
-              requestTimeoutMs: 45000,
-            },
-          },
-        },
-      }),
-      "test-config.json",
-    );
-
-    expect(parsed.providers?.ollama).toEqual({
-      credentials: { api: "OLLAMA_API_KEY" },
-      baseUrl: "https://ollama-proxy.test",
-      settings: {
-        requestTimeoutMs: 45000,
-      },
-    });
-  });
-
-  it("rejects unsupported Ollama provider options", () => {
-    expect(() =>
-      parseConfig(
-        JSON.stringify({
-          providers: {
-            ollama: {
-              credentials: { api: "OLLAMA_API_KEY" },
-              options: {
-                locale: "en-US",
-              },
-            },
-          },
-        }),
-        "test-config.json",
-      ),
-    ).toThrow(/providers\.ollama/);
-  });
-
   it("creates an Ollama provider template", () => {
     expect(ollamaProvider.config.createTemplate()).toEqual({
       credentials: { api: "OLLAMA_API_KEY" },
-    });
-  });
-
-  it("exposes Ollama API key and base URL settings", () => {
-    const manifest = getProviderConfigManifest("ollama");
-    const ids = manifest.settings.map((setting) => setting.id);
-
-    expect(ids).toEqual(["credentials.api", "baseUrl"]);
-  });
-
-  it("round-trips Ollama API key and base URL settings", () => {
-    const manifest = getProviderConfigManifest("ollama");
-    const credentialSetting = manifest.settings.find(
-      (setting) => setting.id === "credentials.api",
-    );
-    const baseUrlSetting = manifest.settings.find(
-      (setting) => setting.id === "baseUrl",
-    );
-
-    if (
-      !credentialSetting ||
-      credentialSetting.kind !== "text" ||
-      !baseUrlSetting ||
-      baseUrlSetting.kind !== "text"
-    ) {
-      throw new Error("Missing Ollama settings.");
-    }
-
-    const config: Ollama = {};
-    (credentialSetting as ProviderTextSettingDescriptor<Ollama>).setValue(
-      config,
-      "OLLAMA_API_KEY",
-    );
-    (baseUrlSetting as ProviderTextSettingDescriptor<Ollama>).setValue(
-      config,
-      "https://ollama-proxy.test",
-    );
-
-    expect(config).toEqual({
-      credentials: { api: "OLLAMA_API_KEY" },
-      baseUrl: "https://ollama-proxy.test",
     });
   });
 });

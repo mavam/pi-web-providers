@@ -6,6 +6,7 @@ import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { PACKAGE_VERSION } from "./package-metadata.js";
 import {
   createWebMux,
   createInitialConfig,
@@ -29,7 +30,6 @@ import type {
   WebMuxConfig,
 } from "./web-mux/public-types.js";
 
-const VERSION = "0.1.0";
 const RESERVED_FLAGS = new Set([
   "provider",
   "config",
@@ -72,7 +72,6 @@ interface ParsedArgs {
   quiet: boolean;
   noColor: boolean;
   help: boolean;
-  version: boolean;
   force: boolean;
   queries: string[];
   maxResults?: number;
@@ -104,8 +103,10 @@ export async function runCli(
       io.stdout.write(`${rootHelp()}\n`);
       return 0;
     }
-    if (argv.includes("--version") || argv[0] === "version") {
-      io.stdout.write(`${VERSION}\n`);
+    const separator = argv.indexOf("--");
+    const options = separator === -1 ? argv : argv.slice(0, separator);
+    if (options.includes("--version") || argv[0] === "version") {
+      io.stdout.write(`${PACKAGE_VERSION}\n`);
       return 0;
     }
     if (argv[0] === "--help" || argv[0] === "help") {
@@ -326,7 +327,6 @@ function parseArgs(args: string[], flags: OptionFlag[]): ParsedArgs {
     quiet: false,
     noColor: false,
     help: false,
-    version: false,
     force: false,
     queries: [],
     typedOptions: {},
@@ -418,9 +418,6 @@ function parseArgs(args: string[], flags: OptionFlag[]): ParsedArgs {
       case "--help":
         parsed.help = true;
         break;
-      case "--version":
-        parsed.version = true;
-        break;
       case "--force":
         parsed.force = true;
         break;
@@ -441,9 +438,13 @@ function firstPass(args: string[]): {
   const result: { provider?: ProviderId; configPath?: string; cwd?: string } =
     {};
   for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === "--") break;
     const [name, inline] = splitFlag(args[index]);
-    if (name === "--provider")
-      result.provider = (inline ?? args[index + 1]) as ProviderId;
+    if (name === "--provider") {
+      const value = inline ?? args[index + 1];
+      if (value && value in PROVIDERS_BY_ID)
+        result.provider = value as ProviderId;
+    }
     if (name === "--config") result.configPath = inline ?? args[index + 1];
     if (name === "--cwd") result.cwd = inline ?? args[index + 1];
     if (!inline && ["--provider", "--config", "--cwd"].includes(name))
@@ -760,7 +761,7 @@ function formatFlagHelp(flag: OptionFlag): string {
 }
 
 function rootHelp(): string {
-  return `web-mux ${VERSION}\n\nUsage: web <command> [options]\n\nCommands:\n  search      Search the web\n  contents    Fetch URL contents\n  answer      Produce grounded answers\n  research    Run foreground research\n  providers   Show provider capabilities and status\n  config      Manage configuration\n\nRun 'web <command> --help' for command options.`;
+  return `web-mux ${PACKAGE_VERSION}\n\nUsage: web <command> [options]\n\nCommands:\n  search      Search the web\n  contents    Fetch URL contents\n  answer      Produce grounded answers\n  research    Run foreground research\n  providers   Show provider capabilities and status\n  config      Manage configuration\n\nRun 'web <command> --help' for command options.`;
 }
 
 function parseTypedValue(raw: string, descriptor: OptionFlag): unknown {

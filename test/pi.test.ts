@@ -1,16 +1,42 @@
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import webMuxExtension from "../src/pi.js";
 
-const fixture = resolve("test-new/fixtures/custom-provider.mjs");
+const fixture = resolve("test/fixtures/custom-provider.mjs");
 
 afterEach(() => {
   delete process.env.WEB_MUX_CONFIG;
 });
 
 describe("pi extension", () => {
+  it("warns when no default provider binds any tools", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "web-mux-pi-empty-"));
+    const path = join(directory, "config.json");
+    await writeFile(path, "{}");
+    process.env.WEB_MUX_CONFIG = path;
+
+    const tools: any[] = [];
+    let sessionStart: ((event: unknown, context: any) => void) | undefined;
+    await webMuxExtension({
+      registerTool: (tool: any) => tools.push(tool),
+      on: (event: string, handler: typeof sessionStart) => {
+        expect(event).toBe("session_start");
+        sessionStart = handler;
+      },
+    } as any);
+
+    const notify = vi.fn();
+    expect(tools).toEqual([]);
+    expect(sessionStart).toBeTypeOf("function");
+    sessionStart?.({}, { ui: { notify } });
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringContaining("web config init"),
+      "warning",
+    );
+  });
+
   it("registers only four bound web tools and executes through the library", async () => {
     const directory = await mkdtemp(join(tmpdir(), "web-mux-pi-"));
     const path = join(directory, "config.json");

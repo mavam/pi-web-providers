@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import type { ProviderConfig } from "../types.js";
+import { CONFIG_SCHEMA_URL } from "../package-metadata.js";
 import { WebMuxError } from "./errors.js";
 import { PROVIDER_CATALOG } from "./catalog.js";
 import { loadProvider } from "./provider-loader.js";
@@ -18,8 +19,7 @@ import {
   type WebMuxConfig,
 } from "./public-types.js";
 
-export const CONFIG_SCHEMA_URL =
-  "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json";
+export { CONFIG_SCHEMA_URL };
 
 export interface ConfigPathOptions {
   configPath?: string;

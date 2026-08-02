@@ -180,13 +180,9 @@ async function contents(
       request.signal,
       request.onProgress,
     )) as ProviderResult<"contents">;
-    const remaining = [...value.answers];
-    const results = urls.map((url) => {
-      const matchingIndex = remaining.findIndex((answer) => answer.url === url);
-      const answer = remaining.splice(
-        matchingIndex >= 0 ? matchingIndex : 0,
-        1,
-      )[0];
+    const answers = matchContentAnswers(urls, value.answers);
+    const results = urls.map((url, index) => {
+      const answer = answers[index];
       if (!answer)
         return failure(
           url,
@@ -216,6 +212,62 @@ async function contents(
       provider,
       urls.map((url) => failure(url, error, execution.secretValues)),
     );
+  }
+}
+
+function matchContentAnswers(
+  urls: string[],
+  answers: ProviderResult<"contents">["answers"],
+): Array<ProviderResult<"contents">["answers"][number] | undefined> {
+  const matched = new Array<
+    ProviderResult<"contents">["answers"][number] | undefined
+  >(urls.length);
+  const used = new Set<number>();
+
+  matchBy((url, answerUrl) => answerUrl === url);
+  matchBy((url, answerUrl) => normalizeUrl(answerUrl) === normalizeUrl(url));
+
+  if (answers.length !== urls.length) return matched;
+  const remainingAnswers = answers.filter((_, index) => !used.has(index));
+  let nextAnswer = 0;
+  for (let index = 0; index < matched.length; index += 1) {
+    if (matched[index]) continue;
+    matched[index] = remainingAnswers[nextAnswer];
+    nextAnswer += 1;
+  }
+  return matched;
+
+  function matchBy(matches: (url: string, answerUrl: string) => boolean): void {
+    for (let inputIndex = 0; inputIndex < urls.length; inputIndex += 1) {
+      if (matched[inputIndex]) continue;
+      const answerIndex = answers.findIndex(
+        (answer, index) =>
+          !used.has(index) && matches(urls[inputIndex], answer.url),
+      );
+      if (answerIndex < 0) continue;
+      matched[inputIndex] = answers[answerIndex];
+      used.add(answerIndex);
+    }
+  }
+}
+
+function normalizeUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    for (const key of [...url.searchParams.keys()]) {
+      if (
+        /^utm_/i.test(key) ||
+        ["fbclid", "gclid"].includes(key.toLowerCase())
+      ) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.searchParams.sort();
+    if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString();
+  } catch {
+    return value;
   }
 }
 

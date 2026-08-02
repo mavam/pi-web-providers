@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { runCli } from "../src/cli.js";
 
-const fixture = resolve("test-new/fixtures/custom-provider.mjs");
+const fixture = resolve("test/fixtures/custom-provider.mjs");
 
 async function setupConfig(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "web-mux-cli-"));
@@ -59,6 +59,26 @@ async function invoke(args: string[], stdin = "", signalSource?: EventEmitter) {
 }
 
 describe("web CLI", () => {
+  it("reports an unknown first-pass provider as a usage error", async () => {
+    const result = await invoke(["search", "--provider", "bogus", "hello"]);
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("Unknown provider 'bogus'");
+    expect(result.err).not.toContain("TypeError");
+  });
+
+  it("treats --version after -- as positional input", async () => {
+    const path = await setupConfig();
+    const result = await invoke([
+      "search",
+      "--config",
+      path,
+      "--",
+      "--version",
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("Result for --version");
+  });
+
   it("keeps normalized JSON on stdout and progress on stderr", async () => {
     const path = await setupConfig();
     const result = await invoke([

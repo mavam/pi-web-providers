@@ -138,7 +138,7 @@ The client provides:
 - `listProviders()` and `getProvider(id)`
 - `getProviderOptionSchema(id, capability)`
 
-The package exports typed configuration, requests, normalized results, provider metadata, `WebMuxError`, and the error codes `INVALID_CONFIG`, `INVALID_INPUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_FAILURE`, `PARTIAL_BATCH`, `TIMEOUT`, and `CANCELLED`. Provider registration is intentionally not public in `0.1.0`.
+The package exports typed configuration, requests, normalized results, provider metadata, `WebMuxError`, and the error codes `INVALID_CONFIG`, `INVALID_INPUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_FAILURE`, `PARTIAL_BATCH`, `TIMEOUT`, and `CANCELLED`. Provider registration is intentionally not public.
 
 The published configuration schema is available as `web-mux/config.schema.json`.
 
