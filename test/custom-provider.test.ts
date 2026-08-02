@@ -30,14 +30,14 @@ describe("providerHarness(customProvider)", () => {
         'process.stdin.on("data", (chunk) => (input += chunk));',
         'process.stdin.on("end", () => {',
         "  const request = JSON.parse(input);",
-        "  process.stderr.write(`searching ${request.query}\\n`);",
+        "  process.stderr.write(`searching ${request.input.query}\\n`);",
         "  process.stdout.write(JSON.stringify({",
         "    results: [{",
-        "      title: `Result for ${request.query}` ,",
+        "      title: `Result for ${request.input.query}` ,",
         '      url: "https://example.com",',
         '      snippet: "example snippet",',
         "      score: 0.9,",
-        "      metadata: { echoedMaxResults: request.maxResults }",
+        "      metadata: { echoedMaxResults: request.input.maxResults }",
         "    }]",
         "  }));",
         "});",
@@ -76,7 +76,7 @@ describe("providerHarness(customProvider)", () => {
         },
       ],
     });
-    expect(progress).toEqual([]);
+    expect(progress).toEqual(["searching custom query"]);
   });
 
   it("parses provider tool output for non-search capabilities", async () => {
@@ -93,7 +93,7 @@ describe("providerHarness(customProvider)", () => {
         'process.stdin.on("end", () => {',
         "  const request = JSON.parse(input);",
         "  process.stdout.write(JSON.stringify({",
-        "    text: `Answer for: ${request.query}` ,",
+        "    text: `Answer for: ${request.input.query}` ,",
         "    itemCount: 2,",
         '    metadata: { source: "fixture" }',
         "  }));",

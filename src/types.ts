@@ -336,7 +336,10 @@ export interface ValyuOptions {
 export interface CustomCommandConfig {
   argv?: string[];
   cwd?: string;
-  env?: Record<string, string>;
+  env?: Record<
+    string,
+    string | import("./web-mux/public-types.js").CredentialSource
+  >;
 }
 
 export interface CustomOptions {

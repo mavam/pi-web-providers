@@ -1,4 +1,5 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import type { CredentialSource } from "./web-mux/public-types.js";
 
 const commandValueCache = new Map<
   string,
@@ -6,11 +7,15 @@ const commandValueCache = new Map<
 >();
 
 export function resolveConfigValue(
-  reference: string | undefined,
+  reference: string | CredentialSource | undefined,
 ): string | undefined {
   if (!reference) return undefined;
-  if (reference.startsWith("!")) {
-    const cached = commandValueCache.get(reference);
+  if (typeof reference === "object") {
+    if ("env" in reference) return process.env[reference.env];
+    if ("value" in reference) return reference.value;
+
+    const cacheKey = JSON.stringify(reference.command);
+    const cached = commandValueCache.get(cacheKey);
     if (cached) {
       if (cached.errorMessage) {
         throw new Error(cached.errorMessage);
@@ -19,17 +24,26 @@ export function resolveConfigValue(
     }
 
     try {
-      const output = execSync(reference.slice(1), {
+      const [program, ...args] = reference.command;
+      const output = execFileSync(program, args, {
         encoding: "utf-8",
         stdio: ["ignore", "pipe", "pipe"],
       }).trim();
       const value = output.length > 0 ? output : undefined;
-      commandValueCache.set(reference, { value });
+      commandValueCache.set(cacheKey, { value });
       return value;
     } catch (error) {
-      const errorMessage = (error as Error).message;
-      commandValueCache.set(reference, { errorMessage });
-      throw error;
+      const failure = error as NodeJS.ErrnoException & {
+        status?: number;
+        signal?: NodeJS.Signals;
+      };
+      const [program] = reference.command;
+      const reason = failure.signal
+        ? `signal ${failure.signal}`
+        : `exit code ${failure.status ?? "unknown"}`;
+      const errorMessage = `Credential command '${program}' failed with ${reason}.`;
+      commandValueCache.set(cacheKey, { errorMessage });
+      throw new Error(errorMessage, { cause: error });
     }
   }
   const envValue = process.env[reference];
@@ -43,7 +57,7 @@ export function resolveConfigValue(
 }
 
 export function resolveEnvMap(
-  envMap: Record<string, string> | undefined,
+  envMap: Record<string, string | CredentialSource> | undefined,
 ): Record<string, string> | undefined {
   if (!envMap) return undefined;
   const resolved = Object.fromEntries(

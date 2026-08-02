@@ -10,13 +10,14 @@ import type {
   ToolOutput,
 } from "../types.js";
 import { runCliJsonCommand } from "./cli-json.js";
+import { attachRawPayload } from "../web-mux/raw.js";
 
 import { defineCapability, defineProvider } from "./definition.js";
 
 const customImplementation = {
   id: "custom" as const,
   label: "Custom",
-  docsUrl: "https://github.com/mavam/pi-web-providers#custom-provider",
+  docsUrl: "https://github.com/mavam/web-mux#custom-providers",
 
   getToolOptionsSchema(_capability: Tool): TObject | undefined {
     return undefined;
@@ -51,12 +52,8 @@ const customImplementation = {
   ): Promise<SearchResponse> {
     const output = await runCommand<unknown>({
       capability: "search",
-      payload: {
-        capability: "search",
-        query,
-        maxResults,
-        ...(options ? { options } : {}),
-      },
+      input: { query, maxResults },
+      options,
       config,
       context,
     });
@@ -72,11 +69,8 @@ const customImplementation = {
   ): Promise<ContentsResponse> {
     const output = await runCommand<unknown>({
       capability: "contents",
-      payload: {
-        capability: "contents",
-        urls,
-        ...(options ? { options } : {}),
-      },
+      input: { urls },
+      options,
       config,
       context,
     });
@@ -92,11 +86,8 @@ const customImplementation = {
   ): Promise<ToolOutput> {
     const output = await runCommand<unknown>({
       capability: "answer",
-      payload: {
-        capability: "answer",
-        query,
-        ...(options ? { options } : {}),
-      },
+      input: { query },
+      options,
       config,
       context,
     });
@@ -112,11 +103,8 @@ const customImplementation = {
   ): Promise<ToolOutput> {
     const output = await runCommand<unknown>({
       capability: "research",
-      payload: {
-        capability: "research",
-        input,
-        ...(options ? { options } : {}),
-      },
+      input: { input },
+      options,
       config,
       context,
     });
@@ -127,12 +115,14 @@ const customImplementation = {
 
 async function runCommand<TOutput>({
   capability,
-  payload,
+  input,
+  options,
   config,
   context,
 }: {
   capability: Tool;
-  payload: Record<string, unknown>;
+  input: Record<string, unknown>;
+  options: Record<string, unknown> | undefined;
   config: Custom;
   context: ProviderContext;
 }): Promise<TOutput> {
@@ -144,7 +134,10 @@ async function runCommand<TOutput>({
   return await runCliJsonCommand<TOutput>({
     command,
     payload: {
-      ...payload,
+      schemaVersion: 1,
+      capability,
+      input,
+      options: options ?? {},
       cwd: context.cwd,
     },
     context,
@@ -192,12 +185,15 @@ function parseSearchResponse(
     throw new Error("search output must include a 'results' array");
   }
 
-  return {
-    provider: providerId,
-    results: response.results.map((entry, index) =>
-      parseSearchResult(entry, index),
-    ),
-  };
+  return attachRawPayload(
+    {
+      provider: providerId,
+      results: response.results.map((entry, index) =>
+        parseSearchResult(entry, index),
+      ),
+    },
+    value,
+  );
 }
 
 function parseSearchResult(entry: unknown, index: number) {
@@ -227,12 +223,15 @@ function parseContentsResponse(
     throw new Error("contents output must include an 'answers' array");
   }
 
-  return {
-    provider: providerId,
-    answers: response.answers.map((entry, index) =>
-      parseContentsAnswer(entry, index),
-    ),
-  };
+  return attachRawPayload(
+    {
+      provider: providerId,
+      answers: response.answers.map((entry, index) =>
+        parseContentsAnswer(entry, index),
+      ),
+    },
+    value,
+  );
 }
 
 function parseContentsAnswer(entry: unknown, index: number): ContentsAnswer {
@@ -274,12 +273,15 @@ function parseToolOutput(
   const output = requireObject(value, "output must be a JSON object");
   const metadata = readLenientJsonObject(output.metadata);
 
-  return {
-    provider: providerId,
-    text: readRequiredString(output.text, "text"),
-    ...readOptionalNonNegativeInteger(output.itemCount),
-    ...(metadata !== undefined ? { metadata } : {}),
-  };
+  return attachRawPayload(
+    {
+      provider: providerId,
+      text: readRequiredString(output.text, "text"),
+      ...readOptionalNonNegativeInteger(output.itemCount),
+      ...(metadata !== undefined ? { metadata } : {}),
+    },
+    value,
+  );
 }
 
 function readRequiredJsonObject(

@@ -1,5 +1,54 @@
 {
-  "tools": {
-    "search": "codex"
+  "$schema": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
+  "defaults": {
+    "search": {
+      "provider": "brave",
+      "maxResults": 5
+    },
+    "contents": {
+      "provider": "tavily"
+    },
+    "answer": {
+      "provider": "openai"
+    },
+    "research": {
+      "provider": "gemini"
+    }
+  },
+  "execution": {
+    "timeoutMs": 30000,
+    "retries": 1,
+    "retryDelayMs": 2000,
+    "researchTimeoutMs": 1800000
+  },
+  "providers": {
+    "brave": {
+      "credentials": {
+        "search": {
+          "env": "BRAVE_SEARCH_API_KEY"
+        }
+      }
+    },
+    "tavily": {
+      "credentials": {
+        "api": {
+          "env": "TAVILY_API_KEY"
+        }
+      }
+    },
+    "openai": {
+      "credentials": {
+        "api": {
+          "env": "OPENAI_API_KEY"
+        }
+      }
+    },
+    "gemini": {
+      "credentials": {
+        "api": {
+          "env": "GOOGLE_API_KEY"
+        }
+      }
+    }
   }
 }

@@ -78,6 +78,8 @@ export async function runCliJsonCommand<TOutput>({
     child.stderr.setEncoding("utf8");
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
+      const diagnostic = chunk.trim();
+      if (diagnostic) context.onProgress?.(diagnostic);
     });
 
     child.on("error", (error) => {

@@ -1,639 +1,243 @@
-# 🌍 pi-web-providers
+# web-mux
 
-A _meta_ web extension for [pi](https://pi.dev) that routes search, content
-extraction, quick grounded answers, and research through configurable per-tool
-providers, with explicit provider-specific option schemas for each managed tool.
+Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, `web` CLI, and pi extension.
 
-## Why?
+`web-mux` gives applications and agents one interface for four web capabilities while keeping provider selection explicit. It ships integrations for Brave, Claude, Cloudflare, Codex, Custom, Exa, Firecrawl, Gemini, Linkup, Ollama, OpenAI, Parallel, Perplexity, Serper, Tavily, and Valyu.
 
-Most web extensions hard-wire a single backend. **pi-web-providers** lets you
-mix and match providers per tool instead, so `web_search`, `web_contents`,
-`web_answer`, and `web_research` can each use a different backend or be turned
-off entirely. Treat `web_answer` as a fast path for simple grounded questions,
-not as a replacement for source inspection or deeper research.
+Requires Node.js 22 or newer.
 
-## ✨ Features
+## Install
 
-- **Multiple providers**: Brave, Claude, Cloudflare, Codex, Exa, Firecrawl,
-  Gemini, Linkup, Ollama, OpenAI, Perplexity, Parallel, Serper,
-  [Tavily](https://tavily.com), Valyu
-- **Provider-aware tool options**: pi only exposes the provider settings that
-  actually apply to the backend you selected, so tool calls are easier to
-  discover and harder to get wrong
-- **Batched search and answers**: run several related queries or questions in a
-  single `web_search` or `web_answer` call and get grouped results back in one
-  response
-- **Background contents prefetch**: optionally start `web_contents`
-  extraction from `web_search` results in the background and reuse the cached
-  pages later for faster follow-up reads
-
-## 🚀 Installation
+Install the `web` executable globally:
 
 ```sh
-pi install npm:pi-web-providers
+npm install -g web-mux
+web --help
 ```
 
-## ⚙️ Configuration
+Run it without installing globally:
 
-Run:
+```sh
+npx web-mux search "Node.js 22 release notes" --provider brave
+```
+
+Or add the library to an application:
+
+```sh
+npm install web-mux
+```
+
+## CLI
 
 ```text
-/web-providers
+web search [query|-] [--query <query>...] [--max-results <n>]
+web contents <url...|->
+web answer [question|-] [--query <question>...]
+web research <brief|->
 ```
 
-This edits the global config file `~/.pi/agent/web-providers.json`. The
-settings UI mirrors the three sections below: tools, providers, and settings.
+Search and answer accept up to ten inputs. The positional input comes first, followed by repeated `--query` values. `web contents -` reads newline-separated URLs from stdin. Research stays in the foreground, writes progress to stderr, writes only its result to stdout, and cancels on Ctrl-C.
 
-Each tool can be routed to any compatible provider:
+Common options:
 
-Provider credentials can be literal values, environment variable names, or
-`!command` references. pi-web-providers resolves those secrets lazily on the
-first matching tool use, not when a session starts. This avoids startup delays
-from password-manager commands such as `op`; missing or failing secrets are
-reported when the tool is actually called.
+```text
+--provider <id>              Select a provider for this invocation
+--config <path>              Use an explicit configuration file
+--cwd <path>                 Set the execution and custom-command directory
+--timeout <ms>               Override the request timeout
+--retries <n>                Override the retry count
+--retry-delay <ms>           Override the initial retry delay
+--output text|json           Select human-readable or normalized output
+--raw                        Emit an unstable provider-payload wrapper
+--options-json <json|@file>  Supply options that cannot be flags
+--quiet                      Suppress progress on stderr
+--no-color                   Disable color
+--help                       Show provider-aware help
+--version                    Show the version
+```
 
-**Built-in local providers**
+The CLI loads the selected provider's TypeBox schema and creates exact flags for scalar fields. For example, `searchContextSize` becomes `--search-context-size`, `userLocation.country` becomes `--user-location-country`, arrays are repeatable, and booleans have both `--foo` and `--no-foo`. Objects, records, and colliding flag names remain available through `--options-json`.
 
-| Provider   | search | contents | answer | research | Auth                   |
-| ---------- | :----: | :------: | :----: | :------: | ---------------------- |
-| **Claude** |   ✔    |          |   ✔    |          | Local Claude Code auth |
-| **Codex**  |   ✔    |          |        |          | Local Codex CLI auth   |
+Option precedence is:
 
-**API-backed providers**
+1. provider defaults
+2. configured capability options
+3. `--options-json`
+4. generated typed flags
 
-| Provider       | search | contents | answer | research | Auth                                             |
-| -------------- | :----: | :------: | :----: | :------: | ------------------------------------------------ |
-| **Brave**      |   ✔    |          |   ✔    |    ✔     | `BRAVE_SEARCH_API_KEY` / `BRAVE_ANSWERS_API_KEY` |
-| **Cloudflare** |        |    ✔     |        |          | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` |
-| **Exa**        |   ✔    |    ✔     |   ✔    |    ✔     | `EXA_API_KEY`                                    |
-| **Firecrawl**  |   ✔    |    ✔     |   ✔    |          | `FIRECRAWL_API_KEY`                              |
-| **Gemini**     |   ✔    |          |   ✔    |    ✔     | `GOOGLE_API_KEY`                                 |
-| **Linkup**     |   ✔    |    ✔     |        |    ✔     | `LINKUP_API_KEY`                                 |
-| **Ollama**     |   ✔    |    ✔     |        |          | `OLLAMA_API_KEY`                                 |
-| **OpenAI**     |   ✔    |          |   ✔    |    ✔     | `OPENAI_API_KEY`                                 |
-| **Parallel**   |   ✔    |    ✔     |        |          | `PARALLEL_API_KEY`                               |
-| **Perplexity** |   ✔    |          |   ✔    |    ✔     | `PERPLEXITY_API_KEY`                             |
-| **Serper**     |   ✔    |          |        |          | `SERPER_API_KEY`                                 |
-| **Tavily**     |   ✔    |    ✔     |        |          | `TAVILY_API_KEY`                                 |
-| **Valyu**      |   ✔    |    ✔     |   ✔    |    ✔     | `VALYU_API_KEY`                                  |
+No provider is selected implicitly. If neither `--provider` nor a configured capability default is present, `web` exits with a list of compatible providers.
 
-Advanced option: `custom` can route any managed tool through a local wrapper
-command using a JSON stdin/stdout contract.
+### Output
 
-See [`example-config.json`](example-config.json) for the minimal default
-configuration.
-
-### Tools
-
-Each managed tool maps to one provider id under the top-level `tools` key.
-Removing a tool mapping turns that tool off. A tool is only exposed when it is
-mapped to a compatible provider and that provider is currently available.
-Shared defaults and tool-specific settings live under `settings`; search-specific
-settings live under `settings.search`, and async research uses
-`settings.researchTimeoutMs`. Provider option schemas are strict: only the keys
-shown for the active provider are accepted.
-
-#### `web_search`
-
-Search the public web for up to 10 queries in one call. It returns grouped
-titles, URLs, and snippets for each query. Batch related queries when grouped
-comparison matters; use separate sibling `web_search` calls when independent
-results should arrive as soon as they are ready.
-
-<details>
-<summary><strong>Parameters and behavior</strong></summary>
-
-| Parameter    | Type     | Default  | Description                                                        |
-| ------------ | -------- | -------- | ------------------------------------------------------------------ |
-| `queries`    | string[] | required | One or more search queries to run (max 10)                         |
-| `maxResults` | integer  | `5`      | Result count per query, clamped to `1–20`                          |
-| `options`    | object   | —        | Provider-specific settings exposed by the selected provider schema |
-
-`options` is omitted when the configured search provider has no per-call
-provider options. Runtime controls are not accepted in tool calls. Configure
-retry, timeout, and background contents prefetch under `settings` and
-`settings.search`; prefetch starts only when `settings.search.provider` is set.
-
-</details>
-
-#### `web_contents`
-
-Read the main text from one or more web pages. It reuses cached pages when they
-match and fetches only missing or stale URLs. Batch related pages when they are
-meant to be read as one bundle; use separate sibling `web_contents` calls when
-each page can be acted on independently.
-
-<details>
-<summary><strong>Parameters and behavior</strong></summary>
-
-| Parameter | Type     | Default  | Description                                                        |
-| --------- | -------- | -------- | ------------------------------------------------------------------ |
-| `urls`    | string[] | required | One or more URLs to extract                                        |
-| `options` | object   | —        | Provider-specific settings exposed by the selected provider schema |
-
-`web_contents` reuses any matching cached pages already present in the local
-in-memory cache—whether they came from prefetch or an earlier read—and only
-fetches missing or stale URLs.
-
-</details>
-
-#### `web_answer`
-
-Answer one or more simple factual questions using web-grounded evidence. Use it
-as a lightweight shortcut when you want a concise grounded answer without
-manually selecting and reading sources. Prefer `web_search` plus `web_contents`
-when source selection matters or you need to inspect primary sources directly;
-prefer `web_research` for open-ended, controversial, or multi-step
-investigations.
-
-When you ask more than one question, the response is grouped into per-question
-sections. Batch related questions when the answers belong together; split them
-into sibling calls when earlier independent answers can unblock the next step.
-Collapsed results show a short answer preview; expand the tool result to read the
-full answer.
-
-<details>
-<summary><strong>Parameters and behavior</strong></summary>
-
-| Parameter | Type     | Default  | Description                                                        |
-| --------- | -------- | -------- | ------------------------------------------------------------------ |
-| `queries` | string[] | required | One or more questions to answer in one call (max 10)               |
-| `options` | object   | —        | Provider-specific settings exposed by the selected provider schema |
-
-Responses are grouped into per-question sections when more than one question is
-provided.
-
-</details>
-
-#### `web_research`
-
-Investigate a topic across web sources and produce a longer report.
-`web_research` is always asynchronous: it starts a background run, returns a
-short dispatch notice immediately, and later posts a completion message with a
-saved report path.
-
-<details>
-<summary><strong>Parameters and behavior</strong></summary>
-
-| Parameter | Type   | Default  | Description                                                        |
-| --------- | ------ | -------- | ------------------------------------------------------------------ |
-| `input`   | string | required | Research brief or question                                         |
-| `options` | object | —        | Provider-specific settings exposed by the selected provider schema |
-
-`options` is provider-specific. Equivalent concepts can use different field
-names across SDKs—for example Perplexity uses `country`, Exa uses
-`userLocation`, and Valyu uses `countryCode`. Runtime controls are not accepted
-in tool calls.
-
-Unlike the other managed tools, `web_research` does not accept local timeout,
-retry, polling, or resume controls. Research has one opinionated execution
-style: pi starts it asynchronously, tracks it locally, and saves the final
-report under `.pi/artifacts/research/`. Saved research reports are Markdown
-files with YAML frontmatter for job metadata such as query, provider, status,
-and timestamps.
-
-Use `/web-research` in interactive pi sessions to browse and manage researches.
-The command opens a table of running and finished researches with status, date,
-provider, duration, and title. Running researches show a live spinner and
-elapsed time; press `c` twice to cancel one. Cancellation aborts the provider
-call and records a durable `cancelled` artifact under
-`.pi/artifacts/research/`. Press `Enter` on a finished research to read the
-report in a scrollable Markdown overlay; from there, `c` copies the report as
-Markdown to the clipboard and `i` injects it into the current conversation so
-the agent can build on earlier research.
-
-While researches run, a one-line summary above the editor shows the number of
-active researches with their status and elapsed time.
-
-</details>
-
-### Providers
-
-The built-in providers below integrate with official SDKs or documented APIs.
-
-<details>
-<summary><strong>Brave</strong></summary>
-
-- API: Brave Search API and Brave Answers API
-- Supports `web_search` via Web Search, plus optional `llm_context`, `news`, `videos`, `images`, and `places` search modes
-- Supports `web_answer` and `web_research` via Brave Answers streaming chat completions
-- Uses the Answers API replacement for Brave's deprecated Summarizer API; answer and research search controls are sent through `web_search_options`
-- Exposes the Answers `model` option (`brave` or `brave-pro`) for answer and research calls
-- `web_contents` stays routed to URL-fetch providers; Brave LLM Context is query-based retrieval and is exposed as a search mode instead
-- Brave Answers may require a different key or plan than Brave Search
-
-**Setup**
+Text is the default and never truncates provider results. `--output json` writes one normalized document:
 
 ```json
 {
-  "tools": {
-    "search": "brave",
-    "answer": "brave",
-    "research": "brave"
+  "schemaVersion": 1,
+  "capability": "search",
+  "provider": "brave",
+  "status": "ok",
+  "results": [
+    {
+      "input": "example query",
+      "ok": true,
+      "value": { "results": [] }
+    }
+  ]
+}
+```
+
+A partial batch includes both successful results and per-input errors, sets `status` to `partial`, and exits nonzero.
+
+`--raw` is mutually exclusive with `--output json`. It emits a small wrapper around the payload captured before the CLI renders it. Secret-looking fields are redacted and request headers and credentials are never included. The payload shape is intentionally unstable across provider and SDK versions.
+
+Exit codes are `0` for success, `1` for provider or partial-result failures, `2` for usage or configuration failures, `130` for cancellation.
+
+### Supporting commands
+
+```sh
+web providers
+web providers openai
+
+web config path
+web config init
+web config init --force
+web config show
+web config edit
+web config validate
+```
+
+`config show` always redacts literal and command credentials. `config validate` checks JSON and structure only; it performs no network requests and does not execute credential commands.
+
+## Library
+
+```ts
+import { createWebMux } from "web-mux";
+
+const web = createWebMux();
+
+const result = await web.search({
+  provider: "brave",
+  queries: ["TypeBox validation", "Node.js AbortSignal"],
+  maxResults: 8,
+  options: { searchContextSize: "high" },
+  onProgress: ({ message }) => console.error(message),
+});
+
+if (result.status === "partial") {
+  // Successful inputs remain available in result.results.
+}
+```
+
+The client provides:
+
+- `search({ provider?, queries, maxResults?, options?, signal?, onProgress?, raw? })`
+- `contents({ provider?, urls, options?, signal?, onProgress?, raw? })`
+- `answer({ provider?, queries, options?, signal?, onProgress?, raw? })`
+- `research({ provider?, input, options?, signal?, onProgress?, raw? })`
+- `listProviders()` and `getProvider(id)`
+- `getProviderOptionSchema(id, capability)`
+
+The package exports typed configuration, requests, normalized results, provider metadata, `WebMuxError`, and the error codes `INVALID_CONFIG`, `INVALID_INPUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_FAILURE`, `PARTIAL_BATCH`, `TIMEOUT`, and `CANCELLED`. Provider registration is intentionally not public in `0.1.0`.
+
+The published configuration schema is available as `web-mux/config.schema.json`.
+
+## Configuration
+
+Configuration is strict JSON. It is resolved in this order:
+
+1. `--config`
+2. `WEB_MUX_CONFIG`
+3. `$XDG_CONFIG_HOME/web-mux/config.json`
+4. `~/.config/web-mux/config.json`, or `%APPDATA%\web-mux\config.json` on Windows
+
+Start with [example-config.json](./example-config.json) or run `web config init`. A complete shape looks like this:
+
+```json
+{
+  "$schema": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
+  "defaults": {
+    "search": {
+      "provider": "brave",
+      "maxResults": 5,
+      "options": {}
+    },
+    "contents": { "provider": "tavily" },
+    "answer": { "provider": "openai" },
+    "research": { "provider": "gemini" }
+  },
+  "execution": {
+    "timeoutMs": 30000,
+    "retries": 1,
+    "retryDelayMs": 2000,
+    "researchTimeoutMs": 1800000
   },
   "providers": {
     "brave": {
       "credentials": {
-        "search": "BRAVE_SEARCH_API_KEY",
-        "answers": "BRAVE_ANSWERS_API_KEY"
-      }
-    }
-  }
-}
-```
-
-Use `providers.brave.options.search.mode` or per-call search options to select
-`llm_context`, `news`, `videos`, `images`, or `places`. Places details and
-descriptions are opt-in because they can add calls, latency, and place-specific
-semantics.
-
-</details>
-
-<details>
-<summary><strong>Claude</strong></summary>
-
-- SDK: `@anthropic-ai/claude-agent-sdk`
-- Uses Claude Code's built-in `WebSearch` and `WebFetch` tools with structured JSON output
-- Exposes `model`, `thinking`, `effort`, `maxThinkingTokens`, `maxTurns`, and
-  `maxBudgetUsd` as provider options for search and answer calls
-- Great for search plus grounded answers if you already use Claude Code locally
-
-</details>
-
-<details>
-<summary><strong>Cloudflare</strong></summary>
-
-- SDK: `cloudflare`
-- Supports `web_contents` via Cloudflare Browser Rendering's `/markdown`
-  endpoint
-- Good for JavaScript-heavy pages that need a real browser render before
-  extraction
-- Exposes `gotoOptions.waitUntil` as the provider-specific contents option
-
-**Setup**
-
-1. In the Cloudflare dashboard, create an API token.
-2. Grant it this permission:
-   - `Account | Browser Rendering | Edit`
-3. Scope it to the account you want to use.
-4. Copy that account's **Account ID** from the Cloudflare dashboard.
-5. Configure pi with both values:
-
-```json
-{
-  "tools": {
-    "contents": "cloudflare"
-  },
-  "providers": {
-    "cloudflare": {
-      "credentials": {
-        "api": "CLOUDFLARE_API_TOKEN"
+        "search": { "env": "BRAVE_SEARCH_API_KEY" }
       },
-      "accountId": "CLOUDFLARE_ACCOUNT_ID"
-    }
-  }
-}
-```
-
-If Cloudflare returns `401 Authentication error`, the token permission, token
-scope, or account ID is usually wrong.
-
-</details>
-
-<details>
-<summary><strong>Codex</strong></summary>
-
-- SDK: `@openai/codex-sdk`
-- Runs in read-only mode with web search enabled
-- Exposes `model`, `modelReasoningEffort`, and `webSearchMode` as provider
-  options for `web_search`
-- Best if you already use the local Codex CLI and auth flow
-
-</details>
-
-<details>
-<summary><strong>Exa</strong></summary>
-
-- SDK: `exa-js`
-- Supports `web_search`, `web_contents`, `web_answer`, and `web_research`
-- `web_research` is exposed through pi's async research workflow
-- Neural, keyword, hybrid, and deep-search search modes
-- Inline text-content extraction on search results
-- Exposes search options such as `category`, `type`, crawl and publish date
-  filters, `includeDomains`, `excludeDomains`, `includeText`, `excludeText`,
-  `userLocation`, `additionalQueries`, `systemPrompt`, and richer `contents`
-  controls such as `livecrawl`, `maxAgeHours`, `subpages`, and `extras`
-- Persisted Exa defaults are scoped under `providers.exa.options.search`
-- `web_contents`, `web_answer`, and `web_research` currently use fixed provider behavior with no extra per-call provider options
-
-</details>
-
-<details>
-<summary><strong>Firecrawl</strong></summary>
-
-- SDK: `@mendable/firecrawl-js`
-- Supports `web_search`, `web_contents`, and page-scoped `web_answer`
-- Search can optionally include Firecrawl scrape-backed result enrichment
-- Contents extraction uses Firecrawl scrape with markdown-first defaults
-- Answers use Firecrawl scrape's `question` format against one explicit page URL;
-  set `options.url` in the `web_answer` call or
-  `providers.firecrawl.options.answer.url` as a default
-- Exposes search options such as `lang`, `country`, `sources`, `categories`,
-  domain filters, `tbs`, `location`, `timeout`, and `scrapeOptions`
-- Exposes contents options such as `formats`, `onlyMainContent`, `includeTags`,
-  `excludeTags`, `waitFor`, `timeout`, `headers`, `location`, `mobile`,
-  `proxy`, `fastMode`, `blockAds`, `removeBase64Images`, `redactPII`, and
-  cache controls
-- Exposes answer options `url`, `onlyMainContent`, `includeTags`,
-  `excludeTags`, `waitFor`, `timeout`, `headers`, `location`, `mobile`,
-  `proxy`, `fastMode`, `blockAds`, `removeBase64Images`, `redactPII`, and
-  cache controls
-- Firecrawl charges 5 credits per page for the `question` format
-- Optional `baseUrl` overrides are supported for self-hosted Firecrawl
-  instances, proxies, and testing. API keys are required for Firecrawl Cloud,
-  but can be omitted for self-hosted endpoints that do not enforce
-  authentication.
-
-</details>
-
-<details>
-<summary><strong>Gemini</strong></summary>
-
-- SDK: `@google/genai`
-- Supports `web_search`, `web_answer`, and `web_research`
-- `web_research` is exposed through pi's async research workflow
-- Google Search grounding for answers
-- Deep-research agents via Google's Gemini API
-- Exposes `model` and `generation_config` for search, `model` and `config`
-  for answers, and only the conservative deep-research option
-  `agent_config.thinking_summaries` for research
-- Gemini research intentionally does not expose or send Interactions API
-  `tools`, `response_format`, `response_modalities`, or `system_instruction`
-  because the default deep-research agent rejects several of those fields
-
-</details>
-
-<details>
-<summary><strong>Linkup</strong></summary>
-
-- SDK: `linkup-sdk`
-- Supports `web_search` via Linkup Search with fixed `searchResults` output
-- Supports `web_contents` via Linkup Fetch and always returns markdown
-- Supports `web_research` via Linkup's async Research API
-- Exposes search options `depth`, `includeImages`, `includeDomains`,
-  `excludeDomains`, `fromDate`, and `toDate`
-- Exposes contents options `renderJs`, `includeRawHtml`, and `extractImages`
-- Exposes research options `outputType`, `mode`, `reasoningDepth`,
-  `includeDomains`, `excludeDomains`, `fromDate`, `toDate`, and
-  `structuredOutputSchema`
-- Research defaults to `sourcedAnswer`; provide `structuredOutputSchema` for
-  structured output
-- Good fit for search, markdown extraction, and long-running sourced research
-  without extra provider wiring
-
-</details>
-
-<details>
-<summary><strong>Ollama</strong></summary>
-
-- API: [Ollama Web Search and Fetch API](https://docs.ollama.com/capabilities/web-search)
-- Supports `web_search` via Ollama's `POST /api/web_search` endpoint
-- Supports `web_contents` via Ollama's `POST /api/web_fetch` endpoint
-- Authenticates with an Ollama API key using `OLLAMA_API_KEY` by default
-- Optional `baseUrl` overrides the default `https://ollama.com` API host for
-  proxies or compatible endpoints
-- Ollama caps search requests at 10 results, so `web_search.maxResults` is
-  clamped to `1–10` for this provider
-
-Minimal config:
-
-```json
-{
-  "tools": {
-    "search": "ollama",
-    "contents": "ollama"
-  },
-  "providers": {
-    "ollama": {
-      "credentials": {
-        "api": "OLLAMA_API_KEY"
+      "options": {
+        "search": { "mode": "web" }
       }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><strong>OpenAI</strong></summary>
-
-- SDK: `openai`
-- Supports `web_search`, `web_answer`, and `web_research`
-- Uses the Responses API for structured web search, grounded answers, and
-  deep-research runs
-- Enables OpenAI's built-in `web_search` tool for search, answer, and research
-  calls
-- Exposes `model`, `instructions`, `searchContextSize`, `allowedDomains`, and
-  `userLocation` for `web_search` and `web_answer`
-- Exposes `model`, `instructions`, `max_tool_calls`, `searchContextSize`,
-  `allowedDomains`, and `userLocation` for `web_research`
-- Good fit when you want official OpenAI web-grounded search, answers, and deep
-  research behind pi's managed tool abstractions
-
-**Setup**
-
-1. Create or reuse an OpenAI API key.
-2. Configure pi to route `web_search`, `web_answer`, `web_research`, or any
-   subset of them to `openai`.
-3. Optionally set default models under `providers.openai.options.search.model`,
-   `providers.openai.options.answer.model`, and
-   `providers.openai.options.research.model`.
-
-```json
-{
-  "tools": {
-    "search": "openai",
-    "answer": "openai",
-    "research": "openai"
-  },
-  "providers": {
+    },
     "openai": {
       "credentials": {
-        "api": "OPENAI_API_KEY"
+        "api": { "command": ["op", "read", "op://vault/openai/api-key"] }
       },
       "options": {
-        "search": {
-          "model": "gpt-4.1"
-        },
-        "answer": {
-          "model": "gpt-4.1"
-        },
-        "research": {
-          "model": "o4-mini-deep-research"
-        }
+        "answer": { "model": "gpt-5-mini" }
       }
     }
   }
 }
 ```
 
-You can also set `instructions` as a provider default under
-`providers.openai.options.search`, `providers.openai.options.answer`, or
-`providers.openai.options.research`, and set `max_tool_calls` under
-`providers.openai.options.research`. All of them can also be overridden per
-call.
-
-</details>
-
-<details>
-<summary><strong>Perplexity</strong></summary>
-
-- SDK: `@perplexity-ai/perplexity_ai`
-- Supports `web_search`, `web_answer`, and `web_research`
-- `web_research` is exposed through pi's async research workflow
-- Uses Perplexity Search for `web_search`
-- Uses Sonar for `web_answer` and `sonar-deep-research` for `web_research`
-- Exposes search options `country`, `search_mode`,
-  `search_domain_filter`, and `search_recency_filter`
-- Exposes `model` for answer and research calls
-
-</details>
-
-<details>
-<summary><strong>Parallel</strong></summary>
-
-- SDK: `parallel-web`
-- Search modes `advanced`, `basic`, and `turbo`
-- Page content extraction with excerpt and full-content toggles
-- Exposes search option `mode`
-- Exposes contents options `excerpts` and `full_content`
-
-</details>
-
-<details>
-<summary><strong>Serper</strong></summary>
-
-- API: Serper HTTP API
-- Supports `web_search` via Serper's Google endpoints for web, image, video,
-  places, maps, reviews, news, shopping, product reviews, Lens, Scholar,
-  patents, autocomplete, and webpage results
-- Good fit for fast, straightforward Google-style search results
-- Exposes search options `mode`, `gl`, `hl`, `location`, `page`, `tbs`,
-  `autocorrect`, and mode-specific fields such as `url`, `ll`, `placeId`,
-  `cid`, `fid`, `productId`, `nextPageToken`, and webpage include flags.
-  Reviews mode uses the top-level query when no place identifier is provided.
-  `includeMarkdown` defaults to `true` for webpage scraping
-- Preserves rich metadata from Serper responses, including ranking position,
-  sitelinks, attributes, and top-level response context such as
-  `knowledgeGraph`, `answerBox`, `peopleAlsoAsk`, and `relatedSearches`
-- Optional `baseUrl` overrides are supported for proxies and testing
-
-Minimal config:
+Credential values are exactly one of:
 
 ```json
-{
-  "tools": {
-    "search": "serper"
-  },
-  "providers": {
-    "serper": {
-      "credentials": {
-        "api": "SERPER_API_KEY"
-      }
-    }
-  }
-}
+{ "env": "NAME" }
+{ "command": ["program", "arg", "..."] }
+{ "value": "literal" }
 ```
 
-</details>
+Credential commands run directly, never through a shell. Their trimmed stdout is cached in the client process. Standard environment variables work without an explicit provider section; see `web providers <id>` for each provider's names.
 
-<details>
-<summary><strong>Tavily</strong></summary>
+## Provider matrix
 
-- SDK: `@tavily/core`
-- Supports `web_search` via Tavily Search
-- Supports `web_contents` via Tavily Extract
-- Good for pairing LLM-oriented web search with lightweight page extraction
-- Exposes search options `topic`, `searchDepth`, `timeRange`, `country`,
-  `exactMatch`, `includeAnswer`, `includeRawContent`, `includeImages`,
-  `includeFavicon`, `includeDomains`, `excludeDomains`, and `days`
-- Exposes contents options `extractDepth`, `format`, `includeImages`, `query`,
-  `chunksPerSource`, and `includeFavicon`
+| Provider | Search | Contents | Answer | Research |
+| --- | :---: | :---: | :---: | :---: |
+| Brave | ✓ |  | ✓ | ✓ |
+| Claude | ✓ |  | ✓ |  |
+| Cloudflare |  | ✓ |  |  |
+| Codex | ✓ |  |  |  |
+| Custom | ✓ | ✓ | ✓ | ✓ |
+| Exa | ✓ | ✓ | ✓ | ✓ |
+| Firecrawl | ✓ | ✓ | ✓ |  |
+| Gemini | ✓ |  | ✓ | ✓ |
+| Linkup | ✓ | ✓ |  | ✓ |
+| Ollama | ✓ | ✓ |  |  |
+| OpenAI | ✓ |  | ✓ | ✓ |
+| Parallel | ✓ | ✓ |  |  |
+| Perplexity | ✓ |  | ✓ | ✓ |
+| Serper | ✓ |  |  |  |
+| Tavily | ✓ | ✓ |  |  |
+| Valyu | ✓ | ✓ | ✓ | ✓ |
 
-</details>
+All provider SDKs are package dependencies. Provider modules are loaded dynamically, so unrelated SDKs do not run during CLI startup.
 
-<details>
-<summary><strong>Valyu</strong></summary>
+## Custom providers
 
-- SDK: `valyu-js`
-- Supports `web_search`, `web_contents`, `web_answer`, and `web_research`
-- `web_research` is exposed through pi's async research workflow
-- Web, proprietary, and news search types
-- Exposes search options such as `searchType`, `responseLength`,
-  `countryCode`, source filters, `sourceBiases`, date filters,
-  `historicalCache`, `fastMode`, `urlOnly`, and `instructions`
-- Exposes contents options such as `summary`, `extractEffort`,
-  `responseLength`, `maxPriceDollars`, `screenshot`, date filters, and
-  `historicalCache`
-- Exposes answer options such as `structuredOutput`, `systemInstructions`,
-  `searchType`, `dataMaxPrice`, source filters, date filters, `countryCode`,
-  and `fastMode`
-- Exposes research options such as `mode`, `outputFormats`, `search`,
-  and `tools`
-- Persisted Valyu defaults are scoped under `providers.valyu.options.search`,
-  `providers.valyu.options.contents`, `providers.valyu.options.answer`, and
-  `providers.valyu.options.research`
-
-</details>
-
-### Custom provider
-
-The `custom` provider lets you bring your own wrapper command for any
-managed tool. Each capability can point at a different local command under
-`providers["custom"].options`.
-
-`custom` does not expose standard per-call `options` fields. Put
-provider-specific behavior in the wrapper configuration or in the wrapper
-implementation.
-
-The repo includes actual wrapper examples under
-[`examples/custom/wrappers/`](examples/custom/wrappers/). They are
-small bash scripts that use `jq` for JSON handling. Each one uses a different
-backend pattern:
-
-- `codex --search exec` for `web_search`
-- Gemini API via `curl` for `web_contents`
-- `claude -p` for `web_answer`
-- Perplexity API via `curl` for `web_research`
-
-<details>
-<summary><strong>Configuration example</strong></summary>
-
-Copy the example wrappers into a local `./wrappers/` directory, then configure:
+Custom providers use a versioned, language-neutral process contract. Configure an argv array for each capability:
 
 ```json
 {
-  "tools": {
-    "search": "custom",
-    "contents": "custom",
-    "answer": "custom",
-    "research": "custom"
-  },
+  "defaults": { "search": { "provider": "custom" } },
   "providers": {
     "custom": {
-      "options": {
+      "commands": {
         "search": {
-          "argv": ["bash", "./wrappers/codex-search.sh"]
-        },
-        "contents": {
-          "argv": ["bash", "./wrappers/gemini-contents.sh"]
-        },
-        "answer": {
-          "argv": ["bash", "./wrappers/claude-answer.sh"]
-        },
-        "research": {
-          "argv": ["bash", "./wrappers/perplexity-research.sh"]
+          "argv": ["node", "./examples/custom/provider.mjs"]
         }
       }
     }
@@ -641,49 +245,58 @@ Copy the example wrappers into a local `./wrappers/` directory, then configure:
 }
 ```
 
-Those example wrappers deliberately use different local CLIs and APIs so you
-can see several wrapper styles in one setup without extra glue code.
+The process receives one JSON request on stdin:
 
-Each capability can also set an optional `cwd` and `env` block. Use `cwd` when
-one wrapper must run from a specific directory. Use `env` for per-command
-variables; each value can be a literal string, an environment variable name, or
-`!command`.
+```json
+{
+  "schemaVersion": 1,
+  "capability": "search",
+  "input": { "query": "example", "maxResults": 5 },
+  "options": {},
+  "cwd": "/working/directory"
+}
+```
 
-`web_research` uses the same async workflow as every other research provider:
-pi starts the wrapper in the background, tracks the job locally, and writes the
-final report to a file when it finishes.
+It writes one normalized capability result to stdout and diagnostics to stderr. A nonzero exit means failure. Commands are argv arrays and are never interpreted by a shell. See [examples/custom/README.md](./examples/custom/README.md).
 
-Wrapper contract:
+## pi extension
 
-- `stdin`: one JSON request object with `capability` plus the per-call managed
-  inputs (`query`, `urls`, `input`, `maxResults`, `options`, `cwd`)
-- `stdout`: one JSON response object
-  - `search`: `{ "results": [{ "title", "url", "snippet" }] }`
-  - `contents`: `{ "answers": [{ "url", "content"?: "...", "summary"?: unknown, "metadata"?: {}, "error"?: "..." }] }`
-  - `answer` / `research`: `{ "text": "...", "summary"?: "...", "itemCount"?: 1, "metadata"?: {} }`
-- `stderr`: optional progress lines
-- exit code `0`: success
-- non-zero exit code: failure
+```sh
+pi install npm:web-mux
+```
 
-</details>
+The `web-mux/pi` entry point imports the library directly. At session startup it binds `web_search`, `web_contents`, `web_answer`, and `web_research` to their configured defaults and exposes each selected provider's exact option schema. Restart pi after changing configuration. The extension uses pi cancellation and progress callbacks and has no settings UI, management commands, background jobs, artifacts, cache, or dependency on a globally installed `web` command.
 
-See [`examples/custom/README.md`](examples/custom/README.md) for a
-copy-and-pasteable setup, and see
-[`examples/custom/wrappers/`](examples/custom/wrappers/) for the actual
-wrapper files.
+## Migrating from `pi-web-providers`
 
-### Settings
+The old configuration is not detected or converted. There are no aliases or compatibility shims.
 
-The `settings` block holds shared execution defaults that apply to all
-providers unless overridden in a provider's own `settings` block:
+1. Uninstall the former package: `pi remove pi-web-providers` or `npm uninstall -g pi-web-providers`.
+2. Install this package with `npm install -g web-mux`, run it once with `npx web-mux`, or install it in pi with `pi install npm:web-mux`.
+3. Create a fresh XDG configuration with `web config init`.
+4. Manually map fields:
 
-| Field               | Default   | Description                                                 |
-| ------------------- | --------- | ----------------------------------------------------------- |
-| `requestTimeoutMs`  | `30000`   | Maximum time for a single provider request                  |
-| `retryCount`        | `3`       | Retries for transient failures                              |
-| `retryDelayMs`      | `2000`    | Initial delay before retrying                               |
-| `researchTimeoutMs` | `1800000` | Maximum total time for an async `web_research` job (30 min) |
+| Former field | `web-mux` field |
+| --- | --- |
+| `tools.search` | `defaults.search.provider` |
+| `tools.contents` | `defaults.contents.provider` |
+| `tools.answer` | `defaults.answer.provider` |
+| `tools.research` | `defaults.research.provider` |
+| `settings.requestTimeoutMs` | `execution.timeoutMs` |
+| `settings.retryCount` | `execution.retries` |
+| `settings.retryDelayMs` | `execution.retryDelayMs` |
+| `settings.researchTimeoutMs` | `execution.researchTimeoutMs` |
+| provider credential string | `providers.<id>.credentials.<name>.env`, `.command`, or `.value` object |
+| provider option object | `providers.<id>.options.<capability>` |
+| custom provider option/command | `providers.custom.commands.<capability>` |
 
-## 📄 License
+## Development
 
-[MIT](LICENSE)
+```sh
+npm run check
+npm test
+npm run build
+npm pack
+```
+
+Live provider smoke tests remain opt-in and credential-gated. Research smoke tests should be enabled separately because they can be slow and expensive.

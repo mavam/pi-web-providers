@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2023",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -8,5 +8,26 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": [
+    "src/index.ts",
+    "src/cli.ts",
+    "src/pi.ts",
+    "src/web-mux/**/*.ts",
+    "src/providers/**/*.ts",
+    "src/types.ts",
+    "src/contents.ts",
+    "src/config-values.ts",
+    "src/execution-policy.ts",
+    "src/execution-policy-defaults.ts",
+    "src/provider-diagnostics.ts",
+    "src/provider-runtime.ts",
+    "src/options.ts",
+    "test-new/**/*.ts",
+    "test/*-provider.test.ts",
+    "test/contents-providers.test.ts",
+    "test/execution-policy.test.ts",
+    "test/provider-diagnostics.test.ts",
+    "test/provider-runtime.test.ts",
+    "test/research-lifecycle-providers.test.ts"
+  ]
 }

@@ -3,6 +3,7 @@ import type {
   ProviderCapabilityStatus,
   ProviderCapabilityStatusOptions,
 } from "../types.js";
+import type { CredentialSource } from "../web-mux/public-types.js";
 
 export function trimSnippet(
   input: string | undefined,
@@ -48,7 +49,7 @@ export function formatJson(value: unknown): string {
 }
 
 export function getApiKeyStatus(
-  apiKeyReference: string | undefined,
+  apiKeyReference: string | CredentialSource | undefined,
   options: ProviderCapabilityStatusOptions = {},
 ): ProviderCapabilityStatus {
   if (!apiKeyReference) {
@@ -69,8 +70,10 @@ export function getApiKeyStatus(
   }
 }
 
-export function isSecretReference(reference: string): boolean {
-  return reference.startsWith("!") || /^[A-Z][A-Z0-9_]*$/.test(reference);
+export function isSecretReference(
+  reference: string | CredentialSource,
+): boolean {
+  return typeof reference === "object" || /^[A-Z][A-Z0-9_]*$/.test(reference);
 }
 
 export function formatConfigValueError(error: unknown): string {

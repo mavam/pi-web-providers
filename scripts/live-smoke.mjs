@@ -1,341 +1,93 @@
 #!/usr/bin/env node
 
-import process from "node:process";
-import { __test__ } from "../dist/index.js";
+import { createWebMux, loadConfig, WebMuxError } from "../dist/index.js";
 
-const PROVIDERS_BY_TOOL = {
-  search: [
-    "claude",
-    "codex",
-    "custom",
-    "exa",
-    "gemini",
-    "linkup",
-    "perplexity",
-    "parallel",
-    "serper",
-    "valyu",
-  ],
-  contents: ["custom", "exa", "linkup", "parallel", "valyu"],
-  answer: ["claude", "custom", "exa", "gemini", "perplexity", "valyu"],
-  research: ["custom", "exa", "gemini", "linkup", "perplexity", "valyu"],
-};
+const args = process.argv.slice(2);
+const providerFilter = readOption(args, "--provider");
+const capabilityFilter =
+  readOption(args, "--capability") ?? readOption(args, "--tool");
+const includeResearch = args.includes("--include-research");
 
-const PROBE_INPUTS = {
-  search: {
-    maxResults: 3,
-    options: { requestTimeoutMs: 30_000 },
-    timeoutMs: 45_000,
-    query: "OpenAI API",
-  },
-  contents: {
-    options: { requestTimeoutMs: 45_000 },
-    timeoutMs: 60_000,
-    urlsByProvider: {
-      custom: ["https://platform.openai.com/docs/overview"],
-      exa: ["https://platform.openai.com/docs/overview"],
-      linkup: [
-        "https://docs.linkup.so/pages/documentation/endpoints/research/overview",
-      ],
-      parallel: ["https://openai.com/api/"],
-      valyu: ["https://github.com/openai/openai-python"],
-    },
-  },
-  answer: {
-    options: { requestTimeoutMs: 60_000 },
-    timeoutMs: 90_000,
-    query: "What is the OpenAI API?",
-  },
-  research: {
-    input:
-      "Write a short web-grounded report explaining what the OpenAI API is, with cited sources.",
-    options: {
-      timeoutMs: 180_000,
-      pollIntervalMs: 3_000,
-      maxConsecutivePollErrors: 2,
-    },
-    optionsByProvider: {
-      linkup: {
-        mode: "answer",
-        reasoningDepth: "S",
-      },
-    },
-    timeoutMs: 360_000,
-  },
-};
+if (args.includes("--help") || args.includes("-h")) {
+  console.log(
+    "Usage: npm run smoke:live -- [--provider <id>] [--capability <name>] [--include-research]",
+  );
+  process.exit(0);
+}
 
-const argv = process.argv.slice(2);
-const filters = parseArgs(argv);
-const config = await __test__.loadConfig();
-const cwd = process.cwd();
-const probes = buildProbes(filters);
+const config = await loadConfig();
+const client = createWebMux({ config });
 const outcomes = [];
 
-for (const probe of probes) {
-  const status = __test__.getProviderStatusForTool(
-    config,
-    cwd,
-    probe.providerId,
-    probe.capability,
-  );
-  if (!isProviderStatusAvailable(status)) {
-    const outcome = {
-      probe,
-      status: "skipped",
-      message: formatProviderStatus(status),
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-    continue;
-  }
+for (const provider of client.listProviders()) {
+  if (providerFilter && provider.id !== providerFilter) continue;
+  for (const capability of provider.capabilities) {
+    if (capabilityFilter && capability !== capabilityFilter) continue;
+    if (capability === "research" && !includeResearch) continue;
 
-  try {
-    const signal = AbortSignal.timeout(probe.timeoutMs);
-    const result = await Promise.race([
-      __test__.executeRawProviderRequest({
-        capability: probe.capability,
-        config,
-        explicitProvider: probe.providerId,
-        ctx: { cwd },
-        signal,
-        options: probe.options,
-        ...(probe.capability === "search"
-          ? {
-              maxResults: probe.maxResults,
-              query: probe.query,
-            }
-          : probe.capability === "contents"
-            ? {
-                urls: probe.urls,
-              }
-            : probe.capability === "answer"
-              ? {
-                  query: probe.query,
-                }
-              : {
-                  input: probe.input,
-                }),
-      }),
-      createProbeTimeout(probe),
-    ]);
-
-    const message = summarizeProbeResult(probe, result);
-    const outcome = {
-      probe,
-      status: "passed",
-      message,
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-  } catch (error) {
-    const outcome = {
-      probe,
-      status: "failed",
-      message: formatError(error),
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-  }
-}
-
-printSummary(outcomes);
-process.exit(outcomes.some((outcome) => outcome.status === "failed") ? 1 : 0);
-
-function parseArgs(args) {
-  const filters = {
-    includeResearch: false,
-    providerId: undefined,
-    capability: undefined,
-  };
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--include-research") {
-      filters.includeResearch = true;
-      continue;
-    }
-    if (arg === "--provider") {
-      filters.providerId = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg === "--tool") {
-      filters.capability = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg === "--help" || arg === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-    throw new Error(`Unknown argument: ${arg}`);
-  }
-
-  return filters;
-}
-
-function isProviderStatusAvailable(status) {
-  return status.state === "ready" || status.state === "deferred_secret";
-}
-
-function formatProviderStatus(status) {
-  if (status.detail) {
-    return `${status.state}: ${status.detail}`;
-  }
-  return status.state;
-}
-
-function printHelp() {
-  console.log(
-    [
-      "Usage: npm run smoke:live -- [--provider <id>] [--tool <capability>] [--include-research]",
-      "",
-      "Options:",
-      "  --provider <id>        Run probes only for a single provider id",
-      "  --tool <capability>    Run probes only for one tool: search|contents|answer|research",
-      "  --include-research     Include research probes (slower and higher cost)",
-    ].join("\n"),
-  );
-}
-
-function buildProbes(filters) {
-  const capabilities = filters.capability
-    ? [filters.capability]
-    : Object.keys(PROVIDERS_BY_TOOL).filter(
-        (capability) =>
-          capability !== "research" || filters.includeResearch === true,
+    try {
+      const signal = AbortSignal.timeout(
+        capability === "research" ? 360_000 : 90_000,
       );
+      const result =
+        capability === "search"
+          ? await client.search({
+              provider: provider.id,
+              queries: ["OpenAI API"],
+              maxResults: 3,
+              signal,
+            })
+          : capability === "contents"
+            ? await client.contents({
+                provider: provider.id,
+                urls: ["https://openai.com/api/"],
+                signal,
+              })
+            : capability === "answer"
+              ? await client.answer({
+                  provider: provider.id,
+                  queries: ["What is the OpenAI API?"],
+                  signal,
+                })
+              : await client.research({
+                  provider: provider.id,
+                  input:
+                    "Write a concise web-grounded explanation of the OpenAI API with cited sources.",
+                  signal,
+                });
 
-  return capabilities.flatMap((capability) =>
-    PROVIDERS_BY_TOOL[capability]
-      .filter(
-        (providerId) =>
-          filters.providerId === undefined || providerId === filters.providerId,
-      )
-      .map((providerId) => buildProbe(capability, providerId)),
-  );
-}
-
-function buildProbe(capability, providerId) {
-  if (capability === "search") {
-    return {
-      capability,
-      providerId,
-      query: PROBE_INPUTS.search.query,
-      maxResults: PROBE_INPUTS.search.maxResults,
-      options: PROBE_INPUTS.search.options,
-      timeoutMs: PROBE_INPUTS.search.timeoutMs,
-    };
-  }
-
-  if (capability === "contents") {
-    return {
-      capability,
-      providerId,
-      urls: PROBE_INPUTS.contents.urlsByProvider[providerId],
-      options: PROBE_INPUTS.contents.options,
-      timeoutMs: PROBE_INPUTS.contents.timeoutMs,
-    };
-  }
-
-  if (capability === "answer") {
-    return {
-      capability,
-      providerId,
-      query: PROBE_INPUTS.answer.query,
-      options: PROBE_INPUTS.answer.options,
-      timeoutMs: PROBE_INPUTS.answer.timeoutMs,
-    };
-  }
-
-  return {
-    capability,
-    providerId,
-    input: PROBE_INPUTS.research.input,
-    options: {
-      ...PROBE_INPUTS.research.options,
-      ...(PROBE_INPUTS.research.optionsByProvider[providerId] ?? {}),
-    },
-    timeoutMs: PROBE_INPUTS.research.timeoutMs,
-  };
-}
-
-function createProbeTimeout(probe) {
-  return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
-      reject(
-        new Error(`probe timed out after ${formatDuration(probe.timeoutMs)}`),
-      );
-    }, probe.timeoutMs);
-    timer.unref?.();
-  });
-}
-
-function formatDuration(durationMs) {
-  const totalSeconds = Math.ceil(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) {
-    return `${seconds}s`;
-  }
-  if (seconds === 0) {
-    return `${minutes}m`;
-  }
-  return `${minutes}m ${seconds}s`;
-}
-
-function summarizeProbeResult(probe, result) {
-  if (probe.capability === "search") {
-    return `${result.results.length} result(s)`;
-  }
-
-  if (probe.capability === "contents") {
-    const successes = result.answers.filter(
-      (answer) =>
-        typeof answer.content === "string" || answer.summary !== undefined,
-    );
-    if (successes.length === 0) {
-      throw new Error(
-        result.answers[0]?.error ||
-          "contents probe returned no readable content",
-      );
+      if (result.status === "partial") {
+        throw new Error(
+          result.results.find((entry) => !entry.ok)?.error?.message ??
+            "partial result",
+        );
+      }
+      outcomes.push("passed");
+      console.log(`PASS ${provider.id}/${capability}`);
+    } catch (error) {
+      if (
+        error instanceof WebMuxError &&
+        error.code === "PROVIDER_UNAVAILABLE"
+      ) {
+        outcomes.push("skipped");
+        console.log(`SKIP ${provider.id}/${capability}: ${error.message}`);
+      } else {
+        outcomes.push("failed");
+        console.error(
+          `FAIL ${provider.id}/${capability}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
-    return `${successes.length}/${result.answers.length} URL(s) returned content`;
   }
-
-  const text = result.text?.trim() ?? "";
-  if (!text) {
-    throw new Error("probe returned empty text");
-  }
-
-  return `${text.length} char(s)`;
 }
 
-function formatError(error) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
+const passed = outcomes.filter((value) => value === "passed").length;
+const skipped = outcomes.filter((value) => value === "skipped").length;
+const failed = outcomes.filter((value) => value === "failed").length;
+console.log(`\n${passed} passed, ${skipped} skipped, ${failed} failed`);
+process.exitCode = failed > 0 ? 1 : 0;
 
-function printOutcome(outcome) {
-  const label = `${outcome.probe.providerId}/${outcome.probe.capability}`;
-  console.log(
-    `${outcome.status.toUpperCase().padEnd(7)} ${label.padEnd(18)} ${outcome.message}`,
-  );
-}
-
-function printSummary(outcomes) {
-  const counts = outcomes.reduce(
-    (summary, outcome) => {
-      summary[outcome.status] += 1;
-      return summary;
-    },
-    { passed: 0, failed: 0, skipped: 0 },
-  );
-
-  console.log("");
-  console.log(
-    `Summary: ${counts.passed} passed, ${counts.failed} failed, ${counts.skipped} skipped`,
-  );
+function readOption(argv, name) {
+  const index = argv.indexOf(name);
+  return index < 0 ? undefined : argv[index + 1];
 }

@@ -1,7 +1,7 @@
 {
-  "name": "pi-web-providers",
-  "version": "3.5.1",
-  "description": "Configurable web access extension for pi with per-tool provider routing and explicit provider option schemas for search, contents, quick grounded answers, and research.",
+  "name": "web-mux",
+  "version": "0.1.0",
+  "description": "Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, web CLI, and pi extension.",
   "type": "module",
   "files": [
     "dist",
@@ -11,6 +11,9 @@
     "examples"
   ],
   "keywords": [
+    "web-mux",
+    "web-cli",
+    "typescript-library",
     "pi-package",
     "pi-extension",
     "coding-agent",
@@ -40,27 +43,44 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mavam/pi-web-providers.git"
+    "url": "git+https://github.com/mavam/web-mux.git"
   },
   "engines": {
-    "node": ">=24.0.0"
+    "node": ">=22.0.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "pi": {
     "extensions": [
-      "./dist/index.js"
+      "./dist/pi.js"
     ]
   },
+  "bin": {
+    "web": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./pi": {
+      "types": "./dist/pi.d.ts",
+      "import": "./dist/pi.js"
+    },
+    "./config.schema.json": "./dist/config.schema.json"
+  },
   "scripts": {
-    "build": "rm -rf dist && esbuild src/index.ts --bundle --format=esm --platform=node --outfile=dist/index.js --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-ai --external:@earendil-works/pi-tui --external:typebox --external:@anthropic-ai/claude-agent-sdk --external:@google/genai --external:@mendable/firecrawl-js --external:@openai/codex-sdk --external:@perplexity-ai/perplexity_ai --external:@tavily/core --external:cloudflare --external:exa-js --external:linkup-sdk --external:openai --external:parallel-web --external:valyu-js",
+    "build": "rm -rf dist && esbuild src/index.ts src/cli.ts src/pi.ts --bundle --splitting --format=esm --platform=node --target=node22 --packages=external --outdir=dist && tsc --project tsconfig.build.json && cp src/config.schema.json dist/config.schema.json && chmod +x dist/cli.js",
     "prepare": "npm run build",
     "prepack": "npm run build",
     "check": "tsc --noEmit",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "smoke:live": "npm run build && node scripts/live-smoke.mjs",
+    "smoke:package": "node scripts/package-smoke.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -76,6 +96,7 @@
     "linkup-sdk": "^3.2.8",
     "openai": "^6.48.0",
     "parallel-web": "^1.1.0",
+    "typebox": "^1.3.6",
     "valyu-js": "^2.9.2"
   },
   "devDependencies": {
@@ -85,13 +106,19 @@
     "@earendil-works/pi-tui": "^0.80.10",
     "@types/node": "^26.1.1",
     "esbuild": "^0.28.1",
-    "typebox": "^1.3.6",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*",
-    "typebox": "*"
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
   }
 }

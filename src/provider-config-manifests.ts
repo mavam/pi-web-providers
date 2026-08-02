@@ -7,6 +7,7 @@ import type {
   Codex,
   CodexOptions,
   Custom,
+  CustomCommandConfig,
   CustomOptions,
   Exa,
   ExaOptions,
@@ -1011,9 +1012,7 @@ function ensureCustomOptions(config: Custom): CustomOptions {
   return config.options;
 }
 
-function formatCustomEnv(
-  env: Record<string, string> | undefined,
-): string | undefined {
+function formatCustomEnv(env: CustomCommandConfig["env"]): string | undefined {
   return env ? JSON.stringify(env) : undefined;
 }
 

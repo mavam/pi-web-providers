@@ -60,8 +60,7 @@ vi.mock("openai", () => {
   };
 });
 
-import { __test__ } from "../src/index.js";
-import type { WebProviders } from "../src/types.js";
+import { createWebMux, type WebMuxConfig } from "../src/index.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -96,11 +95,11 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await __test__.executeSearchTool({
+    const result = await createWebMux({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               search: {
                 model: "gpt-4.1",
@@ -108,11 +107,9 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebMuxConfig,
+    }).search({
+      provider: "openai",
       options: {
         instructions: "Prefer official sources.",
         allowedDomains: ["platform.openai.com"],
@@ -187,16 +184,10 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).not.toContain('## "openai deep research"');
-    expect(result.content[0]?.text).toContain(
-      "1. [OpenAI Deep Research docs](<https://platform.openai.com/docs/guides/deep-research>)",
-    );
-    expect(result.details).toEqual({
-      tool: "web_search",
-      provider: "openai",
-      queryCount: 1,
-      failedQueryCount: 0,
-      resultCount: 1,
+    expect(result.status).toBe("ok");
+    expect(result.results[0].value?.results[0]).toMatchObject({
+      title: "OpenAI Deep Research docs",
+      url: "https://platform.openai.com/docs/guides/deep-research",
     });
   });
 
@@ -233,12 +224,11 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await __test__.executeProviderTool({
-      capability: "answer",
+    const result = await createWebMux({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               answer: {
                 model: "gpt-4.1",
@@ -246,15 +236,13 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebMuxConfig,
+    }).answer({
+      provider: "openai",
       options: {
         instructions: "Keep the answer concise and prefer primary sources.",
       },
-      query: "What is the latest OpenAI deep research API?",
+      queries: ["What is the latest OpenAI deep research API?"],
     });
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
@@ -272,7 +260,7 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toBe(
+    expect(result.results[0].value?.text).toBe(
       "OpenAI grounded answer\n\nSources:\n1. Answer Source\n   https://example.com/answer",
     );
   });
@@ -292,23 +280,21 @@ describe("async research providers", () => {
         },
       });
 
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebMux({
       config: {
         providers: {
           exa: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "exa",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebMuxConfig,
+    }).research({
+      provider: "exa",
       options: undefined,
       input: "Investigate Exa research polling",
     });
 
+    await vi.dynamicImportSettled();
     await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
@@ -318,7 +304,7 @@ describe("async research providers", () => {
     expect(exaResearchGetMock).toHaveBeenNthCalledWith(1, "exa-job-1", {
       events: false,
     });
-    expect(result.content[0]?.text).toBe("Exa research result");
+    expect(result.results[0].value?.text).toBe("Exa research result");
   });
 
   it("uses OpenAI background responses polling and preserves citations", async () => {
@@ -359,12 +345,11 @@ describe("async research providers", () => {
         incomplete_details: null,
       });
 
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebMux({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               research: {
                 model: "o3-deep-research",
@@ -372,11 +357,9 @@ describe("async research providers", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebMuxConfig,
+    }).research({
+      provider: "openai",
       options: {
         instructions: "Prefer primary sources.",
         max_tool_calls: 12,
@@ -384,6 +367,7 @@ describe("async research providers", () => {
       input: "Investigate OpenAI deep research polling",
     });
 
+    await vi.dynamicImportSettled();
     await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
@@ -413,7 +397,7 @@ describe("async research providers", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toBe(
+    expect(result.results[0].value?.text).toBe(
       "OpenAI research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });
@@ -442,23 +426,21 @@ describe("async research providers", () => {
         ],
       });
 
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebMux({
       config: {
         providers: {
           valyu: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "valyu",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebMuxConfig,
+    }).research({
+      provider: "valyu",
       options: undefined,
       input: "Investigate Valyu research polling",
     });
 
+    await vi.dynamicImportSettled();
     await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
@@ -469,7 +451,7 @@ describe("async research providers", () => {
       1,
       "valyu-job-1",
     );
-    expect(result.content[0]?.text).toBe(
+    expect(result.results[0].value?.text).toBe(
       "Valyu research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });

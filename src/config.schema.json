@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
+  "title": "web-mux configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "search": { "$ref": "#/$defs/searchDefault" },
+        "contents": { "$ref": "#/$defs/capabilityDefault" },
+        "answer": { "$ref": "#/$defs/capabilityDefault" },
+        "research": { "$ref": "#/$defs/capabilityDefault" }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": { "type": "integer", "minimum": 1 },
+        "retries": { "type": "integer", "minimum": 0 },
+        "retryDelayMs": { "type": "integer", "minimum": 0 },
+        "researchTimeoutMs": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brave": { "$ref": "#/$defs/standardProvider" },
+        "claude": { "$ref": "#/$defs/claudeProvider" },
+        "cloudflare": { "$ref": "#/$defs/cloudflareProvider" },
+        "codex": { "$ref": "#/$defs/codexProvider" },
+        "custom": { "$ref": "#/$defs/customProvider" },
+        "exa": { "$ref": "#/$defs/standardProvider" },
+        "firecrawl": { "$ref": "#/$defs/standardProvider" },
+        "gemini": { "$ref": "#/$defs/geminiProvider" },
+        "linkup": { "$ref": "#/$defs/standardProvider" },
+        "ollama": { "$ref": "#/$defs/standardProvider" },
+        "openai": { "$ref": "#/$defs/standardProvider" },
+        "parallel": { "$ref": "#/$defs/standardProvider" },
+        "perplexity": { "$ref": "#/$defs/standardProvider" },
+        "serper": { "$ref": "#/$defs/standardProvider" },
+        "tavily": { "$ref": "#/$defs/standardProvider" },
+        "valyu": { "$ref": "#/$defs/standardProvider" }
+      }
+    }
+  },
+  "$defs": {
+    "providerId": {
+      "enum": [
+        "brave",
+        "claude",
+        "cloudflare",
+        "codex",
+        "custom",
+        "exa",
+        "firecrawl",
+        "gemini",
+        "linkup",
+        "ollama",
+        "openai",
+        "parallel",
+        "perplexity",
+        "serper",
+        "tavily",
+        "valyu"
+      ]
+    },
+    "jsonObject": { "type": "object" },
+    "credentialSource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["env"],
+          "properties": { "env": { "type": "string", "minLength": 1 } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["command"],
+          "properties": {
+            "command": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value"],
+          "properties": { "value": { "type": "string", "minLength": 1 } }
+        }
+      ]
+    },
+    "credentialMap": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/credentialSource" }
+    },
+    "capabilityOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "search": { "$ref": "#/$defs/jsonObject" },
+        "contents": { "$ref": "#/$defs/jsonObject" },
+        "answer": { "$ref": "#/$defs/jsonObject" },
+        "research": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "capabilityDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerId" },
+        "options": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "searchDefault": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "$ref": "#/$defs/providerId" },
+        "options": { "$ref": "#/$defs/jsonObject" },
+        "maxResults": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "standardProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials": { "$ref": "#/$defs/credentialMap" },
+        "baseUrl": { "type": "string", "minLength": 1 },
+        "options": { "$ref": "#/$defs/capabilityOptions" }
+      }
+    },
+    "claudeProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "options": { "$ref": "#/$defs/capabilityOptions" },
+        "pathToClaudeCodeExecutable": { "type": "string", "minLength": 1 }
+      }
+    },
+    "cloudflareProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials": { "$ref": "#/$defs/credentialMap" },
+        "options": { "$ref": "#/$defs/capabilityOptions" },
+        "accountId": { "$ref": "#/$defs/credentialSource" }
+      }
+    },
+    "codexProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials": { "$ref": "#/$defs/credentialMap" },
+        "baseUrl": { "type": "string", "minLength": 1 },
+        "options": { "$ref": "#/$defs/capabilityOptions" },
+        "codexPath": { "type": "string", "minLength": 1 },
+        "env": { "$ref": "#/$defs/credentialMap" },
+        "config": { "$ref": "#/$defs/jsonObject" }
+      }
+    },
+    "customCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "cwd": { "type": "string", "minLength": 1 },
+        "env": { "$ref": "#/$defs/credentialMap" }
+      }
+    },
+    "customProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "options": { "$ref": "#/$defs/capabilityOptions" },
+        "commands": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "search": { "$ref": "#/$defs/customCommand" },
+            "contents": { "$ref": "#/$defs/customCommand" },
+            "answer": { "$ref": "#/$defs/customCommand" },
+            "research": { "$ref": "#/$defs/customCommand" }
+          }
+        }
+      }
+    },
+    "geminiProvider": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "credentials": { "$ref": "#/$defs/credentialMap" },
+        "options": { "$ref": "#/$defs/capabilityOptions" }
+      }
+    }
+  }
+}
