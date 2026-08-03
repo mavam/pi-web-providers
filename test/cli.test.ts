@@ -165,6 +165,26 @@ describe("web CLI", () => {
     expect(result.out).toContain("✘︎");
   });
 
+  it("keeps provider status cells icon-only", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "web-mux-providers-"));
+    const path = join(directory, "config.json");
+    await writeFile(path, "{}");
+    const result = await invoke(
+      ["providers", "--config", path],
+      "",
+      undefined,
+      { NO_COLOR: "1" },
+    );
+    expect(result.code).toBe(0);
+    const [matrix] = result.out.split("\n\n");
+    expect(result.out).toMatch(/^brave\s+✘︎\s+—\s+✘︎\s+✘︎$/m);
+    expect(result.out).toMatch(/^claude\s+✔︎\s+—\s+✔︎\s+—$/m);
+    expect(matrix).not.toMatch(/\b(?:ready|local|setup)\b/);
+    expect(result.out).toContain(
+      "Legend: ✔︎ available · ✘︎ setup required · — unsupported",
+    );
+  });
+
   it("reports an unknown first-pass provider as a usage error", async () => {
     const result = await invoke(["search", "--provider", "bogus", "hello"]);
     expect(result.code).toBe(2);

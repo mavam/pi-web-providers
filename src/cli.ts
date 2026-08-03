@@ -821,8 +821,13 @@ async function providersCommand(
   const coloredHeaders = headers.map((header) =>
     theme.out.bold(theme.out.cyan(header)),
   );
+  const legend = [
+    `${theme.out.green(SUCCESS_MARK)} available`,
+    `${theme.out.red(FAILURE_MARK)} setup required`,
+    `${theme.out.dim("—")} unsupported`,
+  ].join(` ${theme.out.dim("·")} `);
   io.stdout.write(
-    `${[coloredHeaders, ...rows].map((row) => row.map((cell, index) => padAnsi(cell, widths[index])).join("  ")).join("\n")}\n`,
+    `${[coloredHeaders, ...rows].map((row) => row.map((cell, index) => (index === row.length - 1 ? cell : padAnsi(cell, widths[index]))).join("  ")).join("\n")}\n\n${theme.out.dim("Legend:")} ${legend}\n`,
   );
   return 0;
 }
@@ -859,9 +864,9 @@ function formatProviderStatus(
   status: "ready" | "setup" | "local",
   colors: Colors,
 ): string {
-  if (status === "setup") return colors.red(`${FAILURE_MARK} setup`);
-  if (status === "local") return colors.cyan(`${SUCCESS_MARK} local`);
-  return colors.green(`${SUCCESS_MARK} ready`);
+  if (status === "setup") return colors.red(FAILURE_MARK);
+  if (status === "local") return colors.cyan(SUCCESS_MARK);
+  return colors.green(SUCCESS_MARK);
 }
 
 async function configCommand(
@@ -1208,7 +1213,8 @@ function streamColumns(stream: NodeJS.WritableStream): number {
 }
 
 function visibleWidth(value: string): number {
-  return [...stripVTControlCharacters(value)].length;
+  return [...stripVTControlCharacters(value).replace(/[\uFE0E\uFE0F]/g, "")]
+    .length;
 }
 
 function padAnsi(value: string, width: number): string {
