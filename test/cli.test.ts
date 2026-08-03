@@ -70,6 +70,48 @@ function forcedColorEnv(): NodeJS.ProcessEnv {
 }
 
 describe("web CLI", () => {
+  it("provides contextual examples at every command level", async () => {
+    const root = await invoke(["--help"]);
+    expect(root.code).toBe(0);
+    expect(root.out).toContain(
+      "Unified web access through interchangeable providers",
+    );
+    expect(root.out).toContain("Examples:");
+    expect(root.out).toContain(
+      'web search --provider brave "Node.js 22 release notes"',
+    );
+
+    const search = await invoke(["search", "--provider", "openai", "--help"]);
+    expect(search.code).toBe(0);
+    expect(search.out).toContain(
+      "Submit one or more independent queries to a web-search provider",
+    );
+    expect(search.out).toContain(
+      'web search --provider openai "TypeBox validation"',
+    );
+
+    const providers = await invoke(["providers", "--help"]);
+    expect(providers.code).toBe(0);
+    expect(providers.out).toContain(
+      "This command does not make provider requests",
+    );
+    expect(providers.out).toContain("web providers openai");
+
+    const config = await invoke(["config", "--help"]);
+    expect(config.code).toBe(0);
+    expect(config.out).toContain("WEB_MUX_CONFIG");
+    expect(config.out).toContain("web config validate");
+
+    const init = await invoke(["config", "init", "--help"]);
+    expect(init.code).toBe(0);
+    expect(init.out.replace(/\s+/g, " ")).toContain(
+      "no credentials or provider defaults are invented",
+    );
+    expect(init.out).toContain(
+      "web config init --config ./web-mux.json --force",
+    );
+  });
+
   it("uses Commander help with provider-specific option groups", async () => {
     const result = await invoke(["search", "--provider", "openai", "--help"]);
     expect(result.code).toBe(0);

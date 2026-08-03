@@ -115,6 +115,13 @@ interface CapabilityPreparation {
   flags: OptionFlag[];
 }
 
+interface HelpExample {
+  description: string;
+  command: string;
+}
+
+type ConfigAction = "path" | "init" | "show" | "edit" | "validate";
+
 export interface OptionFlag {
   flag: string;
   negativeFlag?: string;
@@ -301,12 +308,17 @@ function createProgram(
   program
     .name("web")
     .description(
-      "Search, extract, answer, and research through interchangeable web providers.",
+      "Unified web access through interchangeable providers. Search the public web, extract readable page contents, answer questions with web grounding, or run long-form research. Select a provider per invocation with --provider or configure an explicit default for each capability.",
     )
-    .version(PACKAGE_VERSION, "--version", "Show the version")
-    .addOption(new Option("--no-color", "Disable colored output"))
-    .helpOption("-h, --help", "Show help")
-    .helpCommand("help [command]", "Show help for a command")
+    .version(PACKAGE_VERSION, "--version", "Print the web-mux version and exit")
+    .addOption(
+      new Option(
+        "--no-color",
+        "Disable ANSI colors in human-readable output and help",
+      ),
+    )
+    .helpOption("-h, --help", "Display help for this command")
+    .helpCommand("help [command]", "Display help for a command")
     .showSuggestionAfterError(true)
     .exitOverride()
     .configureOutput({
@@ -337,6 +349,36 @@ function createProgram(
       styleOptionTerm: (value) => theme.out.yellow(value),
       styleArgumentTerm: (value) => theme.out.magenta(value),
     });
+
+  program.addHelpText(
+    "after",
+    () =>
+      `\n${formatExamples(theme.out, [
+        {
+          description: "Search the web with an explicit provider:",
+          command: 'web search --provider brave "Node.js 22 release notes"',
+        },
+        {
+          description: "Extract readable content from several pages:",
+          command:
+            "web contents --provider firecrawl https://example.com/a https://example.com/b",
+        },
+        {
+          description: "Return a web-grounded answer as normalized JSON:",
+          command:
+            'web answer --provider openai --output json "What changed in ECMAScript 2026?"',
+        },
+        {
+          description: "Run a long-form research brief in the foreground:",
+          command:
+            'web research --provider gemini "Compare Node.js and Bun for backend services"',
+        },
+        {
+          description: "Discover providers or create the configuration file:",
+          command: "web providers\nweb config init",
+        },
+      ])}`,
+  );
 
   for (const capability of [
     "search",
@@ -374,34 +416,47 @@ function addCapabilityCommand(
 ): void {
   const definitions = {
     search: {
-      description: "Search the public web",
+      summary: "Search the public web",
+      description:
+        "Submit one or more independent queries to a web-search provider. Results preserve input order and include normalized titles, URLs, snippets, and provider metadata. Search accepts at most ten inputs; the positional query is processed before repeated --query values.",
       usage: "[query|-] [options]",
       argument: "[query]",
-      argumentDescription: "Query or '-' for stdin",
+      argumentDescription:
+        "First search query, or '-' to read one query from stdin",
     },
     contents: {
-      description: "Fetch and extract URL contents",
+      summary: "Fetch and extract URL contents",
+      description:
+        "Fetch one or more URLs and return normalized, readable page contents through a content-extraction provider. Input order is preserved, partial batches still emit successful pages, and any per-URL failure produces a nonzero exit status.",
       usage: "<url...|-> [options]",
       argument: "[urls...]",
-      argumentDescription: "URLs or '-' for newline-separated stdin",
+      argumentDescription:
+        "HTTP(S) URLs, or '-' alone to read newline-separated URLs from stdin",
     },
     answer: {
-      description: "Produce web-grounded answers",
+      summary: "Answer questions using web sources",
+      description:
+        "Ask one or more independent questions and receive provider-generated answers grounded in current web sources. Answers preserve input order and may include citations or source metadata. At most ten inputs are accepted; the positional question comes before repeated --query values.",
       usage: "[question|-] [options]",
       argument: "[question]",
-      argumentDescription: "Question or '-' for stdin",
+      argumentDescription:
+        "First question, or '-' to read one question from stdin",
     },
     research: {
-      description: "Run foreground web research",
+      summary: "Run long-form web research",
+      description:
+        "Run one long-form research brief synchronously in the foreground. Progress events go to stderr and the final report goes to stdout, so output can be redirected safely. Press Ctrl-C to cancel the provider request through AbortSignal.",
       usage: "<brief|-> [options]",
       argument: "[brief]",
-      argumentDescription: "Research brief or '-' for stdin",
+      argumentDescription:
+        "Research brief, or '-' to read the complete brief from stdin",
     },
   } as const;
   const definition = definitions[capability];
   const command = program
     .command(capability)
     .description(definition.description)
+    .summary(definition.summary)
     .usage(definition.usage)
     .argument(definition.argument, definition.argumentDescription)
     .allowExcessArguments(false);
@@ -412,10 +467,10 @@ function addCapabilityCommand(
   for (const flag of active?.flags ?? [])
     addDynamicOption(command, flag, active?.provider);
   command.addHelpText("after", () => {
-    if (active?.provider) {
-      return `\n${theme.out.dim("Provider:")} ${theme.out.bold(PROVIDERS_BY_ID[active.provider].label)} ${theme.out.dim(`(${active.provider})`)}`;
-    }
-    return `\n${theme.out.yellow("No provider selected.")} ${theme.out.dim("Pass --provider or configure a capability default.")}`;
+    const providerStatus = active?.provider
+      ? `${theme.out.dim("Provider:")} ${theme.out.bold(PROVIDERS_BY_ID[active.provider].label)} ${theme.out.dim(`(${active.provider})`)}`
+      : `${theme.out.yellow("No provider selected.")} ${theme.out.dim("Pass --provider or configure a capability default. Provider-specific flags appear after selection.")}`;
+    return `\n${providerStatus}\n\n${formatExamples(theme.out, capabilityExamples(capability, active?.provider))}`;
   });
 
   command.action(async function (this: Command) {
@@ -432,59 +487,82 @@ function addCommonOptions(command: Command, capability: Capability): void {
   const common = "Common options";
   command
     .addOption(
-      new Option("--provider <id>", "Select a provider")
+      new Option(
+        "--provider <id>",
+        "Use this provider; overrides the configured capability default",
+      )
         .argParser(parseProviderId)
         .helpGroup(common),
     )
     .addOption(
       new Option(
         "--config <path>",
-        "Use an explicit configuration file",
+        "Read this configuration file instead of the resolved default",
       ).helpGroup(common),
     )
     .addOption(
-      new Option("--cwd <path>", "Set the execution directory").helpGroup(
-        common,
-      ),
+      new Option(
+        "--cwd <path>",
+        "Resolve relative files and run custom providers from this directory",
+      ).helpGroup(common),
     )
     .addOption(
-      new Option("--timeout <ms>", "Override the request timeout")
+      new Option(
+        "--timeout <ms>",
+        "Set the capability timeout in milliseconds for this invocation",
+      )
         .argParser((value) => parseInteger(value, "--timeout", 1))
         .helpGroup(common),
     )
     .addOption(
-      new Option("--retries <n>", "Override the retry count")
+      new Option(
+        "--retries <n>",
+        "Retry retryable provider failures this many times",
+      )
         .argParser((value) => parseInteger(value, "--retries", 0))
         .helpGroup(common),
     )
     .addOption(
-      new Option("--retry-delay <ms>", "Override the initial retry delay")
+      new Option(
+        "--retry-delay <ms>",
+        "Set the initial retry backoff in milliseconds",
+      )
         .argParser((value) => parseInteger(value, "--retry-delay", 0))
         .helpGroup(common),
     )
     .addOption(
-      new Option("--output <format>", "Select text or normalized JSON output")
+      new Option(
+        "--output <format>",
+        "Write human-readable text or one normalized JSON document",
+      )
         .choices(["text", "json"])
         .default("text")
         .helpGroup(common),
     )
     .addOption(
-      new Option("--raw", "Emit unstable provider-native payloads").helpGroup(
-        common,
-      ),
+      new Option(
+        "--raw",
+        "Write unstable provider-native payloads; incompatible with --output json",
+      ).helpGroup(common),
     )
     .addOption(
       new Option(
         "--options-json <json|@file>",
-        "Supply options that cannot be expressed as flags",
+        "Merge provider options from inline JSON or @file before typed flags",
       ).helpGroup(common),
     )
     .addOption(
-      new Option("--quiet", "Suppress progress output").helpGroup(common),
+      new Option(
+        "--quiet",
+        "Suppress provider progress events written to stderr",
+      ).helpGroup(common),
     );
   if (capability === "search" || capability === "answer") {
     command.addOption(
-      new Option("--query <input>", "Add another input")
+      new Option(
+        "--query <input>",
+        "Append another input after the positional value; repeatable, ten inputs total",
+      )
         .argParser((value, previous: string[] | undefined) => [
           ...(previous ?? []),
           value,
@@ -494,7 +572,10 @@ function addCommonOptions(command: Command, capability: Capability): void {
   }
   if (capability === "search") {
     command.addOption(
-      new Option("--max-results <n>", "Maximum results per query")
+      new Option(
+        "--max-results <n>",
+        "Limit normalized search results returned for each query",
+      )
         .argParser((value) => parseInteger(value, "--max-results", 1))
         .helpGroup("Input options"),
     );
@@ -536,6 +617,92 @@ function addDynamicOption(
   }
   option.helpGroup(group);
   command.addOption(option);
+}
+
+function capabilityExamples(
+  capability: Capability,
+  selectedProvider: ProviderId | undefined,
+): HelpExample[] {
+  const provider =
+    selectedProvider ??
+    (
+      {
+        search: "brave",
+        contents: "firecrawl",
+        answer: "openai",
+        research: "gemini",
+      } satisfies Record<Capability, ProviderId>
+    )[capability];
+  return {
+    search: [
+      {
+        description: "Run one search and return human-readable results:",
+        command: `web search --provider ${provider} "TypeBox validation"`,
+      },
+      {
+        description: "Search several queries in order with five results each:",
+        command: `web search --provider ${provider} "Node.js AbortSignal" \\\n  --query "fetch cancellation" --max-results 5`,
+      },
+      {
+        description: "Read one query from stdin and emit normalized JSON:",
+        command: `printf "latest ECMAScript proposal" | web search --provider ${provider} - --output json`,
+      },
+    ],
+    contents: [
+      {
+        description: "Extract readable content from multiple URLs:",
+        command: `web contents --provider ${provider} https://example.com/a https://example.com/b`,
+      },
+      {
+        description: "Read newline-separated URLs from stdin:",
+        command: `printf "https://example.com/a\\nhttps://example.com/b\\n" | \\\n  web contents --provider ${provider} -`,
+      },
+      {
+        description: "Return one normalized JSON document for automation:",
+        command: `web contents --provider ${provider} --output json https://example.com`,
+      },
+    ],
+    answer: [
+      {
+        description: "Ask one question using current web sources:",
+        command: `web answer --provider ${provider} "What changed in Node.js 22?"`,
+      },
+      {
+        description: "Answer several questions and preserve their input order:",
+        command: `web answer --provider ${provider} "What is MCP?" --query "What is A2A?"`,
+      },
+      {
+        description: "Read a question from stdin and emit normalized JSON:",
+        command: `printf "Summarize today's browser news" | web answer --provider ${provider} - --output json`,
+      },
+    ],
+    research: [
+      {
+        description: "Run a research brief while progress is shown on stderr:",
+        command: `web research --provider ${provider} "Compare Node.js and Bun for backend services"`,
+      },
+      {
+        description: "Read a longer brief from a file through stdin:",
+        command: `web research --provider ${provider} - < brief.md`,
+      },
+      {
+        description:
+          "Produce quiet normalized output for an automated workflow:",
+        command: `web research --provider ${provider} --quiet --output json \\\n  "Map the WebAssembly ecosystem"`,
+      },
+    ],
+  }[capability];
+}
+
+function formatExamples(colors: Colors, examples: HelpExample[]): string {
+  const entries = examples.map(
+    ({ description, command }) =>
+      `  ${description}\n    ${command
+        .split("\n")
+        .map((line) => colors.yellow(line))
+        .join("\n    ")}`,
+  );
+  return `${colors.bold(colors.cyan("Examples:"))}\n${entries.join("\n\n")}`;
 }
 
 function parsedArgs(
@@ -586,12 +753,46 @@ function addProvidersCommand(
 ): void {
   const command = program
     .command("providers")
-    .description("Show provider capabilities and configuration status")
-    .argument("[id]", "Provider id")
-    .addOption(
-      new Option("--config <path>", "Use an explicit configuration file"),
+    .summary("Inspect provider capabilities and setup")
+    .description(
+      "List all built-in providers as a capability matrix and show which operations are available with the current configuration. Pass a provider id to inspect its required credentials, supported capabilities, defaults, documentation URL, and exact schema-derived option flags. This command does not make provider requests.",
     )
-    .addOption(new Option("--cwd <path>", "Set the execution directory"));
+    .argument(
+      "[id]",
+      "Provider id to inspect; omit it to print the complete matrix",
+    )
+    .addOption(
+      new Option(
+        "--config <path>",
+        "Read this configuration file instead of the resolved default",
+      ),
+    )
+    .addOption(
+      new Option(
+        "--cwd <path>",
+        "Use this directory while inspecting provider option schemas",
+      ),
+    )
+    .addHelpText(
+      "after",
+      () =>
+        `\n${formatExamples(theme.out, [
+          {
+            description: "Show the complete capability and setup matrix:",
+            command: "web providers",
+          },
+          {
+            description:
+              "Inspect credentials, defaults, and options for OpenAI:",
+            command: "web providers openai",
+          },
+          {
+            description:
+              "Inspect provider status using a specific configuration:",
+            command: "web providers --config ./web-mux.json",
+          },
+        ])}`,
+    );
   command.action(async function (this: Command) {
     const options = this.opts<CommanderOptions>();
     const id = this.processedArgs[0] as string | undefined;
@@ -607,16 +808,52 @@ function addConfigCommand(
 ): void {
   const config = program
     .command("config")
-    .description("Manage web-mux configuration");
+    .summary("Manage web-mux configuration")
+    .description(
+      "Resolve, create, inspect, edit, and validate the strict JSON configuration used by the library, CLI, and pi extension. Configuration resolution honors --config, WEB_MUX_CONFIG, and the platform-specific XDG or AppData location.",
+    )
+    .addHelpText(
+      "after",
+      () =>
+        `\n${formatExamples(theme.out, [
+          {
+            description: "Print the path selected by configuration resolution:",
+            command: "web config path",
+          },
+          {
+            description: "Create a starter configuration at the default path:",
+            command: "web config init",
+          },
+          {
+            description:
+              "Inspect redacted values and validate provider options:",
+            command: "web config show\nweb config validate",
+          },
+        ])}`,
+    );
   for (const action of ["path", "init", "show", "edit", "validate"] as const) {
+    const definition = configDefinition(action);
     const command = config
       .command(action)
-      .description(configDescription(action))
+      .summary(definition.summary)
+      .description(definition.description)
       .addOption(
-        new Option("--config <path>", "Use an explicit configuration file"),
+        new Option(
+          "--config <path>",
+          "Operate on this file instead of the resolved configuration path",
+        ),
+      )
+      .addHelpText(
+        "after",
+        () => `\n${formatExamples(theme.out, definition.examples)}`,
       );
     if (action === "init")
-      command.addOption(new Option("--force", "Replace an existing file"));
+      command.addOption(
+        new Option(
+          "--force",
+          "Replace an existing configuration file instead of refusing",
+        ),
+      );
     command.action(async function (this: Command) {
       setExitCode(
         await configCommand(action, this.opts<CommanderOptions>(), io, theme),
@@ -629,15 +866,91 @@ function addConfigCommand(
   });
 }
 
-function configDescription(
-  action: "path" | "init" | "show" | "edit" | "validate",
-): string {
+function configDefinition(action: ConfigAction): {
+  summary: string;
+  description: string;
+  examples: HelpExample[];
+} {
   return {
-    path: "Print the resolved configuration path",
-    init: "Create an initial configuration",
-    show: "Show the redacted configuration",
-    edit: "Open the configuration in $VISUAL or $EDITOR",
-    validate: "Validate configuration without network access",
+    path: {
+      summary: "Print the resolved configuration path",
+      description:
+        "Print the configuration path selected by --config, WEB_MUX_CONFIG, or the platform-specific default. The file does not need to exist and is not read or validated.",
+      examples: [
+        {
+          description: "Show the path selected by normal resolution:",
+          command: "web config path",
+        },
+        {
+          description: "Resolve an explicitly selected path:",
+          command: "web config path --config ./web-mux.json",
+        },
+      ],
+    },
+    init: {
+      summary: "Create an initial configuration",
+      description:
+        "Create a strict starter JSON configuration with its schema URL and recommended execution defaults. Existing files are preserved unless --force is supplied; no credentials or provider defaults are invented.",
+      examples: [
+        {
+          description: "Create the default XDG or AppData configuration:",
+          command: "web config init",
+        },
+        {
+          description: "Create a project-local configuration:",
+          command: "web config init --config ./web-mux.json",
+        },
+        {
+          description: "Replace an existing project-local configuration:",
+          command: "web config init --config ./web-mux.json --force",
+        },
+      ],
+    },
+    show: {
+      summary: "Show the redacted configuration",
+      description:
+        "Load the selected configuration and print normalized, pretty JSON. Literal credential values and credential commands are always redacted before output, making the result safer to inspect or share.",
+      examples: [
+        {
+          description: "Show the resolved configuration with secrets redacted:",
+          command: "web config show",
+        },
+        {
+          description: "Show a project-local configuration:",
+          command: "web config show --config ./web-mux.json",
+        },
+      ],
+    },
+    edit: {
+      summary: "Open the configuration in $VISUAL or $EDITOR",
+      description:
+        "Open the selected configuration directly in the program named by $VISUAL or $EDITOR and wait for the editor to exit. The command fails when neither environment variable is configured.",
+      examples: [
+        {
+          description: "Edit the normally resolved configuration:",
+          command: "web config edit",
+        },
+        {
+          description: "Edit a project-local configuration:",
+          command: "EDITOR=vim web config edit --config ./web-mux.json",
+        },
+      ],
+    },
+    validate: {
+      summary: "Validate configuration without network access",
+      description:
+        "Strictly validate the selected JSON configuration and all configured provider option objects. Validation performs no network requests and does not execute credential commands.",
+      examples: [
+        {
+          description: "Validate the normally resolved configuration:",
+          command: "web config validate",
+        },
+        {
+          description: "Validate a project-local configuration:",
+          command: "web config validate --config ./web-mux.json",
+        },
+      ],
+    },
   }[action];
 }
 

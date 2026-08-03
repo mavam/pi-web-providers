@@ -56,6 +56,8 @@ Common options:
 --version                    Show the version
 ```
 
+`web --help` includes broad workflow examples across all four capabilities. Each command and configuration action has its own contextual examples, and selecting a provider before `--help` adds that provider's exact schema-derived options—for example, `web search --provider openai --help`.
+
 The CLI loads the selected provider's TypeBox schema and creates exact flags for scalar fields. For example, `searchContextSize` becomes `--search-context-size`, `userLocation.country` becomes `--user-location-country`, arrays are repeatable, and booleans have both `--foo` and `--no-foo`. Objects, records, and colliding flag names remain available through `--options-json`.
 
 Option precedence is:
