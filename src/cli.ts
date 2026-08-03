@@ -6,6 +6,14 @@ import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
+import { stripVTControlCharacters } from "node:util";
+import {
+  Command,
+  CommanderError,
+  InvalidArgumentError,
+  Option,
+} from "commander";
+import pc from "picocolors";
 import { PACKAGE_VERSION } from "./package-metadata.js";
 import {
   createWebMux,
@@ -49,6 +57,10 @@ const RESERVED_FLAGS = new Set([
   "force",
 ]);
 
+const SUCCESS_MARK = "✔︎";
+const FAILURE_MARK = "✘︎";
+type Colors = ReturnType<typeof pc.createColors>;
+
 interface CliIO {
   stdin: NodeJS.ReadableStream;
   stdout: NodeJS.WritableStream;
@@ -70,12 +82,37 @@ interface ParsedArgs {
   raw: boolean;
   optionsJson?: string;
   quiet: boolean;
-  noColor: boolean;
-  help: boolean;
-  force: boolean;
   queries: string[];
   maxResults?: number;
   typedOptions: Record<string, unknown>;
+}
+
+interface CommanderOptions {
+  provider?: ProviderId;
+  config?: string;
+  cwd?: string;
+  timeout?: number;
+  retries?: number;
+  retryDelay?: number;
+  output?: "text" | "json";
+  raw?: boolean;
+  optionsJson?: string;
+  quiet?: boolean;
+  query?: string[];
+  maxResults?: number;
+  force?: boolean;
+}
+
+interface CliTheme {
+  out: Colors;
+  err: Colors;
+}
+
+interface CapabilityPreparation {
+  capability: Capability;
+  config: WebMuxConfig;
+  provider?: ProviderId;
+  flags: OptionFlag[];
 }
 
 export interface OptionFlag {
@@ -98,114 +135,21 @@ export async function runCli(
     cwd: process.cwd(),
   },
 ): Promise<number> {
+  const theme = createTheme(argv, io);
+  let exitCode = 0;
   try {
+    const preparation = await prepareCapability(argv, io);
+    const program = createProgram(argv, io, theme, preparation, (code) => {
+      exitCode = code;
+    });
     if (argv.length === 0) {
-      io.stdout.write(`${rootHelp()}\n`);
+      program.outputHelp();
       return 0;
     }
-    const separator = argv.indexOf("--");
-    const options = separator === -1 ? argv : argv.slice(0, separator);
-    if (options.includes("--version") || argv[0] === "version") {
-      io.stdout.write(`${PACKAGE_VERSION}\n`);
-      return 0;
-    }
-    if (argv[0] === "--help" || argv[0] === "help") {
-      io.stdout.write(`${rootHelp()}\n`);
-      return 0;
-    }
-
-    const command = argv[0];
-    const rest = argv.slice(1);
-    if (command === "providers") return await providersCommand(rest, io);
-    if (command === "config") return await configCommand(rest, io);
-    if (!isCapability(command)) usage(`Unknown command '${command}'`);
-
-    const first = firstPass(rest);
-    const configPath = first.configPath;
-    const config = await loadConfig({ configPath, env: io.env });
-    const selected = first.provider ?? config.defaults?.[command]?.provider;
-    const schema = selected
-      ? await createWebMux({
-          config,
-          cwd: first.cwd ?? io.cwd,
-        }).getProviderOptionSchema(selected, command)
-      : undefined;
-    const flags = schema ? buildOptionFlags(schema) : [];
-    const parsed = parseArgs(rest, flags);
-    if (parsed.help) {
-      io.stdout.write(`${capabilityHelp(command, selected, flags)}\n`);
-      return 0;
-    }
-
-    const effective = applyExecutionOverrides(config, parsed, command);
-    const cwd = parsed.cwd ? resolve(io.cwd, parsed.cwd) : io.cwd;
-    const optionsJson = await parseOptionsJson(parsed.optionsJson, cwd);
-    const providerOptions = deepMerge(optionsJson, parsed.typedOptions);
-    const controller = new AbortController();
-    const onSignal = () =>
-      controller.abort(new DOMException("Operation cancelled", "AbortError"));
-    const signalSource = io.signalSource ?? process;
-    signalSource.once("SIGINT", onSignal);
-
-    try {
-      const client = createWebMux({ config: effective, cwd });
-      const progress = parsed.quiet
-        ? undefined
-        : (event: { message: string }) => io.stderr.write(`${event.message}\n`);
-      let result: CapabilityDocument<unknown>;
-      if (command === "search") {
-        const queries = await queryInputs(parsed, io, "search");
-        result = await client.search({
-          provider: parsed.provider,
-          queries,
-          ...(parsed.maxResults === undefined
-            ? {}
-            : { maxResults: parsed.maxResults }),
-          options: providerOptions,
-          signal: controller.signal,
-          onProgress: progress,
-          raw: parsed.raw,
-        });
-      } else if (command === "contents") {
-        const urls = await contentsInputs(parsed.positionals, io);
-        result = await client.contents({
-          provider: parsed.provider,
-          urls,
-          options: providerOptions,
-          signal: controller.signal,
-          onProgress: progress,
-          raw: parsed.raw,
-        });
-      } else if (command === "answer") {
-        const queries = await queryInputs(parsed, io, "answer");
-        result = await client.answer({
-          provider: parsed.provider,
-          queries,
-          options: providerOptions,
-          signal: controller.signal,
-          onProgress: progress,
-          raw: parsed.raw,
-        });
-      } else {
-        const input = await researchInput(parsed.positionals, io);
-        result = await client.research({
-          provider: parsed.provider,
-          input,
-          options: providerOptions,
-          signal: controller.signal,
-          onProgress: progress,
-          raw: parsed.raw,
-        });
-      }
-
-      writeResult(result, parsed, io);
-      if (result.results.some((entry) => entry.error?.code === "CANCELLED"))
-        return 130;
-      return result.status === "partial" ? 1 : 0;
-    } finally {
-      signalSource.removeListener("SIGINT", onSignal);
-    }
+    await program.parseAsync(argv, { from: "user" });
+    return exitCode;
   } catch (error) {
+    if (error instanceof CommanderError) return error.exitCode === 0 ? 0 : 2;
     const normalized =
       error instanceof WebMuxError
         ? error
@@ -214,13 +158,121 @@ export async function runCli(
             error instanceof Error ? error.message : String(error),
             { cause: error },
           );
-    io.stderr.write(`web: ${normalized.message}\n`);
+    writeCliError(normalized.message, io, theme);
     return normalized.code === "CANCELLED"
       ? 130
       : normalized.code === "INVALID_CONFIG" ||
           normalized.code === "INVALID_INPUT"
         ? 2
         : 1;
+  }
+}
+
+async function prepareCapability(
+  argv: string[],
+  io: CliIO,
+): Promise<CapabilityPreparation | undefined> {
+  const capability = argv[0];
+  if (!isCapability(capability)) return undefined;
+  const first = firstPass(argv.slice(1));
+  const config = await loadConfig({
+    configPath: first.configPath,
+    env: io.env,
+  });
+  const provider = first.provider ?? config.defaults?.[capability]?.provider;
+  const schema = provider
+    ? await createWebMux({
+        config,
+        cwd: first.cwd ?? io.cwd,
+      }).getProviderOptionSchema(provider, capability)
+    : undefined;
+  return {
+    capability,
+    config,
+    provider,
+    flags: schema ? buildOptionFlags(schema) : [],
+  };
+}
+
+async function executeCapability(
+  capability: Capability,
+  parsed: ParsedArgs,
+  config: WebMuxConfig,
+  io: CliIO,
+  theme: CliTheme,
+): Promise<number> {
+  if (parsed.raw && parsed.output === "json")
+    usage("--raw cannot be combined with --output json");
+  const effective = applyExecutionOverrides(config, parsed, capability);
+  const cwd = parsed.cwd ? resolve(io.cwd, parsed.cwd) : io.cwd;
+  const optionsJson = await parseOptionsJson(parsed.optionsJson, cwd);
+  const providerOptions = deepMerge(optionsJson, parsed.typedOptions);
+  const controller = new AbortController();
+  const onSignal = () =>
+    controller.abort(new DOMException("Operation cancelled", "AbortError"));
+  const signalSource = io.signalSource ?? process;
+  signalSource.once("SIGINT", onSignal);
+
+  try {
+    const client = createWebMux({ config: effective, cwd });
+    const progress = parsed.quiet
+      ? undefined
+      : (event: { message: string }) =>
+          io.stderr.write(
+            `${theme.err.cyan("›")} ${theme.err.dim(event.message)}\n`,
+          );
+    let result: CapabilityDocument<unknown>;
+    if (capability === "search") {
+      const queries = await queryInputs(parsed, io, "search");
+      result = await client.search({
+        provider: parsed.provider,
+        queries,
+        ...(parsed.maxResults === undefined
+          ? {}
+          : { maxResults: parsed.maxResults }),
+        options: providerOptions,
+        signal: controller.signal,
+        onProgress: progress,
+        raw: parsed.raw,
+      });
+    } else if (capability === "contents") {
+      const urls = await contentsInputs(parsed.positionals, io);
+      result = await client.contents({
+        provider: parsed.provider,
+        urls,
+        options: providerOptions,
+        signal: controller.signal,
+        onProgress: progress,
+        raw: parsed.raw,
+      });
+    } else if (capability === "answer") {
+      const queries = await queryInputs(parsed, io, "answer");
+      result = await client.answer({
+        provider: parsed.provider,
+        queries,
+        options: providerOptions,
+        signal: controller.signal,
+        onProgress: progress,
+        raw: parsed.raw,
+      });
+    } else {
+      const input = await researchInput(parsed.positionals, io);
+      result = await client.research({
+        provider: parsed.provider,
+        input,
+        options: providerOptions,
+        signal: controller.signal,
+        onProgress: progress,
+        raw: parsed.raw,
+      });
+    }
+
+    writeResult(result, parsed, io, theme);
+    if (result.results.some((entry) => entry.error?.code === "CANCELLED"))
+      return 130;
+    return result.status === "partial" ? 1 : 0;
+  } finally {
+    signalSource.removeListener("SIGINT", onSignal);
   }
 }
 
@@ -236,6 +288,357 @@ export function buildOptionFlags(
     (entry) =>
       counts.get(entry.flag) === 1 && !RESERVED_FLAGS.has(entry.flag.slice(2)),
   );
+}
+
+function createProgram(
+  argv: string[],
+  io: CliIO,
+  theme: CliTheme,
+  preparation: CapabilityPreparation | undefined,
+  setExitCode: (code: number) => void,
+): Command {
+  const program = new Command();
+  program
+    .name("web")
+    .description(
+      "Search, extract, answer, and research through interchangeable web providers.",
+    )
+    .version(PACKAGE_VERSION, "--version", "Show the version")
+    .addOption(new Option("--no-color", "Disable colored output"))
+    .helpOption("-h, --help", "Show help")
+    .helpCommand("help [command]", "Show help for a command")
+    .showSuggestionAfterError(true)
+    .exitOverride()
+    .configureOutput({
+      writeOut: (value) => io.stdout.write(value),
+      writeErr: (value) => io.stderr.write(value),
+      getOutHelpWidth: () => streamColumns(io.stdout),
+      getErrHelpWidth: () => streamColumns(io.stderr),
+      getOutHasColors: () => theme.out.isColorSupported,
+      getErrHasColors: () => theme.err.isColorSupported,
+      stripColor: stripVTControlCharacters,
+      outputError: (value, write) => {
+        const message = stripVTControlCharacters(value)
+          .replace(/^error:\s*/i, "")
+          .trimEnd();
+        write(
+          `${theme.err.red(theme.err.bold(FAILURE_MARK))} ${theme.err.red(message)}\n`,
+        );
+      },
+    })
+    .configureHelp({
+      showGlobalOptions: true,
+      styleTitle: (value) => theme.out.bold(theme.out.cyan(value)),
+      styleUsage: (value) => theme.out.bold(value),
+      styleCommandText: (value) => theme.out.cyan(value),
+      styleOptionText: (value) => theme.out.yellow(value),
+      styleArgumentText: (value) => theme.out.magenta(value),
+      styleSubcommandTerm: (value) => theme.out.cyan(value),
+      styleOptionTerm: (value) => theme.out.yellow(value),
+      styleArgumentTerm: (value) => theme.out.magenta(value),
+    });
+
+  for (const capability of [
+    "search",
+    "contents",
+    "answer",
+    "research",
+  ] as const) {
+    addCapabilityCommand(
+      program,
+      capability,
+      io,
+      theme,
+      preparation,
+      setExitCode,
+    );
+  }
+  addProvidersCommand(program, io, theme, setExitCode);
+  addConfigCommand(program, io, theme, setExitCode);
+
+  const version = new Command("version").action(() => {
+    io.stdout.write(`${PACKAGE_VERSION}\n`);
+    setExitCode(0);
+  });
+  program.addCommand(version, { hidden: true });
+  return program;
+}
+
+function addCapabilityCommand(
+  program: Command,
+  capability: Capability,
+  io: CliIO,
+  theme: CliTheme,
+  preparation: CapabilityPreparation | undefined,
+  setExitCode: (code: number) => void,
+): void {
+  const definitions = {
+    search: {
+      description: "Search the public web",
+      usage: "[query|-] [options]",
+      argument: "[query]",
+      argumentDescription: "Query or '-' for stdin",
+    },
+    contents: {
+      description: "Fetch and extract URL contents",
+      usage: "<url...|-> [options]",
+      argument: "[urls...]",
+      argumentDescription: "URLs or '-' for newline-separated stdin",
+    },
+    answer: {
+      description: "Produce web-grounded answers",
+      usage: "[question|-] [options]",
+      argument: "[question]",
+      argumentDescription: "Question or '-' for stdin",
+    },
+    research: {
+      description: "Run foreground web research",
+      usage: "<brief|-> [options]",
+      argument: "[brief]",
+      argumentDescription: "Research brief or '-' for stdin",
+    },
+  } as const;
+  const definition = definitions[capability];
+  const command = program
+    .command(capability)
+    .description(definition.description)
+    .usage(definition.usage)
+    .argument(definition.argument, definition.argumentDescription)
+    .allowExcessArguments(false);
+  addCommonOptions(command, capability);
+
+  const active =
+    preparation?.capability === capability ? preparation : undefined;
+  for (const flag of active?.flags ?? [])
+    addDynamicOption(command, flag, active?.provider);
+  command.addHelpText("after", () => {
+    if (active?.provider) {
+      return `\n${theme.out.dim("Provider:")} ${theme.out.bold(PROVIDERS_BY_ID[active.provider].label)} ${theme.out.dim(`(${active.provider})`)}`;
+    }
+    return `\n${theme.out.yellow("No provider selected.")} ${theme.out.dim("Pass --provider or configure a capability default.")}`;
+  });
+
+  command.action(async function (this: Command) {
+    const flags = active?.flags ?? [];
+    const parsed = parsedArgs(this, capability, flags);
+    const config =
+      active?.config ??
+      (await loadConfig({ configPath: parsed.configPath, env: io.env }));
+    setExitCode(await executeCapability(capability, parsed, config, io, theme));
+  });
+}
+
+function addCommonOptions(command: Command, capability: Capability): void {
+  const common = "Common options";
+  command
+    .addOption(
+      new Option("--provider <id>", "Select a provider")
+        .argParser(parseProviderId)
+        .helpGroup(common),
+    )
+    .addOption(
+      new Option(
+        "--config <path>",
+        "Use an explicit configuration file",
+      ).helpGroup(common),
+    )
+    .addOption(
+      new Option("--cwd <path>", "Set the execution directory").helpGroup(
+        common,
+      ),
+    )
+    .addOption(
+      new Option("--timeout <ms>", "Override the request timeout")
+        .argParser((value) => parseInteger(value, "--timeout", 1))
+        .helpGroup(common),
+    )
+    .addOption(
+      new Option("--retries <n>", "Override the retry count")
+        .argParser((value) => parseInteger(value, "--retries", 0))
+        .helpGroup(common),
+    )
+    .addOption(
+      new Option("--retry-delay <ms>", "Override the initial retry delay")
+        .argParser((value) => parseInteger(value, "--retry-delay", 0))
+        .helpGroup(common),
+    )
+    .addOption(
+      new Option("--output <format>", "Select text or normalized JSON output")
+        .choices(["text", "json"])
+        .default("text")
+        .helpGroup(common),
+    )
+    .addOption(
+      new Option("--raw", "Emit unstable provider-native payloads").helpGroup(
+        common,
+      ),
+    )
+    .addOption(
+      new Option(
+        "--options-json <json|@file>",
+        "Supply options that cannot be expressed as flags",
+      ).helpGroup(common),
+    )
+    .addOption(
+      new Option("--quiet", "Suppress progress output").helpGroup(common),
+    );
+  if (capability === "search" || capability === "answer") {
+    command.addOption(
+      new Option("--query <input>", "Add another input")
+        .argParser((value, previous: string[] | undefined) => [
+          ...(previous ?? []),
+          value,
+        ])
+        .helpGroup("Input options"),
+    );
+  }
+  if (capability === "search") {
+    command.addOption(
+      new Option("--max-results <n>", "Maximum results per query")
+        .argParser((value) => parseInteger(value, "--max-results", 1))
+        .helpGroup("Input options"),
+    );
+  }
+}
+
+function addDynamicOption(
+  command: Command,
+  descriptor: OptionFlag,
+  provider: ProviderId | undefined,
+): void {
+  const group = provider
+    ? `${PROVIDERS_BY_ID[provider].label} options`
+    : "Provider options";
+  const values = descriptor.enumValues?.length
+    ? ` (${descriptor.enumValues.join(" | ")})`
+    : "";
+  const description = `${descriptor.description ?? descriptor.path.join(".")}${values}`;
+  if (descriptor.kind === "boolean") {
+    command.addOption(
+      new Option(descriptor.flag, description).helpGroup(group),
+    );
+    command.addOption(
+      new Option(
+        descriptor.negativeFlag!,
+        `Disable ${descriptor.path.join(".")}`,
+      ).helpGroup(group),
+    );
+    return;
+  }
+  const option = new Option(`${descriptor.flag} <value>`, description);
+  if (descriptor.kind === "array") {
+    option.argParser((value, previous: unknown[] | undefined) => [
+      ...(previous ?? []),
+      parseTypedValue(value, descriptor),
+    ]);
+  } else {
+    option.argParser((value) => parseTypedValue(value, descriptor));
+  }
+  option.helpGroup(group);
+  command.addOption(option);
+}
+
+function parsedArgs(
+  command: Command,
+  capability: Capability,
+  flags: OptionFlag[],
+): ParsedArgs {
+  const options = command.opts<CommanderOptions>();
+  const typedOptions: Record<string, unknown> = {};
+  for (const descriptor of flags) {
+    const option = command.options.find(
+      (candidate) => candidate.long === descriptor.flag,
+    );
+    if (!option) continue;
+    const key = option.attributeName();
+    if (command.getOptionValueSource(key) !== "cli") continue;
+    setPath(typedOptions, descriptor.path, command.getOptionValue(key));
+  }
+  const positionals = command.processedArgs.flatMap((value) =>
+    Array.isArray(value) ? value : value === undefined ? [] : [String(value)],
+  );
+  return {
+    positionals,
+    provider: options.provider,
+    configPath: options.config,
+    cwd: options.cwd,
+    timeout: options.timeout,
+    retries: options.retries,
+    retryDelay: options.retryDelay,
+    output: options.output ?? "text",
+    raw: options.raw ?? false,
+    optionsJson: options.optionsJson,
+    quiet: options.quiet ?? false,
+    queries:
+      capability === "search" || capability === "answer"
+        ? (options.query ?? [])
+        : [],
+    maxResults: options.maxResults,
+    typedOptions,
+  };
+}
+
+function addProvidersCommand(
+  program: Command,
+  io: CliIO,
+  theme: CliTheme,
+  setExitCode: (code: number) => void,
+): void {
+  const command = program
+    .command("providers")
+    .description("Show provider capabilities and configuration status")
+    .argument("[id]", "Provider id")
+    .addOption(
+      new Option("--config <path>", "Use an explicit configuration file"),
+    )
+    .addOption(new Option("--cwd <path>", "Set the execution directory"));
+  command.action(async function (this: Command) {
+    const options = this.opts<CommanderOptions>();
+    const id = this.processedArgs[0] as string | undefined;
+    setExitCode(await providersCommand(id, options, io, theme));
+  });
+}
+
+function addConfigCommand(
+  program: Command,
+  io: CliIO,
+  theme: CliTheme,
+  setExitCode: (code: number) => void,
+): void {
+  const config = program
+    .command("config")
+    .description("Manage web-mux configuration");
+  for (const action of ["path", "init", "show", "edit", "validate"] as const) {
+    const command = config
+      .command(action)
+      .description(configDescription(action))
+      .addOption(
+        new Option("--config <path>", "Use an explicit configuration file"),
+      );
+    if (action === "init")
+      command.addOption(new Option("--force", "Replace an existing file"));
+    command.action(async function (this: Command) {
+      setExitCode(
+        await configCommand(action, this.opts<CommanderOptions>(), io, theme),
+      );
+    });
+  }
+  config.action(() => {
+    config.outputHelp();
+    setExitCode(0);
+  });
+}
+
+function configDescription(
+  action: "path" | "init" | "show" | "edit" | "validate",
+): string {
+  return {
+    path: "Print the resolved configuration path",
+    init: "Create an initial configuration",
+    show: "Show the redacted configuration",
+    edit: "Open the configuration in $VISUAL or $EDITOR",
+    validate: "Validate configuration without network access",
+  }[action];
 }
 
 function walkSchema(
@@ -319,117 +722,6 @@ function inferEnumKind(
     : undefined;
 }
 
-function parseArgs(args: string[], flags: OptionFlag[]): ParsedArgs {
-  const parsed: ParsedArgs = {
-    positionals: [],
-    output: "text",
-    raw: false,
-    quiet: false,
-    noColor: false,
-    help: false,
-    force: false,
-    queries: [],
-    typedOptions: {},
-  };
-  const byFlag = new Map<
-    string,
-    { descriptor: OptionFlag; negative: boolean }
-  >();
-  for (const descriptor of flags) {
-    byFlag.set(descriptor.flag, { descriptor, negative: false });
-    if (descriptor.negativeFlag)
-      byFlag.set(descriptor.negativeFlag, { descriptor, negative: true });
-  }
-
-  for (let index = 0; index < args.length; index += 1) {
-    const token = args[index];
-    if (token === "--") {
-      parsed.positionals.push(...args.slice(index + 1));
-      break;
-    }
-    const [name, inline] = splitFlag(token);
-    if (!name.startsWith("--")) {
-      parsed.positionals.push(token);
-      continue;
-    }
-    const dynamic = byFlag.get(name);
-    if (dynamic) {
-      const { descriptor, negative } = dynamic;
-      if (descriptor.kind === "boolean") {
-        if (inline !== undefined) usage(`${name} does not take a value`);
-        setPath(parsed.typedOptions, descriptor.path, !negative);
-      } else {
-        const raw = inline ?? nextValue(args, ++index, name);
-        const value = parseTypedValue(raw, descriptor);
-        if (descriptor.kind === "array")
-          appendPath(parsed.typedOptions, descriptor.path, value);
-        else setPath(parsed.typedOptions, descriptor.path, value);
-      }
-      continue;
-    }
-    const take = () => inline ?? nextValue(args, ++index, name);
-    switch (name) {
-      case "--provider": {
-        const value = take();
-        if (!(value in PROVIDERS_BY_ID)) usage(`Unknown provider '${value}'`);
-        parsed.provider = value as ProviderId;
-        break;
-      }
-      case "--config":
-        parsed.configPath = take();
-        break;
-      case "--cwd":
-        parsed.cwd = take();
-        break;
-      case "--timeout":
-        parsed.timeout = integer(take(), name, 1);
-        break;
-      case "--retries":
-        parsed.retries = integer(take(), name, 0);
-        break;
-      case "--retry-delay":
-        parsed.retryDelay = integer(take(), name, 0);
-        break;
-      case "--output": {
-        const value = take();
-        if (value !== "text" && value !== "json")
-          usage("--output must be text or json");
-        parsed.output = value;
-        break;
-      }
-      case "--options-json":
-        parsed.optionsJson = take();
-        break;
-      case "--query":
-        parsed.queries.push(take());
-        break;
-      case "--max-results":
-        parsed.maxResults = integer(take(), name, 1);
-        break;
-      case "--raw":
-        parsed.raw = true;
-        break;
-      case "--quiet":
-        parsed.quiet = true;
-        break;
-      case "--no-color":
-        parsed.noColor = true;
-        break;
-      case "--help":
-        parsed.help = true;
-        break;
-      case "--force":
-        parsed.force = true;
-        break;
-      default:
-        usage(`Unknown option '${name}'`);
-    }
-  }
-  if (parsed.raw && parsed.output === "json")
-    usage("--raw cannot be combined with --output json");
-  return parsed;
-}
-
 function firstPass(args: string[]): {
   provider?: ProviderId;
   configPath?: string;
@@ -453,69 +745,84 @@ function firstPass(args: string[]): {
   return result;
 }
 
-async function providersCommand(args: string[], io: CliIO): Promise<number> {
-  const parsed = parseArgs(args, []);
+async function providersCommand(
+  idValue: string | undefined,
+  options: CommanderOptions,
+  io: CliIO,
+  theme: CliTheme,
+): Promise<number> {
   const config = await loadConfig({
-    configPath: parsed.configPath,
+    configPath: options.config,
     env: io.env,
   });
-  const id = parsed.positionals[0] as ProviderId | undefined;
+  const id = idValue as ProviderId | undefined;
   if (id) {
     const metadata = PROVIDERS_BY_ID[id];
     if (!metadata) usage(`Unknown provider '${id}'`);
     io.stdout.write(
-      `${metadata.label} (${metadata.id})\n${metadata.docsUrl}\n\nCapabilities: ${metadata.capabilities.join(", ")}\n`,
+      `${theme.out.bold(theme.out.cyan(metadata.label))} ${theme.out.dim(`(${metadata.id})`)}\n${theme.out.underline(metadata.docsUrl)}\n\n${theme.out.bold("Capabilities:")} ${metadata.capabilities.join(", ")}\n`,
     );
     if (metadata.credentials.length > 0) {
       io.stdout.write(
-        `Credentials:\n${metadata.credentials.map((entry) => `  ${entry.name}: ${entry.environmentVariable}`).join("\n")}\n`,
+        `${theme.out.bold("Credentials:")}\n${metadata.credentials.map((entry) => `  ${theme.out.yellow(entry.name)}: ${entry.environmentVariable}`).join("\n")}\n`,
       );
     } else {
-      io.stdout.write("Credentials: none\n");
+      io.stdout.write(
+        `${theme.out.bold("Credentials:")} ${theme.out.dim("none")}\n`,
+      );
     }
     if (id === "cloudflare") {
-      io.stdout.write("  accountId: CLOUDFLARE_ACCOUNT_ID\n");
+      io.stdout.write(
+        `  ${theme.out.yellow("accountId")}: CLOUDFLARE_ACCOUNT_ID\n`,
+      );
     }
     const definition = await loadProvider(id);
     const providerDefaults = (
       definition.config.createTemplate() as { options?: unknown }
     ).options;
     io.stdout.write(
-      `Defaults:\n${providerDefaults === undefined ? "  SDK defaults\n" : `${indent(JSON.stringify(providerDefaults, null, 2))}\n`}`,
+      `${theme.out.bold("Defaults:")}\n${providerDefaults === undefined ? `  ${theme.out.dim("SDK defaults")}\n` : `${indent(JSON.stringify(providerDefaults, null, 2))}\n`}`,
     );
     const selectedDefaults = Object.entries(config.defaults ?? {})
       .filter(([, entry]) => entry?.provider === id)
       .map(([capability, entry]) => `${capability}: ${JSON.stringify(entry)}`);
     if (selectedDefaults.length > 0) {
       io.stdout.write(
-        `Configured capability defaults:\n${selectedDefaults.map((line) => `  ${line}`).join("\n")}\n`,
+        `${theme.out.bold("Configured capability defaults:")}\n${selectedDefaults.map((line) => `  ${line}`).join("\n")}\n`,
       );
     }
-    const client = createWebMux({ config, cwd: parsed.cwd ?? io.cwd });
+    const cwd = options.cwd ? resolve(io.cwd, options.cwd) : io.cwd;
+    const client = createWebMux({ config, cwd });
     for (const capability of metadata.capabilities) {
       const schema = await client.getProviderOptionSchema(id, capability);
       const flags = schema ? buildOptionFlags(schema) : [];
       io.stdout.write(
-        `\n${capability} options: ${flags.length ? flags.map((entry) => entry.flag).join(", ") : "none"}\n`,
+        `\n${theme.out.bold(`${capability} options:`)} ${flags.length ? flags.map((entry) => theme.out.yellow(entry.flag)).join(", ") : theme.out.dim("none")}\n`,
       );
     }
     return 0;
   }
   const headers = ["Provider", "Search", "Contents", "Answer", "Research"];
   const rows = PROVIDER_CATALOG.map((provider) => [
-    provider.id,
+    theme.out.bold(provider.id),
     ...(["search", "contents", "answer", "research"] as Capability[]).map(
       (capability) =>
         provider.capabilities.includes(capability)
-          ? providerStatus(provider.id, capability, config, io.env)
-          : "—",
+          ? formatProviderStatus(
+              providerStatus(provider.id, capability, config, io.env),
+              theme.out,
+            )
+          : theme.out.dim("—"),
     ),
   ]);
   const widths = headers.map((header, index) =>
-    Math.max(header.length, ...rows.map((row) => row[index].length)),
+    Math.max(header.length, ...rows.map((row) => visibleWidth(row[index]))),
+  );
+  const coloredHeaders = headers.map((header) =>
+    theme.out.bold(theme.out.cyan(header)),
   );
   io.stdout.write(
-    `${[headers, ...rows].map((row) => row.map((cell, index) => cell.padEnd(widths[index])).join("  ")).join("\n")}\n`,
+    `${[coloredHeaders, ...rows].map((row) => row.map((cell, index) => padAnsi(cell, widths[index])).join("  ")).join("\n")}\n`,
   );
   return 0;
 }
@@ -525,7 +832,7 @@ function providerStatus(
   capability: Capability,
   config: WebMuxConfig,
   env: NodeJS.ProcessEnv,
-): string {
+): "ready" | "setup" | "local" {
   if (id === "custom")
     return config.providers?.custom?.commands?.[capability] ? "ready" : "setup";
   const metadata = PROVIDERS_BY_ID[id];
@@ -548,11 +855,23 @@ function providerStatus(
   return metadata.local && credentials.length === 0 ? "local" : "ready";
 }
 
-async function configCommand(args: string[], io: CliIO): Promise<number> {
-  const subcommand = args[0];
-  const parsed = parseArgs(args.slice(1), []);
+function formatProviderStatus(
+  status: "ready" | "setup" | "local",
+  colors: Colors,
+): string {
+  if (status === "setup") return colors.red(`${FAILURE_MARK} setup`);
+  if (status === "local") return colors.cyan(`${SUCCESS_MARK} local`);
+  return colors.green(`${SUCCESS_MARK} ready`);
+}
+
+async function configCommand(
+  subcommand: "path" | "init" | "show" | "edit" | "validate",
+  options: CommanderOptions,
+  io: CliIO,
+  theme: CliTheme,
+): Promise<number> {
   const path = resolveConfigPath({
-    configPath: parsed.configPath,
+    configPath: options.config,
     env: io.env,
   });
   switch (subcommand) {
@@ -563,9 +882,11 @@ async function configCommand(args: string[], io: CliIO): Promise<number> {
       const written = await writeConfig(createInitialConfig(), {
         configPath: path,
         env: io.env,
-        force: parsed.force,
+        force: options.force,
       });
-      io.stdout.write(`${written}\n`);
+      io.stdout.write(
+        `${theme.out.green(SUCCESS_MARK)} ${theme.out.bold("Created configuration:")} ${written}\n`,
+      );
       return 0;
     }
     case "show": {
@@ -576,7 +897,9 @@ async function configCommand(args: string[], io: CliIO): Promise<number> {
     case "validate": {
       const config = await loadConfig({ configPath: path, env: io.env });
       await validateConfiguredOptions(config);
-      io.stdout.write(`Valid configuration: ${path}\n`);
+      io.stdout.write(
+        `${theme.out.green(SUCCESS_MARK)} ${theme.out.bold("Valid configuration:")} ${path}\n`,
+      );
       return 0;
     }
     case "edit": {
@@ -593,8 +916,6 @@ async function configCommand(args: string[], io: CliIO): Promise<number> {
       });
       return 0;
     }
-    default:
-      usage("Usage: web config path|init|show|edit|validate [--config <path>]");
   }
 }
 
@@ -697,6 +1018,7 @@ function writeResult(
   result: CapabilityDocument<unknown>,
   parsed: ParsedArgs,
   io: CliIO,
+  theme: CliTheme,
 ): void {
   if (parsed.raw) {
     const raw = {
@@ -715,53 +1037,47 @@ function writeResult(
   } else if (parsed.output === "json") {
     io.stdout.write(`${JSON.stringify(result)}\n`);
   } else {
-    io.stdout.write(`${renderTextDocument(result as any)}\n`);
+    const mark =
+      result.status === "ok"
+        ? theme.out.green(SUCCESS_MARK)
+        : theme.out.red(FAILURE_MARK);
+    const provider = theme.out.bold(
+      theme.out.cyan(PROVIDERS_BY_ID[result.provider].label),
+    );
+    const status =
+      result.status === "partial"
+        ? ` ${theme.out.dim("·")} ${theme.out.red("partial")}`
+        : "";
+    const body = styleHumanText(
+      renderTextDocument(result as any),
+      result.capability,
+      theme.out,
+    );
+    io.stdout.write(
+      `${mark} ${provider} ${theme.out.dim("·")} ${theme.out.bold(result.capability)}${status}\n\n${body}\n`,
+    );
   }
 }
 
-function capabilityHelp(
+function styleHumanText(
+  value: string,
   capability: Capability,
-  provider: ProviderId | undefined,
-  flags: OptionFlag[],
+  colors: Colors,
 ): string {
-  const syntax = {
-    search: "web search [query|-] [--query <query>...] [--max-results <n>]",
-    contents: "web contents <url...|->",
-    answer: "web answer [question|-] [--query <question>...]",
-    research: "web research <brief|->",
-  }[capability];
-  const common = [
-    "--provider <id>",
-    "--config <path>",
-    "--cwd <path>",
-    "--timeout <ms>",
-    "--retries <n>",
-    "--retry-delay <ms>",
-    "--output text|json",
-    "--raw",
-    "--options-json <json|@file>",
-    "--quiet",
-    "--no-color",
-    "--help",
-    "--version",
-  ];
-  const providerSection = provider
-    ? `\n${PROVIDERS_BY_ID[provider].label} options:\n${flags.length ? flags.map(formatFlagHelp).join("\n") : "  (none; use --options-json for complex values)"}`
-    : "\nNo provider selected. Pass --provider or configure a capability default.";
-  return `${syntax}\n\nOptions:\n${common.map((flag) => `  ${flag}`).join("\n")}${providerSection}`;
-}
-
-function formatFlagHelp(flag: OptionFlag): string {
-  const syntax =
-    flag.kind === "boolean"
-      ? `${flag.flag} / ${flag.negativeFlag}`
-      : `${flag.flag} <value>`;
-  const values = flag.enumValues ? ` (${flag.enumValues.join("|")})` : "";
-  return `  ${syntax}${values}${flag.description ? `  ${flag.description}` : ""}`;
-}
-
-function rootHelp(): string {
-  return `web-mux ${PACKAGE_VERSION}\n\nUsage: web <command> [options]\n\nCommands:\n  search      Search the web\n  contents    Fetch URL contents\n  answer      Produce grounded answers\n  research    Run foreground research\n  providers   Show provider capabilities and status\n  config      Manage configuration\n\nRun 'web <command> --help' for command options.`;
+  return value
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("Error:")) return colors.red(line);
+      if (line.startsWith("## ")) return colors.bold(colors.cyan(line));
+      if (capability === "search") {
+        const title = /^(\d+\. )(.*)$/.exec(line);
+        if (title) return `${colors.dim(title[1])}${colors.bold(title[2])}`;
+        if (/^\s+https?:\/\//.test(line))
+          return colors.cyan(colors.underline(line));
+      }
+      return line;
+    })
+    .join("\n");
 }
 
 function parseTypedValue(raw: string, descriptor: OptionFlag): unknown {
@@ -774,14 +1090,18 @@ function parseTypedValue(raw: string, descriptor: OptionFlag): unknown {
       !Number.isFinite(value) ||
       (itemKind === "integer" && !Number.isInteger(value))
     )
-      usage(`${descriptor.flag} requires a ${itemKind}`);
+      throw new InvalidArgumentError(
+        `${descriptor.flag} requires a ${itemKind}`,
+      );
   } else if (itemKind === "boolean") {
     if (raw !== "true" && raw !== "false")
-      usage(`${descriptor.flag} requires true or false`);
+      throw new InvalidArgumentError(
+        `${descriptor.flag} requires true or false`,
+      );
     value = raw === "true";
   }
   if (descriptor.enumValues && !descriptor.enumValues.includes(value)) {
-    usage(
+    throw new InvalidArgumentError(
       `${descriptor.flag} must be one of: ${descriptor.enumValues.join(", ")}`,
     );
   }
@@ -808,18 +1128,17 @@ function splitFlag(token: string): [string, string | undefined] {
     : [token.slice(0, index), token.slice(index + 1)];
 }
 
-function nextValue(args: string[], index: number, flag: string): string {
-  const value = args[index];
-  if (value === undefined || value.startsWith("--"))
-    usage(`${flag} requires a value`);
-  return value;
-}
-
-function integer(value: string, flag: string, min: number): number {
+function parseInteger(value: string, flag: string, min: number): number {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < min)
-    usage(`${flag} must be an integer >= ${min}`);
+    throw new InvalidArgumentError(`${flag} must be an integer >= ${min}`);
   return parsed;
+}
+
+function parseProviderId(value: string): ProviderId {
+  if (!(value in PROVIDERS_BY_ID))
+    throw new InvalidArgumentError(`Unknown provider '${value}'`);
+  return value as ProviderId;
 }
 
 function setPath(
@@ -837,27 +1156,6 @@ function setPath(
     cursor = cursor[part] as Record<string, unknown>;
   }
   cursor[path.at(-1)!] = value;
-}
-
-function appendPath(
-  target: Record<string, unknown>,
-  path: string[],
-  value: unknown,
-): void {
-  let cursor = target;
-  for (const part of path.slice(0, -1)) {
-    const existing = cursor[part];
-    cursor[part] =
-      existing && typeof existing === "object" && !Array.isArray(existing)
-        ? existing
-        : {};
-    cursor = cursor[part] as Record<string, unknown>;
-  }
-  const key = path.at(-1)!;
-  cursor[key] = [
-    ...(Array.isArray(cursor[key]) ? (cursor[key] as unknown[]) : []),
-    value,
-  ];
 }
 
 function kebab(value: string): string {
@@ -880,6 +1178,46 @@ function isCapability(value: string): value is Capability {
     value === "contents" ||
     value === "answer" ||
     value === "research"
+  );
+}
+
+function createTheme(argv: string[], io: CliIO): CliTheme {
+  const noColor =
+    optionBeforeSeparator(argv, "--no-color") ||
+    Object.hasOwn(io.env, "NO_COLOR");
+  const forceColor = io.env.FORCE_COLOR;
+  const forcedOff = forceColor === "0";
+  const forcedOn = forceColor !== undefined && !forcedOff;
+  const colorsFor = (stream: NodeJS.WritableStream) =>
+    pc.createColors(
+      !noColor &&
+        !forcedOff &&
+        (forcedOn || Boolean((stream as NodeJS.WriteStream).isTTY)),
+    );
+  return { out: colorsFor(io.stdout), err: colorsFor(io.stderr) };
+}
+
+function optionBeforeSeparator(argv: string[], option: string): boolean {
+  const separator = argv.indexOf("--");
+  const options = separator === -1 ? argv : argv.slice(0, separator);
+  return options.includes(option);
+}
+
+function streamColumns(stream: NodeJS.WritableStream): number {
+  return (stream as NodeJS.WriteStream).columns ?? 80;
+}
+
+function visibleWidth(value: string): number {
+  return [...stripVTControlCharacters(value)].length;
+}
+
+function padAnsi(value: string, width: number): string {
+  return `${value}${" ".repeat(Math.max(0, width - visibleWidth(value)))}`;
+}
+
+function writeCliError(message: string, io: CliIO, theme: CliTheme): void {
+  io.stderr.write(
+    `${theme.err.red(theme.err.bold(FAILURE_MARK))} ${theme.err.red("web:")} ${message}\n`,
   );
 }
 

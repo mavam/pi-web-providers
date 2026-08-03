@@ -36,7 +36,12 @@ async function setupConfig(): Promise<string> {
   return path;
 }
 
-async function invoke(args: string[], stdin = "", signalSource?: EventEmitter) {
+async function invoke(
+  args: string[],
+  stdin = "",
+  signalSource?: EventEmitter,
+  env: NodeJS.ProcessEnv = process.env,
+) {
   const stdout = new PassThrough();
   const stderr = new PassThrough();
   let out = "";
@@ -51,14 +56,115 @@ async function invoke(args: string[], stdin = "", signalSource?: EventEmitter) {
     stdin: Readable.from([stdin]),
     stdout,
     stderr,
-    env: process.env,
+    env,
     cwd: process.cwd(),
     signalSource,
   });
   return { code, out, err };
 }
 
+function forcedColorEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "1" };
+  delete env.NO_COLOR;
+  return env;
+}
+
 describe("web CLI", () => {
+  it("uses Commander help with provider-specific option groups", async () => {
+    const result = await invoke(["search", "--provider", "openai", "--help"]);
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("Usage: web search");
+    expect(result.out).toContain("Common options");
+    expect(result.out).toContain("OpenAI options");
+    expect(result.out).toContain("--search-context-size <value>");
+    expect(result.out).not.toMatch(/\x1b\[/);
+  });
+
+  it("validates generated enum flags through Commander", async () => {
+    const result = await invoke([
+      "search",
+      "hello",
+      "--provider",
+      "openai",
+      "--search-context-size",
+      "huge",
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("must be one of: low, medium, high");
+    expect(result.err).toContain("✘︎");
+  });
+
+  it("colors human output when forced and uses heavy status marks", async () => {
+    const path = await setupConfig();
+    const result = await invoke(
+      ["search", "hello", "--config", path],
+      "",
+      undefined,
+      forcedColorEnv(),
+    );
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("✔︎");
+    expect(result.out).toMatch(/\x1b\[/);
+    expect(result.err).toMatch(/\x1b\[/);
+  });
+
+  it("honors --no-color even when color is forced", async () => {
+    const path = await setupConfig();
+    const result = await invoke(
+      ["search", "hello", "--config", path, "--no-color"],
+      "",
+      undefined,
+      forcedColorEnv(),
+    );
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("✔︎");
+    expect(result.out).not.toMatch(/\x1b\[/);
+    expect(result.err).not.toMatch(/\x1b\[/);
+  });
+
+  it("never colors normalized JSON output", async () => {
+    const path = await setupConfig();
+    const result = await invoke(
+      ["search", "hello", "--config", path, "--output", "json"],
+      "",
+      undefined,
+      forcedColorEnv(),
+    );
+    expect(result.code).toBe(0);
+    expect(result.out).not.toMatch(/\x1b\[/);
+    expect(JSON.parse(result.out)).toMatchObject({ status: "ok" });
+  });
+
+  it("never colors raw output", async () => {
+    const path = await setupConfig();
+    const result = await invoke(
+      ["search", "hello", "--config", path, "--raw"],
+      "",
+      undefined,
+      forcedColorEnv(),
+    );
+    expect(result.code).toBe(0);
+    expect(result.out).not.toMatch(/\x1b\[/);
+    expect(JSON.parse(result.out)).toMatchObject({
+      capability: "search",
+      status: "ok",
+    });
+  });
+
+  it("uses the heavy X for partial human output", async () => {
+    const path = await setupConfig();
+    const result = await invoke([
+      "answer",
+      "first",
+      "--query",
+      "fail",
+      "--config",
+      path,
+    ]);
+    expect(result.code).toBe(1);
+    expect(result.out).toContain("✘︎");
+  });
+
   it("reports an unknown first-pass provider as a usage error", async () => {
     const result = await invoke(["search", "--provider", "bogus", "hello"]);
     expect(result.code).toBe(2);

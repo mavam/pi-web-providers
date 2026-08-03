@@ -71,6 +71,8 @@ No provider is selected implicitly. If neither `--provider` nor a configured cap
 
 Text is the default and never truncates provider results. `--output json` writes one normalized document:
 
+Interactive text output and help use color automatically, with `✔︎` for success and `✘︎` for failures or partial results. Colors are disabled when output is redirected, when `--no-color` is present, or when `NO_COLOR` is set. `FORCE_COLOR` can enable colors for a non-interactive terminal. JSON and raw output never contain ANSI color codes.
+
 ```json
 {
   "schemaVersion": 1,
