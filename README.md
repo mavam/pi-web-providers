@@ -1,6 +1,6 @@
 # 🌍 pi-web-providers
 
-A _meta_ web extension for [pi](https://pi.dev) that routes search, content
+A _meta_ web extension for [Pi](https://pi.dev) that routes search, content
 extraction, quick grounded answers, and research through configurable per-tool
 providers, with explicit provider-specific option schemas for each managed tool.
 
