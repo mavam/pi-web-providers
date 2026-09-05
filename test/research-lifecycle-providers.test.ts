@@ -124,6 +124,7 @@ describe("OpenAI provider", () => {
     });
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -185,7 +186,7 @@ describe("OpenAI provider", () => {
       }),
     );
     expect(result.status).toBe("ok");
-    expect(result.results[0].value?.results[0]).toMatchObject({
+    expect(successful(result.results[0])?.results[0]).toMatchObject({
       title: "OpenAI Deep Research docs",
       url: "https://platform.openai.com/docs/guides/deep-research",
     });
@@ -246,6 +247,7 @@ describe("OpenAI provider", () => {
     });
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -260,7 +262,7 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.results[0].value?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "OpenAI grounded answer\n\nSources:\n1. Answer Source\n   https://example.com/answer",
     );
   });
@@ -272,7 +274,9 @@ describe("async research providers", () => {
 
     exaResearchCreateMock.mockResolvedValue({ researchId: "exa-job-1" });
     exaResearchGetMock
-      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+      )
       .mockResolvedValueOnce({
         status: "completed",
         output: {
@@ -282,6 +286,7 @@ describe("async research providers", () => {
 
     const promise = createWebMux({
       config: {
+        execution: { retries: 1 },
         providers: {
           exa: {
             credentials: { api: { value: "literal-key" } },
@@ -304,7 +309,7 @@ describe("async research providers", () => {
     expect(exaResearchGetMock).toHaveBeenNthCalledWith(1, "exa-job-1", {
       events: false,
     });
-    expect(result.results[0].value?.text).toBe("Exa research result");
+    expect(successful(result.results[0])?.text).toBe("Exa research result");
   });
 
   it("uses OpenAI background responses polling and preserves citations", async () => {
@@ -312,7 +317,9 @@ describe("async research providers", () => {
 
     openaiResponsesCreateMock.mockResolvedValue({ id: "resp_1" });
     openaiResponsesRetrieveMock
-      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+      )
       .mockResolvedValueOnce({
         id: "resp_1",
         model: "o3-deep-research",
@@ -357,6 +364,7 @@ describe("async research providers", () => {
             },
           },
         },
+        execution: { retries: 1 },
       } satisfies WebMuxConfig,
     }).research({
       provider: "openai",
@@ -372,6 +380,7 @@ describe("async research providers", () => {
     const result = await promise;
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -397,7 +406,7 @@ describe("async research providers", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.results[0].value?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "OpenAI research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });
@@ -410,10 +419,9 @@ describe("async research providers", () => {
       deepresearch_id: "valyu-job-1",
     });
     valyuDeepResearchStatusMock
-      .mockResolvedValueOnce({
-        success: false,
-        error: "fetch failed",
-      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+      )
       .mockResolvedValueOnce({
         success: true,
         status: "completed",
@@ -428,6 +436,7 @@ describe("async research providers", () => {
 
     const promise = createWebMux({
       config: {
+        execution: { retries: 1 },
         providers: {
           valyu: {
             credentials: { api: { value: "literal-key" } },
@@ -451,8 +460,13 @@ describe("async research providers", () => {
       1,
       "valyu-job-1",
     );
-    expect(result.results[0].value?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "Valyu research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });
 });
+
+function successful<T>(result: import("../src/index.js").InputResult<T>): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}

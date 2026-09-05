@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { geminiImplementation } from "../src/providers/gemini.js";
-import type { Gemini, ProviderContext } from "../src/types.js";
+import { geminiImplementation } from "../src/providers/gemini/adapter.js";
+import type { Gemini } from "../src/providers/gemini/types.js";
+import type { ProviderContext } from "../src/providers/contract.js";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -47,7 +48,7 @@ describe("Gemini provider search", () => {
           tool_choice: "any",
         },
       },
-      undefined,
+      { maxRetries: 0 },
     );
     expect(response.results).toEqual([
       {
@@ -153,7 +154,7 @@ describe("Gemini provider search", () => {
           tool_choice: "any",
         },
       },
-      undefined,
+      { maxRetries: 0 },
     );
     expect(create).toHaveBeenNthCalledWith(
       2,
@@ -162,7 +163,7 @@ describe("Gemini provider search", () => {
         input: "fallback query",
         tools: [{ type: "google_search" }],
       },
-      undefined,
+      { maxRetries: 0 },
     );
     expect(response.results).toEqual([
       {
@@ -387,7 +388,7 @@ describe("Gemini provider search", () => {
           tool_choice: "any",
         },
       },
-      undefined,
+      { maxRetries: 0 },
     );
   });
 });
@@ -504,7 +505,7 @@ describe("Gemini provider research", () => {
         agent: "deep-research-pro-preview-12-2025",
         background: true,
       },
-      { idempotencyKey: "stable-key" },
+      { idempotencyKey: "stable-key", maxRetries: 0 },
     );
   });
 
@@ -574,7 +575,7 @@ describe("Gemini provider research", () => {
         agent: "deep-research-pro-preview-12-2025",
         background: true,
       },
-      undefined,
+      { maxRetries: 0 },
     );
   });
 
@@ -594,7 +595,9 @@ describe("Gemini provider research", () => {
       undefined,
     );
 
-    expect(get).toHaveBeenCalledWith("research-1", undefined, undefined);
+    expect(get).toHaveBeenCalledWith("research-1", undefined, {
+      maxRetries: 0,
+    });
     expect(result).toEqual({ status: "in_progress" });
   });
 
@@ -734,9 +737,6 @@ function createProvider(client: unknown) {
 function createConfig(): Gemini {
   return {
     credentials: { api: "literal-key" },
-    options: {
-      searchModel: "gemini-2.5-flash",
-    },
   };
 }
 

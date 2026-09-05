@@ -2,254 +2,319 @@
 
 Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, `web` CLI, and pi extension.
 
-`web-mux` gives applications and agents one interface for four web capabilities while keeping provider selection explicit. It ships integrations for Brave, Claude, Cloudflare, Codex, Custom, Exa, Firecrawl, Gemini, Linkup, Ollama, OpenAI, Parallel, Perplexity, Serper, Tavily, and Valyu.
+## 🚀 Installation
 
-Requires Node.js 22 or newer.
+Install `web-mux` with your preferred package manager. A global installation
+provides the `web` executable; an application dependency provides the TypeScript
+library. Requires Node.js 22 or newer.
 
-## Install
-
-Install the `web` executable globally:
-
-```sh
-npm install -g web-mux
-web --help
-```
-
-Run it without installing globally:
+For pi:
 
 ```sh
-npx web-mux search "Node.js 22 release notes" --provider brave
+pi install npm:web-mux
 ```
 
-Or add the library to an application:
+## ✨ Usage
+
+Make your first request without a configuration file:
 
 ```sh
-npm install web-mux
+export BRAVE_SEARCH_API_KEY=…
+web search "Node.js release notes" --provider brave
 ```
 
-## CLI
+Save your choice for subsequent requests:
 
-```text
-web search [query|-] [--query <query>...] [--max-results <n>]
-web contents <url...|->
-web answer [question|-] [--query <question>...]
-web research <brief|->
+```sh
+web config default search brave
+web search "TypeBox validation"
 ```
 
-Search and answer accept up to ten inputs. The positional input comes first, followed by repeated `--query` values. `web contents -` reads newline-separated URLs from stdin. Research stays in the foreground, writes progress to stderr, writes only its result to stdout, and cancels on Ctrl-C.
+Provider selection is always explicit: use `--provider` or a saved capability
+default. Credentials never determine which provider runs.
 
-Common options:
+### Everyday commands
 
-```text
---provider <id>              Select a provider for this invocation
---config <path>              Use an explicit configuration file
---cwd <path>                 Set the execution and custom-command directory
---timeout <ms>               Override the request timeout
---retries <n>                Override the retry count
---retry-delay <ms>           Override the initial retry delay
---output text|json           Select human-readable or normalized output
---raw                        Emit an unstable provider-payload wrapper
---options-json <json|@file>  Supply options that cannot be flags
---quiet                      Suppress progress on stderr
---no-color                   Disable color
---help                       Show provider-aware help
---version                    Show the version
+```sh
+web search "Node.js cancellation" "Bun cancellation"
+web contents https://example.com/a https://example.com/b --provider tavily
+web answer "What is MCP?" "What is A2A?" --provider openai
+web research "Compare databases" --provider gemini --timeout 20m
 ```
 
-`web --help` includes broad workflow examples across all four capabilities. Each command and configuration action has its own contextual examples, and selecting a provider before `--help` adds that provider's exact schema-derived options—for example, `web search --provider openai --help`.
+Quote each independent query or question. Search and answer accept up to ten
+inputs. Research accepts exactly one brief. Use `-` alone for stdin:
 
-The CLI loads the selected provider's TypeBox schema and creates exact flags for scalar fields. For example, `searchContextSize` becomes `--search-context-size`, `userLocation.country` becomes `--user-location-country`, arrays are repeatable, and booleans have both `--foo` and `--no-foo`. Objects, records, and colliding flag names remain available through `--options-json`.
+```sh
+web search - < query.txt
+web answer - < question.txt
+web research - --provider gemini < brief.md
+web contents - --provider tavily < urls.txt
+```
 
-Option precedence is:
+Search, answer, and research read one complete text input, including newlines.
+Contents reads newline-separated URLs. Stdin is never read implicitly.
 
-1. provider defaults
-2. configured capability options
-3. `--options-json`
-4. generated typed flags
+Common controls:
 
-No provider is selected implicitly. If neither `--provider` nor a configured capability default is present, `web` exits with a list of compatible providers.
+| Flag | Meaning |
+| --- | --- |
+| `--provider <id>` | Override the saved provider for this request. |
+| `--max-results <n>` | Limit results per query; search only. |
+| `--format text\|json` | Select the result format; text is the default. |
+| `--timeout <duration>` | Set the overall deadline, including credential commands and retries. |
+| `--quiet` | Suppress progress on stderr, not errors. |
 
-### Output
+Durations require a unit: `500ms`, `30s`, `20m`, or `1h`. Ctrl-C cancels waiting
+for stdin, credential commands, subprocesses, and provider operations. Cancellation
+stops the caller waiting even if an SDK cannot cancel its underlying request.
+Cancelling a remote research request does not necessarily cancel its billable job.
 
-Text is the default and never truncates provider results. `--output json` writes one normalized document:
+### Progressive help
 
-Interactive text output and help use color automatically, with `✔︎` for success and `✘︎` for failures or partial results. Colors are disabled when output is redirected, when `--no-color` is present, or when `NO_COLOR` is set. `FORCE_COLOR` can enable colors for a non-interactive terminal. JSON and raw output never contain ANSI color codes.
+```sh
+web search --help
+web search --provider openai --help
+web search --help-advanced
+```
+
+Ordinary help contains common controls. Explicit provider help adds that
+provider’s exact schema-derived flags. For example, OpenAI exposes `--model`,
+`--search-context-size`, and `--user-location-country`. Arrays use repeatable
+flags; booleans provide `--foo` and `--no-foo`.
+
+Advanced help exposes `--config <path>`, `--cwd <path>`, and
+`--options-json <json|@file>`. Complex objects and colliding flag names remain
+available through JSON. Retry tuning belongs in configuration, not CLI flags.
+
+Options have one precedence order:
+
+1. Provider defaults.
+2. `providers.<id>.options.<capability>`.
+3. Request options, or CLI `--options-json`.
+4. Schema-derived CLI flags.
+
+Switching providers never carries the previous provider’s options into a request.
+Defaults and overrides can be incomplete; required fields are checked after
+merging. For example, Firecrawl answers need a `url` supplied in defaults or
+with `--url`.
+
+### Predictable output
+
+```sh
+web search "TypeBox" --format text
+web search "TypeBox" --format json
+```
+
+Text remains the default when piped. Stdout contains results, not success banners
+or execution diagnostics. Progress and command errors go to stderr. Error color
+follows terminal detection, `NO_COLOR`, and the advanced `--no-color` flag;
+JSON never acquires terminal styling.
+In text mode, failed-input diagnostics go only to stderr. JSON retains structured
+errors in the result document as well. Results are not truncated by the CLI or
+library.
+
+JSON is one versioned document with results in input order. Status is `ok` when
+all inputs succeed and `partial` otherwise:
 
 ```json
 {
   "schemaVersion": 1,
   "capability": "search",
   "provider": "brave",
-  "status": "ok",
+  "status": "partial",
   "results": [
+    { "input": "first query", "ok": true, "value": { "results": [] } },
     {
-      "input": "example query",
-      "ok": true,
-      "value": { "results": [] }
+      "input": "second query",
+      "ok": false,
+      "error": { "code": "TIMEOUT", "message": "Operation exceeded its deadline." }
     }
   ]
 }
 ```
 
-A partial batch includes both successful results and per-input errors, sets `status` to `partial`, and exits nonzero.
+A result has either `ok: true` and `value`, or `ok: false` and a structured
+`error`. Partial batches retain completed successes, including when another input
+times out or is cancelled. A contents result’s `input` is the requested URL;
+`value.url` is the final URL when the provider reports it.
 
-`--raw` is mutually exclusive with `--output json`. It emits a small wrapper around the payload captured before the CLI renders it. Secret-looking fields are redacted and request headers and credentials are never included. The payload shape is intentionally unstable across provider and SDK versions.
+Exit codes: **0** success/help, **1** provider failure, partial result, or timeout,
+**2** invalid input/configuration, **130** cancellation.
 
-Exit codes are `0` for success, `1` for provider or partial-result failures, `2` for usage or configuration failures, `130` for cancellation.
-
-### Supporting commands
+### Inspect providers
 
 ```sh
 web providers
 web providers openai
+```
 
+Discovery distinguishes **Supported**, **Configured**, and **Selected default**.
+Configured means that local settings or credential sources exist—not that
+credentials, executables, or connectivity have been verified. Inspection and help
+never run credential commands or initialize provider SDKs.
+
+## ⚙️ Configuration
+
+JSON is for advanced setups. You don’t need to learn its schema to select and
+save a provider. Inspect or validate the file with:
+
+```sh
 web config path
-web config init
-web config init --force
 web config show
-web config edit
 web config validate
 ```
 
-`config show` always redacts literal and command credentials. `config validate` checks JSON and structure only; it performs no network requests and does not execute credential commands.
+`show` redacts literal credential values and credential commands. `validate`
+checks configuration and provider option schemas without resolving credentials
+or making requests.
 
-## Library
+Configuration paths resolve in this order:
 
-```ts
-import { createWebMux } from "web-mux";
+1. `--config` or the library’s `configPath`.
+2. `WEB_MUX_CONFIG`.
+3. `%APPDATA%\web-mux\config.json` on Windows, when `APPDATA` is set.
+4. `$XDG_CONFIG_HOME/web-mux/config.json`.
+5. `~/.config/web-mux/config.json`.
 
-const web = createWebMux();
+A missing default file means no saved settings. An explicitly selected missing
+file is an error; `config default` can create it. The setter preserves unrelated
+settings and atomically replaces the file.
 
-const result = await web.search({
-  provider: "brave",
-  queries: ["TypeBox validation", "Node.js AbortSignal"],
-  maxResults: 8,
-  options: { searchContextSize: "high" },
-  onProgress: ({ message }) => console.error(message),
-});
-
-if (result.status === "partial") {
-  // Successful inputs remain available in result.results.
-}
-```
-
-The client provides:
-
-- `search({ provider?, queries, maxResults?, options?, signal?, onProgress?, raw? })`
-- `contents({ provider?, urls, options?, signal?, onProgress?, raw? })`
-- `answer({ provider?, queries, options?, signal?, onProgress?, raw? })`
-- `research({ provider?, input, options?, signal?, onProgress?, raw? })`
-- `listProviders()` and `getProvider(id)`
-- `getProviderOptionSchema(id, capability)`
-
-The package exports typed configuration, requests, normalized results, provider metadata, `WebMuxError`, and the error codes `INVALID_CONFIG`, `INVALID_INPUT`, `PROVIDER_UNAVAILABLE`, `PROVIDER_FAILURE`, `PARTIAL_BATCH`, `TIMEOUT`, and `CANCELLED`. Provider registration is intentionally not public.
-
-The published configuration schema is available as `web-mux/config.schema.json`.
-
-## Configuration
-
-Configuration is strict JSON. It is resolved in this order:
-
-1. `--config`
-2. `WEB_MUX_CONFIG`
-3. `$XDG_CONFIG_HOME/web-mux/config.json`
-4. `~/.config/web-mux/config.json`, or `%APPDATA%\web-mux\config.json` on Windows
-
-Start with [example-config.json](./example-config.json) or run `web config init`. A complete shape looks like this:
+See [example-config.json](./example-config.json). A smaller example:
 
 ```json
 {
   "$schema": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
   "defaults": {
-    "search": {
-      "provider": "brave",
-      "maxResults": 5,
-      "options": {}
-    },
-    "contents": { "provider": "tavily" },
-    "answer": { "provider": "openai" },
-    "research": { "provider": "gemini" }
+    "search": { "provider": "brave", "maxResults": 5 },
+    "answer": { "provider": "openai" }
   },
   "execution": {
     "timeoutMs": 30000,
+    "researchTimeoutMs": 1800000,
     "retries": 1,
     "retryDelayMs": 2000,
-    "researchTimeoutMs": 1800000
+    "concurrency": 4
   },
   "providers": {
     "brave": {
-      "credentials": {
-        "search": { "env": "BRAVE_SEARCH_API_KEY" }
-      },
-      "options": {
-        "search": { "mode": "web" }
-      }
+      "options": { "search": { "mode": "news" } }
     },
     "openai": {
       "credentials": {
         "api": { "command": ["op", "read", "op://vault/openai/api-key"] }
       },
-      "options": {
-        "answer": { "model": "gpt-5-mini" }
-      }
+      "options": { "answer": { "model": "gpt-4.1" } }
     }
   }
 }
 ```
 
-Credential values are exactly one of:
+Capability defaults contain only provider selection and portable settings
+(currently search’s `maxResults`). Provider-specific options belong exclusively
+under that provider. Unknown configuration fields are rejected. The published
+schema is available as `web-mux/config.schema.json`.
+
+Defaults are 30 seconds for ordinary operations, 30 minutes for research, four
+concurrent inputs, and no retries. Retry backoff starts at two seconds and grows
+up to 30 seconds within the same overall deadline. Only structurally classified
+transient failures on operations the adapter marks retry-safe are retried.
+Research job creation is never blindly retried; polling applies the configured
+retry count and backoff without creating another job. URL operations are scheduled separately so
+completed pages survive another page’s failure or timeout.
+
+### Credentials
+
+Each credential source has exactly one form:
 
 ```json
-{ "env": "NAME" }
-{ "command": ["program", "arg", "..."] }
-{ "value": "literal" }
+{ "env": "OPENAI_API_KEY" }
+{ "command": ["program", "argument"] }
+{ "value": "literal-secret" }
 ```
 
-Credential commands run directly, never through a shell. Their trimmed stdout is cached in the client process. Standard environment variables work without an explicit provider section; see `web providers <id>` for each provider's names.
+Standard environment references work without a provider section. `web providers
+<id>` lists credential names. Brave uses `BRAVE_SEARCH_API_KEY` for search and
+`BRAVE_ANSWERS_API_KEY` for answers/research. Cloudflare additionally requires
+`CLOUDFLARE_ACCOUNT_ID`. Claude and Codex can use their local SDK authentication.
+Claude also accepts `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A self-hosted
+Firecrawl `baseUrl` can work without an API key.
 
-## Provider matrix
+Credential commands run asynchronously as argv arrays, never through a shell.
+They inherit the client’s environment and working directory and obey its request
+signal. Successful outputs are cached per client, not globally. Overriding one
+credential preserves the provider’s other standard references.
+
+A single runtime boundary redacts resolved credentials from results, progress,
+and public errors before they reach callers. Secret-bearing metadata fields are
+also redacted. This policy is not a sandbox for untrusted adapters or commands.
+
+## 📚 Library
+
+```ts
+import { createWebMux } from "web-mux";
+
+const web = createWebMux();
+const document = await web.search({
+  provider: "openai",
+  queries: ["TypeBox validation", "Node.js AbortSignal"],
+  maxResults: 5,
+  options: { searchContextSize: "high" },
+  timeoutMs: 30_000,
+  onProgress: ({ message }) => console.error(message),
+});
+
+for (const result of document.results) {
+  if (result.ok) console.log(result.value.results);
+  else console.error(result.error.code, result.error.message);
+}
+```
+
+`createWebMux({ config?, configPath?, cwd?, env? })` snapshots configuration and
+environment for one client. It exposes:
+
+- `search({ queries, maxResults?, ...controls })`.
+- `contents({ urls, ...controls })`.
+- `answer({ queries, ...controls })`.
+- `research({ input, ...controls })`.
+- `inspectCapability(capability, provider?)`: selection, configuration status,
+  provider option-override schema, and effective non-secret defaults.
+- `listProviders()` and `getProvider(id)`: supported/configured capabilities and
+  saved selections.
+
+Request controls are `provider`, `options`, `timeoutMs`, `signal`, and
+`onProgress`. Planning errors throw `WebMuxError`; per-input execution failures
+remain in the document. Provider registration is deliberately not public.
+
+## 🔌 Providers
 
 | Provider | Search | Contents | Answer | Research |
 | --- | :---: | :---: | :---: | :---: |
-| Brave | ✓ |  | ✓ | ✓ |
-| Claude | ✓ |  | ✓ |  |
-| Cloudflare |  | ✓ |  |  |
-| Codex | ✓ |  |  |  |
+| Brave | ✓ | | ✓ | ✓ |
+| Claude | ✓ | | ✓ | |
+| Cloudflare | | ✓ | | |
+| Codex | ✓ | | | |
 | Custom | ✓ | ✓ | ✓ | ✓ |
 | Exa | ✓ | ✓ | ✓ | ✓ |
-| Firecrawl | ✓ | ✓ | ✓ |  |
-| Gemini | ✓ |  | ✓ | ✓ |
-| Linkup | ✓ | ✓ |  | ✓ |
-| Ollama | ✓ | ✓ |  |  |
-| OpenAI | ✓ |  | ✓ | ✓ |
-| Parallel | ✓ | ✓ |  |  |
-| Perplexity | ✓ |  | ✓ | ✓ |
-| Serper | ✓ |  |  |  |
-| Tavily | ✓ | ✓ |  |  |
+| Firecrawl | ✓ | ✓ | ✓ | |
+| Gemini | ✓ | | ✓ | ✓ |
+| Linkup | ✓ | ✓ | | ✓ |
+| Ollama | ✓ | ✓ | | |
+| OpenAI | ✓ | | ✓ | ✓ |
+| Parallel | ✓ | ✓ | | |
+| Perplexity | ✓ | | ✓ | ✓ |
+| Serper | ✓ | | | |
+| Tavily | ✓ | ✓ | | |
 | Valyu | ✓ | ✓ | ✓ | ✓ |
 
-All provider SDKs are package dependencies. Provider modules are loaded dynamically, so unrelated SDKs do not run during CLI startup.
+SDKs are dependencies but load only when executing their provider. Lightweight
+provider definitions supply discovery, help, defaults, and validation.
 
-## Custom providers
+### Custom providers
 
-Custom providers use a versioned, language-neutral process contract. Configure an argv array for each capability:
-
-```json
-{
-  "defaults": { "search": { "provider": "custom" } },
-  "providers": {
-    "custom": {
-      "commands": {
-        "search": {
-          "argv": ["node", "./examples/custom/provider.mjs"]
-        }
-      }
-    }
-  }
-}
-```
-
-The process receives one JSON request on stdin:
+Configure `providers.custom.commands.<capability>.argv`, optionally with `cwd`
+and credential-source `env` entries. The process receives one JSON request:
 
 ```json
 {
@@ -261,46 +326,42 @@ The process receives one JSON request on stdin:
 }
 ```
 
-It writes one normalized capability result to stdout and diagnostics to stderr. A nonzero exit means failure. Commands are argv arrays and are never interpreted by a shell. See [examples/custom/README.md](./examples/custom/README.md).
+Write one normalized result object to stdout and newline-delimited progress to
+stderr. A nonzero exit signals failure. Contents answers must include a zero-based
+`inputIndex` relative to the process request; `url` separately represents the final
+URL. Errors are structured `{ "code": "PROVIDER_FAILURE", "message": "..." }`
+objects. See the deterministic [custom-provider example](./examples/custom/README.md).
 
-## pi extension
+### pi extension
 
-```sh
-pi install npm:web-mux
-```
+The extension uses the same inspection and execution API, binds only explicitly
+selected capability defaults, and exposes each provider’s option schema. Restart
+pi after changing configuration. It forwards cancellation and progress, marks
+partial results as errors, and truncates tool output at 2,000 lines or 50 KiB,
+with full results saved to a temporary file. It needs no globally installed
+`web` command and starts no background research jobs.
 
-The `web-mux/pi` entry point imports the library directly. At session startup it binds `web_search`, `web_contents`, `web_answer`, and `web_research` to their configured defaults and exposes each selected provider's exact option schema. Restart pi after changing configuration. The extension uses pi cancellation and progress callbacks and has no settings UI, management commands, background jobs, artifacts, cache, or dependency on a globally installed `web` command.
+## 🩺 Migration
 
-## Migrating from `pi-web-providers`
+The former `pi-web-providers` configuration is not auto-detected or converted.
+Save new defaults with `web config default <capability> <provider>`. Move old
+`tools.<capability>` selections to `defaults.<capability>.provider`, execution
+settings to `execution`, credentials to explicit source objects, and custom
+commands to `providers.custom.commands.<capability>`.
 
-The old configuration is not detected or converted. There are no aliases or compatibility shims.
+For earlier branch versions, replace `--query` with quoted positional inputs and
+`--output` with `--format`. Provider-native output is not exposed. Move
+`defaults.<capability>.options` into `providers.<id>.options.<capability>`.
+Use `config default` instead of starter-file/editor commands.
 
-1. Uninstall the former package: `pi remove pi-web-providers` or `npm uninstall -g pi-web-providers`.
-2. Install this package with `npm install -g web-mux`, run it once with `npx web-mux`, or install it in pi with `pi install npm:web-mux`.
-3. Create a fresh XDG configuration with `web config init`.
-4. Manually map fields:
-
-| Former field | `web-mux` field |
-| --- | --- |
-| `tools.search` | `defaults.search.provider` |
-| `tools.contents` | `defaults.contents.provider` |
-| `tools.answer` | `defaults.answer.provider` |
-| `tools.research` | `defaults.research.provider` |
-| `settings.requestTimeoutMs` | `execution.timeoutMs` |
-| `settings.retryCount` | `execution.retries` |
-| `settings.retryDelayMs` | `execution.retryDelayMs` |
-| `settings.researchTimeoutMs` | `execution.researchTimeoutMs` |
-| provider credential string | `providers.<id>.credentials.<name>.env`, `.command`, or `.value` object |
-| provider option object | `providers.<id>.options.<capability>` |
-| custom provider option/command | `providers.custom.commands.<capability>` |
-
-## Development
+## 🧹 Uninstall
 
 ```sh
-npm run check
-npm test
-npm run build
-npm pack
+pi remove npm:web-mux
 ```
 
-Live provider smoke tests remain opt-in and credential-gated. Research smoke tests should be enabled separately because they can be slow and expensive.
+For standalone installations, remove `web-mux` with your package manager.
+
+## 📄 License
+
+[MIT](LICENSE)

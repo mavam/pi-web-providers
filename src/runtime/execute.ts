@@ -1,0 +1,264 @@
+import type {
+  Capability,
+  CapabilityDocument,
+  CapabilityValues,
+  InputResult,
+  RequestOptions,
+} from "../domain.js";
+import type {
+  ExecutionConfig,
+  ProviderConfiguration,
+} from "../configuration/types.js";
+import type {
+  ProviderAdapter,
+  ProviderDefinition,
+} from "../providers/definition.js";
+import type {
+  ProviderConfig,
+  ProviderContext,
+  ProviderRequest,
+  ProviderResult,
+} from "../providers/contract.js";
+import { asWebMuxError, WebMuxError } from "../errors.js";
+import { CredentialResolver } from "./credentials.js";
+import { OutwardBoundary } from "./outward.js";
+import { deadline, orderedMap, sleep, withSignal } from "./lifecycle.js";
+
+export interface ExecutionPlan<C extends Capability> {
+  capability: C;
+  definition: ProviderDefinition;
+  stored?: ProviderConfiguration;
+  inputs: string[];
+  options: Record<string, unknown>;
+  maxResults?: number;
+  policy: ExecutionConfig;
+}
+export class ExecutionRuntime {
+  private readonly credentials: CredentialResolver;
+  constructor(
+    private readonly cwd: string,
+    private readonly env: Record<string, string | undefined>,
+  ) {
+    this.credentials = new CredentialResolver(cwd, env);
+  }
+  async execute<C extends Capability>(
+    plan: ExecutionPlan<C>,
+    request: RequestOptions,
+  ): Promise<CapabilityDocument<CapabilityValues[C], C>> {
+    const { capability, definition, inputs } = plan;
+    const timeoutMs =
+      request.timeoutMs ??
+      (capability === "research"
+        ? (plan.policy.researchTimeoutMs ?? 1_800_000)
+        : (plan.policy.timeoutMs ?? 30_000));
+    if (
+      !Number.isSafeInteger(timeoutMs) ||
+      timeoutMs <= 0 ||
+      timeoutMs > 2_147_483_647
+    )
+      throw new WebMuxError(
+        "INVALID_INPUT",
+        "timeoutMs must be a positive integer no larger than 2147483647.",
+      );
+    const scope = deadline(timeoutMs, request.signal);
+    const outward = new OutwardBoundary();
+    let active = true;
+    const context: ProviderContext = {
+      cwd: this.cwd,
+      env: this.env,
+      signal: scope.signal,
+      retryPolicy: {
+        retries: plan.policy.retries ?? 0,
+        delayMs: plan.policy.retryDelayMs ?? 2000,
+      },
+      onProgress: (message) => {
+        if (active && !scope.signal.aborted) {
+          try {
+            request.onProgress?.(
+              outward.value({ capability, provider: definition.id, message }),
+            );
+          } catch {
+            /* A notification callback must not crash SDK/subprocess handlers. */
+          }
+        }
+      },
+    };
+    const fail = (input: string, error: unknown): InputResult<never> => ({
+      input,
+      ok: false,
+      error: outward.error(scope.signal.aborted ? scope.signal.reason : error),
+    });
+    try {
+      scope.signal.throwIfAborted();
+      const config = await this.credentials.prepare(
+        definition,
+        plan.stored,
+        capability,
+        scope.signal,
+        outward,
+      );
+      const adapter = await withSignal<ProviderAdapter<any>>(
+        definition.load(),
+        scope.signal,
+      );
+      const run = async (
+        input: string,
+      ): Promise<InputResult<CapabilityValues[C]>> => {
+        try {
+          const operation: ProviderRequest =
+            capability === "search"
+              ? {
+                  capability,
+                  query: input,
+                  maxResults: plan.maxResults!,
+                  options: plan.options,
+                }
+              : capability === "answer"
+                ? { capability, query: input, options: plan.options }
+                : { capability: "research", input, options: plan.options };
+          const result = await this.run(
+            adapter,
+            config,
+            operation,
+            plan,
+            context,
+          );
+          const value =
+            capability === "search"
+              ? {
+                  results: (result as ProviderResult<"search">).results.slice(
+                    0,
+                    plan.maxResults,
+                  ),
+                }
+              : textValue(result as ProviderResult<"answer">);
+          return { input, ok: true, value: value as CapabilityValues[C] };
+        } catch (error) {
+          return fail(input, error);
+        }
+      };
+      let results: InputResult<CapabilityValues[C]>[];
+      if (capability === "contents") {
+        // Schedule URL operations individually: completed pages survive another
+        // page's timeout, and adapters cannot exceed runtime batch concurrency.
+        results = await orderedMap(
+          inputs,
+          plan.policy.concurrency ?? 4,
+          async (input) => {
+            try {
+              const response = (await this.run(
+                adapter,
+                config,
+                {
+                  capability: "contents",
+                  urls: [input],
+                  options: plan.options,
+                },
+                plan,
+                context,
+              )) as ProviderResult<"contents">;
+              if (
+                response.answers.length !== 1 ||
+                response.answers[0].inputIndex !== 0
+              )
+                throw new WebMuxError(
+                  "PROVIDER_FAILURE",
+                  "Provider returned missing, duplicate, or invalid contents input indexes.",
+                );
+              const answer = response.answers[0];
+              if (answer.error)
+                return fail(
+                  input,
+                  new WebMuxError(answer.error.code, answer.error.message, {
+                    retryable: answer.error.retryable,
+                  }),
+                );
+              const { inputIndex: _index, error: _error, ...value } = answer;
+              return { input, ok: true, value: value as CapabilityValues[C] };
+            } catch (error) {
+              return fail(input, error);
+            }
+          },
+        );
+      } else
+        results = await orderedMap(inputs, plan.policy.concurrency ?? 4, run);
+      return outward.value({
+        schemaVersion: 1,
+        capability,
+        provider: definition.id,
+        status: results.every((result) => result.ok) ? "ok" : "partial",
+        results,
+      });
+    } catch (error) {
+      if (scope.signal.aborted)
+        return outward.value({
+          schemaVersion: 1,
+          capability,
+          provider: definition.id,
+          status: "partial",
+          results: inputs.map((input) => fail(input, error)),
+        });
+      throw outward.exception(error);
+    } finally {
+      active = false;
+      scope.dispose();
+    }
+  }
+
+  private async run(
+    adapter: ProviderAdapter<any>,
+    config: ProviderConfig,
+    request: ProviderRequest,
+    plan: ExecutionPlan<Capability>,
+    context: ProviderContext,
+  ): Promise<ProviderResult> {
+    const execute = adapter[request.capability];
+    if (!execute)
+      throw new WebMuxError(
+        "PROVIDER_UNAVAILABLE",
+        `Provider does not implement ${request.capability}.`,
+      );
+    const retries = plan.definition.capabilities[request.capability]?.retrySafe
+      ? (context.retryPolicy?.retries ?? 0)
+      : 0;
+    for (let attempt = 0; ; attempt++) {
+      context.signal!.throwIfAborted();
+      try {
+        // Dispatch is safe because request, definition, and resolved config were
+        // selected together in the plan; no SDK types enter the application API.
+        const result = await withSignal<ProviderResult>(
+          execute(request as never, config, context),
+          context.signal,
+        );
+        if (request.capability === "contents") {
+          const page = (result as ProviderResult<"contents">).answers[0];
+          if (page?.error)
+            throw new WebMuxError(page.error.code, page.error.message, {
+              retryable: page.error.retryable,
+            });
+        }
+        return result;
+      } catch (error) {
+        if (context.signal!.aborted) throw context.signal!.reason;
+        const normalized = asWebMuxError(error);
+        if (!normalized.options.retryable || attempt >= retries)
+          throw normalized;
+        const delay = Math.min(
+          (context.retryPolicy?.delayMs ?? 2000) * 2 ** attempt,
+          30_000,
+        );
+        context.onProgress?.(
+          `Retrying ${request.capability} in ${delay}ms (attempt ${attempt + 2}).`,
+        );
+        await sleep(delay, context.signal);
+      }
+    }
+  }
+}
+function textValue(value: ProviderResult<"answer">) {
+  return {
+    text: value.text,
+    ...(value.itemCount === undefined ? {} : { itemCount: value.itemCount }),
+    ...(value.metadata === undefined ? {} : { metadata: value.metadata }),
+  };
+}

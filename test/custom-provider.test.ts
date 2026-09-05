@@ -1,193 +1,53 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
-import { customProvider } from "../src/providers/custom.js";
-import { providerHarness } from "./provider-harness.js";
-
-const cleanupDirs: string[] = [];
-
-afterEach(async () => {
-  while (cleanupDirs.length > 0) {
-    const dir = cleanupDirs.pop();
-    if (dir) {
-      await rm(dir, { recursive: true, force: true });
-    }
-  }
+import { expect, it } from "vitest";
+import { createWebMux } from "../src/index.js";
+import { customConfig } from "./helpers.js";
+it.each([
+  [{ url: "https://test" }],
+  [{ inputIndex: -1, url: "https://test" }],
+  [{ inputIndex: 1, url: "https://test" }],
+  [
+    { inputIndex: 0, url: "https://test" },
+    { inputIndex: 0, url: "https://test" },
+  ],
+])(
+  "rejects missing, out-of-range, and duplicate contents indexes (%#)",
+  async (...answers) => {
+    const config = customConfig();
+    config.providers!.custom!.commands!.contents!.argv = [
+      process.execPath,
+      "-e",
+      `console.log(${JSON.stringify(JSON.stringify({ answers }))})`,
+    ];
+    const result = await createWebMux({ config }).contents({
+      urls: ["https://test"],
+    });
+    expect(result.results[0]).toMatchObject({
+      ok: false,
+      error: { code: "PROVIDER_FAILURE" },
+    });
+  },
+);
+it("keeps completed contents when another URL exceeds the deadline", async () => {
+  const result = await createWebMux({ config: customConfig() }).contents({
+    urls: ["https://fast.test", "https://slow.test"],
+    timeoutMs: 250,
+  });
+  expect(result.results[0]).toMatchObject({
+    input: "https://fast.test",
+    ok: true,
+  });
+  expect(result.results[1]).toMatchObject({
+    input: "https://slow.test",
+    ok: false,
+    error: { code: "TIMEOUT" },
+  });
 });
-
-describe("providerHarness(customProvider)", () => {
-  it("executes a configured search command and parses structured JSON", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
-    cleanupDirs.push(root);
-
-    const scriptPath = join(root, "search.mjs");
-    await writeFile(
-      scriptPath,
-      [
-        'let input = "";',
-        'process.stdin.setEncoding("utf8");',
-        'process.stdin.on("data", (chunk) => (input += chunk));',
-        'process.stdin.on("end", () => {',
-        "  const request = JSON.parse(input);",
-        "  process.stderr.write(`searching ${request.input.query}\\n`);",
-        "  process.stdout.write(JSON.stringify({",
-        "    results: [{",
-        "      title: `Result for ${request.input.query}` ,",
-        '      url: "https://example.com",',
-        '      snippet: "example snippet",',
-        "      score: 0.9,",
-        "      metadata: { echoedMaxResults: request.input.maxResults }",
-        "    }]",
-        "  }));",
-        "});",
-      ].join("\n"),
-      "utf8",
-    );
-
-    const provider = providerHarness(customProvider);
-    const progress: string[] = [];
-    const result = await provider.search(
-      "custom query",
-      3,
-      {
-        options: {
-          search: {
-            argv: [process.execPath, scriptPath],
-          },
-        },
-      },
-      {
-        cwd: process.cwd(),
-        onProgress: (message: string) => progress.push(message),
-      },
-      { mode: "demo" },
-    );
-
-    expect(result).toEqual({
-      provider: "custom",
-      results: [
-        {
-          title: "Result for custom query",
-          url: "https://example.com",
-          snippet: "example snippet",
-          score: 0.9,
-          metadata: { echoedMaxResults: 3 },
-        },
-      ],
-    });
-    expect(progress).toEqual(["searching custom query"]);
-  });
-
-  it("parses provider tool output for non-search capabilities", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
-    cleanupDirs.push(root);
-
-    const scriptPath = join(root, "answer.mjs");
-    await writeFile(
-      scriptPath,
-      [
-        'let input = "";',
-        'process.stdin.setEncoding("utf8");',
-        'process.stdin.on("data", (chunk) => (input += chunk));',
-        'process.stdin.on("end", () => {',
-        "  const request = JSON.parse(input);",
-        "  process.stdout.write(JSON.stringify({",
-        "    text: `Answer for: ${request.input.query}` ,",
-        "    itemCount: 2,",
-        '    metadata: { source: "fixture" }',
-        "  }));",
-        "});",
-      ].join("\n"),
-      "utf8",
-    );
-
-    const provider = providerHarness(customProvider);
-    const result = await provider.answer(
-      "what is this?",
-      {
-        options: {
-          answer: {
-            argv: [process.execPath, scriptPath],
-          },
-        },
-      },
-      {
-        cwd: process.cwd(),
-      },
-      undefined,
-    );
-
-    expect(result).toEqual({
-      provider: "custom",
-      text: "Answer for: what is this?",
-      itemCount: 2,
-      metadata: { source: "fixture" },
-    });
-  });
-
-  it("rejects unsupported contents text payloads from the wrapped command", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
-    cleanupDirs.push(root);
-
-    const scriptPath = join(root, "unsupported-contents.mjs");
-    await writeFile(
-      scriptPath,
-      ['process.stdout.write(JSON.stringify({ text: "unsupported" }));'].join(
-        "\n",
-      ),
-      "utf8",
-    );
-
-    await expect(
-      providerHarness(customProvider).contents(
-        ["https://example.com"],
-        {
-          options: {
-            contents: {
-              argv: [process.execPath, scriptPath],
-            },
-          },
-        },
-        {
-          cwd: process.cwd(),
-        },
-        undefined,
-      ),
-    ).rejects.toThrow(/contents output must include an 'answers' array/);
-  });
-
-  it("rejects invalid search payloads from the wrapped command", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-web-providers-custom-"));
-    cleanupDirs.push(root);
-
-    const scriptPath = join(root, "invalid.mjs");
-    await writeFile(
-      scriptPath,
-      [
-        'process.stdout.write(JSON.stringify({ results: [{ title: "Missing fields" }] }));',
-      ].join("\n"),
-      "utf8",
-    );
-
-    const provider = providerHarness(customProvider);
-
-    await expect(
-      provider.search(
-        "broken",
-        1,
-        {
-          options: {
-            search: {
-              argv: [process.execPath, scriptPath],
-            },
-          },
-        },
-        {
-          cwd: process.cwd(),
-        },
-        undefined,
-      ),
-    ).rejects.toThrow(/results\[0\]\.url/);
-  });
+it("smokes all four custom-provider operations through the public API", async () => {
+  const client = createWebMux({ config: customConfig() });
+  expect((await client.search({ queries: ["custom"] })).status).toBe("ok");
+  expect(
+    (await client.contents({ urls: ["https://example.test"] })).status,
+  ).toBe("ok");
+  expect((await client.answer({ queries: ["custom"] })).status).toBe("ok");
+  expect((await client.research({ input: "custom" })).status).toBe("ok");
 });

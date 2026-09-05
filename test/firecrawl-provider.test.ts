@@ -16,7 +16,7 @@ vi.mock("@mendable/firecrawl-js", () => ({
   }),
 }));
 
-import { firecrawlProvider } from "../src/providers/firecrawl.js";
+import { firecrawlProvider } from "../src/providers/firecrawl/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
@@ -28,31 +28,6 @@ afterEach(() => {
 });
 
 describe("providerHarness(firecrawlProvider)", () => {
-  it("reports ready for a custom base URL without an API key", () => {
-    expect(
-      firecrawlProvider.getCapabilityStatus(
-        {
-          baseUrl: "http://localhost:3002",
-        },
-        process.cwd(),
-      ),
-    ).toEqual({ state: "ready" });
-  });
-
-  it("reports missing_api_key for Firecrawl Cloud without an API key", () => {
-    expect(firecrawlProvider.getCapabilityStatus({}, process.cwd())).toEqual({
-      state: "missing_api_key",
-    });
-    expect(
-      firecrawlProvider.getCapabilityStatus(
-        {
-          baseUrl: "https://api.firecrawl.dev",
-        },
-        process.cwd(),
-      ),
-    ).toEqual({ state: "missing_api_key" });
-  });
-
   it("searches with a custom base URL without an API key", async () => {
     firecrawlSearchMock.mockResolvedValue({ web: [] });
 
@@ -66,6 +41,7 @@ describe("providerHarness(firecrawlProvider)", () => {
     );
 
     expect(firecrawlCtorMock).toHaveBeenCalledWith({
+      maxRetries: 1,
       apiKey: undefined,
       apiUrl: "http://localhost:3002",
     });
@@ -116,23 +92,24 @@ describe("providerHarness(firecrawlProvider)", () => {
       "firecrawl sdk",
       4,
       {
-        credentials: { api: "FIRECRAWL_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://api.firecrawl.test",
-        options: {
-          search: {
-            sources: ["web", "news"],
-            timeout: 15,
-          },
-        },
       },
       { cwd: process.cwd() },
       {
-        location: "us",
-        limit: 99,
+        ...{
+          sources: ["web", "news"],
+          timeout: 15,
+        },
+        ...{
+          location: "us",
+          limit: 99,
+        },
       },
     );
 
     expect(firecrawlCtorMock).toHaveBeenCalledWith({
+      maxRetries: 1,
       apiKey: "test-key",
       apiUrl: "https://api.firecrawl.test",
     });
@@ -217,23 +194,22 @@ describe("providerHarness(firecrawlProvider)", () => {
         "https://example.com/b",
         "https://example.com/c",
       ],
-      {
-        credentials: { api: "literal-key" },
-        options: {
-          scrape: {
-            formats: ["markdown"],
-            waitFor: 500,
-          },
-        },
-      },
+      { credentials: { api: "literal-key" } },
       { cwd: process.cwd() },
       {
-        formats: ["html"],
-        mobile: true,
+        ...{
+          formats: ["markdown"],
+          waitFor: 500,
+        },
+        ...{
+          formats: ["html"],
+          mobile: true,
+        },
       },
     );
 
     expect(firecrawlCtorMock).toHaveBeenCalledWith({
+      maxRetries: 1,
       apiKey: "literal-key",
       apiUrl: undefined,
     });
@@ -241,6 +217,7 @@ describe("providerHarness(firecrawlProvider)", () => {
       1,
       "https://example.com/a",
       {
+        autoResume: false,
         formats: ["html"],
         onlyMainContent: true,
         waitFor: 500,
@@ -251,6 +228,7 @@ describe("providerHarness(firecrawlProvider)", () => {
       2,
       "https://example.com/b",
       {
+        autoResume: false,
         formats: ["html"],
         onlyMainContent: true,
         waitFor: 500,
@@ -261,14 +239,16 @@ describe("providerHarness(firecrawlProvider)", () => {
       3,
       "https://example.com/c",
       {
+        autoResume: false,
         formats: ["html"],
         onlyMainContent: true,
         waitFor: 500,
         mobile: true,
       },
     );
-    expect(response.answers).toEqual([
+    expect(response.answers).toMatchObject([
       {
+        inputIndex: 0,
         url: "https://example.com/a",
         content: "# Page A\n\nBody A",
         metadata: {
@@ -277,10 +257,12 @@ describe("providerHarness(firecrawlProvider)", () => {
         },
       },
       {
+        inputIndex: 1,
         url: "https://example.com/b",
-        error: "blocked by robots",
+        error: { code: "PROVIDER_FAILURE", message: "blocked by robots" },
       },
       {
+        inputIndex: 2,
         url: "https://example.com/c",
         content: JSON.stringify(
           {
@@ -317,24 +299,22 @@ describe("providerHarness(firecrawlProvider)", () => {
 
     const response = await providerHarness(firecrawlProvider).answer(
       "What does the page say about question scraping?",
-      {
-        credentials: { api: "FIRECRAWL_API_KEY" },
-        options: {
-          scrape: {
-            formats: ["markdown"],
-            onlyMainContent: false,
-            waitFor: 100,
-          },
-          answer: {
-            url: "https://docs.firecrawl.dev/features/scrape",
-            mobile: true,
-          },
-        },
-      },
+      { credentials: { api: "test-key" } },
       { cwd: process.cwd() },
       {
-        url: "https://docs.firecrawl.dev/features/scrape#question-format",
-        waitFor: 250,
+        ...{
+          formats: ["markdown"],
+          onlyMainContent: false,
+          waitFor: 100,
+        },
+        ...{
+          url: "https://docs.firecrawl.dev/features/scrape",
+          mobile: true,
+        },
+        ...{
+          url: "https://docs.firecrawl.dev/features/scrape#question-format",
+          waitFor: 250,
+        },
       },
     );
 

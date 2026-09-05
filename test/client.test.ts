@@ -1,139 +1,122 @@
-import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
-import { createWebMux, type WebMuxConfig } from "../src/index.js";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { createWebMux } from "../src/index.js";
+import { customConfig } from "./helpers.js";
+afterEach(() => vi.unstubAllGlobals());
 
-const fixture = resolve("test/fixtures/custom-provider.mjs");
-
-function config(): WebMuxConfig {
-  const command = {
-    argv: [process.execPath, fixture] as [string, ...string[]],
-    env: { SAFE_SECRET: { value: "configured-secret" } },
-  };
-  return {
-    defaults: {
-      search: {
-        provider: "custom",
-        options: { shared: "default", nested: { one: 1 } },
-      },
-      contents: { provider: "custom" },
-      answer: { provider: "custom" },
-      research: { provider: "custom" },
-    },
-    providers: {
-      custom: {
-        options: { search: { shared: "provider", nested: { two: 2 } } },
-        commands: {
-          search: command,
-          contents: command,
-          answer: command,
-          research: command,
-        },
-      },
-    },
-  };
-}
-
-describe("web-mux client", () => {
-  it("does not choose an implicit provider", async () => {
-    const client = createWebMux({ config: {} });
+describe("application contracts", () => {
+  it("never selects a provider from credentials", async () => {
+    const client = createWebMux({
+      config: {},
+      env: { BRAVE_SEARCH_API_KEY: "present" },
+    });
     await expect(client.search({ queries: ["hello"] })).rejects.toThrow(
-      /Compatible providers/,
+      "web config default search brave",
     );
   });
-
-  it("preserves batch ordering and returns partial results", async () => {
-    const result = await createWebMux({ config: config() }).search({
-      queries: ["first", "fail", "third"],
+  it("preserves ordered partial results and provider option precedence", async () => {
+    const config = customConfig();
+    config.providers!.custom!.options = {
+      search: { shared: "provider", nested: { one: 1 } },
+    };
+    const result = await createWebMux({ config }).search({
+      queries: ["slow", "fail", "third"],
+      timeoutMs: 250,
+      options: { shared: "call", nested: { two: 2 } },
     });
-    expect(result.status).toBe("partial");
-    expect(result.results.map((entry) => entry.input)).toEqual([
-      "first",
-      "fail",
-      "third",
+    expect(result.results.map((entry) => [entry.input, entry.ok])).toEqual([
+      ["slow", false],
+      ["fail", false],
+      ["third", true],
     ]);
-    expect(result.results.map((entry) => entry.ok)).toEqual([
-      true,
-      false,
-      true,
-    ]);
-  });
-
-  it("applies default, configured, and call option precedence with nested merging", async () => {
-    const result = await createWebMux({ config: config() }).search({
-      queries: ["options"],
-      options: { shared: "call", nested: { three: 3 } },
-    });
-    const metadata = result.results[0].value?.results[0].metadata as any;
-    expect(metadata.options).toEqual({
+    expect(result.results[0]).toMatchObject({ error: { code: "TIMEOUT" } });
+    const last = result.results[2];
+    if (!last.ok) throw new Error("expected success");
+    expect(last.value.results[0].metadata?.options).toEqual({
       shared: "call",
-      nested: { one: 1, two: 2, three: 3 },
+      nested: { one: 1, two: 2 },
     });
   });
-
-  it("maps per-URL content failures without losing successful content", async () => {
-    const result = await createWebMux({ config: config() }).contents({
-      urls: ["https://one.test", "https://error.test", "https://three.test"],
+  it("uses adapter input indexes even when redirected pages are reordered", async () => {
+    const result = await createWebMux({ config: customConfig() }).contents({
+      urls: [
+        "https://redirected.test/article",
+        "https://exact.test",
+        "https://error.test",
+      ],
     });
-    expect(result.status).toBe("partial");
-    expect(result.results.map((entry) => entry.ok)).toEqual([
-      true,
-      false,
-      true,
-    ]);
+    expect(result.results[0]).toMatchObject({
+      input: "https://redirected.test/article",
+      ok: true,
+      value: {
+        url: "https://canonical.test/article",
+        content: "Contents of https://redirected.test/article",
+      },
+    });
+    expect(result.results[1]).toMatchObject({
+      ok: true,
+      value: { content: "Contents of https://exact.test" },
+    });
+    expect(result.results[2]).toMatchObject({
+      ok: false,
+      error: { code: "PROVIDER_FAILURE" },
+    });
   });
-
-  it("keeps contents aligned when one URL is rewritten and answers are reordered", async () => {
-    const result = await createWebMux({ config: config() }).contents({
-      urls: ["https://redirected.test/article", "https://exact.test/article"],
-    });
-    expect(result.results.map((entry) => entry.input)).toEqual([
-      "https://redirected.test/article",
-      "https://exact.test/article",
-    ]);
-    expect(result.results.map((entry) => entry.value?.content)).toEqual([
-      "Contents of https://redirected.test/article",
-      "Contents of https://exact.test/article",
-    ]);
+  it("does not leak incompatible options when switching providers", async () => {
+    const config = customConfig();
+    config.providers!.custom!.options = { search: { customOnly: true } };
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ web: { results: [] } })),
+      );
+    vi.stubGlobal("fetch", fetch);
+    const result = await createWebMux({
+      config,
+      env: { BRAVE_SEARCH_API_KEY: "secret" },
+    }).search({ provider: "brave", queries: ["brave"] });
+    expect(result.status).toBe("ok");
+    expect(String(fetch.mock.calls[0][0])).not.toContain("customOnly");
   });
-
-  it("matches normalized content URLs before positional fallback", async () => {
-    const normalized =
-      "https://normalized.test/article/?utm_source=test#fragment";
-    const result = await createWebMux({ config: config() }).contents({
-      urls: [normalized, "https://exact.test/article"],
+  it("redacts results, object keys, progress, inputs, and structured errors consistently", async () => {
+    const config = customConfig();
+    config.providers!.custom!.commands!.answer = {
+      argv: [
+        process.execPath,
+        "-e",
+        'const s=process.env.SAFE_SECRET; process.stderr.write(s.slice(0,5)); setTimeout(()=>{process.stderr.write(s.slice(5)+"\\n"); console.log(JSON.stringify({text:s,metadata:{[s]:s,apiToken:"hidden"}}));},10)',
+      ],
+      env: { SAFE_SECRET: { value: "configured-secret" } },
+    };
+    const progress: string[] = [];
+    const result = await createWebMux({ config }).answer({
+      queries: ["configured-secret"],
+      onProgress: (event) => progress.push(event.message),
     });
-    expect(result.results.map((entry) => entry.value?.content)).toEqual([
-      `Contents of ${normalized}`,
-      "Contents of https://exact.test/article",
-    ]);
-  });
-
-  it("captures unstable raw output and redacts secret-looking fields", async () => {
-    const result = await createWebMux({ config: config() }).answer({
-      queries: ["question"],
-      raw: true,
-    });
-    expect(result.results[0].raw).toMatchObject({
-      providerPayload: { metadata: { apiToken: "[redacted]" } },
-    });
-    expect(JSON.stringify(result)).not.toContain("must-not-leak");
+    expect(progress).toEqual(["[redacted]"]);
     expect(JSON.stringify(result)).not.toContain("configured-secret");
+    expect(JSON.stringify(result)).not.toContain("hidden");
+    expect(result).not.toHaveProperty("raw");
   });
-
-  it("forwards research progress and cancellation", async () => {
+  it("returns cancellation without reclassifying message substrings", async () => {
     const controller = new AbortController();
-    const messages: string[] = [];
-    const promise = createWebMux({ config: config() }).research({
+    const client = createWebMux({ config: customConfig() });
+    const pending = client.research({
       input: "slow",
       signal: controller.signal,
-      onProgress: (event) => messages.push(event.message),
     });
-    setTimeout(
-      () => controller.abort(new DOMException("cancelled", "AbortError")),
-      20,
-    );
-    const result = await promise;
-    expect(result.status).toBe("partial");
-    expect(result.results[0].error?.code).toBe("CANCELLED");
+    setTimeout(() => controller.abort(new Error("any caller reason")), 30);
+    expect((await pending).results[0]).toMatchObject({
+      ok: false,
+      error: { code: "CANCELLED" },
+    });
+    const config = customConfig();
+    config.providers!.custom!.commands!.answer!.argv = [
+      process.execPath,
+      "-e",
+      'console.error("timeout cancelled but not a timeout");process.exit(1)',
+    ];
+    expect(
+      (await createWebMux({ config }).answer({ queries: ["x"] })).results[0],
+    ).toMatchObject({ error: { code: "PROVIDER_FAILURE", retryable: false } });
   });
 });

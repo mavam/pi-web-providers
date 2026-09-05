@@ -1,37 +1,32 @@
-import { describe, expect, it } from "vitest";
-import { createWebMux, PROVIDER_IDS, type ProviderId } from "../src/index.js";
-import { loadProvider } from "../src/web-mux/provider-loader.js";
-
-describe("provider catalog", () => {
-  it("rejects unknown provider ids before caching a load", () => {
-    expect(() => loadProvider("bogus" as ProviderId)).toThrow(
-      "Unknown provider 'bogus'",
-    );
-  });
-
-  it("ships all 16 providers with the retained capability matrix", async () => {
-    const client = createWebMux({ config: {} });
-    expect(client.listProviders().map((provider) => provider.id)).toEqual(
-      PROVIDER_IDS,
-    );
-    expect(client.getProvider("valyu")?.capabilities).toEqual([
-      "search",
-      "contents",
-      "answer",
-      "research",
-    ]);
-    expect(client.getProvider("cloudflare")?.capabilities).toEqual([
-      "contents",
-    ]);
-
-    for (const provider of client.listProviders()) {
-      for (const capability of provider.capabilities) {
-        await expect(
-          client.getProviderOptionSchema(provider.id, capability),
-        ).resolves.toSatisfy(
-          (schema) => schema === undefined || typeof schema === "object",
-        );
-      }
+import { expect, it, vi } from "vitest";
+import { createWebMux } from "../src/index.js";
+vi.mock("openai", () => {
+  throw new Error("Inspection initialized an SDK");
+});
+it("validates every lightweight definition and default without SDK initialization", () => {
+  const client = createWebMux({ config: {}, env: {} });
+  for (const provider of client.listProviders()) {
+    for (const capability of provider.capabilities) {
+      expect(client.inspectCapability(capability, provider.id).provider).toBe(
+        provider.id,
+      );
     }
+  }
+  expect(client.getProvider("cloudflare")?.configurationRequirements).toEqual({
+    accountId: "CLOUDFLARE_ACCOUNT_ID",
   });
+});
+it("inspects supported providers and exact schemas without loading their SDKs", () => {
+  const client = createWebMux({
+    config: { defaults: { search: { provider: "openai" } } },
+    env: {},
+  });
+  expect(client.getProvider("openai")).toMatchObject({
+    selectedDefaults: ["search"],
+    configured: [],
+  });
+  expect(
+    client.inspectCapability("search").optionSchema?.properties,
+  ).toHaveProperty("searchContextSize");
+  expect(client.inspectCapability("answer").provider).toBeUndefined();
 });

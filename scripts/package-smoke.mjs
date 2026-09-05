@@ -61,7 +61,6 @@ try {
         'const library = await import("web-mux");',
         'if (typeof library.createWebMux !== "function") throw new Error("missing createWebMux");',
         `if (library.CONFIG_SCHEMA_URL !== ${JSON.stringify(expectedSchemaUrl)}) throw new Error("library schema version does not match package metadata");`,
-        'await import("web-mux/pi");',
       ].join("\n"),
     ],
     { cwd: directory, stdio: "inherit" },
@@ -87,7 +86,93 @@ try {
   );
   if (schema.$id !== expectedSchemaUrl)
     throw new Error("packed schema version does not match package metadata");
-  console.log("Packed package smoke test passed.");
+  const configPath = join(directory, "web-mux.json");
+  const sample = join(
+    directory,
+    "node_modules",
+    "web-mux",
+    "examples",
+    "custom",
+    "provider.mjs",
+  );
+  await writeFile(
+    configPath,
+    JSON.stringify({
+      providers: {
+        custom: {
+          commands: Object.fromEntries(
+            ["search", "contents", "answer", "research"].map((capability) => [
+              capability,
+              { argv: [process.execPath, sample] },
+            ]),
+          ),
+        },
+      },
+    }),
+  );
+  const run = (args, input) =>
+    execFileSync(executable, [...args, "--config", configPath], {
+      cwd: directory,
+      encoding: "utf8",
+      input,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+  run(["config", "default", "search", "custom"]);
+  run(["config", "validate"]);
+  const text = run(["search", "example"]);
+  if (
+    !text.includes("Example result for example") ||
+    text.trimStart().startsWith("{")
+  )
+    throw new Error("piped output was not plain text");
+  const cases = [
+    ["search", ["first query", "second query"], undefined, 2],
+    [
+      "contents",
+      ["https://example.com/a", "https://example.com/a"],
+      undefined,
+      2,
+    ],
+    ["answer", ["-"], "one complete\nquestion", 1],
+    ["research", ["-"], "one complete\nbrief", 1],
+  ];
+  for (const [capability, inputs, stdin, count] of cases) {
+    const document = JSON.parse(
+      run(
+        [capability, ...inputs, "--provider", "custom", "--format", "json"],
+        stdin,
+      ),
+    );
+    if (
+      document.status !== "ok" ||
+      document.results.length !== count ||
+      document.results.some((result) => !result.ok)
+    )
+      throw new Error(`packed ${capability} failed`);
+  }
+  // Optional pi peers must not be required by standalone library/CLI users.
+  // Install the host separately before checking the extension entry point.
+  execFileSync(
+    "npm",
+    [
+      "install",
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      `@earendil-works/pi-coding-agent@${sourcePackageJson.devDependencies["@earendil-works/pi-coding-agent"]}`,
+    ],
+    { cwd: directory, stdio: "inherit" },
+  );
+  execFileSync(
+    process.execPath,
+    [
+      "--input-type=module",
+      "--eval",
+      'if (typeof (await import("web-mux/pi")).default !== "function") throw new Error("missing pi extension")',
+    ],
+    { cwd: directory, stdio: "inherit" },
+  );
+  console.log("Packed package and custom-provider smoke tests passed.");
 } finally {
   if (archive) await rm(archive, { force: true });
   await rm(directory, { recursive: true, force: true });

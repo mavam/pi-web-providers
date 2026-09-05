@@ -21,7 +21,7 @@ vi.mock("@tavily/core", () => ({
   }),
 }));
 
-import { tavilyProvider } from "../src/providers/tavily.js";
+import { tavilyProvider } from "../src/providers/tavily/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
@@ -55,19 +55,16 @@ describe("providerHarness(tavilyProvider)", () => {
     const response = await providerHarness(tavilyProvider).search(
       "tavily sdk",
       5,
-      {
-        credentials: { api: "TAVILY_API_KEY" },
-        baseUrl: "https://api.tavily.test",
-        options: {
-          search: {
-            topic: "news",
-          },
-        },
-      },
+      { credentials: { api: "test-key" }, baseUrl: "https://api.tavily.test" },
       { cwd: process.cwd() },
       {
-        country: "US",
-        maxResults: 50,
+        ...{
+          topic: "news",
+        },
+        ...{
+          country: "US",
+          maxResults: 50,
+        },
       },
     );
 
@@ -120,17 +117,15 @@ describe("providerHarness(tavilyProvider)", () => {
 
     const response = await providerHarness(tavilyProvider).contents(
       ["https://example.com/a", "https://example.com/b"],
-      {
-        credentials: { api: "literal-key" },
-        options: {
-          extract: {
-            format: "markdown",
-          },
-        },
-      },
+      { credentials: { api: "literal-key" } },
       { cwd: process.cwd() },
       {
-        includeImages: true,
+        ...{
+          format: "markdown",
+        },
+        ...{
+          includeImages: true,
+        },
       },
     );
 
@@ -141,12 +136,14 @@ describe("providerHarness(tavilyProvider)", () => {
         includeImages: true,
       },
     );
-    expect(response.answers).toEqual([
+    expect(response.answers).toMatchObject([
       {
+        inputIndex: 0,
         url: "https://example.com/a",
-        error: "blocked",
+        error: { code: "PROVIDER_FAILURE", message: "blocked" },
       },
       {
+        inputIndex: 1,
         url: "https://example.com/b",
         content: "Body B",
         metadata: {

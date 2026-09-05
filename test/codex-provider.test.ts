@@ -14,7 +14,7 @@ vi.mock("@openai/codex-sdk", () => ({
   }),
 }));
 
-import { codexProvider } from "../src/providers/codex.js";
+import { codexProvider } from "../src/providers/codex/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
@@ -51,9 +51,12 @@ describe("Codex provider", () => {
     const response = await provider.search(
       "latest docs",
       5,
+      { credentials: { api: "literal-key" } },
       {
-        credentials: { api: "literal-key" },
-        options: {
+        cwd: "/repo",
+      },
+      {
+        ...{
           model: "gpt-4.1",
           modelReasoningEffort: "low",
           webSearchMode: "live",
@@ -61,26 +64,22 @@ describe("Codex provider", () => {
           webSearchEnabled: true,
           additionalDirectories: ["docs"],
         },
-      },
-      {
-        cwd: "/repo",
-      },
-      {
-        model: "gpt-5-codex",
-        modelReasoningEffort: "high",
-        webSearchMode: "cached",
-        sandboxMode: "danger-full-access",
-        workingDirectory: "/tmp/override",
-        skipGitRepoCheck: false,
-        approvalPolicy: "on-request",
-        networkAccessEnabled: false,
-        webSearchEnabled: false,
-        additionalDirectories: ["tmp"],
+        ...{
+          model: "gpt-5-codex",
+          modelReasoningEffort: "high",
+          webSearchMode: "cached",
+          sandboxMode: "danger-full-access",
+          workingDirectory: "/tmp/override",
+          skipGitRepoCheck: false,
+          approvalPolicy: "on-request",
+          networkAccessEnabled: false,
+          webSearchEnabled: false,
+          additionalDirectories: ["tmp"],
+        },
       },
     );
 
     expect(startThreadMock).toHaveBeenCalledWith({
-      additionalDirectories: ["docs"],
       approvalPolicy: "never",
       model: "gpt-5-codex",
       modelReasoningEffort: "high",

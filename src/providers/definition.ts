@@ -1,145 +1,54 @@
-import type { TObject } from "typebox";
+import type { Capability, ProviderId } from "../domain.js";
 import type {
-  ProviderCapabilityStatus,
-  ProviderCapabilityStatusOptions,
-  ProviderConfig,
+  CredentialSource,
+  ProviderConfiguration,
+} from "../configuration/types.js";
+import type {
+  ProviderConfigMap,
   ProviderContext,
-  ProviderId,
+  ProviderRequest,
   ProviderResult,
-  Tool,
-} from "../types.js";
+} from "./contract.js";
 
-export type SearchInput = {
-  query: string;
-  maxResults: number;
-};
-
-export type ContentsInput = {
-  urls: string[];
-};
-
-export type AnswerInput = {
-  query: string;
-};
-
-export type ResearchInput = {
-  input: string;
-};
-
-export type CapabilityInput<TInput extends object, TOptions> = TInput &
-  (TOptions extends undefined ? object : { options?: TOptions });
-
-export interface CapabilityLimits {
-  maxResults?: number;
-}
-
-export interface CapabilityDefinition<
-  TInput extends object,
-  TOptions extends object | undefined = undefined,
-  TResult = unknown,
-> {
-  options?: TObject;
-  limits?: CapabilityLimits;
+import type { ProviderCredentialMetadata } from "./metadata.js";
+export interface CapabilityDefinition {
+  options?: Record<string, unknown>;
+  limits?: { maxResults?: number };
   promptGuidelines?: readonly string[];
-  execute(
-    input: CapabilityInput<TInput, TOptions>,
-    context: ProviderExecutionContext,
-  ): Promise<TResult>;
+  /** Whether the entire operation may be repeated after a transient failure. */
+  retrySafe: boolean;
 }
-
-export interface ProviderExecutionContext extends ProviderContext {
-  config: ProviderConfig;
-}
-
-export type ProviderConfigField =
-  | "accountId"
-  | "credentials"
-  | "baseUrl"
-  | "codexPath"
-  | "config"
-  | "customOptions"
-  | "env"
-  | "options"
-  | "pathToClaudeCodeExecutable"
-  | "settings";
-
-export interface ProviderConfigDefinition<TConfig> {
-  createTemplate: () => TConfig;
-  fields: readonly ProviderConfigField[];
-  credentials?: Record<string, string>;
-  optionCapabilities?: readonly Tool[];
-}
-
-export interface ProviderDefinition<
-  TId extends string,
-  TConfig,
-  TCapabilities extends Partial<Record<Tool, CapabilityDefinition<object>>>,
-> {
-  id: TId;
+export type ProviderAdapter<I extends ProviderId> = {
+  [C in Capability]?: (
+    request: ProviderRequest<C>,
+    config: ProviderConfigMap[I],
+    context: ProviderContext,
+  ) => Promise<ProviderResult<C>>;
+};
+export interface ProviderDefinitionFor<I extends ProviderId> {
+  id: I;
   label: string;
   docsUrl: string;
-  config: ProviderConfigDefinition<TConfig>;
-  capabilities: TCapabilities;
-  getCapabilityStatus(
-    config: TConfig | undefined,
-    cwd: string,
-    tool?: Tool,
-    options?: ProviderCapabilityStatusOptions,
-  ): ProviderCapabilityStatus;
+  local: boolean;
+  credentials: readonly ProviderCredentialMetadata[];
+  fields: readonly (keyof ProviderConfiguration)[];
+  credentialDefaults: Record<string, CredentialSource>;
+  defaults: Partial<Record<Capability, Record<string, unknown>>>;
+  capabilities: Partial<Record<Capability, CapabilityDefinition>>;
+  load(): Promise<ProviderAdapter<I>>;
 }
-
-export type ProviderRegistry = Record<
-  ProviderId,
-  ProviderDefinition<
-    ProviderId,
-    ProviderConfig,
-    Partial<Record<Tool, CapabilityDefinition<object>>>
-  >
->;
-
-export function defineCapability<
-  TInput extends object,
-  TOptions extends object | undefined = undefined,
-  TResult = unknown,
->(
-  definition: CapabilityDefinition<TInput, TOptions, TResult>,
-): CapabilityDefinition<TInput, TOptions, TResult> {
-  return definition;
+export type ProviderDefinition = {
+  [I in ProviderId]: ProviderDefinitionFor<I>;
+}[ProviderId];
+export function defineProvider<I extends ProviderId>(
+  definition: ProviderDefinitionFor<I>,
+): ProviderDefinitionFor<I> {
+  return freeze(definition);
 }
-
-export function defineProvider<
-  const TId extends string,
-  TConfig,
-  const TCapabilities extends Partial<
-    Record<Tool, CapabilityDefinition<object>>
-  >,
->(
-  definition: ProviderDefinition<TId, TConfig, TCapabilities>,
-): ProviderDefinition<TId, TConfig, TCapabilities> {
-  return definition;
-}
-
-export function defineProviders<const TProviders extends ProviderRegistry>(
-  providers: TProviders,
-): TProviders {
-  return providers;
-}
-
-export async function executeProviderCapability<TTool extends Tool>(
-  definition: ProviderDefinition<
-    ProviderId,
-    ProviderConfig,
-    Partial<Record<Tool, CapabilityDefinition<object>>>
-  >,
-  capability: TTool,
-  input: object,
-  context: ProviderExecutionContext,
-): Promise<ProviderResult<TTool>> {
-  const handler = definition.capabilities[capability];
-  if (!handler) {
-    throw new Error(
-      `Provider '${definition.id}' does not support '${capability}'.`,
-    );
+function freeze<T>(value: T): T {
+  if (value && typeof value === "object") {
+    Object.freeze(value);
+    for (const child of Object.values(value)) freeze(child);
   }
-  return (await handler.execute(input, context)) as ProviderResult<TTool>;
+  return value;
 }

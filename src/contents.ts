@@ -1,69 +1,42 @@
-import type { ProviderId } from "./types.js";
+import type {
+  ContentsAnswer as DocumentContents,
+  ProviderId,
+  SerializedError,
+} from "./domain.js";
+import { WebMuxError } from "./errors.js";
 
-export interface ContentsAnswer {
-  url: string;
-  content?: string;
-  summary?: unknown;
-  metadata?: Record<string, unknown>;
-  error?: string;
+/** Internal normalized page, before the adapter associates its request index. */
+export interface ContentsAnswer extends DocumentContents {
+  error?: string | SerializedError;
+  inputIndex?: number;
 }
-
 export interface ContentsResponse {
   provider: ProviderId;
   answers: ContentsAnswer[];
 }
-
-export function renderContentsAnswer(
-  answer: ContentsAnswer,
-  index?: number,
-): string {
-  const heading =
-    answer.error !== undefined
-      ? `Error: ${answer.url || "Untitled"}`
-      : answer.url || "Untitled";
-  const lines = [
-    `## ${index === undefined ? "" : `${index + 1}. `}${heading}`.trim(),
-  ];
-
-  const body =
-    answer.error !== undefined
-      ? answer.error.trim()
-      : (answer.content?.trim() ?? "");
-  if (body) {
-    lines.push("", body);
-  }
-
-  if (answer.summary !== undefined) {
-    const summaryText = renderUnknown(answer.summary);
-    if (summaryText) {
-      lines.push("", "### Summary", "", summaryText);
-    }
-  }
-
-  return lines.join("\n").trimEnd();
+export interface IndexedContentsResponse {
+  provider: ProviderId;
+  answers: Array<
+    DocumentContents & { inputIndex: number; error?: SerializedError }
+  >;
 }
-
-export function renderContentsAnswers(answers: ContentsAnswer[]): string {
-  if (answers.length === 0) {
-    return "No contents found.";
-  }
-
-  return (
-    answers
-      .map((answer, index) => renderContentsAnswer(answer, index))
-      .join("\n\n")
-      .trim() || "No contents found."
-  );
-}
-
-function renderUnknown(value: unknown): string {
-  if (typeof value === "string") {
-    return value.trim();
-  }
-
-  if (value === undefined) {
-    return "";
-  }
-
-  return `\`\`\`json\n${JSON.stringify(value, null, 2).trim()}\n\`\`\``;
+/** Only adapters that themselves assemble pages in request order use this helper. */
+export function orderedContents(
+  response: ContentsResponse,
+): IndexedContentsResponse {
+  return {
+    provider: response.provider,
+    answers: response.answers.map((answer, inputIndex) => ({
+      ...answer,
+      inputIndex,
+      ...(answer.error
+        ? {
+            error:
+              typeof answer.error === "string"
+                ? new WebMuxError("PROVIDER_FAILURE", answer.error).toJSON()
+                : answer.error,
+          }
+        : { error: undefined }),
+    })),
+  };
 }

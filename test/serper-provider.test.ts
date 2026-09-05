@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { serperProvider } from "../src/providers/serper.js";
+import { serperProvider } from "../src/providers/serper/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 const originalFetch = globalThis.fetch;
@@ -65,19 +65,19 @@ describe("providerHarness(serperProvider)", () => {
       "serper api",
       25,
       {
-        credentials: { api: "SERPER_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://google.serper.test",
-        options: {
-          search: {
-            gl: "de",
-            autocorrect: false,
-          },
-        },
       },
       { cwd: process.cwd() },
       {
-        hl: "en",
-        location: "Berlin, Berlin, Germany",
+        ...{
+          gl: "de",
+          autocorrect: false,
+        },
+        ...{
+          hl: "en",
+          location: "Berlin, Berlin, Germany",
+        },
       },
     );
 
@@ -160,18 +160,16 @@ describe("providerHarness(serperProvider)", () => {
     await providerHarness(serperProvider).search(
       "serper api",
       3,
+      { credentials: { api: "literal-key" } },
+      { cwd: process.cwd() },
       {
-        credentials: { api: "literal-key" },
-        options: {
-          search: {
-            gl: 123,
-            page: "2",
-            autocorrect: "false",
-            customOption: "preserved",
-          },
+        ...{
+          gl: 123,
+          page: "2",
+          autocorrect: "false",
+          customOption: "preserved",
         },
       },
-      { cwd: process.cwd() },
     );
 
     expect(fetchMock).toHaveBeenCalledWith("https://google.serper.dev/search", {
@@ -217,7 +215,7 @@ describe("providerHarness(serperProvider)", () => {
       "falcon 9 launch",
       5,
       {
-        credentials: { api: "SERPER_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://google.serper.test",
       },
       { cwd: process.cwd() },
@@ -334,17 +332,15 @@ describe("providerHarness(serperProvider)", () => {
     const response = await providerHarness(serperProvider).search(
       "coffee berlin",
       1,
-      {
-        credentials: { api: "literal-key" },
-        options: {
-          search: {
-            gl: "de",
-            location: "Berlin, Berlin, Germany",
-          },
-        },
-      },
+      { credentials: { api: "literal-key" } },
       { cwd: process.cwd() },
-      { mode: "maps", hl: "en" },
+      {
+        ...{
+          gl: "de",
+          location: "Berlin, Berlin, Germany",
+        },
+        ...{ mode: "maps", hl: "en" },
+      },
     );
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -563,18 +559,5 @@ describe("providerHarness(serperProvider)", () => {
     ).rejects.toThrow(
       /Serper API request failed \(401 Unauthorized\): invalid key/,
     );
-  });
-
-  it("requires an API key", async () => {
-    await expect(
-      providerHarness(serperProvider).search(
-        "serper",
-        1,
-        {
-          credentials: { api: "SERPER_API_KEY" },
-        },
-        { cwd: process.cwd() },
-      ),
-    ).rejects.toThrow(/missing an API key/);
   });
 });

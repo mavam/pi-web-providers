@@ -1,356 +1,201 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { PassThrough, Readable } from "node:stream";
+import { Readable, Writable, PassThrough } from "node:stream";
 import { EventEmitter } from "node:events";
-import { describe, expect, it } from "vitest";
-import { runCli } from "../src/cli.js";
-
-const fixture = resolve("test/fixtures/custom-provider.mjs");
-
-async function setupConfig(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "web-mux-cli-"));
-  const path = join(directory, "config.json");
-  const command = { argv: [process.execPath, fixture] };
-  await writeFile(
-    path,
-    JSON.stringify({
-      defaults: {
-        search: { provider: "custom" },
-        contents: { provider: "custom" },
-        answer: { provider: "custom" },
-        research: { provider: "custom" },
-      },
-      providers: {
-        custom: {
-          commands: {
-            search: command,
-            contents: command,
-            answer: command,
-            research: command,
-          },
-        },
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { buildOptionFlags, runCli } from "../src/cli.js";
+import { customConfig } from "./helpers.js";
+const directories: string[] = [];
+afterEach(async () => {
+  await Promise.all(
+    directories
+      .splice(0)
+      .map((path) => rm(path, { recursive: true, force: true })),
+  );
+});
+async function cli(
+  args: string[],
+  input = "",
+  extra: Record<string, unknown> = {},
+) {
+  const cwd = await mkdtemp(join(tmpdir(), "web-mux-cli-"));
+  directories.push(cwd);
+  const config = join(cwd, "config.json");
+  await writeFile(config, JSON.stringify(customConfig()));
+  let stdout = "";
+  let stderr = "";
+  const code = await runCli(args, {
+    stdin: Readable.from([input]),
+    stdout: new Writable({
+      write(chunk, _encoding, done) {
+        stdout += chunk;
+        done();
       },
     }),
-  );
-  return path;
+    stderr: new Writable({
+      write(chunk, _encoding, done) {
+        stderr += chunk;
+        done();
+      },
+    }),
+    env: { WEB_MUX_CONFIG: config },
+    cwd,
+    ...extra,
+  });
+  return { code, stdout, stderr };
 }
-
-async function invoke(
-  args: string[],
-  stdin = "",
-  signalSource?: EventEmitter,
-  env: NodeJS.ProcessEnv = process.env,
-) {
-  const stdout = new PassThrough();
-  const stderr = new PassThrough();
-  let out = "";
-  let err = "";
-  stdout.on("data", (chunk) => {
-    out += chunk;
+describe("CLI contracts", () => {
+  it("keeps execution errors on stderr even with quiet text output", async () => {
+    const failure = await cli(["search", "fail", "--quiet"]);
+    expect(failure.code).toBe(1);
+    expect(failure.stdout).toBe("");
+    expect(failure.stderr).toContain("PROVIDER_FAILURE");
+    const partial = await cli(["search", "success", "fail", "--quiet"]);
+    expect(partial.stdout).toContain("Result for success");
+    expect(partial.stdout).not.toContain("intentional provider failure");
+    expect(partial.stderr).toContain("intentional provider failure");
   });
-  stderr.on("data", (chunk) => {
-    err += chunk;
-  });
-  const code = await runCli(args, {
-    stdin: Readable.from([stdin]),
-    stdout,
-    stderr,
-    env,
-    cwd: process.cwd(),
-    signalSource,
-  });
-  return { code, out, err };
-}
-
-function forcedColorEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, FORCE_COLOR: "1" };
-  delete env.NO_COLOR;
-  return env;
-}
-
-describe("web CLI", () => {
-  it("provides contextual examples at every command level", async () => {
-    const root = await invoke(["--help"]);
-    expect(root.code).toBe(0);
-    expect(root.out).toContain(
-      "Unified web access through interchangeable providers",
-    );
-    expect(root.out).toContain("Examples:");
-    expect(root.out).toContain(
-      'web search --provider brave "Node.js 22 release notes"',
-    );
-
-    const search = await invoke(["search", "--provider", "openai", "--help"]);
-    expect(search.code).toBe(0);
-    expect(search.out).toContain(
-      "Submit one or more independent queries to a web-search provider",
-    );
-    expect(search.out).toContain(
-      'web search --provider openai "TypeBox validation"',
-    );
-
-    const providers = await invoke(["providers", "--help"]);
-    expect(providers.code).toBe(0);
-    expect(providers.out).toContain(
-      "This command does not make provider requests",
-    );
-    expect(providers.out).toContain("web providers openai");
-
-    const config = await invoke(["config", "--help"]);
-    expect(config.code).toBe(0);
-    expect(config.out).toContain("WEB_MUX_CONFIG");
-    expect(config.out).toContain("web config validate");
-
-    const init = await invoke(["config", "init", "--help"]);
-    expect(init.code).toBe(0);
-    expect(init.out.replace(/\s+/g, " ")).toContain(
-      "no credentials or provider defaults are invented",
-    );
-    expect(init.out).toContain(
-      "web config init --config ./web-mux.json --force",
-    );
-  });
-
-  it("uses Commander help with provider-specific option groups", async () => {
-    const result = await invoke(["search", "--provider", "openai", "--help"]);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain("Usage: web search");
-    expect(result.out).toContain("Common options");
-    expect(result.out).toContain("OpenAI options");
-    expect(result.out).toContain("--search-context-size <value>");
-    expect(result.out).not.toMatch(/\x1b\[/);
-  });
-
-  it("validates generated enum flags through Commander", async () => {
-    const result = await invoke([
-      "search",
-      "hello",
-      "--provider",
-      "openai",
-      "--search-context-size",
-      "huge",
-    ]);
-    expect(result.code).toBe(2);
-    expect(result.err).toContain("must be one of: low, medium, high");
-    expect(result.err).toContain("✘︎");
-  });
-
-  it("colors human output when forced and uses heavy status marks", async () => {
-    const path = await setupConfig();
-    const result = await invoke(
-      ["search", "hello", "--config", path],
-      "",
-      undefined,
-      forcedColorEnv(),
-    );
-    expect(result.code).toBe(0);
-    expect(result.out).toContain("✔︎");
-    expect(result.out).toMatch(/\x1b\[/);
-    expect(result.err).toMatch(/\x1b\[/);
-  });
-
-  it("honors --no-color even when color is forced", async () => {
-    const path = await setupConfig();
-    const result = await invoke(
-      ["search", "hello", "--config", path, "--no-color"],
-      "",
-      undefined,
-      forcedColorEnv(),
-    );
-    expect(result.code).toBe(0);
-    expect(result.out).toContain("✔︎");
-    expect(result.out).not.toMatch(/\x1b\[/);
-    expect(result.err).not.toMatch(/\x1b\[/);
-  });
-
-  it("never colors normalized JSON output", async () => {
-    const path = await setupConfig();
-    const result = await invoke(
-      ["search", "hello", "--config", path, "--output", "json"],
-      "",
-      undefined,
-      forcedColorEnv(),
-    );
-    expect(result.code).toBe(0);
-    expect(result.out).not.toMatch(/\x1b\[/);
-    expect(JSON.parse(result.out)).toMatchObject({ status: "ok" });
-  });
-
-  it("never colors raw output", async () => {
-    const path = await setupConfig();
-    const result = await invoke(
-      ["search", "hello", "--config", path, "--raw"],
-      "",
-      undefined,
-      forcedColorEnv(),
-    );
-    expect(result.code).toBe(0);
-    expect(result.out).not.toMatch(/\x1b\[/);
-    expect(JSON.parse(result.out)).toMatchObject({
-      capability: "search",
-      status: "ok",
+  it("keeps reserved and colliding provider flags behind the JSON escape hatch", () => {
+    const flags = buildOptionFlags({
+      type: "object",
+      properties: {
+        provider: { type: "string" },
+        apiKey: { type: "string" },
+        api: { type: "object", properties: { key: { type: "string" } } },
+        foo: { type: "boolean" },
+        noFoo: { type: "boolean" },
+        enabled: { type: "boolean" },
+      },
     });
-  });
-
-  it("uses the heavy X for partial human output", async () => {
-    const path = await setupConfig();
-    const result = await invoke([
-      "answer",
-      "first",
-      "--query",
-      "fail",
-      "--config",
-      path,
+    expect(flags.map((flag) => [flag.flag, flag.negativeFlag])).toEqual([
+      ["--enabled", "--no-enabled"],
     ]);
-    expect(result.code).toBe(1);
-    expect(result.out).toContain("✘︎");
   });
-
-  it("keeps provider status cells icon-only", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "web-mux-providers-"));
-    const path = join(directory, "config.json");
-    await writeFile(path, "{}");
-    const result = await invoke(
-      ["providers", "--config", path],
-      "",
-      undefined,
-      { NO_COLOR: "1" },
+  it("routes provider options with a leading color control and exposes incomplete required options in help", async () => {
+    expect(
+      (
+        await cli([
+          "--no-color",
+          "search",
+          "--provider",
+          "brave",
+          "--mode",
+          "news",
+          "--help",
+        ])
+      ).code,
+    ).toBe(0);
+    const help = await cli(["answer", "--provider", "firecrawl", "--help"]);
+    expect(help.code).toBe(0);
+    expect(help.stdout).toContain("--url");
+  });
+  it("keeps common help small and exposes provider and advanced options progressively", async () => {
+    const common = await cli(["search", "--help"]);
+    expect(common.code).toBe(0);
+    expect(common.stdout).toContain("--format");
+    expect(common.stdout).not.toContain("--model");
+    expect(common.stdout).not.toContain("--options-json");
+    expect(common.stdout).not.toContain("--retries");
+    const provider = await cli(["search", "--provider", "openai", "--help"]);
+    expect(provider.code).toBe(0);
+    expect(provider.stdout).toContain("--search-context-size");
+    expect((await cli(["search", "--help-advanced"])).stdout).toContain(
+      "--options-json",
     );
-    expect(result.code).toBe(0);
-    const [matrix] = result.out.split("\n\n");
-    expect(result.out).toMatch(/^brave\s+✘︎\s+—\s+✘︎\s+✘︎$/m);
-    expect(result.out).toMatch(/^claude\s+✔︎\s+—\s+✔︎\s+—$/m);
-    expect(matrix).not.toMatch(/\b(?:ready|local|setup)\b/);
-    expect(result.out).toContain(
-      "Legend: ✔︎ available · ✘︎ setup required · — unsupported",
+  });
+  it("uses quoted positionals, explicit stdin, and one stable format selector", async () => {
+    const text = await cli(["search", "first", "second", "--quiet"]);
+    expect(text.code).toBe(0);
+    expect(text.stdout).toContain("## 1. first");
+    expect(text.stdout).not.toContain("✔");
+    expect(text.stderr).toBe("");
+    const json = await cli(
+      ["search", "-", "--format", "json"],
+      "one\ncomplete query",
     );
+    expect(JSON.parse(json.stdout).results[0].input).toBe(
+      "one\ncomplete query",
+    );
+    expect(json.stderr).toContain("custom search progress");
+    expect((await cli(["search", "-", "other"], "stdin")).code).toBe(2);
+    for (const flag of ["--raw", "--output", "--query", "--retries"])
+      expect((await cli(["search", "x", flag, "json"])).code).toBe(2);
   });
-
-  it("reports an unknown first-pass provider as a usage error", async () => {
-    const result = await invoke(["search", "--provider", "bogus", "hello"]);
-    expect(result.code).toBe(2);
-    expect(result.err).toContain("Unknown provider 'bogus'");
-    expect(result.err).not.toContain("TypeError");
-  });
-
-  it("treats --version after -- as positional input", async () => {
-    const path = await setupConfig();
-    const result = await invoke([
+  it("keeps route selection consistent with option values and separators", async () => {
+    const result = await cli([
       "search",
-      "--config",
-      path,
+      '--options-json={"value":"--provider"}',
+      "--provider=custom",
       "--",
-      "--version",
+      "--provider",
     ]);
     expect(result.code).toBe(0);
-    expect(result.out).toContain("Result for --version");
+    expect(result.stdout).toContain("Result for --provider");
+    expect(
+      (await cli(["search", "--provider", "invalid", "--help"])).code,
+    ).toBe(2);
+    expect(
+      (
+        await cli([
+          "search",
+          "--provider",
+          "openai",
+          "--help",
+          "--search-context-size",
+          "invalid",
+        ])
+      ).code,
+    ).toBe(2);
   });
-
-  it("keeps normalized JSON on stdout and progress on stderr", async () => {
-    const path = await setupConfig();
-    const result = await invoke([
+  it("preserves partial JSON and accepts readable overall deadlines", async () => {
+    const result = await cli([
       "search",
-      "hello",
-      "--config",
-      path,
-      "--output",
+      "slow",
+      "fast",
+      "--timeout",
+      "150ms",
+      "--format",
       "json",
     ]);
-    expect(result.code).toBe(0);
-    expect(JSON.parse(result.out)).toMatchObject({
-      schemaVersion: 1,
-      capability: "search",
-      provider: "custom",
-      status: "ok",
-    });
-    expect(result.out.trim().split("\n")).toHaveLength(1);
-    expect(result.err).toContain("custom search progress");
-  });
-
-  it("reads newline-separated contents URLs from stdin", async () => {
-    const path = await setupConfig();
-    const result = await invoke(
-      ["contents", "-", "--config", path, "--output", "json"],
+    expect(result.code).toBe(1);
+    expect(
+      JSON.parse(result.stdout).results.map((r: { ok: boolean }) => r.ok),
+    ).toEqual([false, true]);
+    expect((await cli(["research", "brief", "--timeout", "20m"])).code).toBe(0);
+    expect((await cli(["research", "brief", "--timeout", "20"])).code).toBe(2);
+    const contents = await cli(
+      ["contents", "-", "--format", "json"],
       "https://one.test\nhttps://two.test\n",
     );
-    expect(result.code).toBe(0);
-    expect(
-      JSON.parse(result.out).results.map((entry: any) => entry.input),
-    ).toEqual(["https://one.test", "https://two.test"]);
+    expect(JSON.parse(contents.stdout).results).toHaveLength(2);
   });
-
-  it("emits available batch results and exits nonzero for partial failure", async () => {
-    const path = await setupConfig();
-    const result = await invoke([
-      "answer",
-      "first",
-      "--query",
-      "fail",
-      "--config",
-      path,
-      "--output",
-      "json",
-    ]);
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.out)).toMatchObject({ status: "partial" });
+  it("reports discovery honestly and saves defaults with no stdout banner", async () => {
+    const result = await cli(["providers"]);
+    expect(result.stdout).toContain("Supported");
+    expect(result.stdout).toContain("Configured");
+    expect(result.stdout).toContain("Selected default");
+    expect(result.stdout).toContain("have not been verified");
+    const saved = await cli(["config", "default", "search", "brave"]);
+    expect(saved.code).toBe(0);
+    expect(saved.stdout).toBe("");
+    expect(saved.stderr).toContain("Saved search default: brave");
   });
-
-  it("runs research in the foreground and reports progress", async () => {
-    const path = await setupConfig();
-    const result = await invoke(["research", "brief", "--config", path]);
-    expect(result.code).toBe(0);
-    expect(result.out).toContain("Research for brief");
-    expect(result.err).toContain("custom research progress");
-  });
-
-  it("uses exit 2 for mutually exclusive output modes", async () => {
-    const result = await invoke([
-      "search",
-      "query",
-      "--raw",
-      "--output",
-      "json",
-    ]);
-    expect(result.code).toBe(2);
-    expect(result.err).toContain("cannot be combined");
-  });
-
-  it("returns exit 130 when Ctrl-C cancels foreground research", async () => {
-    const path = await setupConfig();
-    const signals = new EventEmitter();
-    const pending = invoke(
-      ["research", "slow", "--config", path, "--output", "json"],
-      "",
-      signals,
-    );
-    setTimeout(() => signals.emit("SIGINT"), 20);
-    const result = await pending;
-    expect(result.code).toBe(130);
-    expect(JSON.parse(result.out).results[0].error.code).toBe("CANCELLED");
-  });
-
-  it("validates provider options without resolving credential commands", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "web-mux-validate-"));
-    const path = join(directory, "config.json");
-    await writeFile(
-      path,
-      JSON.stringify({
-        providers: {
-          openai: {
-            credentials: {
-              api: { command: ["definitely-does-not-exist"] },
-            },
-            options: {
-              search: { searchContextSize: "impossible" },
-            },
-          },
-        },
-      }),
-    );
-    const result = await invoke(["config", "validate", "--config", path]);
-    expect(result.code).toBe(2);
-    expect(result.err).toContain("Invalid openai search options");
-    expect(result.err).not.toContain("definitely-does-not-exist");
+  it("cancels pending stdin and unregisters signal listeners", async () => {
+    const signalSource = new EventEmitter();
+    const pending = cli(["search", "-"], "", {
+      stdin: new PassThrough(),
+      signalSource,
+    });
+    const timer = setInterval(() => {
+      if (signalSource.listenerCount("SIGINT")) signalSource.emit("SIGINT");
+    }, 10);
+    try {
+      expect((await pending).code).toBe(130);
+    } finally {
+      clearInterval(timer);
+    }
+    expect(signalSource.listenerCount("SIGINT")).toBe(0);
+    expect(signalSource.listenerCount("SIGTERM")).toBe(0);
   });
 });

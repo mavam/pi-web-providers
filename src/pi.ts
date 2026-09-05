@@ -1,209 +1,151 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Type, type TObject, type TSchema } from "typebox";
-import { createWebMux } from "./index.js";
-import { loadConfig } from "./web-mux/configuration.js";
-import { renderTextDocument } from "./web-mux/client.js";
-import { CAPABILITIES } from "./web-mux/public-types.js";
-import type {
-  Capability,
-  ProviderId,
-  WebMuxClient,
-  WebMuxConfig,
-} from "./web-mux/public-types.js";
+import {
+  truncateHead,
+  withFileMutationQueue,
+} from "@earendil-works/pi-coding-agent";
+import { Type, type TObject, type TProperties } from "typebox";
+import {
+  CAPABILITIES,
+  createWebMux,
+  type Capability,
+  type WebMuxClient,
+} from "./index.js";
+import { renderTextDocument } from "./render.js";
 
-const NO_TOOLS_MESSAGE =
-  "web-mux registered no tools because no default providers are configured. Run `npx web-mux config init` (or `web config init` when installed globally), set `defaults.<capability>.provider`, then restart pi.";
-
-export default async function webMuxExtension(pi: ExtensionAPI): Promise<void> {
-  const config = await loadConfig();
-  if (!hasBoundProvider(config)) {
-    pi.on("session_start", (_event, context) => {
-      context.ui.notify(NO_TOOLS_MESSAGE, "warning");
-    });
-    return;
-  }
-  const client = createWebMux({ config });
-
-  await registerSearch(pi, client, config);
-  await registerContents(pi, client, config);
-  await registerAnswer(pi, client, config);
-  await registerResearch(pi, client, config);
-}
-
-function hasBoundProvider(config: WebMuxConfig): boolean {
-  return CAPABILITIES.some(
-    (capability) => boundProvider(config, capability) !== undefined,
-  );
-}
-
-async function registerSearch(
-  pi: ExtensionAPI,
-  client: WebMuxClient,
-  config: WebMuxConfig,
-): Promise<void> {
-  const provider = boundProvider(config, "search");
-  if (!provider) return;
-  const options = await optionsField(client, provider, "search");
-  pi.registerTool({
-    name: "web_search",
-    label: "Web Search",
-    description:
-      "Search the public web for up to ten queries and return titles, URLs, and snippets grouped by query.",
-    parameters: Type.Object(
-      {
-        queries: Type.Array(Type.String({ minLength: 1 }), {
-          minItems: 1,
-          maxItems: 10,
-        }),
-        maxResults: Type.Optional(Type.Integer({ minimum: 1 })),
-        ...options,
-      },
-      { additionalProperties: false },
-    ),
-    async execute(_id, params, signal, onUpdate, ctx) {
-      const result = await createWebMux({ config, cwd: ctx.cwd }).search({
-        provider,
-        queries: params.queries,
-        maxResults: params.maxResults,
-        options: params.options as Record<string, unknown> | undefined,
-        signal: signal ?? undefined,
-        onProgress: progress(onUpdate),
-      });
-      return toolResult(result);
-    },
-  });
-}
-
-async function registerContents(
-  pi: ExtensionAPI,
-  client: WebMuxClient,
-  config: WebMuxConfig,
-): Promise<void> {
-  const provider = boundProvider(config, "contents");
-  if (!provider) return;
-  const options = await optionsField(client, provider, "contents");
-  pi.registerTool({
-    name: "web_contents",
-    label: "Web Contents",
-    description:
-      "Fetch and extract the main contents of one or more web pages.",
-    parameters: Type.Object(
-      {
-        urls: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }),
-        ...options,
-      },
-      { additionalProperties: false },
-    ),
-    async execute(_id, params, signal, onUpdate, ctx) {
-      const result = await createWebMux({ config, cwd: ctx.cwd }).contents({
-        provider,
-        urls: params.urls,
-        options: params.options as Record<string, unknown> | undefined,
-        signal: signal ?? undefined,
-        onProgress: progress(onUpdate),
-      });
-      return toolResult(result);
-    },
-  });
-}
-
-async function registerAnswer(
-  pi: ExtensionAPI,
-  client: WebMuxClient,
-  config: WebMuxConfig,
-): Promise<void> {
-  const provider = boundProvider(config, "answer");
-  if (!provider) return;
-  const options = await optionsField(client, provider, "answer");
-  pi.registerTool({
-    name: "web_answer",
-    label: "Web Answer",
-    description:
-      "Answer up to ten factual questions using web-grounded evidence.",
-    parameters: Type.Object(
-      {
-        queries: Type.Array(Type.String({ minLength: 1 }), {
-          minItems: 1,
-          maxItems: 10,
-        }),
-        ...options,
-      },
-      { additionalProperties: false },
-    ),
-    async execute(_id, params, signal, onUpdate, ctx) {
-      const result = await createWebMux({ config, cwd: ctx.cwd }).answer({
-        provider,
-        queries: params.queries,
-        options: params.options as Record<string, unknown> | undefined,
-        signal: signal ?? undefined,
-        onProgress: progress(onUpdate),
-      });
-      return toolResult(result);
-    },
-  });
-}
-
-async function registerResearch(
-  pi: ExtensionAPI,
-  client: WebMuxClient,
-  config: WebMuxConfig,
-): Promise<void> {
-  const provider = boundProvider(config, "research");
-  if (!provider) return;
-  const options = await optionsField(client, provider, "research");
-  pi.registerTool({
-    name: "web_research",
-    label: "Web Research",
-    description:
-      "Run a foreground multi-step web research request and return the final report.",
-    parameters: Type.Object(
-      {
-        input: Type.String({ minLength: 1 }),
-        ...options,
-      },
-      { additionalProperties: false },
-    ),
-    async execute(_id, params, signal, onUpdate, ctx) {
-      const result = await createWebMux({ config, cwd: ctx.cwd }).research({
-        provider,
-        input: params.input,
-        options: params.options as Record<string, unknown> | undefined,
-        signal: signal ?? undefined,
-        onProgress: progress(onUpdate),
-      });
-      return toolResult(result);
-    },
-  });
-}
-
-function boundProvider(
-  config: WebMuxConfig,
-  capability: Capability,
-): ProviderId | undefined {
-  return config.defaults?.[capability]?.provider;
-}
-
-async function optionsField(
-  client: WebMuxClient,
-  provider: ProviderId,
-  capability: Capability,
-): Promise<{ options?: TSchema }> {
-  const schema = await client.getProviderOptionSchema(provider, capability);
-  return schema ? { options: Type.Optional(schema as unknown as TObject) } : {};
-}
-
-function progress(onUpdate: ((update: any) => void) | undefined) {
-  return (event: { message: string }) =>
-    onUpdate?.({
-      content: [{ type: "text", text: event.message }],
-      details: {},
-    });
-}
-
-function toolResult(result: any) {
-  return {
-    content: [{ type: "text" as const, text: renderTextDocument(result) }],
-    details: result,
-    isError: result.status === "partial",
+export default function webMuxExtension(pi: ExtensionAPI): void {
+  const clients = new Map<string, WebMuxClient>();
+  const clientFor = (cwd: string) => {
+    let client = clients.get(cwd);
+    if (!client) {
+      client = createWebMux({ cwd });
+      clients.set(cwd, client);
+    }
+    return client;
   };
+  const initial = clientFor(process.cwd());
+  const selected = CAPABILITIES.filter(
+    (capability) => initial.inspectCapability(capability).provider,
+  );
+  if (!selected.length)
+    pi.on("session_start", (_event, context) => {
+      if (context.hasUI)
+        context.ui.notify(
+          "web-mux registered no tools. Run `web config default search brave` to select a provider, then restart pi.",
+          "warning",
+        );
+    });
+  for (const capability of selected) {
+    const inspection = initial.inspectCapability(capability);
+    const provider = inspection.provider!;
+    const fields: TProperties =
+      capability === "contents"
+        ? { urls: Type.Array(Type.String({ minLength: 1 }), { minItems: 1 }) }
+        : capability === "research"
+          ? { input: Type.String({ minLength: 1 }) }
+          : {
+              queries: Type.Array(Type.String({ minLength: 1 }), {
+                minItems: 1,
+                maxItems: 10,
+              }),
+              ...(capability === "search"
+                ? { maxResults: Type.Optional(Type.Integer({ minimum: 1 })) }
+                : {}),
+            };
+    pi.registerTool({
+      name: `web_${capability}`,
+      label: `Web ${capability[0].toUpperCase()}${capability.slice(1)}`,
+      description: `${descriptions[capability]} Output is truncated to 2000 lines or 50 KiB; full results are saved to a file when truncated.`,
+      parameters: Type.Object(
+        {
+          ...fields,
+          ...(inspection.optionSchema
+            ? {
+                options: Type.Optional(
+                  inspection.optionSchema as unknown as TObject,
+                ),
+              }
+            : {}),
+        },
+        { additionalProperties: false },
+      ),
+      async execute(_id, values, signal, onUpdate, ctx) {
+        const params = values as {
+          queries?: string[];
+          urls?: string[];
+          input?: string;
+          maxResults?: number;
+          options?: Record<string, unknown>;
+        };
+        const client = clientFor(ctx.cwd);
+        const request = {
+          provider,
+          signal: signal ?? ctx.signal,
+          options: params.options as Record<string, unknown> | undefined,
+          onProgress: (event: { message: string }) =>
+            onUpdate?.({
+              content: [{ type: "text", text: event.message }],
+              details: {},
+            }),
+        };
+        const result =
+          capability === "search"
+            ? await client.search({
+                ...request,
+                queries: params.queries!,
+                maxResults: params.maxResults,
+              })
+            : capability === "answer"
+              ? await client.answer({ ...request, queries: params.queries! })
+              : capability === "contents"
+                ? await client.contents({ ...request, urls: params.urls! })
+                : await client.research({ ...request, input: params.input! });
+        const text = renderTextDocument(result);
+        const truncated = truncateHead(text);
+        let body = truncated.content;
+        let fullOutputPath: string | undefined;
+        if (truncated.truncated) {
+          fullOutputPath = join(
+            await mkdtemp(join(tmpdir(), "web-mux-")),
+            "result.json",
+          );
+          await withFileMutationQueue(fullOutputPath, () =>
+            writeFile(fullOutputPath!, JSON.stringify(result), { mode: 0o600 }),
+          );
+          body += `\n\nFull results: ${fullOutputPath}`;
+        }
+        // Preserve partial results, and mark the tool error through Pi's event
+        // API instead of the ignored isError property on execute return values.
+        return {
+          content: [{ type: "text" as const, text: body }],
+          details: {
+            webMux: true,
+            status: result.status,
+            ...(fullOutputPath ? { fullOutputPath } : { result }),
+          },
+        };
+      },
+    });
+  }
+  pi.on("tool_result", (event) => {
+    if (
+      event.details &&
+      typeof event.details === "object" &&
+      "webMux" in event.details &&
+      event.details.webMux === true &&
+      "status" in event.details &&
+      event.details.status === "partial"
+    )
+      return { isError: true };
+  });
 }
+const descriptions: Record<Capability, string> = {
+  search:
+    "Search up to ten queries and return titles, URLs, and snippets in input order.",
+  contents: "Fetch and extract readable contents from web URLs.",
+  answer: "Answer up to ten questions using web-grounded evidence.",
+  research:
+    "Run foreground multi-step web research and return the final report.",
+};

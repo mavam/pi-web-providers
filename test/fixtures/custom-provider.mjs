@@ -7,7 +7,11 @@ if (request.input?.query === "fail" || request.input?.input === "fail") {
   process.exit(7);
 }
 
-if (request.input?.query === "slow" || request.input?.input === "slow") {
+if (
+  request.input?.query === "slow" ||
+  request.input?.input === "slow" ||
+  request.input?.urls?.some((url) => url.includes("slow.test"))
+) {
   await new Promise((resolve) => setTimeout(resolve, 5000));
 }
 
@@ -29,10 +33,15 @@ switch (request.capability) {
     );
     break;
   case "contents":
-    const answers = request.input.urls.map((url) =>
+    const answers = request.input.urls.map((url, inputIndex) =>
       url.includes("error")
-        ? { url, error: "could not fetch" }
+        ? {
+            inputIndex,
+            url,
+            error: { code: "PROVIDER_FAILURE", message: "could not fetch" },
+          }
         : {
+            inputIndex,
             url: url.includes("redirected.test")
               ? "https://canonical.test/article"
               : url.includes("normalized.test")

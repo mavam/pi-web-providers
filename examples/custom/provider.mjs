@@ -26,7 +26,8 @@ switch (request.capability) {
   case "contents":
     process.stdout.write(
       JSON.stringify({
-        answers: request.input.urls.map((url) => ({
+        answers: request.input.urls.map((url, inputIndex) => ({
+          inputIndex,
           url,
           content: `Example contents for ${url}`,
         })),

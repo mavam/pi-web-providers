@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContentsResponse } from "../src/contents.js";
-import { executeProviderCapability } from "../src/providers/definition.js";
-import { ollamaProvider } from "../src/providers/ollama.js";
-import type { Ollama, ProviderContext, SearchResponse } from "../src/types.js";
+import { adapter } from "../src/providers/ollama/adapter.js";
+import { ollamaProvider } from "../src/providers/ollama/definition.js";
+import type { Ollama } from "../src/providers/ollama/types.js";
+import type {
+  ProviderContext,
+  SearchResponse,
+} from "../src/providers/contract.js";
 
 const originalFetch = globalThis.fetch;
 
@@ -18,11 +22,10 @@ async function searchOllama(
   config: Ollama,
   context: ProviderContext,
 ): Promise<SearchResponse> {
-  return await executeProviderCapability(
-    ollamaProvider,
-    "search",
-    { query, maxResults },
-    { ...context, config },
+  return adapter.search(
+    { capability: "search", query, maxResults },
+    config,
+    context,
   );
 }
 
@@ -31,12 +34,7 @@ async function fetchOllama(
   config: Ollama,
   context: ProviderContext,
 ): Promise<ContentsResponse> {
-  return await executeProviderCapability(
-    ollamaProvider,
-    "contents",
-    { urls },
-    { ...context, config },
-  );
+  return adapter.contents({ capability: "contents", urls }, config, context);
 }
 
 describe("ollamaProvider", () => {
@@ -67,7 +65,7 @@ describe("ollamaProvider", () => {
       "what is ollama?",
       5,
       {
-        credentials: { api: "OLLAMA_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
     );
@@ -114,7 +112,7 @@ describe("ollamaProvider", () => {
       "test",
       20,
       {
-        credentials: { api: "OLLAMA_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
     );
@@ -145,7 +143,7 @@ describe("ollamaProvider", () => {
     const response = await fetchOllama(
       ["https://ollama.com"],
       {
-        credentials: { api: "OLLAMA_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
     );
@@ -162,10 +160,11 @@ describe("ollamaProvider", () => {
       }),
     );
 
-    expect(response).toEqual({
+    expect(response).toMatchObject({
       provider: "ollama",
       answers: [
         {
+          inputIndex: 0,
           url: "https://ollama.com",
           content: "Cloud models are now available in Ollama\n\nExplore models",
           metadata: {
@@ -190,7 +189,7 @@ describe("ollamaProvider", () => {
       "test",
       5,
       {
-        credentials: { api: "OLLAMA_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://ollama-proxy.test/api/",
       },
       { cwd: process.cwd() },
@@ -215,17 +214,22 @@ describe("ollamaProvider", () => {
     const response = await fetchOllama(
       ["https://ollama.com"],
       {
-        credentials: { api: "OLLAMA_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
     );
 
-    expect(response).toEqual({
+    expect(response).toMatchObject({
       provider: "ollama",
       answers: [
         {
+          inputIndex: 0,
           url: "https://ollama.com",
-          error: "Ollama API request failed (401 Unauthorized): invalid key",
+          error: {
+            code: "PROVIDER_FAILURE",
+            message:
+              "Ollama API request failed (401 Unauthorized): invalid key",
+          },
         },
       ],
     });
@@ -245,7 +249,7 @@ describe("ollamaProvider", () => {
         "test",
         5,
         {
-          credentials: { api: "OLLAMA_API_KEY" },
+          credentials: { api: "test-key" },
         },
         { cwd: process.cwd() },
       ),
@@ -254,57 +258,10 @@ describe("ollamaProvider", () => {
     );
   });
 
-  it("requires an API key", async () => {
-    await expect(
-      searchOllama(
-        "test",
-        5,
-        {
-          credentials: { api: "OLLAMA_API_KEY" },
-        },
-        { cwd: process.cwd() },
-      ),
-    ).rejects.toThrow(/missing an API key/);
-  });
-
-  it("reports missing_api_key when the configured API key does not resolve", () => {
-    expect(
-      ollamaProvider.getCapabilityStatus(
-        {
-          credentials: { api: "OLLAMA_API_KEY" },
-        },
-        process.cwd(),
-      ),
-    ).toEqual({ state: "missing_api_key" });
-  });
-
-  it("reports ready when the configured API key resolves", () => {
-    process.env.OLLAMA_API_KEY = "test-key";
-
-    expect(
-      ollamaProvider.getCapabilityStatus(
-        {
-          credentials: { api: "OLLAMA_API_KEY" },
-        },
-        process.cwd(),
-      ),
-    ).toEqual({ state: "ready" });
-  });
-
   it("supports search and contents tools", () => {
-    expect(typeof ollamaProvider.capabilities.search.execute).toBe("function");
-    expect(typeof ollamaProvider.capabilities.contents.execute).toBe(
-      "function",
-    );
+    expect(typeof adapter.search).toBe("function");
+    expect(typeof adapter.contents).toBe("function");
     expect("answer" in ollamaProvider.capabilities).toBe(false);
     expect("research" in ollamaProvider.capabilities).toBe(false);
-  });
-});
-
-describe("Ollama config", () => {
-  it("creates an Ollama provider template", () => {
-    expect(ollamaProvider.config.createTemplate()).toEqual({
-      credentials: { api: "OLLAMA_API_KEY" },
-    });
   });
 });

@@ -1,0 +1,18 @@
+{
+  "defaults": {
+    "search": { "provider": "custom" },
+    "contents": { "provider": "custom" },
+    "answer": { "provider": "custom" },
+    "research": { "provider": "custom" }
+  },
+  "providers": {
+    "custom": {
+      "commands": {
+        "search": { "argv": ["node", "./examples/custom/provider.mjs"] },
+        "contents": { "argv": ["node", "./examples/custom/provider.mjs"] },
+        "answer": { "argv": ["node", "./examples/custom/provider.mjs"] },
+        "research": { "argv": ["node", "./examples/custom/provider.mjs"] }
+      }
+    }
+  }
+}

@@ -1,24 +1,25 @@
 ---
-title: Contextual CLI help
+title: Progressive CLI help
 type: change
 authors:
   - mavam
-  - codex
 prs:
   - 37
 created: 2026-08-03T06:46:03.701626Z
 ---
 
-Every `web` command now includes fuller task and option descriptions plus
-copyable examples for its specific usage context:
+Common help now shows a small set of everyday controls. Request provider help
+for exact provider-specific flags, or advanced help for configuration and complex
+JSON options:
 
 ```sh
-web --help
+web search --help
 web search --provider openai --help
-web config init --help
+web search --help-advanced
 ```
 
-Top-level help demonstrates complete workflows across capabilities, while
-command help documents batching, stdin, output streams, provider selection,
-and automation-friendly output. Selecting a provider also shows its exact
-schema-derived options alongside the examples.
+Provider discovery distinguishes supported capabilities, locally configured
+credential sources, and saved defaults without running credential commands or
+claiming that credentials have been verified. Save a selection with
+`web config default search brave`; starter-file and generic editor commands are
+no longer part of the CLI.

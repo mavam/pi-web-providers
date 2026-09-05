@@ -1,22 +1,30 @@
 ---
-title: Colored CLI output
+title: Predictable CLI output
 type: feature
 authors:
   - mavam
-  - codex
 prs:
   - 37
 created: 2026-08-03T05:34:07.693607Z
 ---
 
-Interactive `web` commands now use colored help, provider status tables, and
-human-readable result headers with `✔︎` and `✘︎` status marks:
+The CLI defaults to readable text, including when piped. Use `--format json`
+for a versioned result document. Stdout contains results only; progress and
+errors go to stderr. Terminal error colors respect `NO_COLOR` and `--no-color`.
 
 ```sh
-web providers
-web search "Node.js 22"
+web search "first query" "second query" --format json
+web answer - < question.txt
+web contents - < urls.txt
+web research "Compare databases" --timeout 20m
 ```
 
-Colors disable automatically when output is redirected and can be controlled
-with `--no-color`, `NO_COLOR`, or `FORCE_COLOR`. JSON and raw output remain
-free of ANSI color codes.
+Quoted positional inputs replace repeated `--query` flags, and `--format`
+replaces `--output`. Provider-native output is no longer exposed. Explicit `-`
+reads one complete text input, or newline-separated URLs for contents; stdin is
+never consumed implicitly.
+
+Partial results preserve input order and completed successes. Structured errors
+and exit codes distinguish invalid input, provider failures, timeouts, and
+cancellation. Deadlines include credential commands, retries, and polling;
+research polling retries do not create duplicate jobs.
