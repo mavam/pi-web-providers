@@ -1,0 +1,69 @@
+name: Live provider smoke test
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Explicit provider ID (for example brave, openai, or tavily)
+        required: true
+        type: string
+      capability:
+        description: Capability to test
+        required: true
+        default: search
+        type: choice
+        options: [search, contents, answer, research]
+      options-json:
+        description: Provider-specific request options as JSON (not credentials)
+        default: "{}"
+        type: string
+      include-research:
+        description: Allow a potentially billable research job
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  live-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: live-provider-tests
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install and build
+        run: npm ci
+      - name: Test the selected provider and capability
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          CAPABILITY: ${{ inputs.capability }}
+          PROVIDER_OPTIONS: ${{ inputs.options-json }}
+          INCLUDE_RESEARCH: ${{ inputs.include-research }}
+          ANTHROPIC_API_KEY: ${{ inputs.provider == 'claude' && secrets.ANTHROPIC_API_KEY || '' }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.provider == 'claude' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          BRAVE_SEARCH_API_KEY: ${{ inputs.provider == 'brave' && secrets.BRAVE_SEARCH_API_KEY || '' }}
+          BRAVE_ANSWERS_API_KEY: ${{ inputs.provider == 'brave' && secrets.BRAVE_ANSWERS_API_KEY || '' }}
+          CLOUDFLARE_API_TOKEN: ${{ inputs.provider == 'cloudflare' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ inputs.provider == 'cloudflare' && secrets.CLOUDFLARE_ACCOUNT_ID || '' }}
+          EXA_API_KEY: ${{ inputs.provider == 'exa' && secrets.EXA_API_KEY || '' }}
+          FIRECRAWL_API_KEY: ${{ inputs.provider == 'firecrawl' && secrets.FIRECRAWL_API_KEY || '' }}
+          GOOGLE_API_KEY: ${{ inputs.provider == 'gemini' && secrets.GOOGLE_API_KEY || '' }}
+          LINKUP_API_KEY: ${{ inputs.provider == 'linkup' && secrets.LINKUP_API_KEY || '' }}
+          OLLAMA_API_KEY: ${{ inputs.provider == 'ollama' && secrets.OLLAMA_API_KEY || '' }}
+          OPENAI_API_KEY: ${{ (inputs.provider == 'openai' || inputs.provider == 'codex') && secrets.OPENAI_API_KEY || '' }}
+          PARALLEL_API_KEY: ${{ inputs.provider == 'parallel' && secrets.PARALLEL_API_KEY || '' }}
+          PERPLEXITY_API_KEY: ${{ inputs.provider == 'perplexity' && secrets.PERPLEXITY_API_KEY || '' }}
+          SERPER_API_KEY: ${{ inputs.provider == 'serper' && secrets.SERPER_API_KEY || '' }}
+          TAVILY_API_KEY: ${{ inputs.provider == 'tavily' && secrets.TAVILY_API_KEY || '' }}
+          VALYU_API_KEY: ${{ inputs.provider == 'valyu' && secrets.VALYU_API_KEY || '' }}
+        run: |
+          args=(--provider "$PROVIDER" --capability "$CAPABILITY" --options-json "$PROVIDER_OPTIONS")
+          if [[ "$INCLUDE_RESEARCH" == "true" ]]; then
+            args+=(--include-research)
+          fi
+          node scripts/live-smoke.mjs "${args[@]}"

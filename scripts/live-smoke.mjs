@@ -1,93 +1,127 @@
 #!/usr/bin/env node
 
-import { createWebMux, loadConfig, WebMuxError } from "../dist/index.js";
+import { parseArgs } from "node:util";
+import { CAPABILITIES, createWebMux } from "../dist/index.js";
 
-const args = process.argv.slice(2);
-const providerFilter = readOption(args, "--provider");
-const capabilityFilter =
-  readOption(args, "--capability") ?? readOption(args, "--tool");
-const includeResearch = args.includes("--include-research");
+const controller = new AbortController();
+const cancel = () => controller.abort();
+process.once("SIGINT", cancel);
 
-if (args.includes("--help") || args.includes("-h")) {
-  console.log(
-    "Usage: npm run smoke:live -- [--provider <id>] [--capability <name>] [--include-research]",
-  );
-  process.exit(0);
-}
-
-const config = await loadConfig();
-const client = createWebMux({ config });
-const outcomes = [];
-
-for (const provider of client.listProviders()) {
-  if (providerFilter && provider.id !== providerFilter) continue;
-  for (const capability of provider.capabilities) {
-    if (capabilityFilter && capability !== capabilityFilter) continue;
-    if (capability === "research" && !includeResearch) continue;
-
-    try {
-      const signal = AbortSignal.timeout(
-        capability === "research" ? 360_000 : 90_000,
+try {
+  const { values } = parseArgs({
+    options: {
+      provider: { type: "string" },
+      capability: { type: "string" },
+      config: { type: "string" },
+      "options-json": { type: "string", default: "{}" },
+      "include-research": { type: "boolean", default: false },
+      help: { type: "boolean", short: "h" },
+    },
+  });
+  if (values.help) {
+    console.log(
+      "Usage: node scripts/live-smoke.mjs --provider <id> [--capability <name>] [--config <path>] [--options-json <json>] [--include-research]",
+    );
+    console.log(
+      "Provider selection is required. Research needs explicit additional consent and can incur charges.",
+    );
+  } else {
+    if (!values.provider)
+      throw new Error(
+        "Choose exactly one provider with --provider; credentials never select providers.",
       );
-      const result =
-        capability === "search"
-          ? await client.search({
-              provider: provider.id,
-              queries: ["OpenAI API"],
-              maxResults: 3,
-              signal,
-            })
-          : capability === "contents"
-            ? await client.contents({
-                provider: provider.id,
-                urls: ["https://openai.com/api/"],
-                signal,
-              })
-            : capability === "answer"
-              ? await client.answer({
-                  provider: provider.id,
-                  queries: ["What is the OpenAI API?"],
-                  signal,
-                })
-              : await client.research({
-                  provider: provider.id,
-                  input:
-                    "Write a concise web-grounded explanation of the OpenAI API with cited sources.",
-                  signal,
-                });
+    if (values.capability && !CAPABILITIES.includes(values.capability))
+      throw new Error(`Unknown capability: ${values.capability}`);
+    if (values.capability === "research" && !values["include-research"])
+      throw new Error(
+        "Research requires --include-research because it can incur charges.",
+      );
 
-      if (result.status === "partial") {
-        throw new Error(
-          result.results.find((entry) => !entry.ok)?.error?.message ??
-            "partial result",
+    const options = JSON.parse(values["options-json"]);
+    if (!options || typeof options !== "object" || Array.isArray(options))
+      throw new Error("--options-json must be a JSON object.");
+    const client = createWebMux({ configPath: values.config });
+    const provider = client.getProvider(values.provider);
+    if (!provider) throw new Error(`Unknown provider: ${values.provider}`);
+    const capabilities = values.capability
+      ? [values.capability]
+      : provider.capabilities.filter(
+          (capability) =>
+            capability !== "research" || values["include-research"],
         );
-      }
-      outcomes.push("passed");
-      console.log(`PASS ${provider.id}/${capability}`);
-    } catch (error) {
-      if (
-        error instanceof WebMuxError &&
-        error.code === "PROVIDER_UNAVAILABLE"
-      ) {
-        outcomes.push("skipped");
-        console.log(`SKIP ${provider.id}/${capability}: ${error.message}`);
-      } else {
-        outcomes.push("failed");
+    if (!capabilities.length) throw new Error("No capabilities selected.");
+    let failed = 0;
+    for (const capability of capabilities) {
+      controller.signal.throwIfAborted();
+      try {
+        client.inspectCapability(capability, provider.id);
+        const controls = {
+          provider: provider.id,
+          options,
+          timeoutMs: capability === "research" ? 1_200_000 : 90_000,
+          signal: controller.signal,
+          onProgress: ({ message }) => console.error(message),
+        };
+        const result =
+          capability === "search"
+            ? await client.search({
+                ...controls,
+                queries: ["Node.js AbortSignal documentation"],
+                maxResults: 3,
+              })
+            : capability === "contents"
+              ? await client.contents({
+                  ...controls,
+                  urls: ["https://nodejs.org/api/globals.html"],
+                })
+              : capability === "answer"
+                ? await client.answer({
+                    ...controls,
+                    queries: [
+                      "What does Node.js AbortSignal.timeout do? Cite a source.",
+                    ],
+                  })
+                : await client.research({
+                    ...controls,
+                    input:
+                      "Explain Node.js AbortSignal.timeout and cancellation in a short cited report.",
+                  });
+        if (result.status !== "ok")
+          throw new Error(
+            result.results.find((entry) => !entry.ok)?.error.message ??
+              result.status,
+          );
+        if (!result.results.length || result.results.some((entry) => !entry.ok))
+          throw new Error("Missing successful results.");
+        for (const entry of result.results) {
+          if (capability === "search" && !entry.value.results.length)
+            throw new Error("Search returned no results.");
+          if (
+            (capability === "answer" || capability === "research") &&
+            !entry.value.text.trim()
+          )
+            throw new Error("No textual answer returned.");
+          if (
+            capability === "contents" &&
+            !entry.value.content &&
+            !entry.value.summary
+          )
+            throw new Error("No content returned.");
+        }
+        console.log(`PASS ${provider.id}/${capability}`);
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        failed++;
         console.error(
           `FAIL ${provider.id}/${capability}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }
+    process.exitCode = failed ? 1 : 0;
   }
-}
-
-const passed = outcomes.filter((value) => value === "passed").length;
-const skipped = outcomes.filter((value) => value === "skipped").length;
-const failed = outcomes.filter((value) => value === "failed").length;
-console.log(`\n${passed} passed, ${skipped} skipped, ${failed} failed`);
-process.exitCode = failed > 0 ? 1 : 0;
-
-function readOption(argv, name) {
-  const index = argv.indexOf(name);
-  return index < 0 ? undefined : argv[index + 1];
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = controller.signal.aborted ? 130 : 1;
+} finally {
+  process.removeListener("SIGINT", cancel);
 }
