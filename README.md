@@ -370,39 +370,16 @@ objects. See the deterministic [custom-provider example](./examples/custom/READM
 
 ### pi extension
 
-The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
-`web_research`, with labels such as “Web Search.” Tool-call headers display
-lowercase, space-separated names: `web search`, `web contents`, `web answer`,
-and `web research`. Headers show explicit call parameters as a gray `key=value`
-sequence with bold keys and regular values, including provider-specific choices
-from `options`. For example:
+Webfox exposes `web_search`, `web_contents`, `web_answer`, and `web_research`
+for capabilities with an explicitly configured default provider. Each tool’s
+parameter schema is built dynamically from that provider: the model sees its
+supported options, including provider-specific model settings, search controls,
+and extraction options, rather than parameters for every backend.
 
-```text
-web search limit=2 type=neural contents.text=true
-web answer model=<model-id> config.temperature=0
-```
-
-Nested options use dotted names; arrays stay compact and values with spaces are
-quoted. Only supplied arguments appear, not inherited defaults. Credential-bearing
-options are redacted. Long parameter sequences truncate while collapsed and wrap
-when expanded. The hint shows your configured tool-expansion shortcut, such as
-`ctrl+o to expand`; no shortcut hint appears when that binding is disabled.
-
-All four tools show one status row per input, without
-surrounding quotes, in the theme’s accent color: `●` queued, `▶︎` running,
-`✔︎` done, `✘︎` failed, and `■` cancelled. Rows update in place, preserve input
-order, and remain visible after completion. Long inputs stay on one line until
-expanded with Pi’s tool-expansion shortcut. Result bodies stay collapsed;
-expand to read them with Pi’s native Markdown rendering, including headings,
-links, lists, and syntax-highlighted code blocks. Status glyphs use the theme’s
-warning color (typically amber) for running, green for success, red for failure,
-and dim gray for queued or cancelled inputs. Input text keeps the accent color.
-
-The extension uses the same inspection and execution API, binds only explicitly
-selected capability defaults, and exposes each provider’s option schema. Restart
-pi after changing configuration. It forwards cancellation and progress, marks
-partial results as errors, and truncates tool output at 2,000 lines or 50 KiB,
-with full results saved to a temporary file. It needs no globally installed
+The extension shares configuration and execution with the CLI and library.
+Restart pi after changing configuration to refresh the tool schemas. It forwards
+cancellation and progress, marks partial results as errors, and truncates tool
+output at 2,000 lines or 50 KiB, with full results saved to a temporary file. It needs no globally installed
 `webfox` command and starts no background research jobs.
 
 ## 🧹 Uninstall
