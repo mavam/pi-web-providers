@@ -1,0 +1,729 @@
+import OpenAI from "openai";
+
+import { executeAsyncResearch } from "../../runtime/polling.js";
+import type {
+  ProviderContext,
+  ResearchJob,
+  ResearchPollResult,
+  SearchResponse,
+  ToolOutput,
+} from "../contract.js";
+import type {
+  OpenAIAnswerOptions,
+  OpenAI as OpenAIConfig,
+  OpenAIResearchOptions,
+  OpenAISearchOptions,
+  OpenAIWebSearchToolOptions,
+} from "./types.js";
+
+import { trimSnippet } from "../shared.js";
+
+const DEFAULT_SEARCH_MODEL = "gpt-4.1";
+const DEFAULT_ANSWER_MODEL = "gpt-4.1";
+const DEFAULT_RESEARCH_MODEL = "o4-mini-deep-research";
+
+// Built-in `web_search` tool controls shared by every OpenAI capability.
+
+const searchResultSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["sources"],
+  properties: {
+    sources: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "url", "snippet"],
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          snippet: { type: "string" },
+        },
+      },
+    },
+  },
+} as const;
+
+interface OpenAIResponseLike {
+  id: string;
+  model: string;
+  status?:
+    | "completed"
+    | "failed"
+    | "in_progress"
+    | "cancelled"
+    | "queued"
+    | "incomplete";
+  output_text: string;
+  error: { message: string } | null;
+  incomplete_details: {
+    reason?: "max_output_tokens" | "content_filter";
+  } | null;
+  output: Array<{
+    type: string;
+    content?: Array<{
+      type: string;
+      annotations?: Array<{
+        type: string;
+        title?: string;
+        url?: string;
+        start_index?: number;
+        end_index?: number;
+      }>;
+    }>;
+  }>;
+}
+
+const openaiImplementation = {
+  async search(
+    query: string,
+    maxResults: number,
+    config: OpenAIConfig,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<SearchResponse> {
+    const client = createClient(config);
+    const response = (await client.responses.create(
+      buildOpenAISearchRequest(query, maxResults, options),
+      buildRequestOptions(context.signal, context.idempotencyKey),
+    )) as OpenAIResponseLike;
+
+    return parseSearchResponse(response, maxResults);
+  },
+
+  async answer(
+    query: string,
+    config: OpenAIConfig,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput> {
+    const client = createClient(config);
+    const response = (await client.responses.create(
+      buildOpenAIAnswerRequest(query, options),
+      buildRequestOptions(context.signal, context.idempotencyKey),
+    )) as OpenAIResponseLike;
+
+    return ensureCompletedResponse(response, "answer");
+  },
+
+  async research(
+    input: string,
+    config: OpenAIConfig,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ToolOutput> {
+    return await executeAsyncResearch({
+      providerLabel: "OpenAI",
+      providerId: "openai",
+      context,
+      start: (researchContext) =>
+        openaiImplementation.startResearch(
+          input,
+          config,
+          researchContext,
+          options,
+        ),
+      poll: (id, researchContext) =>
+        openaiImplementation.pollResearch(id, config, researchContext, options),
+    });
+  },
+
+  async startResearch(
+    input: string,
+    config: OpenAIConfig,
+    context: ProviderContext,
+    options?: Record<string, unknown>,
+  ): Promise<ResearchJob> {
+    const client = createClient(config);
+    const response = (await client.responses.create(
+      buildOpenAIResearchRequest(input, options),
+      buildRequestOptions(context.signal, context.idempotencyKey),
+    )) as OpenAIResponseLike;
+
+    return { id: response.id };
+  },
+
+  async pollResearch(
+    id: string,
+    config: OpenAIConfig,
+    context: ProviderContext,
+    _options?: Record<string, unknown>,
+  ): Promise<ResearchPollResult> {
+    const client = createClient(config);
+    const response = (await client.responses.retrieve(
+      id,
+      undefined,
+      buildRequestOptions(context.signal),
+    )) as OpenAIResponseLike;
+    const status = response.status ?? "completed";
+
+    if (status === "completed") {
+      return {
+        status: "completed",
+        output: formatResponseOutput(response, "research"),
+      };
+    }
+
+    if (status === "failed") {
+      return {
+        status: "failed",
+        error: response.error?.message ?? "research failed",
+      };
+    }
+
+    if (status === "cancelled") {
+      return {
+        status: "cancelled",
+        error: "research was canceled",
+      };
+    }
+
+    if (status === "incomplete") {
+      return {
+        status: "failed",
+        error: formatIncompleteError(response, "research"),
+      };
+    }
+
+    return {
+      status: "in_progress",
+      statusText: status,
+    };
+  },
+};
+
+function createClient(config: OpenAIConfig): OpenAI {
+  const apiKey = config.credentials?.api;
+  if (!apiKey) {
+    throw new Error("is missing an API key");
+  }
+
+  const baseUrl = config.baseUrl;
+
+  return new OpenAI({
+    maxRetries: 0,
+    apiKey,
+    ...(baseUrl ? { baseURL: baseUrl } : {}),
+  });
+}
+
+function generationControls(options?: Record<string, unknown>) {
+  const reasoning = options?.reasoning as { effort?: unknown } | undefined;
+  const effort = readStringUnion(reasoning?.effort, [
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  const maxTokens = readPositiveInteger(options?.max_output_tokens);
+  return {
+    ...(effort ? { reasoning: { effort } } : {}),
+    ...(maxTokens ? { max_output_tokens: maxTokens } : {}),
+  } satisfies Pick<
+    OpenAI.Responses.ResponseCreateParamsNonStreaming,
+    "reasoning" | "max_output_tokens"
+  >;
+}
+
+function buildOpenAISearchRequest(
+  query: string,
+  maxResults: number,
+  options?: Record<string, unknown>,
+) {
+  const mergedOptions = resolveOpenAISearchOptions(options);
+
+  const model = mergedOptions.model ?? DEFAULT_SEARCH_MODEL;
+  const instructions = mergedOptions.instructions;
+
+  return {
+    model,
+    ...generationControls(options),
+    input: [
+      "Search the public web and return only the most relevant sources for the user's query.",
+      `Return at most ${maxResults} sources.`,
+      "Prefer official, primary, or highly reputable sources when available.",
+      "Each snippet should be short, specific, and grounded in the retrieved source.",
+      "Return only data matching the provided JSON schema.",
+      "",
+      `User query: ${query}`,
+    ].join("\n"),
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
+    text: {
+      format: {
+        type: "json_schema" as const,
+        name: "openai_web_search_results",
+        schema: searchResultSchema,
+        strict: true,
+      },
+    },
+    ...(instructions ? { instructions } : {}),
+  };
+}
+
+function buildOpenAIAnswerRequest(
+  query: string,
+  options?: Record<string, unknown>,
+) {
+  const mergedOptions = resolveOpenAIAnswerOptions(options);
+
+  const model = mergedOptions.model ?? DEFAULT_ANSWER_MODEL;
+  const instructions = mergedOptions.instructions;
+
+  return {
+    model,
+    ...generationControls(options),
+    input: query,
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
+    ...(instructions ? { instructions } : {}),
+  };
+}
+
+function buildOpenAIResearchRequest(
+  input: string,
+  options?: Record<string, unknown>,
+) {
+  const mergedOptions = resolveOpenAIResearchOptions(options);
+
+  const model = mergedOptions.model ?? DEFAULT_RESEARCH_MODEL;
+  const instructions = mergedOptions.instructions;
+  const maxToolCalls = mergedOptions.max_tool_calls;
+
+  return {
+    model,
+    ...generationControls(options),
+    input,
+    background: true,
+    tools: [buildOpenAIWebSearchTool(mergedOptions)],
+    ...(instructions ? { instructions } : {}),
+    ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
+  };
+}
+
+function buildOpenAIWebSearchTool(options: OpenAIWebSearchToolOptions) {
+  const tool: {
+    type: "web_search";
+    external_web_access?: boolean;
+    search_context_size?: "low" | "medium" | "high";
+    filters?: { allowed_domains: string[] };
+    user_location?: {
+      type: "approximate";
+      city?: string;
+      country?: string;
+      region?: string;
+      timezone?: string;
+    };
+  } = { type: "web_search" };
+  if (options.externalWebAccess !== undefined)
+    tool.external_web_access = options.externalWebAccess;
+  if (options.searchContextSize) {
+    tool.search_context_size = options.searchContextSize;
+  }
+  if (options.allowedDomains && options.allowedDomains.length > 0) {
+    tool.filters = { allowed_domains: options.allowedDomains };
+  }
+  if (options.userLocation) {
+    tool.user_location = {
+      type: "approximate",
+      ...options.userLocation,
+    };
+  }
+  return tool;
+}
+
+function resolveOpenAIWebSearchToolOptions(
+  merged: Record<string, unknown>,
+): OpenAIWebSearchToolOptions {
+  const searchContextSize = readStringUnion(merged.searchContextSize, [
+    "low",
+    "medium",
+    "high",
+  ]);
+  const allowedDomains = readStringArray(merged.allowedDomains);
+  const userLocation = readUserLocation(merged.userLocation);
+  return {
+    ...(typeof merged.externalWebAccess === "boolean"
+      ? { externalWebAccess: merged.externalWebAccess }
+      : {}),
+    ...(searchContextSize ? { searchContextSize } : {}),
+    ...(allowedDomains ? { allowedDomains } : {}),
+    ...(userLocation ? { userLocation } : {}),
+  };
+}
+
+function resolveOpenAISearchOptions(
+  options?: Record<string, unknown>,
+): OpenAISearchOptions {
+  const mergedOptions = {
+    ...(options ?? {}),
+  };
+  const model = readNonEmptyString(mergedOptions.model);
+  const instructions = readNonEmptyString(mergedOptions.instructions);
+
+  return {
+    ...(model ? { model } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
+  };
+}
+
+function resolveOpenAIAnswerOptions(
+  options?: Record<string, unknown>,
+): OpenAIAnswerOptions {
+  const mergedOptions = {
+    ...(options ?? {}),
+  };
+  const model = readNonEmptyString(mergedOptions.model);
+  const instructions = readNonEmptyString(mergedOptions.instructions);
+
+  return {
+    ...(model ? { model } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
+  };
+}
+
+function resolveOpenAIResearchOptions(
+  options?: Record<string, unknown>,
+): OpenAIResearchOptions {
+  const mergedOptions = {
+    ...(options ?? {}),
+  };
+  const model = readNonEmptyString(mergedOptions.model);
+  const instructions = readNonEmptyString(mergedOptions.instructions);
+  const maxToolCalls = readPositiveInteger(mergedOptions.max_tool_calls);
+
+  return {
+    ...(model ? { model } : {}),
+    ...(instructions ? { instructions } : {}),
+    ...(maxToolCalls ? { max_tool_calls: maxToolCalls } : {}),
+    ...resolveOpenAIWebSearchToolOptions(mergedOptions),
+  };
+}
+
+function buildRequestOptions(
+  signal: AbortSignal | undefined,
+  idempotencyKey?: string,
+) {
+  if (!signal && !idempotencyKey) {
+    return undefined;
+  }
+
+  return {
+    ...(signal ? { signal } : {}),
+    ...(idempotencyKey ? { idempotencyKey } : {}),
+  };
+}
+
+function parseSearchResponse(
+  response: OpenAIResponseLike,
+  maxResults: number,
+): SearchResponse {
+  const status = response.status ?? "completed";
+
+  if (status === "failed") {
+    throw new Error(response.error?.message ?? "search failed");
+  }
+
+  if (status === "cancelled") {
+    throw new Error("search was canceled");
+  }
+
+  if (status === "incomplete") {
+    throw new Error(formatIncompleteError(response, "search"));
+  }
+
+  if (status !== "completed") {
+    throw new Error(`search did not complete (status: ${status})`);
+  }
+
+  const payload = parseSearchPayload(response.output_text);
+  return {
+    provider: "openai",
+    results: payload.sources.slice(0, maxResults).map((source) => ({
+      title: source.title.trim(),
+      url: source.url.trim(),
+      snippet: trimSnippet(source.snippet),
+    })),
+  };
+}
+
+function ensureCompletedResponse(
+  response: OpenAIResponseLike,
+  operation: "answer" | "research",
+): ToolOutput {
+  const status = response.status ?? "completed";
+
+  if (status === "completed") {
+    return formatResponseOutput(response, operation);
+  }
+
+  if (status === "failed") {
+    throw new Error(response.error?.message ?? `${operation} failed`);
+  }
+
+  if (status === "cancelled") {
+    throw new Error(`${operation} was canceled`);
+  }
+
+  if (status === "incomplete") {
+    throw new Error(formatIncompleteError(response, operation));
+  }
+
+  throw new Error(`${operation} did not complete (status: ${status})`);
+}
+
+function formatResponseOutput(
+  response: OpenAIResponseLike,
+  operation: "answer" | "research",
+): ToolOutput {
+  const lines: string[] = [];
+  lines.push(
+    response.output_text?.trim() ||
+      `OpenAI ${operation} completed without textual output.`,
+  );
+
+  const citations = extractUrlCitations(response);
+  if (citations.length > 0) {
+    lines.push("");
+    lines.push("Sources:");
+    for (const [index, citation] of citations.entries()) {
+      lines.push(`${index + 1}. ${citation.title}`);
+      lines.push(`   ${citation.url}`);
+    }
+  }
+
+  return {
+    provider: "openai",
+    text: lines.join("\n").trimEnd(),
+    itemCount: citations.length,
+    metadata: {
+      responseId: response.id,
+      model: response.model,
+      citations,
+    },
+  };
+}
+
+function extractUrlCitations(response: OpenAIResponseLike): Array<{
+  title: string;
+  url: string;
+  startIndex: number;
+  endIndex: number;
+}> {
+  const citations: Array<{
+    title: string;
+    url: string;
+    startIndex: number;
+    endIndex: number;
+  }> = [];
+  const seen = new Set<string>();
+
+  for (const item of response.output) {
+    if (item.type !== "message" || !item.content) {
+      continue;
+    }
+
+    for (const content of item.content) {
+      if (content.type !== "output_text" || !content.annotations) {
+        continue;
+      }
+
+      for (const annotation of content.annotations) {
+        if (annotation.type !== "url_citation") {
+          continue;
+        }
+
+        const title = readNonEmptyString(annotation.title);
+        const url = readNonEmptyString(annotation.url);
+        const startIndex = readInteger(annotation.start_index);
+        const endIndex = readInteger(annotation.end_index);
+        if (
+          !title ||
+          !url ||
+          startIndex === undefined ||
+          endIndex === undefined
+        ) {
+          continue;
+        }
+
+        const citation = {
+          title,
+          url,
+          startIndex,
+          endIndex,
+        };
+        const key = [
+          citation.title,
+          citation.url,
+          String(citation.startIndex),
+          String(citation.endIndex),
+        ].join("::");
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        citations.push(citation);
+      }
+    }
+  }
+
+  return citations;
+}
+
+function parseSearchPayload(text: string | undefined): {
+  sources: Array<{ title: string; url: string; snippet: string }>;
+} {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text ?? "");
+  } catch (error) {
+    throw new Error(
+      `search returned invalid JSON: ${(error as Error).message}`,
+    );
+  }
+
+  if (
+    typeof parsed !== "object" ||
+    parsed === null ||
+    !("sources" in parsed) ||
+    !Array.isArray((parsed as { sources?: unknown }).sources)
+  ) {
+    throw new Error("search output must include a 'sources' array");
+  }
+
+  return {
+    sources: (parsed as { sources: unknown[] }).sources.map((source, index) => {
+      if (typeof source !== "object" || source === null) {
+        throw new Error(`search source at index ${index} must be an object`);
+      }
+
+      const entry = source as Record<string, unknown>;
+      const title = readNonEmptyString(entry.title);
+      const url = readNonEmptyString(entry.url);
+      const snippet = readNonEmptyString(entry.snippet);
+      if (!title) {
+        throw new Error(`search source at index ${index} is missing title`);
+      }
+      if (!url) {
+        throw new Error(`search source at index ${index} is missing url`);
+      }
+      if (!snippet) {
+        throw new Error(`search source at index ${index} is missing snippet`);
+      }
+
+      return { title, url, snippet };
+    }),
+  };
+}
+
+function formatIncompleteError(
+  response: OpenAIResponseLike,
+  operation: "search" | "answer" | "research",
+): string {
+  const reason = response.incomplete_details?.reason;
+  if (reason) {
+    return `${operation} ended incomplete (${reason})`;
+  }
+  return `${operation} ended incomplete`;
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim().length > 0
+    ? value
+    : undefined;
+}
+
+function readStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const strings = value.filter(
+    (item): item is string => typeof item === "string" && item.trim() !== "",
+  );
+  return strings.length > 0 ? strings : undefined;
+}
+
+function readStringUnion<const TValue extends string>(
+  value: unknown,
+  values: readonly TValue[],
+): TValue | undefined {
+  return typeof value === "string" && values.includes(value as TValue)
+    ? (value as TValue)
+    : undefined;
+}
+
+function readUserLocation(
+  value: unknown,
+): OpenAISearchOptions["userLocation"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  const location = value as Record<string, unknown>;
+  const city = readNonEmptyString(location.city);
+  const country = readNonEmptyString(location.country);
+  const region = readNonEmptyString(location.region);
+  const timezone = readNonEmptyString(location.timezone);
+  const result = {
+    ...(city ? { city } : {}),
+    ...(country ? { country } : {}),
+    ...(region ? { region } : {}),
+    ...(timezone ? { timezone } : {}),
+  };
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function readInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value)
+    ? value
+    : undefined;
+}
+
+export const adapter = {
+  async search(
+    input: import("../contract.js").ProviderRequest<"search">,
+    config: OpenAIConfig,
+    context: ProviderContext,
+  ) {
+    return await openaiImplementation.search(
+      input.query,
+      input.maxResults,
+      config,
+      context,
+      input.options,
+    );
+  },
+  async answer(
+    input: import("../contract.js").ProviderRequest<"answer">,
+    config: OpenAIConfig,
+    context: ProviderContext,
+  ) {
+    return await openaiImplementation.answer(
+      input.query,
+      config,
+      context,
+      input.options,
+    );
+  },
+  async research(
+    input: import("../contract.js").ProviderRequest<"research">,
+    config: OpenAIConfig,
+    context: ProviderContext,
+  ) {
+    return await openaiImplementation.research(
+      input.input,
+      config,
+      context,
+      input.options,
+    );
+  },
+};

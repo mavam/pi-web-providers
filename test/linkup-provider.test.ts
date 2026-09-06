@@ -25,7 +25,7 @@ vi.mock("linkup-sdk", () => ({
   }),
 }));
 
-import { linkupProvider } from "../src/providers/linkup.js";
+import { linkupProvider } from "../src/providers/linkup/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
@@ -63,21 +63,21 @@ describe("providerHarness(linkupProvider)", () => {
       "linkup sdk",
       2,
       {
-        credentials: { api: "LINKUP_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://api.linkup.test/v1",
-        options: {
-          search: {
-            includeImages: true,
-            excludeDomains: ["example.com"],
-          },
-        },
       },
       { cwd: process.cwd() },
       {
-        depth: "deep",
-        includeDomains: ["docs.linkup.so"],
-        fromDate: "2026-01-02T03:04:05.000Z",
-        requestTimeoutMs: 5000,
+        ...{
+          includeImages: true,
+          excludeDomains: ["example.com"],
+        },
+        ...{
+          depth: "deep",
+          includeDomains: ["docs.linkup.so"],
+          fromDate: "2026-01-02T03:04:05.000Z",
+          requestTimeoutMs: 5000,
+        },
       },
     );
 
@@ -161,19 +161,17 @@ describe("providerHarness(linkupProvider)", () => {
         "https://example.com/b",
         "https://example.com/c",
       ],
-      {
-        credentials: { api: "literal-key" },
-        options: {
-          fetch: {
-            includeRawHtml: true,
-          },
-        },
-      },
+      { credentials: { api: "literal-key" } },
       { cwd: process.cwd() },
       {
-        renderJs: true,
-        extractImages: true,
-        retryCount: 2,
+        ...{
+          includeRawHtml: true,
+        },
+        ...{
+          renderJs: true,
+          extractImages: true,
+          retryCount: 2,
+        },
       },
     );
 
@@ -199,18 +197,24 @@ describe("providerHarness(linkupProvider)", () => {
       includeRawHtml: true,
       extractImages: true,
     });
-    expect(response.answers).toEqual([
+    expect(response.answers).toMatchObject([
       {
+        inputIndex: 0,
         url: "https://example.com/a",
         content: "# Page A\n\nBody A",
       },
       {
+        inputIndex: 1,
         url: "https://example.com/b",
-        error: "blocked by robots",
+        error: { code: "PROVIDER_FAILURE", message: "blocked by robots" },
       },
       {
+        inputIndex: 2,
         url: "https://example.com/c",
-        error: "No content returned for this URL.",
+        error: {
+          code: "PROVIDER_FAILURE",
+          message: "No content returned for this URL.",
+        },
       },
     ]);
   });
@@ -250,21 +254,21 @@ describe("providerHarness(linkupProvider)", () => {
     const promise = providerHarness(linkupProvider).research(
       "Investigate Linkup research",
       {
-        credentials: { api: "LINKUP_API_KEY" },
+        credentials: { api: "test-key" },
         baseUrl: "https://api.linkup.test/v1",
-        options: {
-          research: {
-            includeDomains: ["docs.linkup.so"],
-            reasoningDepth: "M",
-          },
-        },
       },
       { cwd: process.cwd() },
       {
-        mode: "investigate",
-        reasoningDepth: "L",
-        excludeDomains: ["example.net"],
-        fromDate: "2026-01-02T03:04:05.000Z",
+        ...{
+          includeDomains: ["docs.linkup.so"],
+          reasoningDepth: "M",
+        },
+        ...{
+          mode: "investigate",
+          reasoningDepth: "L",
+          excludeDomains: ["example.net"],
+          fromDate: "2026-01-02T03:04:05.000Z",
+        },
       },
     );
 
@@ -413,18 +417,5 @@ describe("providerHarness(linkupProvider)", () => {
         },
       ),
     ).rejects.toThrow(/requires structuredOutputSchema/);
-  });
-
-  it("requires an API key", async () => {
-    await expect(
-      providerHarness(linkupProvider).search(
-        "linkup",
-        1,
-        {
-          credentials: { api: "LINKUP_API_KEY" },
-        },
-        { cwd: process.cwd() },
-      ),
-    ).rejects.toThrow(/missing an API key/);
   });
 });

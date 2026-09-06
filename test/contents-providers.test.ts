@@ -86,7 +86,7 @@ afterEach(() => {
 describe("contents providers", () => {
   it("renders contents via Cloudflare Browser Rendering markdown", async () => {
     const { cloudflareProvider } = await import(
-      "../src/providers/cloudflare.js"
+      "../src/providers/cloudflare/definition.js"
     );
     const provider = providerHarness(cloudflareProvider);
 
@@ -96,22 +96,22 @@ describe("contents providers", () => {
 
     const result = await provider.contents(
       ["https://developers.cloudflare.com/browser-rendering/"],
+      { credentials: { api: "literal-token" }, accountId: "account-id" },
+      { cwd: process.cwd() },
       {
-        credentials: { api: "literal-token" },
-        accountId: "account-id",
-        options: {
+        ...{
           gotoOptions: {
             waitUntil: "networkidle0",
           },
         },
-      },
-      { cwd: process.cwd() },
-      {
-        cacheTTL: 0,
+        ...{
+          cacheTTL: 0,
+        },
       },
     );
 
     expect(cloudflareCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiToken: "literal-token",
     });
     expect(cloudflareMarkdownCreateMock).toHaveBeenCalledWith(
@@ -125,14 +125,15 @@ describe("contents providers", () => {
       },
       undefined,
     );
-    expect(result.answers[0]).toEqual({
+    expect(result.answers[0]).toMatchObject({
+      inputIndex: 0,
       url: "https://developers.cloudflare.com/browser-rendering/",
       content: "# Cloudflare Docs\n\nRendered content",
     });
   });
 
   it("keeps full Exa page text instead of collapsing to a snippet", async () => {
-    const { exaProvider } = await import("../src/providers/exa.js");
+    const { exaProvider } = await import("../src/providers/exa/definition.js");
     const provider = providerHarness(exaProvider);
     const longParagraph = "x".repeat(420);
 
@@ -170,108 +171,10 @@ describe("contents providers", () => {
     });
   });
 
-  it("requests full Parallel page contents by default and prefers full_content", async () => {
-    const { parallelProvider } = await import("../src/providers/parallel.js");
-    const provider = providerHarness(parallelProvider);
-    const config = provider.createTemplate();
-    config.credentials = { api: "literal-key" };
-
-    parallelExtractMock.mockResolvedValue({
-      results: [
-        {
-          title: "Parallel Docs",
-          url: "https://parallel.ai/docs",
-          excerpts: ["short excerpt"],
-          full_content: "Section 1\n\nSection 2",
-        },
-      ],
-      errors: [],
-    });
-
-    const result = await provider.contents(
-      ["https://parallel.ai/docs"],
-      config,
-      { cwd: process.cwd() },
-      undefined,
-    );
-
-    expect(parallelExtractMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        urls: ["https://parallel.ai/docs"],
-        advanced_settings: {
-          full_content: true,
-          excerpt_settings: {
-            max_chars_per_result: 0,
-          },
-        },
-      }),
-      undefined,
-    );
-    expect(result.answers[0]).toMatchObject({
-      url: "https://parallel.ai/docs",
-      content: "Section 1\n\nSection 2",
-      metadata: {
-        title: "Parallel Docs",
-        url: "https://parallel.ai/docs",
-        excerpts: ["short excerpt"],
-        full_content: "Section 1\n\nSection 2",
-      },
-    });
-  });
-
-  it("maps Parallel search to the v1 search API", async () => {
-    const { parallelProvider } = await import("../src/providers/parallel.js");
-    const provider = providerHarness(parallelProvider);
-    const config = provider.createTemplate();
-    config.credentials = { api: "literal-key" };
-    config.options = {
-      search: {
-        mode: "advanced",
-      },
-    };
-
-    parallelSearchMock.mockResolvedValue({
-      results: [
-        {
-          title: "Parallel Docs",
-          url: "https://parallel.ai/docs",
-          excerpts: ["SDK reference"],
-        },
-      ],
-    });
-
-    const result = await provider.search(
-      "parallel sdk",
-      3,
-      config,
-      { cwd: process.cwd() },
-      {
-        mode: "basic",
-      },
-    );
-
-    expect(parallelSearchMock).toHaveBeenCalledWith(
-      {
-        search_queries: ["parallel sdk"],
-        objective: "parallel sdk",
-        mode: "basic",
-        advanced_settings: {
-          max_results: 3,
-        },
-      },
-      undefined,
-    );
-    expect(result.results).toEqual([
-      {
-        title: "Parallel Docs",
-        url: "https://parallel.ai/docs",
-        snippet: "SDK reference",
-      },
-    ]);
-  });
-
   it("prefers Valyu content over summaries and preserves line breaks", async () => {
-    const { valyuProvider } = await import("../src/providers/valyu.js");
+    const { valyuProvider } = await import(
+      "../src/providers/valyu/definition.js"
+    );
     const provider = providerHarness(valyuProvider);
 
     valyuContentsMock.mockResolvedValue({

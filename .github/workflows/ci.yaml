@@ -3,12 +3,43 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      live-provider:
+        description: Optional provider for a live test (blank runs offline CI only)
+        default: ""
+        type: string
+      live-capability:
+        description: Capability to test with the selected live provider
+        default: search
+        type: choice
+        options: [search, contents, answer, research]
+      live-options-json:
+        description: Provider-specific request options as JSON (not credentials)
+        default: "{}"
+        type: string
+      include-research:
+        description: Allow a potentially billable research job
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  live-smoke:
+    name: Live provider check (manual)
+    if: github.event_name == 'workflow_dispatch' && inputs.live-provider != ''
+    uses: ./.github/workflows/live-smoke.yaml
+    # Required for the called job to resolve its environment-scoped secrets.
+    secrets: inherit
+    with:
+      provider: ${{ inputs.live-provider }}
+      capability: ${{ inputs.live-capability }}
+      options-json: ${{ inputs.live-options-json }}
+      include-research: ${{ inputs.include-research }}
+
   format:
+    name: Code formatting
     runs-on: ubuntu-latest
 
     steps:
@@ -28,6 +59,34 @@ jobs:
         run: npm run format:check
 
   test:
+    name: Tests, types & build (Node.js ${{ matrix.node-version }})
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [22, 24, 26]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Type-check and build
+        run: npm run check && npm run build
+
+  package-smoke:
+    name: Installed CLI & Pi extension
     runs-on: ubuntu-latest
 
     steps:
@@ -43,5 +102,5 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Test the packed package
+        run: npm run smoke:package

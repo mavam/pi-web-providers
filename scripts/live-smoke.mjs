@@ -1,341 +1,127 @@
 #!/usr/bin/env node
 
-import process from "node:process";
-import { __test__ } from "../dist/index.js";
+import { parseArgs } from "node:util";
+import { CAPABILITIES, createWebfox } from "../dist/index.js";
 
-const PROVIDERS_BY_TOOL = {
-  search: [
-    "claude",
-    "codex",
-    "custom",
-    "exa",
-    "gemini",
-    "linkup",
-    "perplexity",
-    "parallel",
-    "serper",
-    "valyu",
-  ],
-  contents: ["custom", "exa", "linkup", "parallel", "valyu"],
-  answer: ["claude", "custom", "exa", "gemini", "perplexity", "valyu"],
-  research: ["custom", "exa", "gemini", "linkup", "perplexity", "valyu"],
-};
+const controller = new AbortController();
+const cancel = () => controller.abort();
+process.once("SIGINT", cancel);
 
-const PROBE_INPUTS = {
-  search: {
-    maxResults: 3,
-    options: { requestTimeoutMs: 30_000 },
-    timeoutMs: 45_000,
-    query: "OpenAI API",
-  },
-  contents: {
-    options: { requestTimeoutMs: 45_000 },
-    timeoutMs: 60_000,
-    urlsByProvider: {
-      custom: ["https://platform.openai.com/docs/overview"],
-      exa: ["https://platform.openai.com/docs/overview"],
-      linkup: [
-        "https://docs.linkup.so/pages/documentation/endpoints/research/overview",
-      ],
-      parallel: ["https://openai.com/api/"],
-      valyu: ["https://github.com/openai/openai-python"],
-    },
-  },
-  answer: {
-    options: { requestTimeoutMs: 60_000 },
-    timeoutMs: 90_000,
-    query: "What is the OpenAI API?",
-  },
-  research: {
-    input:
-      "Write a short web-grounded report explaining what the OpenAI API is, with cited sources.",
+try {
+  const { values } = parseArgs({
     options: {
-      timeoutMs: 180_000,
-      pollIntervalMs: 3_000,
-      maxConsecutivePollErrors: 2,
+      provider: { type: "string" },
+      capability: { type: "string" },
+      config: { type: "string" },
+      "options-json": { type: "string", default: "{}" },
+      "include-research": { type: "boolean", default: false },
+      help: { type: "boolean", short: "h" },
     },
-    optionsByProvider: {
-      linkup: {
-        mode: "answer",
-        reasoningDepth: "S",
-      },
-    },
-    timeoutMs: 360_000,
-  },
-};
-
-const argv = process.argv.slice(2);
-const filters = parseArgs(argv);
-const config = await __test__.loadConfig();
-const cwd = process.cwd();
-const probes = buildProbes(filters);
-const outcomes = [];
-
-for (const probe of probes) {
-  const status = __test__.getProviderStatusForTool(
-    config,
-    cwd,
-    probe.providerId,
-    probe.capability,
-  );
-  if (!isProviderStatusAvailable(status)) {
-    const outcome = {
-      probe,
-      status: "skipped",
-      message: formatProviderStatus(status),
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-    continue;
-  }
-
-  try {
-    const signal = AbortSignal.timeout(probe.timeoutMs);
-    const result = await Promise.race([
-      __test__.executeRawProviderRequest({
-        capability: probe.capability,
-        config,
-        explicitProvider: probe.providerId,
-        ctx: { cwd },
-        signal,
-        options: probe.options,
-        ...(probe.capability === "search"
-          ? {
-              maxResults: probe.maxResults,
-              query: probe.query,
-            }
-          : probe.capability === "contents"
-            ? {
-                urls: probe.urls,
-              }
-            : probe.capability === "answer"
-              ? {
-                  query: probe.query,
-                }
-              : {
-                  input: probe.input,
-                }),
-      }),
-      createProbeTimeout(probe),
-    ]);
-
-    const message = summarizeProbeResult(probe, result);
-    const outcome = {
-      probe,
-      status: "passed",
-      message,
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-  } catch (error) {
-    const outcome = {
-      probe,
-      status: "failed",
-      message: formatError(error),
-    };
-    outcomes.push(outcome);
-    printOutcome(outcome);
-  }
-}
-
-printSummary(outcomes);
-process.exit(outcomes.some((outcome) => outcome.status === "failed") ? 1 : 0);
-
-function parseArgs(args) {
-  const filters = {
-    includeResearch: false,
-    providerId: undefined,
-    capability: undefined,
-  };
-
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--include-research") {
-      filters.includeResearch = true;
-      continue;
-    }
-    if (arg === "--provider") {
-      filters.providerId = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg === "--tool") {
-      filters.capability = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg === "--help" || arg === "-h") {
-      printHelp();
-      process.exit(0);
-    }
-    throw new Error(`Unknown argument: ${arg}`);
-  }
-
-  return filters;
-}
-
-function isProviderStatusAvailable(status) {
-  return status.state === "ready" || status.state === "deferred_secret";
-}
-
-function formatProviderStatus(status) {
-  if (status.detail) {
-    return `${status.state}: ${status.detail}`;
-  }
-  return status.state;
-}
-
-function printHelp() {
-  console.log(
-    [
-      "Usage: npm run smoke:live -- [--provider <id>] [--tool <capability>] [--include-research]",
-      "",
-      "Options:",
-      "  --provider <id>        Run probes only for a single provider id",
-      "  --tool <capability>    Run probes only for one tool: search|contents|answer|research",
-      "  --include-research     Include research probes (slower and higher cost)",
-    ].join("\n"),
-  );
-}
-
-function buildProbes(filters) {
-  const capabilities = filters.capability
-    ? [filters.capability]
-    : Object.keys(PROVIDERS_BY_TOOL).filter(
-        (capability) =>
-          capability !== "research" || filters.includeResearch === true,
-      );
-
-  return capabilities.flatMap((capability) =>
-    PROVIDERS_BY_TOOL[capability]
-      .filter(
-        (providerId) =>
-          filters.providerId === undefined || providerId === filters.providerId,
-      )
-      .map((providerId) => buildProbe(capability, providerId)),
-  );
-}
-
-function buildProbe(capability, providerId) {
-  if (capability === "search") {
-    return {
-      capability,
-      providerId,
-      query: PROBE_INPUTS.search.query,
-      maxResults: PROBE_INPUTS.search.maxResults,
-      options: PROBE_INPUTS.search.options,
-      timeoutMs: PROBE_INPUTS.search.timeoutMs,
-    };
-  }
-
-  if (capability === "contents") {
-    return {
-      capability,
-      providerId,
-      urls: PROBE_INPUTS.contents.urlsByProvider[providerId],
-      options: PROBE_INPUTS.contents.options,
-      timeoutMs: PROBE_INPUTS.contents.timeoutMs,
-    };
-  }
-
-  if (capability === "answer") {
-    return {
-      capability,
-      providerId,
-      query: PROBE_INPUTS.answer.query,
-      options: PROBE_INPUTS.answer.options,
-      timeoutMs: PROBE_INPUTS.answer.timeoutMs,
-    };
-  }
-
-  return {
-    capability,
-    providerId,
-    input: PROBE_INPUTS.research.input,
-    options: {
-      ...PROBE_INPUTS.research.options,
-      ...(PROBE_INPUTS.research.optionsByProvider[providerId] ?? {}),
-    },
-    timeoutMs: PROBE_INPUTS.research.timeoutMs,
-  };
-}
-
-function createProbeTimeout(probe) {
-  return new Promise((_, reject) => {
-    const timer = setTimeout(() => {
-      reject(
-        new Error(`probe timed out after ${formatDuration(probe.timeoutMs)}`),
-      );
-    }, probe.timeoutMs);
-    timer.unref?.();
   });
-}
-
-function formatDuration(durationMs) {
-  const totalSeconds = Math.ceil(durationMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes === 0) {
-    return `${seconds}s`;
-  }
-  if (seconds === 0) {
-    return `${minutes}m`;
-  }
-  return `${minutes}m ${seconds}s`;
-}
-
-function summarizeProbeResult(probe, result) {
-  if (probe.capability === "search") {
-    return `${result.results.length} result(s)`;
-  }
-
-  if (probe.capability === "contents") {
-    const successes = result.answers.filter(
-      (answer) =>
-        typeof answer.content === "string" || answer.summary !== undefined,
+  if (values.help) {
+    console.log(
+      "Usage: node scripts/live-smoke.mjs --provider <id> [--capability <name>] [--config <path>] [--options-json <json>] [--include-research]",
     );
-    if (successes.length === 0) {
+    console.log(
+      "Provider selection is required. Research needs explicit additional consent and can incur charges.",
+    );
+  } else {
+    if (!values.provider)
       throw new Error(
-        result.answers[0]?.error ||
-          "contents probe returned no readable content",
+        "Choose exactly one provider with --provider; credentials never select providers.",
       );
+    if (values.capability && !CAPABILITIES.includes(values.capability))
+      throw new Error(`Unknown capability: ${values.capability}`);
+    if (values.capability === "research" && !values["include-research"])
+      throw new Error(
+        "Research requires --include-research because it can incur charges.",
+      );
+
+    const options = JSON.parse(values["options-json"]);
+    if (!options || typeof options !== "object" || Array.isArray(options))
+      throw new Error("--options-json must be a JSON object.");
+    const client = createWebfox({ configPath: values.config });
+    const provider = client.getProvider(values.provider);
+    if (!provider) throw new Error(`Unknown provider: ${values.provider}`);
+    const capabilities = values.capability
+      ? [values.capability]
+      : provider.capabilities.filter(
+          (capability) =>
+            capability !== "research" || values["include-research"],
+        );
+    if (!capabilities.length) throw new Error("No capabilities selected.");
+    let failed = 0;
+    for (const capability of capabilities) {
+      controller.signal.throwIfAborted();
+      try {
+        client.inspectCapability(capability, provider.id);
+        const controls = {
+          provider: provider.id,
+          options,
+          timeoutMs: capability === "research" ? 1_200_000 : 90_000,
+          signal: controller.signal,
+          onProgress: ({ message }) => console.error(message),
+        };
+        const result =
+          capability === "search"
+            ? await client.search({
+                ...controls,
+                queries: ["Node.js AbortSignal documentation"],
+                maxResults: 3,
+              })
+            : capability === "contents"
+              ? await client.contents({
+                  ...controls,
+                  urls: ["https://nodejs.org/api/globals.html"],
+                })
+              : capability === "answer"
+                ? await client.answer({
+                    ...controls,
+                    queries: [
+                      "What does Node.js AbortSignal.timeout do? Cite a source.",
+                    ],
+                  })
+                : await client.research({
+                    ...controls,
+                    input:
+                      "Explain Node.js AbortSignal.timeout and cancellation in a short cited report.",
+                  });
+        if (result.status !== "ok")
+          throw new Error(
+            result.results.find((entry) => !entry.ok)?.error.message ??
+              result.status,
+          );
+        if (!result.results.length || result.results.some((entry) => !entry.ok))
+          throw new Error("Missing successful results.");
+        for (const entry of result.results) {
+          if (capability === "search" && !entry.value.results.length)
+            throw new Error("Search returned no results.");
+          if (
+            (capability === "answer" || capability === "research") &&
+            !entry.value.text.trim()
+          )
+            throw new Error("No textual answer returned.");
+          if (
+            capability === "contents" &&
+            !entry.value.content &&
+            !entry.value.summary
+          )
+            throw new Error("No content returned.");
+        }
+        console.log(`PASS ${provider.id}/${capability}`);
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        failed++;
+        console.error(
+          `FAIL ${provider.id}/${capability}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
     }
-    return `${successes.length}/${result.answers.length} URL(s) returned content`;
+    process.exitCode = failed ? 1 : 0;
   }
-
-  const text = result.text?.trim() ?? "";
-  if (!text) {
-    throw new Error("probe returned empty text");
-  }
-
-  return `${text.length} char(s)`;
-}
-
-function formatError(error) {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return String(error);
-}
-
-function printOutcome(outcome) {
-  const label = `${outcome.probe.providerId}/${outcome.probe.capability}`;
-  console.log(
-    `${outcome.status.toUpperCase().padEnd(7)} ${label.padEnd(18)} ${outcome.message}`,
-  );
-}
-
-function printSummary(outcomes) {
-  const counts = outcomes.reduce(
-    (summary, outcome) => {
-      summary[outcome.status] += 1;
-      return summary;
-    },
-    { passed: 0, failed: 0, skipped: 0 },
-  );
-
-  console.log("");
-  console.log(
-    `Summary: ${counts.passed} passed, ${counts.failed} failed, ${counts.skipped} skipped`,
-  );
+} catch (error) {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = controller.signal.aborted ? 130 : 1;
+} finally {
+  process.removeListener("SIGINT", cancel);
 }

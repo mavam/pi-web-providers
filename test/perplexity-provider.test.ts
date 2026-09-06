@@ -23,7 +23,7 @@ vi.mock("@perplexity-ai/perplexity_ai", () => ({
   }),
 }));
 
-import { perplexityProvider } from "../src/providers/perplexity.js";
+import { perplexityProvider } from "../src/providers/perplexity/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 afterEach(() => {
@@ -52,22 +52,21 @@ describe("Perplexity provider", () => {
     const response = await provider.search(
       "government policies on renewable energy",
       5,
-      {
-        credentials: { api: "PERPLEXITY_API_KEY" },
-        options: {
-          search: {
-            search_mode: "academic",
-          },
-        },
-      },
+      { credentials: { api: "test-key" } },
       { cwd: process.cwd() },
       {
-        country: "US",
-        max_results: 99,
+        ...{
+          search_mode: "academic",
+        },
+        ...{
+          country: "US",
+          max_results: 99,
+        },
       },
     );
 
     expect(perplexityCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "test-key",
       baseURL: undefined,
     });
@@ -120,7 +119,7 @@ describe("Perplexity provider", () => {
     const response = await provider.answer(
       "What changed?",
       {
-        credentials: { api: "PERPLEXITY_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
       { country: "US" },
@@ -181,7 +180,7 @@ describe("Perplexity provider", () => {
     const response = await provider.research(
       "Investigate the topic",
       {
-        credentials: { api: "PERPLEXITY_API_KEY" },
+        credentials: { api: "test-key" },
       },
       {
         cwd: process.cwd(),
@@ -222,7 +221,7 @@ describe("Perplexity provider", () => {
     const response = await provider.answer(
       "What changed?",
       {
-        credentials: { api: "PERPLEXITY_API_KEY" },
+        credentials: { api: "test-key" },
       },
       { cwd: process.cwd() },
       undefined,

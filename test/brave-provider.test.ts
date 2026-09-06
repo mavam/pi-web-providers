@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { braveProvider } from "../src/providers/brave.js";
+import { braveProvider } from "../src/providers/brave/definition.js";
 import { providerHarness } from "./provider-harness.js";
 
 const originalFetch = globalThis.fetch;
@@ -37,17 +37,19 @@ describe("providerHarness(braveProvider)", () => {
       "brave api",
       5,
       {
-        credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        credentials: { search: "test-key" },
         baseUrl: "https://api.search.brave.test",
-        options: {
-          search: {
-            mode: "news",
-            common: { country: "US", ignored: true },
-          },
-        },
       },
       { cwd: process.cwd() },
-      { news: { search_lang: "en", freshness: "pd", extra_snippets: true } },
+      {
+        ...{
+          mode: "news",
+          common: { country: "US", ignored: true },
+        },
+        ...{
+          news: { search_lang: "en", freshness: "pd", extra_snippets: true },
+        },
+      },
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -107,17 +109,19 @@ describe("providerHarness(braveProvider)", () => {
       "brave tutorial",
       3,
       {
-        credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        credentials: { search: "test-key" },
         baseUrl: "https://api.search.brave.test",
-        options: {
-          search: {
-            mode: "videos",
-            videos: {},
-          },
-        },
       },
       { cwd: process.cwd() },
-      { videos: { freshness: "pw", safesearch: "strict", spellcheck: false } },
+      {
+        ...{
+          mode: "videos",
+          videos: {},
+        },
+        ...{
+          videos: { freshness: "pw", safesearch: "strict", spellcheck: false },
+        },
+      },
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -186,12 +190,11 @@ describe("providerHarness(braveProvider)", () => {
       "coffee near me",
       5,
       {
-        credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        credentials: { search: "test-key" },
         baseUrl: "https://api.search.brave.test",
-        options: { search: { mode: "llm_context" } },
       },
       { cwd: process.cwd() },
-      { llmContext: { enable_local: true } },
+      { ...{ mode: "llm_context" }, ...{ llmContext: { enable_local: true } } },
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -258,7 +261,7 @@ describe("providerHarness(braveProvider)", () => {
     const response = await providerHarness(braveProvider).answer(
       "what happened?",
       {
-        credentials: { answers: "BRAVE_ANSWERS_API_KEY" },
+        credentials: { answers: "answers-key" },
         baseUrl: "https://api.search.brave.test",
       },
       { cwd: process.cwd() },
@@ -339,7 +342,7 @@ describe("providerHarness(braveProvider)", () => {
     const response = await providerHarness(braveProvider).research(
       "research this topic",
       {
-        credentials: { answers: "BRAVE_ANSWERS_API_KEY" },
+        credentials: { answers: "answers-key" },
         baseUrl: "https://api.search.brave.test",
       },
       { cwd: process.cwd() },
@@ -430,19 +433,21 @@ describe("providerHarness(braveProvider)", () => {
       "coffee",
       2,
       {
-        credentials: { search: "BRAVE_SEARCH_API_KEY" },
+        credentials: { search: "test-key" },
         baseUrl: "https://api.search.brave.test",
-        options: { search: { mode: "places" } },
       },
       { cwd: process.cwd() },
       {
-        places: {
-          location: "example city example region",
-          includeDetails: true,
-          includeDescriptions: true,
-          search_lang: "en",
-          ui_lang: "en-US",
-          units: "imperial",
+        ...{ mode: "places" },
+        ...{
+          places: {
+            location: "example city example region",
+            includeDetails: true,
+            includeDescriptions: true,
+            search_lang: "en",
+            ui_lang: "en-US",
+            units: "imperial",
+          },
         },
       },
     );

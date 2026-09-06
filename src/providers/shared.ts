@@ -1,81 +1,24 @@
-import { resolveConfigValue } from "../config-values.js";
-import type {
-  ProviderCapabilityStatus,
-  ProviderCapabilityStatusOptions,
-} from "../types.js";
-
 export function trimSnippet(
   input: string | undefined,
   maxLength = 300,
 ): string {
   const text = (input ?? "").replace(/\s+/g, " ").trim();
-  if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength - 1)}…`;
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 }
-
 export function normalizeContentText(input: string | undefined): string {
-  const text = (input ?? "").replace(/\r/g, "").trim();
-  if (!text) {
-    return "";
-  }
-
-  return text
+  return (input ?? "")
+    .replace(/\r/g, "")
+    .trim()
     .split("\n")
     .map((line) => line.replace(/[ \t]+$/g, ""))
     .join("\n")
     .replace(/\n{3,}/g, "\n\n");
 }
-
-export function pushIndentedBlock(lines: string[], text: string): void {
-  const normalized = normalizeContentText(text);
-  if (!normalized) {
-    return;
-  }
-
-  for (const line of normalized.split("\n")) {
-    lines.push(`   ${line}`);
-  }
-}
-
 export function asJsonObject(
   value: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
   return value ? { ...value } : {};
 }
-
 export function formatJson(value: unknown): string {
   return JSON.stringify(value, null, 2);
-}
-
-export function getApiKeyStatus(
-  apiKeyReference: string | undefined,
-  options: ProviderCapabilityStatusOptions = {},
-): ProviderCapabilityStatus {
-  if (!apiKeyReference) {
-    return { state: "missing_api_key" };
-  }
-  if (options.resolveSecrets === false && isSecretReference(apiKeyReference)) {
-    return { state: "deferred_secret" };
-  }
-  try {
-    return resolveConfigValue(apiKeyReference)
-      ? { state: "ready" }
-      : { state: "missing_api_key" };
-  } catch (error) {
-    return {
-      state: "invalid_config",
-      detail: formatConfigValueError(error),
-    };
-  }
-}
-
-export function isSecretReference(reference: string): boolean {
-  return reference.startsWith("!") || /^[A-Z][A-Z0-9_]*$/.test(reference);
-}
-
-export function formatConfigValueError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return (
-    message.replace(/\s+/g, " ").trim() || "Failed to resolve config value"
-  );
 }

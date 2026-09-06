@@ -1,3 +1,6 @@
-id: pi-web-providers
-name: Pi Web Providers
+id: webfox
+name: Webfox
 repository: mavam/pi-web-providers
+release:
+  version_files:
+    - ../package.json

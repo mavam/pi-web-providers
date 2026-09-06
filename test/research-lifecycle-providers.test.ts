@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const {
   exaCtorMock,
-  exaResearchCreateMock,
-  exaResearchGetMock,
+  exaSearchMock,
   openaiCtorMock,
   openaiResponsesCreateMock,
   openaiResponsesRetrieveMock,
@@ -12,8 +11,7 @@ const {
   valyuDeepResearchStatusMock,
 } = vi.hoisted(() => ({
   exaCtorMock: vi.fn(),
-  exaResearchCreateMock: vi.fn(),
-  exaResearchGetMock: vi.fn(),
+  exaSearchMock: vi.fn(),
   openaiCtorMock: vi.fn(),
   openaiResponsesCreateMock: vi.fn(),
   openaiResponsesRetrieveMock: vi.fn(),
@@ -25,10 +23,7 @@ const {
 vi.mock("exa-js", () => ({
   Exa: exaCtorMock.mockImplementation(function MockExa() {
     return {
-      research: {
-        create: exaResearchCreateMock,
-        get: exaResearchGetMock,
-      },
+      search: exaSearchMock,
     };
   }),
 }));
@@ -60,14 +55,12 @@ vi.mock("openai", () => {
   };
 });
 
-import { __test__ } from "../src/index.js";
-import type { WebProviders } from "../src/types.js";
+import { createWebfox, type WebfoxConfig } from "../src/index.js";
 
 afterEach(() => {
   vi.useRealTimers();
   exaCtorMock.mockClear();
-  exaResearchCreateMock.mockReset();
-  exaResearchGetMock.mockReset();
+  exaSearchMock.mockReset();
   openaiCtorMock.mockClear();
   openaiResponsesCreateMock.mockReset();
   openaiResponsesRetrieveMock.mockReset();
@@ -96,11 +89,11 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await __test__.executeSearchTool({
+    const result = await createWebfox({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               search: {
                 model: "gpt-4.1",
@@ -108,11 +101,9 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebfoxConfig,
+    }).search({
+      provider: "openai",
       options: {
         instructions: "Prefer official sources.",
         allowedDomains: ["platform.openai.com"],
@@ -127,6 +118,7 @@ describe("OpenAI provider", () => {
     });
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -187,16 +179,10 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).not.toContain('## "openai deep research"');
-    expect(result.content[0]?.text).toContain(
-      "1. [OpenAI Deep Research docs](<https://platform.openai.com/docs/guides/deep-research>)",
-    );
-    expect(result.details).toEqual({
-      tool: "web_search",
-      provider: "openai",
-      queryCount: 1,
-      failedQueryCount: 0,
-      resultCount: 1,
+    expect(result.status).toBe("ok");
+    expect(successful(result.results[0])?.results[0]).toMatchObject({
+      title: "OpenAI Deep Research docs",
+      url: "https://platform.openai.com/docs/guides/deep-research",
     });
   });
 
@@ -233,12 +219,11 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await __test__.executeProviderTool({
-      capability: "answer",
+    const result = await createWebfox({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               answer: {
                 model: "gpt-4.1",
@@ -246,18 +231,17 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebfoxConfig,
+    }).answer({
+      provider: "openai",
       options: {
         instructions: "Keep the answer concise and prefer primary sources.",
       },
-      query: "What is the latest OpenAI deep research API?",
+      queries: ["What is the latest OpenAI deep research API?"],
     });
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -272,53 +256,46 @@ describe("OpenAI provider", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "OpenAI grounded answer\n\nSources:\n1. Answer Source\n   https://example.com/answer",
     );
   });
 });
 
 describe("async research providers", () => {
-  it("uses Exa polling so transient errors do not create duplicate jobs", async () => {
-    vi.useFakeTimers();
+  it("uses Exa deep-reasoning search to synthesize research", async () => {
+    exaSearchMock.mockResolvedValue({
+      output: { content: "Exa research result" },
+      results: [],
+    });
 
-    exaResearchCreateMock.mockResolvedValue({ researchId: "exa-job-1" });
-    exaResearchGetMock
-      .mockRejectedValueOnce(new Error("fetch failed"))
-      .mockResolvedValueOnce({
-        status: "completed",
-        output: {
-          content: "Exa research result",
-        },
-      });
-
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebfox({
       config: {
+        execution: { retries: 1 },
         providers: {
           exa: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "exa",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebfoxConfig,
+    }).research({
+      provider: "exa",
       options: undefined,
       input: "Investigate Exa research polling",
     });
 
-    await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
     expect(exaCtorMock).toHaveBeenCalledWith("literal-key", undefined);
-    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
-    expect(exaResearchGetMock).toHaveBeenCalledTimes(2);
-    expect(exaResearchGetMock).toHaveBeenNthCalledWith(1, "exa-job-1", {
-      events: false,
-    });
-    expect(result.content[0]?.text).toBe("Exa research result");
+    expect(exaSearchMock).toHaveBeenCalledTimes(1);
+    expect(exaSearchMock).toHaveBeenCalledWith(
+      "Investigate Exa research polling",
+      {
+        type: "deep-reasoning",
+        outputSchema: { type: "text", description: expect.any(String) },
+      },
+    );
+    expect(successful(result.results[0])?.text).toBe("Exa research result");
   });
 
   it("uses OpenAI background responses polling and preserves citations", async () => {
@@ -326,7 +303,9 @@ describe("async research providers", () => {
 
     openaiResponsesCreateMock.mockResolvedValue({ id: "resp_1" });
     openaiResponsesRetrieveMock
-      .mockRejectedValueOnce(new Error("fetch failed"))
+      .mockRejectedValueOnce(
+        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+      )
       .mockResolvedValueOnce({
         id: "resp_1",
         model: "o3-deep-research",
@@ -359,12 +338,11 @@ describe("async research providers", () => {
         incomplete_details: null,
       });
 
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebfox({
       config: {
         providers: {
           openai: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
             options: {
               research: {
                 model: "o3-deep-research",
@@ -372,11 +350,10 @@ describe("async research providers", () => {
             },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "openai",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+        execution: { retries: 1 },
+      } satisfies WebfoxConfig,
+    }).research({
+      provider: "openai",
       options: {
         instructions: "Prefer primary sources.",
         max_tool_calls: 12,
@@ -384,10 +361,12 @@ describe("async research providers", () => {
       input: "Investigate OpenAI deep research polling",
     });
 
+    await vi.dynamicImportSettled();
     await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
     expect(openaiCtorMock).toHaveBeenCalledWith({
+      maxRetries: 0,
       apiKey: "literal-key",
     });
     expect(openaiResponsesCreateMock).toHaveBeenCalledTimes(1);
@@ -413,7 +392,7 @@ describe("async research providers", () => {
         signal: expect.any(AbortSignal),
       }),
     );
-    expect(result.content[0]?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "OpenAI research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });
@@ -426,10 +405,9 @@ describe("async research providers", () => {
       deepresearch_id: "valyu-job-1",
     });
     valyuDeepResearchStatusMock
-      .mockResolvedValueOnce({
-        success: false,
-        error: "fetch failed",
-      })
+      .mockRejectedValueOnce(
+        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
+      )
       .mockResolvedValueOnce({
         success: true,
         status: "completed",
@@ -442,23 +420,22 @@ describe("async research providers", () => {
         ],
       });
 
-    const promise = __test__.executeProviderTool({
-      capability: "research",
+    const promise = createWebfox({
       config: {
+        execution: { retries: 1 },
         providers: {
           valyu: {
-            credentials: { api: "literal-key" },
+            credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebProviders,
-      explicitProvider: "valyu",
-      ctx: { cwd: process.cwd() },
-      signal: undefined,
-      onUpdate: undefined,
+      } satisfies WebfoxConfig,
+    }).research({
+      provider: "valyu",
       options: undefined,
       input: "Investigate Valyu research polling",
     });
 
+    await vi.dynamicImportSettled();
     await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
@@ -469,8 +446,13 @@ describe("async research providers", () => {
       1,
       "valyu-job-1",
     );
-    expect(result.content[0]?.text).toBe(
+    expect(successful(result.results[0])?.text).toBe(
       "Valyu research result\n\nSources:\n1. Source A\n   https://example.com/a",
     );
   });
 });
+
+function successful<T>(result: import("../src/index.js").InputResult<T>): T {
+  if (!result.ok) throw new Error(result.error.message);
+  return result.value;
+}

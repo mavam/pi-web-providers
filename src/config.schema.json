@@ -1,0 +1,4270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/webfox@3.5.1/dist/config.schema.json",
+  "title": "webfox configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "search": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "enum": [
+                "brave",
+                "custom",
+                "exa",
+                "firecrawl",
+                "linkup",
+                "ollama",
+                "openai",
+                "parallel",
+                "perplexity",
+                "serper",
+                "tavily",
+                "valyu"
+              ]
+            },
+            "maxResults": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "contents": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "enum": [
+                "cloudflare",
+                "custom",
+                "exa",
+                "firecrawl",
+                "linkup",
+                "ollama",
+                "parallel",
+                "tavily",
+                "valyu"
+              ]
+            }
+          }
+        },
+        "answer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "enum": [
+                "brave",
+                "custom",
+                "exa",
+                "firecrawl",
+                "gemini",
+                "openai",
+                "perplexity",
+                "valyu"
+              ]
+            }
+          }
+        },
+        "research": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "enum": [
+                "brave",
+                "custom",
+                "exa",
+                "gemini",
+                "linkup",
+                "openai",
+                "perplexity",
+                "valyu"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "researchTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retryDelayMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "brave": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                },
+                "answers": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "web",
+                        "llm_context",
+                        "news",
+                        "videos",
+                        "images",
+                        "places"
+                      ],
+                      "description": "Brave search mode. Use 'news' for recent journalism or current events, 'videos' for clips/tutorials, 'images' for visual references, 'places' for local businesses, venues, cafes, restaurants, hotels, shops, or near/in-location searches, and 'llm_context' for retrieval context."
+                    },
+                    "common": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        }
+                      },
+                      "description": "Common Brave query options merged into the selected mode's options.",
+                      "additionalProperties": false
+                    },
+                    "web": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "freshness": {
+                          "type": "string",
+                          "description": "Freshness filter such as 'pd' (24h), 'pw' (7d), 'pm' (31d), 'py' (year), or a Brave date range."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "goggles": {
+                          "type": "string",
+                          "description": "Brave Goggles URL or inline definition."
+                        },
+                        "extra_snippets": {
+                          "type": "boolean",
+                          "description": "Whether to ask Brave for extra snippets."
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Brave result page offset for paginated requests."
+                        },
+                        "enable_rich_callback": {
+                          "type": "boolean",
+                          "description": "Whether to enable Brave rich callback metadata."
+                        }
+                      },
+                      "description": "Options for Brave Web Search mode.",
+                      "additionalProperties": false
+                    },
+                    "llmContext": {
+                      "type": "object",
+                      "properties": {
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50,
+                          "description": "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed."
+                        },
+                        "maximum_number_of_urls": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum source URLs."
+                        },
+                        "maximum_number_of_tokens": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum context tokens."
+                        },
+                        "maximum_number_of_snippets": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum snippets."
+                        },
+                        "maximum_number_of_tokens_per_url": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum context tokens per URL."
+                        },
+                        "maximum_number_of_snippets_per_url": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum snippets per URL."
+                        },
+                        "context_threshold_mode": {
+                          "type": "string",
+                          "description": "Brave LLM Context threshold mode."
+                        },
+                        "enable_local": {
+                          "type": "boolean",
+                          "description": "Whether to include local results."
+                        },
+                        "enable_source_metadata": {
+                          "type": "boolean",
+                          "description": "Whether to include source metadata in grounding."
+                        },
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "freshness": {
+                          "type": "string",
+                          "description": "Freshness filter such as 'pd' (24h), 'pw' (7d), 'pm' (31d), 'py' (year), or a Brave date range."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "goggles": {
+                          "type": "string",
+                          "description": "Brave Goggles URL or inline definition."
+                        }
+                      },
+                      "description": "Options for Brave LLM Context mode.",
+                      "additionalProperties": false
+                    },
+                    "news": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "freshness": {
+                          "type": "string",
+                          "description": "Freshness filter such as 'pd' (24h), 'pw' (7d), 'pm' (31d), 'py' (year), or a Brave date range."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "goggles": {
+                          "type": "string",
+                          "description": "Brave Goggles URL or inline definition."
+                        },
+                        "extra_snippets": {
+                          "type": "boolean",
+                          "description": "Whether to ask Brave for extra snippets."
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Brave result page offset for paginated requests."
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50,
+                          "description": "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed."
+                        }
+                      },
+                      "description": "Options for Brave News Search mode.",
+                      "additionalProperties": false
+                    },
+                    "videos": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "freshness": {
+                          "type": "string",
+                          "description": "Freshness filter such as 'pd' (24h), 'pw' (7d), 'pm' (31d), 'py' (year), or a Brave date range."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "offset": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Brave result page offset for paginated requests."
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50,
+                          "description": "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed."
+                        }
+                      },
+                      "description": "Options for Brave Video Search mode.",
+                      "additionalProperties": false
+                    },
+                    "images": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50,
+                          "description": "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed."
+                        }
+                      },
+                      "description": "Options for Brave Image Search mode.",
+                      "additionalProperties": false
+                    },
+                    "places": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code used to localize Brave results, for example 'US'."
+                        },
+                        "search_lang": {
+                          "type": "string",
+                          "description": "Content language for Brave results, for example 'en'."
+                        },
+                        "ui_lang": {
+                          "type": "string",
+                          "description": "UI language for response metadata, for example 'en-US'."
+                        },
+                        "latitude": {
+                          "type": "number",
+                          "description": "Latitude for local place search."
+                        },
+                        "longitude": {
+                          "type": "number",
+                          "description": "Longitude for local place search."
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "Human-readable local search location, e.g. 'Eppendorf, Hamburg, Germany'. Use with mode='places' for neighborhood or near-me style searches."
+                        },
+                        "radius": {
+                          "type": "number",
+                          "description": "Local search radius."
+                        },
+                        "units": {
+                          "type": "string",
+                          "description": "Distance units for local search."
+                        },
+                        "safesearch": {
+                          "enum": ["off", "moderate", "strict"],
+                          "description": "Safe-search filtering level."
+                        },
+                        "spellcheck": {
+                          "type": "boolean",
+                          "description": "Whether Brave may spellcheck the query."
+                        },
+                        "geoloc": {
+                          "type": "string",
+                          "description": "Optional geolocation token used to refine results."
+                        },
+                        "count": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 50,
+                          "description": "Mode-specific result count override. Prefer top-level maxResults unless Brave-specific pagination is needed."
+                        },
+                        "includeDetails": {
+                          "type": "boolean",
+                          "description": "Places mode only. Fetch detailed POI metadata when the task needs contact info, opening hours, ratings/review counts, photos, profiles, or richer address/distance data. Leave off for simple place listings to avoid extra latency and quota usage."
+                        },
+                        "includeDescriptions": {
+                          "type": "boolean",
+                          "description": "Places mode only. Fetch AI-generated POI descriptions when the task needs qualitative summaries or short explanations of places. Leave off for simple nearby/place listing queries to avoid extra latency and quota usage."
+                        }
+                      },
+                      "description": "Options for Brave Local Place Search mode.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Brave search options.",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "enum": ["brave", "brave-pro"],
+                      "description": "Brave Answers model. Defaults to 'brave'."
+                    },
+                    "country": {
+                      "type": "string"
+                    },
+                    "language": {
+                      "type": "string"
+                    },
+                    "safesearch": {
+                      "enum": ["off", "moderate", "strict"],
+                      "description": "Safe-search filtering level."
+                    },
+                    "enable_citations": {
+                      "type": "boolean"
+                    },
+                    "enable_entities": {
+                      "type": "boolean"
+                    },
+                    "max_completion_tokens": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "description": "Brave answer options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "enum": ["brave", "brave-pro"],
+                      "description": "Brave Answers model. Defaults to 'brave'."
+                    },
+                    "country": {
+                      "type": "string"
+                    },
+                    "language": {
+                      "type": "string"
+                    },
+                    "safesearch": {
+                      "enum": ["off", "moderate", "strict"],
+                      "description": "Safe-search filtering level."
+                    },
+                    "enable_entities": {
+                      "type": "boolean"
+                    },
+                    "enable_citations": {
+                      "type": "boolean",
+                      "description": "Accepted for compatibility but forced to false for Brave research mode."
+                    },
+                    "max_completion_tokens": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "research_allow_thinking": {
+                      "type": "boolean"
+                    },
+                    "research_maximum_number_of_tokens_per_query": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "research_maximum_number_of_queries": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "research_maximum_number_of_iterations": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "research_maximum_number_of_seconds": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "research_maximum_number_of_results_per_query": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "description": "Brave research options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "cloudflare": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "accountId": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "env": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["env"]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": ["value"]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "command": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "required": ["command"]
+                }
+              ]
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "cacheTTL": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Cache lifetime in seconds; 0 disables caching."
+                    },
+                    "actionTimeout": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Post-navigation action timeout in milliseconds."
+                    },
+                    "waitForTimeout": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Milliseconds to wait before extraction."
+                    },
+                    "waitForSelector": {
+                      "type": "object",
+                      "properties": {
+                        "selector": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "timeout": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "visible": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "hidden": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "description": "Wait for a page element.",
+                      "additionalProperties": false
+                    },
+                    "userAgent": {
+                      "type": "string",
+                      "description": "Browser user agent."
+                    },
+                    "setJavaScriptEnabled": {
+                      "type": "boolean",
+                      "description": "Enable page JavaScript."
+                    },
+                    "gotoOptions": {
+                      "type": "object",
+                      "properties": {
+                        "timeout": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Navigation timeout in milliseconds."
+                        },
+                        "waitUntil": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "load"
+                            },
+                            {
+                              "type": "string",
+                              "const": "domcontentloaded"
+                            },
+                            {
+                              "type": "string",
+                              "const": "networkidle0"
+                            },
+                            {
+                              "type": "string",
+                              "const": "networkidle2"
+                            }
+                          ],
+                          "description": "When to consider navigation complete."
+                        }
+                      },
+                      "description": "Navigation options.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Cloudflare Browser Rendering options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "custom": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "commands": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "argv": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "cwd": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "env": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "env": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["env"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["value"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            "required": ["command"]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["argv"]
+                },
+                "contents": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "argv": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "cwd": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "env": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "env": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["env"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["value"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            "required": ["command"]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["argv"]
+                },
+                "answer": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "argv": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "cwd": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "env": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "env": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["env"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["value"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            "required": ["command"]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["argv"]
+                },
+                "research": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "argv": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "cwd": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "env": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "env": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["env"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "minLength": 1
+                              }
+                            },
+                            "required": ["value"]
+                          },
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "properties": {
+                              "command": {
+                                "type": "array",
+                                "minItems": 1,
+                                "items": {
+                                  "type": "string",
+                                  "minLength": 1
+                                }
+                              }
+                            },
+                            "required": ["command"]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": ["argv"]
+                }
+              }
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "contents": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "answer": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "research": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        },
+        "exa": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "keyword"
+                        },
+                        {
+                          "type": "string",
+                          "const": "neural"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        },
+                        {
+                          "type": "string",
+                          "const": "hybrid"
+                        },
+                        {
+                          "type": "string",
+                          "const": "fast"
+                        },
+                        {
+                          "type": "string",
+                          "const": "instant"
+                        },
+                        {
+                          "type": "string",
+                          "const": "deep-lite"
+                        },
+                        {
+                          "type": "string",
+                          "const": "deep"
+                        },
+                        {
+                          "type": "string",
+                          "const": "deep-reasoning"
+                        }
+                      ],
+                      "description": "Exa search mode."
+                    },
+                    "category": {
+                      "type": "string",
+                      "description": "Filter by category (e.g., 'company', 'research paper')."
+                    },
+                    "includeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict results to these domains."
+                    },
+                    "excludeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these domains."
+                    },
+                    "startPublishedDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest publish date."
+                    },
+                    "endPublishedDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest publish date."
+                    },
+                    "includeText": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Require result page text to contain these terms. Exa currently supports one short phrase."
+                    },
+                    "excludeText": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Require result page text not to contain these terms. Exa currently supports one short phrase."
+                    },
+                    "systemPrompt": {
+                      "type": "string",
+                      "description": "Additional Exa instructions for deep search source selection and synthesis."
+                    },
+                    "additionalQueries": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "maxItems": 5,
+                      "description": "Alternative query formulations for Exa deep search variants."
+                    },
+                    "userLocation": {
+                      "type": "string",
+                      "description": "Two-letter ISO country code for the user location, such as 'US'."
+                    },
+                    "contents": {
+                      "type": "object",
+                      "properties": {
+                        "text": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "maxCharacters": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "description": "Maximum text characters per result."
+                                },
+                                "includeHtmlTags": {
+                                  "type": "boolean",
+                                  "description": "Include HTML tags in returned text."
+                                },
+                                "verbosity": {
+                                  "anyOf": [
+                                    {
+                                      "type": "string",
+                                      "const": "compact"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "standard"
+                                    },
+                                    {
+                                      "type": "string",
+                                      "const": "full"
+                                    }
+                                  ],
+                                  "description": "Verbosity level for returned text."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Include text content."
+                        },
+                        "highlights": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "query": {
+                                  "type": "string",
+                                  "description": "Query to use for highlights."
+                                },
+                                "maxCharacters": {
+                                  "type": "integer",
+                                  "minimum": 1,
+                                  "description": "Maximum highlight characters."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Include highlighted excerpts."
+                        },
+                        "summary": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "query": {
+                                  "type": "string",
+                                  "description": "Query to guide summary generation."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Include AI-generated summary."
+                        },
+                        "livecrawlTimeout": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 90000,
+                          "description": "Content-fetch timeout in milliseconds (1–90000). Does not select a freshness policy."
+                        },
+                        "maxAgeHours": {
+                          "type": "integer",
+                          "minimum": -1,
+                          "maximum": 720,
+                          "description": "Content freshness in whole hours: 0 fetches fresh, -1 uses cache only, 1–720 bounds cache age. Omit for fallback fetching. Set only inside options.contents; do not also send deprecated livecrawl."
+                        },
+                        "filterEmptyResults": {
+                          "type": "boolean",
+                          "description": "Filter results with no contents."
+                        },
+                        "subpages": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Number of subpages to return for each result."
+                        },
+                        "subpageTarget": {
+                          "anyOf": [
+                            {
+                              "type": "string"
+                            },
+                            {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          ],
+                          "description": "Text used to match/rank returned subpages."
+                        },
+                        "extras": {
+                          "type": "object",
+                          "properties": {
+                            "links": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Number of page links to include."
+                            },
+                            "imageLinks": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Number of image links to include."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Content extraction and freshness controls. Put text, highlights, summary, maxAgeHours, and livecrawlTimeout here, not directly in options."
+                    }
+                  },
+                  "description": "Exa search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "firecrawl": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["web", "news", "images"]
+                      },
+                      "description": "Search source groups."
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["github", "research", "pdf", "developer"]
+                      },
+                      "description": "Search categories."
+                    },
+                    "includeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict results to these domains."
+                    },
+                    "excludeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these domains."
+                    },
+                    "tbs": {
+                      "type": "string",
+                      "description": "Google-style time-based search filter."
+                    },
+                    "ignoreInvalidURLs": {
+                      "type": "boolean",
+                      "description": "Ignore invalid result URLs."
+                    },
+                    "location": {
+                      "type": "string",
+                      "description": "Search location, for example 'Berlin, Germany'. Not a scrape location object."
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Request timeout in milliseconds."
+                    },
+                    "highlights": {
+                      "type": "boolean",
+                      "description": "Generate query-relevant highlights."
+                    },
+                    "scrapeOptions": {
+                      "type": "object",
+                      "properties": {
+                        "formats": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "html",
+                              "rawHtml",
+                              "links",
+                              "images",
+                              "screenshot",
+                              "summary",
+                              "json",
+                              "attributes",
+                              "changeTracking"
+                            ]
+                          },
+                          "description": "Output formats for scraping."
+                        },
+                        "timeout": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Request timeout in milliseconds."
+                        },
+                        "onlyMainContent": {
+                          "type": "boolean",
+                          "description": "Extract only the main content."
+                        },
+                        "includeTags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "CSS selectors to include."
+                        },
+                        "excludeTags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "CSS selectors to exclude."
+                        },
+                        "waitFor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Milliseconds to wait before scraping."
+                        },
+                        "headers": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {
+                              "type": "string"
+                            }
+                          },
+                          "description": "Headers to send when scraping."
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "country": {
+                              "type": "string",
+                              "description": "Country code."
+                            },
+                            "languages": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Preferred languages."
+                            }
+                          },
+                          "description": "Scrape location; unlike search location, this is an object.",
+                          "additionalProperties": false
+                        },
+                        "mobile": {
+                          "type": "boolean",
+                          "description": "Use a mobile browser profile."
+                        },
+                        "proxy": {
+                          "type": "string",
+                          "description": "Proxy mode supported by your Firecrawl deployment."
+                        },
+                        "fastMode": {
+                          "type": "boolean",
+                          "description": "Use Firecrawl fast mode."
+                        },
+                        "blockAds": {
+                          "type": "boolean",
+                          "description": "Block ads while scraping."
+                        },
+                        "removeBase64Images": {
+                          "type": "boolean",
+                          "description": "Remove base64 image data from output."
+                        },
+                        "redactPII": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "entities": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "PERSON",
+                                      "EMAIL",
+                                      "PHONE",
+                                      "LOCATION",
+                                      "FINANCIAL",
+                                      "SECRET"
+                                    ]
+                                  }
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "enum": ["accurate", "aggressive", "fast"]
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Redact personal or sensitive data from output."
+                        },
+                        "maxAge": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
+                        },
+                        "minAge": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Minimum cached scrape age in milliseconds."
+                        },
+                        "storeInCache": {
+                          "type": "boolean",
+                          "description": "Store the scrape result in cache."
+                        },
+                        "skipTlsVerification": {
+                          "type": "boolean",
+                          "description": "Skip TLS certificate verification."
+                        }
+                      },
+                      "description": "Options for scraping each search result.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Firecrawl search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "formats": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "markdown",
+                          "html",
+                          "rawHtml",
+                          "links",
+                          "images",
+                          "screenshot",
+                          "summary",
+                          "json",
+                          "attributes",
+                          "changeTracking"
+                        ]
+                      },
+                      "description": "Output formats for scraping."
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Request timeout in milliseconds."
+                    },
+                    "onlyMainContent": {
+                      "type": "boolean",
+                      "description": "Extract only the main content."
+                    },
+                    "includeTags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "CSS selectors to include."
+                    },
+                    "excludeTags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "CSS selectors to exclude."
+                    },
+                    "waitFor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Milliseconds to wait before scraping."
+                    },
+                    "headers": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Headers to send when scraping."
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code."
+                        },
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Preferred languages."
+                        }
+                      },
+                      "description": "Scrape location; unlike search location, this is an object.",
+                      "additionalProperties": false
+                    },
+                    "mobile": {
+                      "type": "boolean",
+                      "description": "Use a mobile browser profile."
+                    },
+                    "proxy": {
+                      "type": "string",
+                      "description": "Proxy mode supported by your Firecrawl deployment."
+                    },
+                    "fastMode": {
+                      "type": "boolean",
+                      "description": "Use Firecrawl fast mode."
+                    },
+                    "blockAds": {
+                      "type": "boolean",
+                      "description": "Block ads while scraping."
+                    },
+                    "removeBase64Images": {
+                      "type": "boolean",
+                      "description": "Remove base64 image data from output."
+                    },
+                    "redactPII": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "entities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "PERSON",
+                                  "EMAIL",
+                                  "PHONE",
+                                  "LOCATION",
+                                  "FINANCIAL",
+                                  "SECRET"
+                                ]
+                              }
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": ["accurate", "aggressive", "fast"]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Redact personal or sensitive data from output."
+                    },
+                    "maxAge": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
+                    },
+                    "minAge": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum cached scrape age in milliseconds."
+                    },
+                    "storeInCache": {
+                      "type": "boolean",
+                      "description": "Store the scrape result in cache."
+                    },
+                    "skipTlsVerification": {
+                      "type": "boolean",
+                      "description": "Skip TLS certificate verification."
+                    }
+                  },
+                  "description": "Firecrawl scrape options.",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "url": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "URL of the page to ask about."
+                    },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Request timeout in milliseconds."
+                    },
+                    "onlyMainContent": {
+                      "type": "boolean",
+                      "description": "Extract only the main content."
+                    },
+                    "includeTags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "CSS selectors to include."
+                    },
+                    "excludeTags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "CSS selectors to exclude."
+                    },
+                    "waitFor": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "description": "Milliseconds to wait before scraping."
+                    },
+                    "headers": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Headers to send when scraping."
+                    },
+                    "location": {
+                      "type": "object",
+                      "properties": {
+                        "country": {
+                          "type": "string",
+                          "description": "Country code."
+                        },
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Preferred languages."
+                        }
+                      },
+                      "description": "Scrape location; unlike search location, this is an object.",
+                      "additionalProperties": false
+                    },
+                    "mobile": {
+                      "type": "boolean",
+                      "description": "Use a mobile browser profile."
+                    },
+                    "proxy": {
+                      "type": "string",
+                      "description": "Proxy mode supported by your Firecrawl deployment."
+                    },
+                    "fastMode": {
+                      "type": "boolean",
+                      "description": "Use Firecrawl fast mode."
+                    },
+                    "blockAds": {
+                      "type": "boolean",
+                      "description": "Block ads while scraping."
+                    },
+                    "removeBase64Images": {
+                      "type": "boolean",
+                      "description": "Remove base64 image data from output."
+                    },
+                    "redactPII": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "entities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "enum": [
+                                  "PERSON",
+                                  "EMAIL",
+                                  "PHONE",
+                                  "LOCATION",
+                                  "FINANCIAL",
+                                  "SECRET"
+                                ]
+                              }
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": ["accurate", "aggressive", "fast"]
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      ],
+                      "description": "Redact personal or sensitive data from output."
+                    },
+                    "maxAge": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
+                    },
+                    "minAge": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum cached scrape age in milliseconds."
+                    },
+                    "storeInCache": {
+                      "type": "boolean",
+                      "description": "Store the scrape result in cache."
+                    },
+                    "skipTlsVerification": {
+                      "type": "boolean",
+                      "description": "Skip TLS certificate verification."
+                    }
+                  },
+                  "description": "Firecrawl page-question options. The URL is required; the question comes from the web_answer query.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "gemini": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "Gemini model for answers (defaults to 'gemini-3.8-flash')."
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "thinkingConfig": {
+                          "type": "object",
+                          "properties": {
+                            "thinkingLevel": {
+                              "type": "string",
+                              "enum": ["MINIMAL", "LOW", "MEDIUM", "HIGH"],
+                              "description": "Model-specific thinking depth."
+                            },
+                            "thinkingBudget": {
+                              "type": "integer",
+                              "minimum": -1,
+                              "description": "Legacy thinking budget; -1 automatic, 0 disabled. Not supported by newer models that require thinkingLevel."
+                            },
+                            "includeThoughts": {
+                              "type": "boolean",
+                              "description": "Include available thought summaries."
+                            }
+                          },
+                          "description": "Generate-content thinking settings; choose controls supported by the selected model.",
+                          "additionalProperties": false
+                        },
+                        "labels": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {
+                              "type": "string"
+                            }
+                          },
+                          "description": "Request labels to attach to the Gemini call."
+                        },
+                        "temperature": {
+                          "type": "number",
+                          "description": "Sampling temperature."
+                        },
+                        "topP": {
+                          "type": "number",
+                          "description": "Top-p sampling value."
+                        },
+                        "topK": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Top-k sampling value."
+                        },
+                        "candidateCount": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Number of candidates to generate."
+                        },
+                        "maxOutputTokens": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Maximum output tokens."
+                        }
+                      },
+                      "description": "Gemini generate-content config overrides.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Gemini answer options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "agent_config": {
+                      "type": "object",
+                      "properties": {
+                        "thinking_summaries": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "auto"
+                            },
+                            {
+                              "type": "string",
+                              "const": "none"
+                            }
+                          ],
+                          "description": "Whether to include thought summaries in the response."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Safe Gemini deep-research agent configuration. The provider adds the required type field."
+                    }
+                  },
+                  "additionalProperties": false,
+                  "description": "Gemini research options."
+                }
+              }
+            }
+          }
+        },
+        "linkup": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "depth": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "standard"
+                        },
+                        {
+                          "type": "string",
+                          "const": "deep"
+                        }
+                      ],
+                      "description": "Search depth. 'deep' is slower but more thorough."
+                    },
+                    "includeImages": {
+                      "type": "boolean",
+                      "description": "Include images in search results."
+                    },
+                    "includeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict results to these domains."
+                    },
+                    "excludeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these domains."
+                    },
+                    "fromDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest result date."
+                    },
+                    "toDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest result date."
+                    }
+                  },
+                  "description": "Linkup search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": ["standard", "pro"],
+                      "description": "Fetch strategy; pro improves retrieval of difficult pages."
+                    },
+                    "includeRawContent": {
+                      "type": "boolean",
+                      "description": "Include raw page content and its content type."
+                    },
+                    "renderJs": {
+                      "type": "boolean",
+                      "description": "Render JavaScript before extracting content."
+                    },
+                    "includeRawHtml": {
+                      "type": "boolean",
+                      "deprecated": true,
+                      "description": "Legacy raw HTML output. Prefer includeRawContent."
+                    },
+                    "extractImages": {
+                      "type": "boolean",
+                      "description": "Extract images from the page."
+                    }
+                  },
+                  "description": "Linkup fetch options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "outputType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "sourcedAnswer"
+                        },
+                        {
+                          "type": "string",
+                          "const": "structured"
+                        }
+                      ],
+                      "description": "Research output type. Defaults to 'sourcedAnswer' unless structuredOutputSchema is provided."
+                    },
+                    "mode": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "answer"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        },
+                        {
+                          "type": "string",
+                          "const": "investigate"
+                        },
+                        {
+                          "type": "string",
+                          "const": "research"
+                        }
+                      ],
+                      "description": "Research mode. Use 'answer' for precise verified answers, 'investigate' for focused deep dives, 'research' for broad reports, or omit/auto to let Linkup classify the task."
+                    },
+                    "reasoningDepth": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "S"
+                        },
+                        {
+                          "type": "string",
+                          "const": "M"
+                        },
+                        {
+                          "type": "string",
+                          "const": "L"
+                        },
+                        {
+                          "type": "string",
+                          "const": "XL"
+                        }
+                      ],
+                      "description": "Reasoning depth. Higher values trade latency for more thorough investigation."
+                    },
+                    "includeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict research to these domains."
+                    },
+                    "excludeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these domains."
+                    },
+                    "fromDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest result date."
+                    },
+                    "toDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest result date."
+                    },
+                    "structuredOutputSchema": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {}
+                      },
+                      "description": "JSON schema object required when outputType is 'structured'."
+                    }
+                  },
+                  "description": "Linkup research options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "ollama": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
+                    },
+                    "searchContextSize": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
+                    },
+                    "allowedDomains": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
+                    },
+                    "userLocation": {
+                      "type": "object",
+                      "properties": {
+                        "city": {
+                          "type": "string"
+                        },
+                        "country": {
+                          "type": "string"
+                        },
+                        "region": {
+                          "type": "string"
+                        },
+                        "timezone": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Approximate location. Not supported by deep research models.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "OpenAI search options.",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
+                    },
+                    "searchContextSize": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
+                    },
+                    "allowedDomains": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
+                    },
+                    "userLocation": {
+                      "type": "object",
+                      "properties": {
+                        "city": {
+                          "type": "string"
+                        },
+                        "country": {
+                          "type": "string"
+                        },
+                        "region": {
+                          "type": "string"
+                        },
+                        "timezone": {
+                          "type": "string"
+                        }
+                      },
+                      "description": "Approximate location. Not supported by deep research models.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "OpenAI answer options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string",
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
+                    },
+                    "searchContextSize": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
+                    },
+                    "allowedDomains": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
+                    },
+                    "max_tool_calls": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum built-in tool calls during research."
+                    }
+                  },
+                  "description": "OpenAI research options. Deep research models do not support userLocation.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "parallel": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "objective": {
+                      "type": "string",
+                      "description": "Underlying question or goal guiding retrieval."
+                    },
+                    "max_chars_total": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total excerpt character budget."
+                    },
+                    "client_model": {
+                      "type": "string",
+                      "description": "Model consuming the results."
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "description": "Session ID for related search and extraction calls."
+                    },
+                    "advanced_settings": {
+                      "type": "object",
+                      "properties": {
+                        "excerpt_settings": {
+                          "type": "object",
+                          "properties": {
+                            "max_chars_per_result": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "fetch_policy": {
+                          "type": "object",
+                          "properties": {
+                            "max_age_seconds": {
+                              "type": "number",
+                              "minimum": 600,
+                              "description": "Cache age threshold for live fetching, in seconds."
+                            },
+                            "timeout_seconds": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "description": "Live fetch timeout in seconds."
+                            },
+                            "disable_cache_fallback": {
+                              "type": "boolean",
+                              "description": "Fail instead of falling back to stale content."
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "source_policy": {
+                          "type": "object",
+                          "properties": {
+                            "include_domains": {
+                              "type": "array",
+                              "maxItems": 200,
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "exclude_domains": {
+                              "type": "array",
+                              "maxItems": 200,
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "after_date": {
+                              "type": "string",
+                              "description": "Earliest publication date (YYYY-MM-DD)."
+                            }
+                          },
+                          "description": "Source constraints; include and exclude lists may contain at most 200 domains combined.",
+                          "additionalProperties": false
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "Two-letter country code."
+                        }
+                      },
+                      "description": "Advanced retrieval settings. Result count comes from maxResults.",
+                      "additionalProperties": false
+                    },
+                    "mode": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "advanced"
+                        },
+                        {
+                          "type": "string",
+                          "const": "basic"
+                        },
+                        {
+                          "type": "string",
+                          "const": "turbo"
+                        },
+                        {
+                          "type": "string",
+                          "const": "fast"
+                        }
+                      ],
+                      "description": "Parallel search mode. Use 'advanced' for higher quality, 'basic' for lower latency, or 'turbo' for the fastest responses."
+                    }
+                  },
+                  "description": "Parallel search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "objective": {
+                      "type": "string",
+                      "description": "Underlying question or goal guiding retrieval."
+                    },
+                    "max_chars_total": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total excerpt character budget."
+                    },
+                    "client_model": {
+                      "type": "string",
+                      "description": "Model consuming the results."
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "description": "Session ID for related search and extraction calls."
+                    },
+                    "advanced_settings": {
+                      "type": "object",
+                      "properties": {
+                        "excerpt_settings": {
+                          "type": "object",
+                          "properties": {
+                            "max_chars_per_result": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "fetch_policy": {
+                          "type": "object",
+                          "properties": {
+                            "max_age_seconds": {
+                              "type": "number",
+                              "minimum": 600,
+                              "description": "Cache age threshold for live fetching, in seconds."
+                            },
+                            "timeout_seconds": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "description": "Live fetch timeout in seconds."
+                            },
+                            "disable_cache_fallback": {
+                              "type": "boolean",
+                              "description": "Fail instead of falling back to stale content."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "description": "Advanced extraction settings.",
+                      "additionalProperties": false
+                    },
+                    "excerpts": {
+                      "type": "boolean",
+                      "description": "Include excerpts in extraction results."
+                    },
+                    "full_content": {
+                      "type": "boolean",
+                      "description": "Include full page content in extraction results."
+                    }
+                  },
+                  "description": "Parallel extract options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "perplexity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Two-letter country hint."
+                    },
+                    "search_mode": {
+                      "type": "string",
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
+                    },
+                    "search_domain_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
+                    },
+                    "search_recency_filter": {
+                      "type": "string",
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
+                    "search_context_size": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of search context."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total search content token budget."
+                    },
+                    "max_tokens_per_page": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Per-page content token budget."
+                    }
+                  },
+                  "description": "Perplexity search options.",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Two-letter country hint."
+                    },
+                    "search_mode": {
+                      "type": "string",
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
+                    },
+                    "search_domain_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
+                    },
+                    "search_recency_filter": {
+                      "type": "string",
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "Perplexity model override."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens."
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "enum": ["minimal", "low", "medium", "high"],
+                      "description": "Reasoning effort, where supported by the selected model."
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature, where supported by the model."
+                    },
+                    "web_search_options": {
+                      "type": "object",
+                      "properties": {
+                        "search_context_size": {
+                          "type": "string",
+                          "enum": ["low", "medium", "high"],
+                          "description": "Amount of search context."
+                        }
+                      },
+                      "description": "Sonar web retrieval controls; distinct from standalone search options.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Perplexity grounded generation options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Two-letter country hint."
+                    },
+                    "search_mode": {
+                      "type": "string",
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
+                    },
+                    "search_domain_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
+                    },
+                    "search_recency_filter": {
+                      "type": "string",
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "Perplexity model override."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens."
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "enum": ["minimal", "low", "medium", "high"],
+                      "description": "Reasoning effort, where supported by the selected model."
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature, where supported by the model."
+                    },
+                    "web_search_options": {
+                      "type": "object",
+                      "properties": {
+                        "search_context_size": {
+                          "type": "string",
+                          "enum": ["low", "medium", "high"],
+                          "description": "Amount of search context."
+                        }
+                      },
+                      "description": "Sonar web retrieval controls; distinct from standalone search options.",
+                      "additionalProperties": false
+                    }
+                  },
+                  "description": "Perplexity grounded generation options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "serper": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "enum": [
+                        "search",
+                        "images",
+                        "videos",
+                        "places",
+                        "maps",
+                        "reviews",
+                        "news",
+                        "shopping",
+                        "product-reviews",
+                        "lens",
+                        "scholar",
+                        "patents",
+                        "autocomplete",
+                        "webpage"
+                      ],
+                      "description": "Serper search type. Use 'search' for web results, 'news' for recent journalism/current events, 'images' for visual references, 'videos' for clips/tutorials, 'places' or 'maps' for local businesses/venues, 'reviews' for Google business reviews by place ID/CID/FID or query, 'shopping' for products, 'product-reviews' for product reviews, 'lens' for reverse image search, 'scholar' for scholarly articles, 'patents' for patents, 'autocomplete' for suggestions, and 'webpage' to scrape a URL."
+                    },
+                    "gl": {
+                      "type": "string",
+                      "description": "Country code hint for Google results (for example 'us')."
+                    },
+                    "hl": {
+                      "type": "string",
+                      "description": "Language code hint for Google results (for example 'en')."
+                    },
+                    "location": {
+                      "type": "string",
+                      "description": "Geographic location hint for Google results."
+                    },
+                    "page": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "1-based results page to request from Serper."
+                    },
+                    "tbs": {
+                      "type": "string",
+                      "description": "Google time/date or vertical-specific filter string passed through to Serper, for example 'qdr:d' for past day."
+                    },
+                    "autocorrect": {
+                      "type": "boolean",
+                      "description": "Enable or disable Serper query autocorrection."
+                    },
+                    "url": {
+                      "type": "string",
+                      "description": "URL for modes that need one: image URL for 'lens', or page URL for 'webpage'. Defaults to the query string when omitted."
+                    },
+                    "ll": {
+                      "type": "string",
+                      "description": "Google Maps latitude/longitude/zoom hint, for example '@40.6973709,-74.1444871,11z'."
+                    },
+                    "placeId": {
+                      "type": "string",
+                      "description": "Google place ID for maps or reviews."
+                    },
+                    "cid": {
+                      "type": "string",
+                      "description": "Google CID for maps or reviews."
+                    },
+                    "fid": {
+                      "type": "string",
+                      "description": "Google FID for reviews."
+                    },
+                    "sortBy": {
+                      "type": "string",
+                      "description": "Review sort order for reviews mode."
+                    },
+                    "topicId": {
+                      "type": "string",
+                      "description": "Review topic ID for reviews mode."
+                    },
+                    "productId": {
+                      "type": "string",
+                      "description": "Google product ID for product-reviews mode. Defaults to the query string when omitted."
+                    },
+                    "nextPageToken": {
+                      "type": "string",
+                      "description": "Pagination token for reviews or product-reviews modes."
+                    },
+                    "includeMarkdown": {
+                      "type": "boolean",
+                      "default": true,
+                      "description": "Include Markdown content in webpage mode. Defaults to true."
+                    },
+                    "includeImages": {
+                      "type": "boolean",
+                      "description": "Include image metadata in webpage mode."
+                    },
+                    "includeLinks": {
+                      "type": "boolean",
+                      "description": "Include link metadata in webpage mode."
+                    },
+                    "includeVideos": {
+                      "type": "boolean",
+                      "description": "Include video metadata in webpage mode."
+                    }
+                  },
+                  "description": "Serper search options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "tavily": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "topic": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "general"
+                        },
+                        {
+                          "type": "string",
+                          "const": "news"
+                        },
+                        {
+                          "type": "string",
+                          "const": "finance"
+                        }
+                      ],
+                      "description": "Category of the search query. Use 'news' for recent journalism or current events, 'finance' for markets or company financial data, and 'general' for broad web search."
+                    },
+                    "searchDepth": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "basic"
+                        },
+                        {
+                          "type": "string",
+                          "const": "advanced"
+                        },
+                        {
+                          "type": "string",
+                          "const": "fast"
+                        },
+                        {
+                          "type": "string",
+                          "const": "ultra-fast"
+                        }
+                      ],
+                      "description": "Depth of the search. 'advanced' is slower but more thorough."
+                    },
+                    "timeRange": {
+                      "type": "string",
+                      "enum": [
+                        "year",
+                        "month",
+                        "week",
+                        "day",
+                        "y",
+                        "m",
+                        "w",
+                        "d"
+                      ],
+                      "description": "Named time range filter."
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "description": "Earliest result date (YYYY-MM-DD)."
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "description": "Latest result date (YYYY-MM-DD)."
+                    },
+                    "chunksPerSource": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3,
+                      "description": "Chunks per source for advanced search."
+                    },
+                    "autoParameters": {
+                      "type": "boolean",
+                      "description": "Let Tavily choose retrieval parameters; may increase cost."
+                    },
+                    "country": {
+                      "type": "string",
+                      "description": "Country hint for search results."
+                    },
+                    "exactMatch": {
+                      "type": "boolean",
+                      "description": "Prefer exact matches."
+                    },
+                    "includeAnswer": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["basic", "advanced"]
+                        }
+                      ],
+                      "description": "Include a short AI-generated answer."
+                    },
+                    "includeRawContent": {
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "const": false
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["markdown", "text"]
+                        }
+                      ],
+                      "description": "Return raw page content as markdown or text, or disable it with false."
+                    },
+                    "includeImages": {
+                      "type": "boolean",
+                      "description": "Include related images."
+                    },
+                    "includeFavicon": {
+                      "type": "boolean",
+                      "description": "Include favicon URLs."
+                    },
+                    "includeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict results to these domains."
+                    },
+                    "excludeDomains": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these domains from results."
+                    },
+                    "days": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Limit results to the last N days."
+                    }
+                  },
+                  "description": "Tavily search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "extractDepth": {
+                      "type": "string",
+                      "enum": ["basic", "advanced"],
+                      "description": "Depth setting for extraction."
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 60,
+                      "description": "Extraction timeout in seconds."
+                    },
+                    "format": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "markdown"
+                        },
+                        {
+                          "type": "string",
+                          "const": "text"
+                        }
+                      ],
+                      "description": "Output format for extracted content."
+                    },
+                    "includeImages": {
+                      "type": "boolean",
+                      "description": "Include extracted images."
+                    },
+                    "query": {
+                      "type": "string",
+                      "description": "Optional query to focus extraction."
+                    },
+                    "chunksPerSource": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 5,
+                      "description": "Maximum chunks per source (1–5). Used with query."
+                    },
+                    "includeFavicon": {
+                      "type": "boolean",
+                      "description": "Include favicon URLs."
+                    }
+                  },
+                  "description": "Tavily extract options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        },
+        "valyu": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "credentials": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "api": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "env": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["env"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "minLength": 1
+                        }
+                      },
+                      "required": ["value"]
+                    },
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "command": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      },
+                      "required": ["command"]
+                    }
+                  ]
+                }
+              }
+            },
+            "baseUrl": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "search": {
+                  "type": "object",
+                  "properties": {
+                    "searchType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "all"
+                        },
+                        {
+                          "type": "string",
+                          "const": "web"
+                        },
+                        {
+                          "type": "string",
+                          "const": "proprietary"
+                        },
+                        {
+                          "type": "string",
+                          "const": "news"
+                        }
+                      ],
+                      "description": "Valyu search type. Use 'news' for recent journalism or current events, 'web' for public web results, 'proprietary' for Valyu proprietary sources, and 'all' when both public and proprietary sources are useful."
+                    },
+                    "responseLength": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "short"
+                        },
+                        {
+                          "type": "string",
+                          "const": "medium"
+                        },
+                        {
+                          "type": "string",
+                          "const": "large"
+                        },
+                        {
+                          "type": "string",
+                          "const": "max"
+                        }
+                      ],
+                      "description": "Response length."
+                    },
+                    "countryCode": {
+                      "type": "string",
+                      "description": "Country code to scope search results."
+                    },
+                    "maxPrice": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum price per thousand characters (CPM)."
+                    },
+                    "relevanceThreshold": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1,
+                      "description": "Minimum result relevance score."
+                    },
+                    "includedSources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict retrieval to these Valyu sources."
+                    },
+                    "excludeSources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these Valyu sources."
+                    },
+                    "sourceBiases": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {
+                          "type": "number"
+                        }
+                      },
+                      "description": "Per-source relevance bias weights."
+                    },
+                    "category": {
+                      "type": "string",
+                      "description": "Valyu source category to search."
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest result date."
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest result date."
+                    },
+                    "historicalCache": {
+                      "type": "boolean",
+                      "description": "Allow Valyu historical cache usage when supported."
+                    },
+                    "fastMode": {
+                      "type": "boolean",
+                      "description": "Use Valyu fast mode when lower latency is preferred."
+                    },
+                    "urlOnly": {
+                      "type": "boolean",
+                      "description": "Return URL-focused results with less content."
+                    },
+                    "instructions": {
+                      "type": "string",
+                      "description": "Provider instructions for retrieval and result selection."
+                    }
+                  },
+                  "description": "Valyu search options.",
+                  "additionalProperties": false
+                },
+                "contents": {
+                  "type": "object",
+                  "properties": {
+                    "summary": {
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {}
+                          }
+                        }
+                      ],
+                      "description": "Whether to include a summary, or instructions for the summary."
+                    },
+                    "extractEffort": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "normal"
+                        },
+                        {
+                          "type": "string",
+                          "const": "high"
+                        },
+                        {
+                          "type": "string",
+                          "const": "auto"
+                        }
+                      ],
+                      "description": "Extraction effort. Use 'high' for difficult pages and 'normal' for faster extraction."
+                    },
+                    "responseLength": {
+                      "anyOf": [
+                        {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "short"
+                            },
+                            {
+                              "type": "string",
+                              "const": "medium"
+                            },
+                            {
+                              "type": "string",
+                              "const": "large"
+                            },
+                            {
+                              "type": "string",
+                              "const": "max"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "number",
+                          "minimum": 0
+                        }
+                      ],
+                      "description": "Content response length."
+                    },
+                    "maxPriceDollars": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum extraction cost in USD."
+                    },
+                    "screenshot": {
+                      "type": "boolean",
+                      "description": "Include screenshot capture when supported."
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest content date."
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest content date."
+                    },
+                    "historicalCache": {
+                      "type": "boolean",
+                      "description": "Allow Valyu historical cache usage when supported."
+                    }
+                  },
+                  "description": "Valyu contents options.",
+                  "additionalProperties": false
+                },
+                "answer": {
+                  "type": "object",
+                  "properties": {
+                    "structuredOutput": {
+                      "type": "object",
+                      "patternProperties": {
+                        "^.*$": {}
+                      },
+                      "description": "JSON schema-like structured output specification."
+                    },
+                    "systemInstructions": {
+                      "type": "string",
+                      "description": "System instructions that guide Valyu answer generation."
+                    },
+                    "searchType": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "all"
+                        },
+                        {
+                          "type": "string",
+                          "const": "web"
+                        },
+                        {
+                          "type": "string",
+                          "const": "proprietary"
+                        },
+                        {
+                          "type": "string",
+                          "const": "news"
+                        }
+                      ],
+                      "description": "Valyu search type for answer grounding."
+                    },
+                    "dataMaxPrice": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum data retrieval price for answer grounding."
+                    },
+                    "countryCode": {
+                      "type": "string",
+                      "description": "Country code to scope answer results."
+                    },
+                    "includedSources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict answer grounding to these Valyu sources."
+                    },
+                    "excludedSources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Exclude these Valyu sources from answer grounding."
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "description": "ISO date string for earliest source date."
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "description": "ISO date string for latest source date."
+                    },
+                    "fastMode": {
+                      "type": "boolean",
+                      "description": "Use Valyu fast mode when lower latency is preferred."
+                    }
+                  },
+                  "description": "Valyu answer options.",
+                  "additionalProperties": false
+                },
+                "research": {
+                  "type": "object",
+                  "properties": {
+                    "mode": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "const": "fast"
+                        },
+                        {
+                          "type": "string",
+                          "const": "standard"
+                        },
+                        {
+                          "type": "string",
+                          "const": "lite"
+                        },
+                        {
+                          "type": "string",
+                          "const": "heavy"
+                        },
+                        {
+                          "type": "string",
+                          "const": "max"
+                        }
+                      ],
+                      "description": "Valyu deep research mode."
+                    },
+                    "outputFormats": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "const": "markdown"
+                              },
+                              {
+                                "type": "string",
+                                "const": "pdf"
+                              },
+                              {
+                                "type": "string",
+                                "const": "toon"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "patternProperties": {
+                              "^.*$": {}
+                            }
+                          }
+                        ]
+                      },
+                      "description": "Requested Valyu research output formats."
+                    },
+                    "search": {
+                      "type": "object",
+                      "properties": {
+                        "searchType": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "const": "all"
+                            },
+                            {
+                              "type": "string",
+                              "const": "web"
+                            },
+                            {
+                              "type": "string",
+                              "const": "proprietary"
+                            }
+                          ],
+                          "description": "Valyu source pool for research."
+                        },
+                        "includedSources": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "excludedSources": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "sourceBiases": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {
+                              "type": "number"
+                            }
+                          }
+                        },
+                        "startDate": {
+                          "type": "string"
+                        },
+                        "endDate": {
+                          "type": "string"
+                        },
+                        "historicalCache": {
+                          "type": "boolean"
+                        },
+                        "category": {
+                          "type": "string"
+                        },
+                        "countryCode": {
+                          "type": "string"
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Valyu deep research search configuration."
+                    },
+                    "tools": {
+                      "type": "object",
+                      "properties": {
+                        "code_execution": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "screenshots": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "browser_use": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "charts": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      },
+                      "additionalProperties": false,
+                      "description": "Valyu deep research tool configuration."
+                    }
+                  },
+                  "description": "Valyu research options.",
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
