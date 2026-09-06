@@ -281,7 +281,14 @@ export async function runCli(
         });
         const entries = id
           ? [client.getProvider(parseProvider(id))!]
-          : client.listProviders();
+          : client
+              .listProviders()
+              .filter(
+                (entry) =>
+                  entry.id !== "custom" ||
+                  entry.configured.length > 0 ||
+                  entry.selectedDefaults.length > 0,
+              );
         const rows = [
           ["", "Provider", ...CAPABILITIES],
           ...entries.map((entry) => [
@@ -290,7 +297,10 @@ export async function runCli(
             ...CAPABILITIES.map((capability) =>
               entry.selectedDefaults.includes(capability)
                 ? "◉"
-                : entry.capabilities.includes(capability)
+                : (entry.id === "custom"
+                      ? entry.configured
+                      : entry.capabilities
+                    ).includes(capability)
                   ? "✔︎"
                   : "✘︎",
             ),
@@ -332,6 +342,11 @@ export async function runCli(
         );
         if (id) {
           const entry = entries[0];
+          if (entry.id === "custom") {
+            io.stdout.write(
+              "\nConfigure providers.custom.commands.<capability>.argv with the executable and arguments for each capability. Only configured commands are marked supported; ◉ marks selection independently.\n",
+            );
+          }
           io.stdout.write(
             `\n${entry.docsUrl}\n${entry.credentials.map((c) => `${c.name}: ${c.environmentVariable}${c.optional ? " (optional)" : ""}`).join("\n")}\n`,
           );

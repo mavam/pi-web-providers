@@ -183,6 +183,11 @@ need configuration for other capabilities. Cells show supported (`✔︎`), unsu
 (`✘︎`), or selected as the default for that tool (`◉`). Selection is independent of
 configuration, so an unconfigured provider can still show `◉`.
 
+The `custom` row appears only when a command is configured or a tool selects it
+as its default. Its support checkmarks reflect configured commands, not every
+capability the extension mechanism can implement. Use `webfox providers custom`
+for explicit inspection and setup guidance even before configuring commands.
+
 Configured means that local settings or credential sources exist—not that
 credentials, executables, or connectivity have been verified. Inspection and help
 never run credential commands or initialize provider SDKs.

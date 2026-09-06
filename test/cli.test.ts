@@ -509,6 +509,62 @@ describe("CLI contracts", () => {
       configured.stdout.split("\n").find((row) => row.includes("  brave ")),
     ).toMatch(/^★ +brave +◉ +✘︎ +✔︎ +✔︎$/);
   });
+  it("hides unused custom providers and reports only configured commands", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "webfox-custom-discovery-"));
+    directories.push(cwd);
+    const configPath = join(cwd, "config.yaml");
+    const extra = { env: { WEBFOX_CONFIG: configPath } };
+    const customRow = (text: string) =>
+      text
+        .split("\n\n")[0]
+        .split("\n")
+        .map((row) => row.split(/ {2,}/))
+        .find((row) => row[1] === "custom");
+    await writeFile(configPath, "{}\n");
+    const hidden = await cli(["providers"], "", extra);
+    expect(hidden.code).toBe(0);
+    expect(customRow(hidden.stdout)).toBeUndefined();
+    const explicit = await cli(["providers", "custom"], "", extra);
+    expect(explicit.code).toBe(0);
+    expect(customRow(explicit.stdout)).toEqual([
+      "☆",
+      "custom",
+      "✘︎",
+      "✘︎",
+      "✘︎",
+      "✘︎",
+    ]);
+    expect(explicit.stdout).toContain(
+      "providers.custom.commands.<capability>.argv",
+    );
+    const config = customConfig();
+    config.defaults = {};
+    config.providers!.custom!.commands = {
+      contents: config.providers!.custom!.commands!.contents!,
+    };
+    await writeFile(configPath, stringify(config));
+    const partial = await cli(["providers"], "", extra);
+    expect(partial.code).toBe(0);
+    expect(customRow(partial.stdout)).toEqual([
+      "★",
+      "custom",
+      "✘︎",
+      "✔︎",
+      "✘︎",
+      "✘︎",
+    ]);
+    await writeFile(configPath, "defaults:\n  search:\n    provider: custom\n");
+    const selected = await cli(["providers"], "", extra);
+    expect(selected.code).toBe(0);
+    expect(customRow(selected.stdout)).toEqual([
+      "☆",
+      "custom",
+      "◉",
+      "✘︎",
+      "✘︎",
+      "✘︎",
+    ]);
+  });
   it("reports discovery honestly and saves defaults with no stdout banner", async () => {
     const result = await cli(["providers"]);
     expect(result.stdout).toContain("Supported");
