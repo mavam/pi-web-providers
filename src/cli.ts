@@ -28,6 +28,7 @@ import {
   type ProviderId,
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
+import { createDiagnostics } from "./cli/diagnostics.js";
 import {
   buildOptionFlags,
   parseTypedValue,
@@ -86,6 +87,7 @@ export async function runCli(
       !("NO_COLOR" in io.env) &&
       !beforeSeparator.includes("--no-color"),
   );
+  const diagnostics = createDiagnostics(io.stderr, colors);
   const controller = new AbortController();
   const abort = () =>
     controller.abort(new WebfoxError("CANCELLED", "Operation cancelled."));
@@ -108,7 +110,11 @@ export async function runCli(
         getErrHasColors: () => colors.isColorSupported,
         writeOut: (value) => io.stdout.write(value),
         writeErr: (value) => io.stderr.write(value),
-        outputError: (value, write) => write(colors.red(value)),
+        outputError: (value) =>
+          diagnostics.error({
+            code: "INVALID_INPUT",
+            message: value.replace(/^error: /, ""),
+          }),
       });
   try {
     // The route and final parse share the same common option declarations.
@@ -218,8 +224,9 @@ export async function runCli(
             onProgress: parsed.quiet
               ? undefined
               : (event: ProgressEvent) => {
-                  // Per-URL lifecycle events drive Pi status rows, not CLI logs.
-                  if (!event.state) io.stderr.write(`${event.message}\n`);
+                  // Lifecycle events drive Pi rows; CLI completions are emitted
+                  // once from the final result, in input order.
+                  if (!event.state) diagnostics.progress(event.message);
                 },
           };
           const result =
@@ -235,10 +242,8 @@ export async function runCli(
                   ? await client!.answer({ ...request, queries: inputs })
                   : await client!.research({ ...request, input: inputs[0] });
           for (const entry of result.results) {
-            if (!entry.ok)
-              io.stderr.write(
-                `${colors.red(`${entry.input}: ${entry.error.code}: ${entry.error.message}`)}\n`,
-              );
+            if (!entry.ok) diagnostics.error(entry.error, entry.input);
+            else if (!parsed.quiet) diagnostics.success(entry.input);
           }
           const rendered =
             parsed.format === "json"
@@ -328,7 +333,7 @@ export async function runCli(
             parseProvider(provider),
             { configPath: controls.config, cwd: io.cwd, env: io.env },
           );
-          io.stderr.write(`Saved ${capability} default: ${provider}\n`);
+          diagnostics.success(`Saved ${capability} default: ${provider}`);
         },
       );
     for (const action of ["path", "show", "validate"] as const)
@@ -356,8 +361,8 @@ export async function runCli(
               io.stdout.write(stringify(redactConfig(value)));
             else {
               validateConfiguredOptions(value);
-              io.stderr.write(
-                "Configuration is valid. Credentials and connectivity have not been verified.\n",
+              diagnostics.success(
+                "Configuration is valid. Credentials and connectivity have not been verified.",
               );
             }
           }
@@ -378,7 +383,7 @@ export async function runCli(
             "INVALID_INPUT",
             error instanceof Error ? error.message : String(error),
           );
-    io.stderr.write(`${colors.red(normalized.message)}\n`);
+    diagnostics.error(normalized);
     return normalized.code === "CANCELLED"
       ? 130
       : ["INVALID_INPUT", "INVALID_CONFIG"].includes(normalized.code)
@@ -413,7 +418,7 @@ function addControls(command: Command, capability: Capability): void {
       "Overall deadline including retries (30s, 20m)",
     ).argParser(parseDuration),
   );
-  command.option("--quiet", "Suppress progress on stderr");
+  command.option("--quiet", "Suppress progress and success notices on stderr");
   command.addOption(new Option("--no-color", "Disable terminal colors"));
   command.addOption(
     new Option("--config <path>", "Read this YAML configuration file"),

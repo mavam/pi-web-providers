@@ -73,7 +73,7 @@ Common controls:
 | `--max-results <n>` | Limit results per query; search only. |
 | `--format text\|json` | Select the result format; text is the default. |
 | `--timeout <duration>` | Set the overall deadline, including credential commands and retries. |
-| `--quiet` | Suppress progress on stderr, not errors. |
+| `--quiet` | Suppress progress and success notices on stderr, not errors. |
 
 Durations require a unit: `500ms`, `30s`, `20m`, or `1h`. Ctrl-C cancels waiting
 for stdin, credential commands, subprocesses, and provider operations. Cancellation
@@ -121,8 +121,11 @@ webfox search "TypeBox" --format json
 ```
 
 Text remains the default when piped. Stdout contains results, not success banners
-or execution diagnostics. Progress and command errors go to stderr. Error color
-follows terminal detection, `NO_COLOR`, and the `--no-color` flag;
+or execution diagnostics. Status messages go to stderr with the same prefixes
+as Pi tools: `▶︎` for progress, `✔︎` for success, `✘︎` for errors, and `■` for
+cancellation. Errors include a stable error code and, for per-input failures,
+the affected input. Use `--quiet` to suppress progress and success notices.
+Status colors follow terminal detection, `NO_COLOR`, and the `--no-color` flag;
 JSON never acquires terminal styling.
 In text mode, failed-input diagnostics go only to stderr. JSON retains structured
 errors in the result document as well. Results are not truncated by the CLI or

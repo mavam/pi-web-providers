@@ -63,7 +63,11 @@ describe("CLI contracts", () => {
     expect(shown.code).toBe(0);
     expect(shown.stdout).toContain("defaults:\n");
     expect(parse(shown.stdout).defaults.search.provider).toBe("custom");
-    expect((await cli(["config", "validate"])).code).toBe(0);
+    const validated = await cli(["config", "validate"]);
+    expect(validated.code).toBe(0);
+    expect(validated.stderr).toBe(
+      "✔︎ Configuration is valid. Credentials and connectivity have not been verified.\n",
+    );
   });
   it.each([
     ["--help"],
@@ -183,12 +187,82 @@ describe("CLI contracts", () => {
     const failure = await cli(["search", "fail", "--quiet"]);
     expect(failure.code).toBe(1);
     expect(failure.stdout).toBe("");
-    expect(failure.stderr).toContain("PROVIDER_FAILURE");
+    expect(failure.stderr).toMatch(/^✘︎ fail: PROVIDER_FAILURE: /);
     const partial = await cli(["search", "success", "fail", "--quiet"]);
     expect(partial.stdout).toContain("Result for success");
     expect(partial.stdout).not.toContain("intentional provider failure");
     expect(partial.stderr).toContain("intentional provider failure");
+    expect(partial.stderr).not.toContain("✔︎");
   });
+  it.each([
+    ["search", "query", "--unknown"],
+    ["search", "query", "--timeout"],
+    ["search", "query", "--timeout", "invalid"],
+    ["search"],
+    ["unknown-command"],
+  ])("prefixes argument errors exactly once for %j", async (...args) => {
+    const result = await cli(args);
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/^✘︎ INVALID_INPUT: /);
+    expect(result.stderr.match(/✘︎/g)).toHaveLength(1);
+    expect(result.stderr).not.toContain("error: ");
+  });
+  it("prefixes configuration-loading errors", async () => {
+    const result = await cli(["config", "validate"], "", {
+      env: { WEBFOX_CONFIG: "/nonexistent-webfox-config.yaml" },
+    });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toMatch(/^✘︎ INVALID_CONFIG: /);
+  });
+  it.each(["search", "contents", "answer", "research"])(
+    "reports %s success on stderr without decorating JSON",
+    async (capability) => {
+      const input = capability === "contents" ? "https://one.test" : "query";
+      const result = await cli([capability, input, "--format", "json"]);
+      expect(result.code).toBe(0);
+      expect(result.stderr).toContain(`✔︎ ${input}\n`);
+      expect(JSON.parse(result.stdout).status).toBe("ok");
+      expect(result.stdout).not.toMatch(/[✔✘▶■]/);
+    },
+  );
+  it.each([
+    { args: [], env: {}, tty: true, colored: true },
+    { args: [], env: {}, tty: false, colored: false },
+    { args: ["--no-color"], env: {}, tty: true, colored: false },
+    { args: [], env: { NO_COLOR: "" }, tty: true, colored: false },
+  ])(
+    "respects diagnostic color controls: %j",
+    async ({ args, env, tty, colored }) => {
+      for (const [command, prefix, color] of [
+        [["config", "validate"], "✔︎", 32],
+        [["config", "unknown"], "✘︎", 31],
+      ] as const) {
+        const result = await cli(
+          [...args, ...command],
+          "",
+          env.NO_COLOR === undefined
+            ? {}
+            : {
+                env: {
+                  ...env,
+                  XDG_CONFIG_HOME: "/nonexistent-webfox-config-home",
+                },
+              },
+          { stdout: true, stderr: tty },
+        );
+        expect(stripVTControlCharacters(result.stderr)).toMatch(
+          new RegExp(`^${prefix} `),
+        );
+        if (colored)
+          expect(result.stderr).toContain(
+            `\u001b[${color}m${prefix}\u001b[39m`,
+          );
+        else
+          expect(result.stderr).toBe(stripVTControlCharacters(result.stderr));
+      }
+    },
+  );
   it("keeps reserved and colliding provider flags behind the JSON escape hatch", () => {
     const flags = buildOptionFlags({
       type: "object",
@@ -253,7 +327,8 @@ describe("CLI contracts", () => {
     expect(JSON.parse(json.stdout).results[0].input).toBe(
       "one\ncomplete query",
     );
-    expect(json.stderr).toContain("custom search progress");
+    expect(json.stderr).toContain("▶︎ custom search progress\n");
+    expect(json.stderr).toContain("✔︎ one\ncomplete query\n");
     expect((await cli(["search", "-", "other"], "stdin")).code).toBe(2);
     for (const flag of ["--raw", "--output", "--query", "--retries"])
       expect((await cli(["search", "x", flag, "json"])).code).toBe(2);
@@ -295,6 +370,8 @@ describe("CLI contracts", () => {
       "json",
     ]);
     expect(result.code).toBe(1);
+    expect(result.stderr).toContain("✘︎ slow: TIMEOUT: ");
+    expect(result.stderr).toContain("✔︎ fast\n");
     expect(
       JSON.parse(result.stdout).results.map((r: { ok: boolean }) => r.ok),
     ).toEqual([false, true]);
@@ -315,7 +392,7 @@ describe("CLI contracts", () => {
     const saved = await cli(["config", "default", "search", "brave"]);
     expect(saved.code).toBe(0);
     expect(saved.stdout).toBe("");
-    expect(saved.stderr).toContain("Saved search default: brave");
+    expect(saved.stderr).toBe("✔︎ Saved search default: brave\n");
   });
   it("cancels pending stdin and unregisters signal listeners", async () => {
     const signalSource = new EventEmitter();
@@ -327,7 +404,9 @@ describe("CLI contracts", () => {
       if (signalSource.listenerCount("SIGINT")) signalSource.emit("SIGINT");
     }, 10);
     try {
-      expect((await pending).code).toBe(130);
+      const result = await pending;
+      expect(result.code).toBe(130);
+      expect(result.stderr).toBe("■ CANCELLED: Operation cancelled.\n");
     } finally {
       clearInterval(timer);
     }
