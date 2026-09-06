@@ -1,0 +1,14 @@
+pre-push:
+  parallel: true
+  commands:
+    format:
+      run: bun run format:check
+    types:
+      run: bun run check
+    test:
+      run: bun run test
+    changelog-validate:
+      glob: "changelog/**"
+      run: uvx tenzir-ship validate --lenient
+    actionlint:
+      run: if command -v actionlint >/dev/null; then actionlint; fi

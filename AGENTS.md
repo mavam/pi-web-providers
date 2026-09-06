@@ -1,24 +1,26 @@
 # webfox
 
-This repository contains **webfox**, a TypeScript library, CLI, and pi extension for configurable web access.
+This repository contains **webfox**, a TypeScript library, CLI, and pi extension
+for configurable web access.
 
-It exposes web-related capabilities through interchangeable providers instead of tying each capability to a single backend. The standalone executable is `webfox`; pi tool names and UI labels stay generic (`web_search`, “Web Search”).
+It exposes web-related capabilities through interchangeable providers instead of
+tying each capability to a single backend.
 
-For the full product overview, supported capabilities, configuration, and provider-specific details, see `README.md`.
+See `README.md` for user-facing documentation.
 
-## Repository map
+## Setup
 
-- `src/` — extension implementation and provider integrations
-- `test/` — automated coverage for configuration, provider behavior, and tool execution
-- `examples/` — example wrapper-based setups and reference integrations
-- `example-config.yaml` — minimal example configuration
-- `scripts/` — project scripts such as live smoke testing
-- `changelog/` — release notes and changelog entries
+Install Lefthook once per clone:
 
-## Guidelines
+```bash
+uvx lefthook install
+```
 
-- Keep `package.json` metadata, especially `description` and `keywords`, in sync with the README.
-- When user-facing behavior changes, update `README.md` alongside the code.
-- When changing configuration, routing, or provider behavior, update or add tests in `test/`.
-- Keep examples and sample configuration aligned with the current behavior.
-- The changelog is managed via the `tenzir-ship` tool; do not edit `changelog/` by hand.
+Pushing runs the quality gates automatically. No need to run checks manually.
+
+## Release engineering
+
+- Use `tenzir-ship` for changelog management and releasing
+- Add changelog entries for user facing changes
+- Before releasing, ensure `main` is in sync with `origin/main`
+- To release, dispatch .github/workflows/release.yaml with a title & intro
