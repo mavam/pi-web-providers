@@ -344,7 +344,7 @@ remain in the document. Provider registration is deliberately not public.
 | Custom | ✓ | ✓ | ✓ | ✓ |
 | Exa | ✓ | ✓ | ✓ | ✓ |
 | Firecrawl | ✓ | ✓ | ✓ | |
-| Gemini | ✓ | | ✓ | ✓ |
+| Gemini | | | ✓ | ✓ |
 | Linkup | ✓ | ✓ | | ✓ |
 | Ollama | ✓ | ✓ | | |
 | OpenAI | ✓ | | ✓ | ✓ |
@@ -357,6 +357,12 @@ remain in the document. Provider registration is deliberately not public.
 SDKs are dependencies but load only when executing their provider. Lightweight
 provider definitions supply discovery, help, defaults, and validation.
 Exa research returns a synthesized report with source links.
+
+Gemini supports grounded answers and research, not standalone search. Its Google
+Search tool runs inside a model interaction; Webfox does not discard the generated
+answer and present its sources as ordinary search results. If you previously
+selected Gemini for search, choose a search-capable provider and remove
+`providers.gemini.options.search` from your configuration.
 
 ### Gemini research
 
