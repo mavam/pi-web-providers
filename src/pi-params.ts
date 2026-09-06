@@ -59,6 +59,7 @@ function parameterValue(value: unknown): string | undefined {
 export function callParameters(
   capability: Capability,
   args: Record<string, unknown>,
+  formatKey: (key: string) => string = (key) => key,
 ): string {
   const pairs: string[] = [];
   if (
@@ -66,14 +67,15 @@ export function callParameters(
     typeof args.maxResults === "number" &&
     Number.isFinite(args.maxResults)
   )
-    pairs.push(`limit=${args.maxResults}`);
+    pairs.push(`${formatKey("limit")}=${args.maxResults}`);
   const append = (value: unknown, path: string) => {
     if (isRecord(value) && Object.keys(value).length) {
       for (const [key, child] of Object.entries(value))
         append(child, path ? `${path}.${keySegment(key)}` : keySegment(key));
     } else if (path) {
       const formatted = parameterValue(value);
-      if (formatted !== undefined) pairs.push(`${path}=${formatted}`);
+      if (formatted !== undefined)
+        pairs.push(`${formatKey(path)}=${formatted}`);
     }
   };
   if (isRecord(args.options)) {

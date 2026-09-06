@@ -374,17 +374,19 @@ The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
 `web_research`, with labels such as “Web Search.” Tool-call headers display
 lowercase, space-separated names: `web search`, `web contents`, `web answer`,
 and `web research`. Headers show explicit call parameters as a gray `key=value`
-sequence, including provider-specific choices from `options`. For example:
+sequence with bold keys and regular values, including provider-specific choices
+from `options`. For example:
 
 ```text
-web search · limit=2 type=neural contents.text=true
-web answer · model=<model-id> config.temperature=0
+web search limit=2 type=neural contents.text=true
+web answer model=<model-id> config.temperature=0
 ```
 
 Nested options use dotted names; arrays stay compact and values with spaces are
 quoted. Only supplied arguments appear, not inherited defaults. Credential-bearing
 options are redacted. Long parameter sequences truncate while collapsed and wrap
-when expanded.
+when expanded. The hint shows your configured tool-expansion shortcut, such as
+`ctrl+o to expand`; no shortcut hint appears when that binding is disabled.
 
 All four tools show one status row per input, without
 surrounding quotes, in the theme’s accent color: `●` queued, `▶︎` running,

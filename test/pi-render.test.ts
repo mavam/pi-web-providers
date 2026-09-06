@@ -1,13 +1,22 @@
 import { stripVTControlCharacters } from "node:util";
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  Box,
+  visibleWidth,
+  getKeybindings,
+  setKeybindings,
+  KeybindingsManager as TuiKeybindingsManager,
+  TUI_KEYBINDINGS,
+} from "@earendil-works/pi-tui";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WebCall, renderWebResult } from "../src/pi-render.js";
 import type { Capability } from "../src/domain.js";
 
 vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
-  keyText: () => "ctrl+o",
   getMarkdownTheme: () =>
     Object.fromEntries(
       [
@@ -28,6 +37,22 @@ vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
       ].map((key) => [key, (text: string) => text]),
     ),
 }));
+
+const originalKeybindings = getKeybindings();
+function appKeybindings(binding: string | string[] = "ctrl+o") {
+  return new TuiKeybindingsManager(
+    { ...TUI_KEYBINDINGS, "app.tools.expand": { defaultKeys: "ctrl+o" } },
+    { "app.tools.expand": binding } as ConstructorParameters<
+      typeof TuiKeybindingsManager
+    >[1],
+  );
+}
+beforeEach(() => setKeybindings(appKeybindings()));
+afterEach(() => {
+  setKeybindings(originalKeybindings);
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 function theme() {
   return {
@@ -57,7 +82,7 @@ describe("vertical web rendering", () => {
     [
       "search",
       { queries: ["Node.js release notes"], maxResults: 5 },
-      "web search · limit=5",
+      "web search limit=5",
     ],
     ["contents", { urls: ["https://example.com"] }, "web contents"],
     ["answer", { queries: ["What is MCP?"] }, "web answer"],
@@ -71,7 +96,7 @@ describe("vertical web rendering", () => {
       expect(call.render(120)).toEqual([`${expected} (ctrl+o to expand)`]);
       expect(th.bold).toHaveBeenCalledWith(`web ${capability}`);
       if (capability === "search")
-        expect(th.fg).toHaveBeenCalledWith("dim", " · limit=5");
+        expect(th.fg).toHaveBeenCalledWith("dim", " limit=5");
       call.update(args, th, true);
       expect(call.render(120)).toEqual([expected]);
     },
@@ -107,12 +132,15 @@ describe("vertical web rendering", () => {
       },
     };
     const parameters =
-      ' · limit=2 type=neural contents.text=true includeDomains=["example.com","docs.example.com"]';
+      ' limit=2 type=neural contents.text=true includeDomains=["example.com","docs.example.com"]';
     call.update(args, th, false);
     expect(call.render(200)).toEqual([
       `web search${parameters} (ctrl+o to expand)`,
     ]);
     expect(th.fg).toHaveBeenCalledWith("dim", parameters);
+    for (const key of ["limit", "type", "contents.text", "includeDomains"])
+      expect(th.bold).toHaveBeenCalledWith(key);
+    expect(th.bold).not.toHaveBeenCalledWith("neural");
     expect(call.render(60)).toHaveLength(1);
     expect(call.render(60)[0]).toContain("ctrl+o to expand");
     expect(call.render(60)[0]).not.toContain("docs.example.com");
@@ -124,6 +152,101 @@ describe("vertical web rendering", () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
     call.update({}, th, false);
     expect(call.render(200)).toEqual(["web search (ctrl+o to expand)"]);
+  });
+
+  it("uses the active shortcut and native hint colors, including remaps and disabled bindings", () => {
+    const call = new WebCall("answer");
+    const th = theme();
+    call.update({}, th, false);
+    setKeybindings(appKeybindings("ctrl+shift+o"));
+    expect(call.render(100)).toEqual(["web answer (ctrl+shift+o to expand)"]);
+    expect(th.fg).toHaveBeenCalledWith("dim", "ctrl+shift+o");
+    expect(th.fg).toHaveBeenCalledWith("muted", " to expand)");
+    setKeybindings(appKeybindings([]));
+    expect(call.render(100)).toEqual(["web answer"]);
+  });
+
+  it.each(["ctrl+o", "ctrl+shift+o", []] as const)(
+    "resolves configured shortcuts when native bundles see a TUI-only singleton: %j",
+    (binding) => {
+      setKeybindings(new TuiKeybindingsManager(TUI_KEYBINDINGS));
+      const directory = mkdtempSync(join(tmpdir(), "webfox-keys-"));
+      vi.stubEnv("PI_CODING_AGENT_DIR", directory);
+      try {
+        writeFileSync(
+          join(directory, "keybindings.json"),
+          JSON.stringify({ "app.tools.expand": binding }),
+        );
+        const call = new WebCall("search");
+        call.update({}, theme(), false);
+        expect(call.render(100)).toEqual([
+          typeof binding === "string"
+            ? `web search (${binding} to expand)`
+            : "web search",
+        ]);
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it("uses default shortcuts for missing configuration and honors legacy bindings", () => {
+    setKeybindings(new TuiKeybindingsManager(TUI_KEYBINDINGS));
+    const directory = mkdtempSync(join(tmpdir(), "webfox-keys-"));
+    vi.stubEnv("PI_CODING_AGENT_DIR", directory);
+    try {
+      const call = new WebCall("contents");
+      call.update({}, theme(), false);
+      expect(call.render(100)).toEqual(["web contents (ctrl+o to expand)"]);
+      const path = join(directory, "keybindings.json");
+      writeFileSync(path, "not json");
+      expect(call.render(100)).toEqual(["web contents (ctrl+o to expand)"]);
+      writeFileSync(
+        path,
+        JSON.stringify({ expandTools: ["ctrl+shift+o", "ctrl+e"] }),
+      );
+      expect(call.render(100)).toEqual([
+        "web contents (ctrl+shift+o/ctrl+e to expand)",
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves shell backgrounds through clipped headers, hints, and status rows", () => {
+    const th = {
+      fg: (_color: string, text: string) => `\x1b[34m${text}\x1b[39m`,
+      bold: (text: string) => `\x1b[1m${text}\x1b[22m`,
+    } as Theme;
+    const call = new WebCall("search");
+    call.update(
+      { options: { includeDomains: ["example.com".repeat(30)] } },
+      th,
+      false,
+    );
+    const statuses = renderWebResult(
+      result("contents", [
+        { input: "https://example.com/".repeat(30), state: "done" },
+      ]),
+      collapsed,
+      th,
+      false,
+    );
+    for (const background of [41, 42, 43]) {
+      const box = new Box(0, 0, (text) => `\x1b[${background}m${text}\x1b[49m`);
+      box.addChild(call);
+      box.addChild(statuses);
+      const lines = box.render(65);
+      expect(stripVTControlCharacters(lines[0])).toContain(
+        "... (ctrl+o to expand)",
+      );
+      for (const line of lines) {
+        expect(line.startsWith(`\x1b[${background}m`)).toBe(true);
+        expect(line.endsWith("\x1b[49m")).toBe(true);
+        expect(line.slice(0, -5)).not.toMatch(/\x1b\[(?:0|49)m/);
+        expect(visibleWidth(line)).toBeLessThanOrEqual(65);
+      }
+    }
   });
 
   it("uses text-style glyphs for all terminal states and preserves duplicates", () => {

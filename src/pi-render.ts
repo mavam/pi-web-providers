@@ -1,19 +1,25 @@
 import { stripVTControlCharacters } from "node:util";
-import {
-  keyText,
-  getMarkdownTheme,
-  type Theme,
-} from "@earendil-works/pi-coding-agent";
+import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   Text,
   Container,
   Markdown,
-  truncateToWidth,
+  truncateToWidth as truncate,
   visibleWidth,
   type Component,
 } from "@earendil-works/pi-tui";
 import type { Capability } from "./domain.js";
 import { callParameters } from "./pi-params.js";
+import { expansionKey } from "./pi-keybindings.js";
+
+// Pi's shell owns the background. TUI truncation emits full SGR resets,
+// which otherwise clear that background for the ellipsis and trailing hint.
+function truncateToWidth(text: string, width: number): string {
+  return truncate(text, width).replaceAll(
+    "\x1b[0m",
+    "\x1b[22;23;24;25;27;28;29;39m",
+  );
+}
 
 const inputStates = {
   queued: { glyph: "●", color: "dim" },
@@ -83,19 +89,22 @@ export class WebCall implements Component {
     const { args, theme, capability } = this;
     const title = theme.fg("toolTitle", theme.bold(`web ${capability}`));
     let text = title;
-    const parameters = callParameters(capability, args);
-    if (parameters) text += theme.fg("dim", ` · ${parameters}`);
+    const parameters = callParameters(capability, args, (key) =>
+      theme.bold(key),
+    );
+    if (parameters) text += theme.fg("dim", ` ${parameters}`);
     if (this.expanded)
       return visibleWidth(text) <= width
         ? [text]
         : new Text(text, 0, 0)
             .render(width)
             .map((line) => truncateToWidth(line, width));
-    const key = keyText("app.tools.expand");
-    const hint = theme.fg(
-      "dim",
-      key ? ` (${key} to expand)` : " (expand for details)",
-    );
+    const key = expansionKey();
+    const hint = key
+      ? theme.fg("muted", " (") +
+        theme.fg("dim", key) +
+        theme.fg("muted", " to expand)")
+      : "";
     if (width >= visibleWidth(title) + visibleWidth(hint) + 3)
       return [truncateToWidth(text, width - visibleWidth(hint)) + hint];
     return [truncateToWidth(text, width)];
@@ -148,11 +157,11 @@ export function renderWebResult(
     result.details.status === "partial";
   if (!options.isPartial && !isError && !partialFailure) return new Container();
   const summary = partialFailure
-    ? "One or more inputs failed; expand for details."
+    ? "One or more inputs failed."
     : (stripVTControlCharacters(text)
         .split(/\r?\n/)
         .find((line) => line.trim()) ??
-      (options.isPartial ? "Working…" : "Tool failed; expand for details."));
+      (options.isPartial ? "Working…" : "Tool failed."));
   const safe = JSON.stringify(summary).slice(1, -1);
   const status = inputStates[isError || partialFailure ? "failed" : "running"];
   return {
