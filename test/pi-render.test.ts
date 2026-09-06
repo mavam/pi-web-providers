@@ -87,7 +87,7 @@ describe("vertical web rendering", () => {
       ]);
       expect(renderWebResult(doc, collapsed, th, false).render(120)).toEqual([
         "✔︎ https://example.com",
-        "◌ https://example.org",
+        "▶︎ https://example.org",
       ]);
       expect(th.fg).toHaveBeenCalledWith("success", "✔︎");
       expect(th.fg).toHaveBeenCalledWith("accent", "https://example.com");
@@ -103,11 +103,11 @@ describe("vertical web rendering", () => {
       })),
     );
     expect(renderWebResult(doc, collapsed, theme(), false).render(80)).toEqual([
-      "○ same",
-      "◌ same",
+      "● same",
+      "▶︎ same",
       "✔︎ same",
       "✘︎ same",
-      "− same",
+      "■ same",
     ]);
   });
 
@@ -201,6 +201,14 @@ describe("vertical web rendering", () => {
     expect(renderWebResult(error, collapsed, theme(), true).render(80)).toEqual(
       ["✘︎ Exa needs a credential."],
     );
+    expect(
+      renderWebResult(
+        { content: [{ type: "text", text: "Working…" }] },
+        { expanded: false, isPartial: true },
+        theme(),
+        false,
+      ).render(80),
+    ).toEqual(["▶︎ Working…"]);
     const legacy = { content: [{ type: "text", text: "# Legacy heading" }] };
     expect(
       renderWebResult(legacy, collapsed, theme(), false).render(80),

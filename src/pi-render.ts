@@ -15,11 +15,11 @@ import {
 import type { Capability } from "./domain.js";
 
 const inputStates = {
-  queued: { glyph: "○", color: "dim" },
-  running: { glyph: "◌", color: "accent" },
+  queued: { glyph: "●", color: "dim" },
+  running: { glyph: "▶︎", color: "accent" },
   done: { glyph: "✔︎", color: "success" },
   failed: { glyph: "✘︎", color: "error" },
-  cancelled: { glyph: "−", color: "warning" },
+  cancelled: { glyph: "■", color: "warning" },
 } as const;
 export interface InputStatus {
   input: string;
@@ -162,7 +162,7 @@ export function renderWebResult(
             truncateToWidth(
               theme.fg(
                 isError || partialFailure ? "error" : "muted",
-                `${isError || partialFailure ? "✘︎" : "◌"} ${safe}`,
+                `${isError || partialFailure ? inputStates.failed.glyph : inputStates.running.glyph} ${safe}`,
               ),
               width,
             ),

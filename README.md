@@ -375,8 +375,8 @@ The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
 lowercase, space-separated names: `web search`, `web contents`, `web answer`,
 and `web research`. Search headers include a gray `· limit 2` annotation when
 an explicit limit is set. All four tools show one status row per input, without
-surrounding quotes, in the theme’s accent color: `○` queued, `◌` running,
-`✔︎` done, `✘︎` failed, and `−` cancelled. Rows update in place, preserve input
+surrounding quotes, in the theme’s accent color: `●` queued, `▶︎` running,
+`✔︎` done, `✘︎` failed, and `■` cancelled. Rows update in place, preserve input
 order, and remain visible after completion. Long inputs stay on one line until
 expanded with Pi’s tool-expansion shortcut. Result bodies stay collapsed;
 expand to read them with Pi’s native Markdown rendering, including headings,
