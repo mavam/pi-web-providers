@@ -1,7 +1,7 @@
 # CLI contract
 
 These target screens define the common command surface. Provider options appear
-only when you explicitly request provider help; advanced controls stay out of
+only when you explicitly request provider help. All command controls appear in
 ordinary help.
 
 ## Root help
@@ -20,9 +20,11 @@ Commands:
   config default <capability> <provider>  Save a provider choice
   config path|show|validate              Inspect advanced configuration
 
-Run webfox <command> --help for common controls.
-Run webfox <command> --provider <id> --help for provider options.
-Run webfox <command> --help-advanced for configuration and complex options.
+Examples:
+  webfox search "Node.js release notes" --provider brave
+  webfox config default search brave
+  webfox search --help
+  webfox search --provider brave --help
 ```
 
 ## Common capability help
@@ -39,6 +41,10 @@ Options:
   --format <text|json>  Result format (default: text, even when piped)
   --timeout <duration>  Overall deadline, including retries (for example 30s, 20m)
   --quiet              Suppress progress on stderr
+  --no-color           Disable terminal colors
+  --config <path>      Read this JSON configuration file
+  --cwd <path>         Working directory for custom providers and option files
+  --options-json <json|@file>  Complex provider options; typed flags take precedence
   -h, --help           Show help
 
 Examples:
@@ -53,8 +59,8 @@ stdin input. None of these commands accepts repeated `--query`, `--output`, or
 `--raw`. Only search has `--max-results`.
 
 `webfox search --provider openai --help` adds schema-derived OpenAI options such as
-`--model`, `--instructions`, and `--search-context-size`. Advanced help adds
-`--config`, `--cwd`, and `--options-json`; retry tuning lives in JSON only.
+`--model`, `--instructions`, and `--search-context-size`. Ordinary help includes
+`--config`, `--cwd`, `--options-json`, and `--no-color`; retry tuning lives in JSON only.
 
 ## First and second requests
 

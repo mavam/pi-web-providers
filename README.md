@@ -80,20 +80,24 @@ for stdin, credential commands, subprocesses, and provider operations. Cancellat
 stops the caller waiting even if an SDK cannot cancel its underlying request.
 Cancelling a remote research request does not necessarily cancel its billable job.
 
-### Progressive help
+### Help
 
 ```sh
 webfox search --help
 webfox search --provider openai --help
-webfox search --help-advanced
 ```
 
-Ordinary help contains common controls. Explicit provider help adds that
+Root and capability help end with an Examples section containing only copyable
+invocations, including provider-specific help commands.
+Help highlights headings, commands, flags, and arguments when stdout is a
+terminal, including examples. Piped help stays plain; `NO_COLOR` or `--no-color` disables styling.
+
+`--help` shows all command controls. Explicit provider help adds that
 provider’s exact schema-derived flags. For example, OpenAI exposes `--model`,
 `--search-context-size`, and `--user-location-country`. Arrays use repeatable
 flags; booleans provide `--foo` and `--no-foo`.
 
-Advanced help exposes `--config <path>`, `--cwd <path>`, and
+Help includes `--config <path>`, `--cwd <path>`, and
 `--options-json <json|@file>`. Complex objects and colliding flag names remain
 available through JSON. Retry tuning belongs in configuration, not CLI flags.
 
@@ -118,7 +122,7 @@ webfox search "TypeBox" --format json
 
 Text remains the default when piped. Stdout contains results, not success banners
 or execution diagnostics. Progress and command errors go to stderr. Error color
-follows terminal detection, `NO_COLOR`, and the advanced `--no-color` flag;
+follows terminal detection, `NO_COLOR`, and the `--no-color` flag;
 JSON never acquires terminal styling.
 In text mode, failed-input diagnostics go only to stderr. JSON retains structured
 errors in the result document as well. Results are not truncated by the CLI or

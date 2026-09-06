@@ -52,7 +52,6 @@ interface Controls {
   maxResults?: number;
   optionsJson?: string;
   help?: boolean;
-  helpAdvanced?: boolean;
 }
 const summaries: Record<Capability, string> = {
   search: "Search the public web",
@@ -80,6 +79,11 @@ export async function runCli(
       !("NO_COLOR" in io.env) &&
       !beforeSeparator.includes("--no-color"),
   );
+  const helpColors = pc.createColors(
+    Boolean((io.stdout as NodeJS.WriteStream).isTTY) &&
+      !("NO_COLOR" in io.env) &&
+      !beforeSeparator.includes("--no-color"),
+  );
   const controller = new AbortController();
   const abort = () =>
     controller.abort(new WebfoxError("CANCELLED", "Operation cancelled."));
@@ -88,11 +92,22 @@ export async function runCli(
   signals.once("SIGTERM", abort);
   let exitCode = 0;
   const output = (command: Command) =>
-    command.exitOverride().configureOutput({
-      writeOut: (value) => io.stdout.write(value),
-      writeErr: (value) => io.stderr.write(value),
-      outputError: (value, write) => write(colors.red(value)),
-    });
+    command
+      .exitOverride()
+      .configureHelp({
+        styleTitle: helpColors.bold,
+        styleCommandText: helpColors.cyan,
+        styleSubcommandText: helpColors.cyan,
+        styleOptionText: helpColors.cyan,
+        styleArgumentText: helpColors.yellow,
+      })
+      .configureOutput({
+        getOutHasColors: () => helpColors.isColorSupported,
+        getErrHasColors: () => colors.isColorSupported,
+        writeOut: (value) => io.stdout.write(value),
+        writeErr: (value) => io.stderr.write(value),
+        outputError: (value, write) => write(colors.red(value)),
+      });
   try {
     // The route and final parse share the same common option declarations.
     // Commander consumes their values (including JSON and paths), honors '--',
@@ -108,7 +123,13 @@ export async function runCli(
       .helpCommand(false);
     root.addHelpText(
       "after",
-      '\nStart: webfox search "Node.js release notes" --provider brave\nSave:  webfox config default search brave\n\nRun webfox <command> --help for common controls.\nRun webfox <command> --provider <id> --help for provider options.\nRun webfox <command> --help-advanced for advanced controls.',
+      [
+        `\n${helpColors.bold("Examples:")}`,
+        `  ${helpColors.cyan("webfox search")} ${helpColors.yellow('"Node.js release notes"')} ${helpColors.cyan("--provider")} ${helpColors.yellow("brave")}`,
+        `  ${helpColors.cyan("webfox config default")} ${helpColors.yellow("search brave")}`,
+        `  ${helpColors.cyan("webfox search --help")}`,
+        `  ${helpColors.cyan("webfox search --provider")} ${helpColors.yellow("brave")} ${helpColors.cyan("--help")}`,
+      ].join("\n"),
     );
     for (const capability of CAPABILITIES) {
       const command = root
@@ -124,23 +145,17 @@ export async function runCli(
         .allowExcessArguments(false)
         .helpOption(false);
       addControls(command, capability);
-      command
-        .addOption(new Option("-h, --help", "Show help"))
-        .addOption(
-          new Option("--help-advanced", "Show advanced controls").hideHelp(),
-        );
+      command.addOption(new Option("-h, --help", "Show help"));
       if (argv[0] !== capability) continue;
       const route = output(new Command())
         .allowUnknownOption(true)
         .helpOption(false);
       addControls(route, capability);
-      route
-        .addOption(new Option("-h, --help"))
-        .addOption(new Option("--help-advanced"));
+      route.addOption(new Option("-h, --help"));
       route.parseOptions(argv.slice(1));
       const controls = route.opts<Controls>();
       const cwd = resolve(io.cwd, controls.cwd ?? ".");
-      const help = controls.help || controls.helpAdvanced;
+      const help = controls.help;
       // Common help is independent of configuration; explicit provider help
       // inspects only lightweight definitions and never resolves credentials.
       const client =
@@ -160,9 +175,7 @@ export async function runCli(
         : [];
       for (const flag of flags)
         addProviderOption(command, flag, !controls.provider && !!help);
-      if (controls.helpAdvanced)
-        for (const option of command.options) option.hideHelp(false);
-      command.addHelpText("after", capabilityHelp(capability));
+      command.addHelpText("after", capabilityHelp(capability, helpColors));
       if (help) {
         // Validate the same complete grammar before displaying help, without
         // requiring positional input or entering execution.
@@ -402,26 +415,21 @@ function addControls(command: Command, capability: Capability): void {
     ).argParser(parseDuration),
   );
   command.option("--quiet", "Suppress progress on stderr");
+  command.addOption(new Option("--no-color", "Disable terminal colors"));
   command.addOption(
-    new Option("--no-color", "Disable terminal colors").hideHelp(),
-  );
-  command.addOption(
-    new Option(
-      "--config <path>",
-      "Read this JSON configuration file",
-    ).hideHelp(),
+    new Option("--config <path>", "Read this JSON configuration file"),
   );
   command.addOption(
     new Option(
       "--cwd <path>",
       "Working directory for custom providers and option files",
-    ).hideHelp(),
+    ),
   );
   command.addOption(
     new Option(
       "--options-json <json|@file>",
       "Complex provider options; typed flags take precedence",
-    ).hideHelp(),
+    ),
   );
 }
 function addProviderOption(
@@ -451,8 +459,36 @@ function addProviderOption(
         .hideHelp(hidden),
     );
 }
-function capabilityHelp(capability: Capability): string {
-  return `\n${capability === "contents" ? "Use '-' alone for newline-separated URLs on stdin." : capability === "research" ? "Provide exactly one brief, or '-' for one complete stdin input." : "Quote each independent input (up to ten). Use '-' alone for one complete stdin input."}\nResults preserve input order. Progress and errors go to stderr.\n\nExamples:\n  ${capability === "search" ? 'webfox search "Node.js cancellation" "Bun cancellation" --provider brave' : capability === "contents" ? "webfox contents https://example.com --provider tavily" : capability === "answer" ? 'webfox answer "What is MCP?" "What is A2A?" --provider openai' : 'webfox research "Compare databases" --provider gemini --timeout 20m'}\n\nProvider options: webfox ${capability} --provider <id> --help\nAdvanced controls: webfox ${capability} --help-advanced\nRetry tuning: execution.retries and execution.retryDelayMs in JSON configuration.\n`;
+function capabilityHelp(
+  capability: Capability,
+  colors: ReturnType<typeof pc.createColors>,
+): string {
+  const examples: Record<Capability, { input: string; provider: ProviderId }> =
+    {
+      search: {
+        input: '"Node.js cancellation" "Bun cancellation"',
+        provider: "brave",
+      },
+      contents: { input: "https://example.com", provider: "tavily" },
+      answer: { input: '"What is MCP?" "What is A2A?"', provider: "openai" },
+      research: { input: '"Compare databases"', provider: "gemini" },
+    };
+  const { input, provider } = examples[capability];
+  const command = colors.cyan(`webfox ${capability}`);
+  const providerFlag = `${colors.cyan("--provider")} ${colors.yellow(provider)}`;
+  return [
+    "",
+    capability === "contents"
+      ? "Use '-' alone for newline-separated URLs on stdin."
+      : capability === "research"
+        ? "Provide exactly one brief, or '-' for one complete stdin input."
+        : "Quote each independent input (up to ten). Use '-' alone for one complete stdin input.",
+    "Results preserve input order. Progress and errors go to stderr.",
+    "",
+    colors.bold("Examples:"),
+    `  ${command} ${colors.yellow(input)} ${providerFlag}${capability === "research" ? ` ${colors.cyan("--timeout")} ${colors.yellow("20m")}` : ""}`,
+    `  ${command} ${providerFlag} ${colors.cyan("--help")}`,
+  ].join("\n");
 }
 export function parseDuration(value: string): number {
   const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/.exec(value);

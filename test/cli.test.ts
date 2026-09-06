@@ -1,4 +1,5 @@
 import { Readable, Writable, PassThrough } from "node:stream";
+import { stripVTControlCharacters } from "node:util";
 import { EventEmitter } from "node:events";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -18,6 +19,7 @@ async function cli(
   args: string[],
   input = "",
   extra: Record<string, unknown> = {},
+  terminals = { stdout: false, stderr: false },
 ) {
   const cwd = await mkdtemp(join(tmpdir(), "webfox-cli-"));
   directories.push(cwd);
@@ -27,18 +29,24 @@ async function cli(
   let stderr = "";
   const code = await runCli(args, {
     stdin: Readable.from([input]),
-    stdout: new Writable({
-      write(chunk, _encoding, done) {
-        stdout += chunk;
-        done();
-      },
-    }),
-    stderr: new Writable({
-      write(chunk, _encoding, done) {
-        stderr += chunk;
-        done();
-      },
-    }),
+    stdout: Object.assign(
+      new Writable({
+        write(chunk, _encoding, done) {
+          stdout += chunk;
+          done();
+        },
+      }),
+      { isTTY: terminals.stdout },
+    ),
+    stderr: Object.assign(
+      new Writable({
+        write(chunk, _encoding, done) {
+          stderr += chunk;
+          done();
+        },
+      }),
+      { isTTY: terminals.stderr },
+    ),
     env: { WEBFOX_CONFIG: config },
     cwd,
     ...extra,
@@ -46,6 +54,104 @@ async function cli(
   return { code, stdout, stderr };
 }
 describe("CLI contracts", () => {
+  it.each([
+    ["--help"],
+    ["search", "--help"],
+    ["search", "--provider", "openai", "--help"],
+    ["config", "--help"],
+  ])(
+    "styles terminal help for %j without changing its text",
+    async (...args) => {
+      const plain = await cli(args);
+      const styled = await cli(args, "", {}, { stdout: true, stderr: false });
+      expect(styled.code).toBe(0);
+      expect(styled.stdout).toContain("\u001b[1mUsage:\u001b[22m");
+      expect(styled.stdout).toContain("\u001b[36m");
+      expect(stripVTControlCharacters(styled.stdout)).toBe(plain.stdout);
+      expect(styled.stderr).toBe("");
+    },
+  );
+  it.each([
+    { args: ["--help"], env: {}, terminals: { stdout: false, stderr: true } },
+    {
+      args: ["--help"],
+      env: { NO_COLOR: "" },
+      terminals: { stdout: true, stderr: true },
+    },
+    {
+      args: ["--no-color", "--help"],
+      env: {},
+      terminals: { stdout: true, stderr: true },
+    },
+    {
+      args: ["search", "--help", "--no-color"],
+      env: {},
+      terminals: { stdout: true, stderr: true },
+    },
+  ])(
+    "keeps help plain with $args and $env",
+    async ({ args, env, terminals }) => {
+      const result = await cli(args, "", { env }, terminals);
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain("Usage:");
+      expect(result.stdout).toBe(stripVTControlCharacters(result.stdout));
+    },
+  );
+  it.each([[], ["--help"]])(
+    "ends root help with copyable examples for %j",
+    async (...args) => {
+      const result = await cli(args);
+      expect(result.code).toBe(0);
+      expect(result.stdout.split("\nExamples:\n")[1]?.trimEnd()).toBe(
+        [
+          '  webfox search "Node.js release notes" --provider brave',
+          "  webfox config default search brave",
+          "  webfox search --help",
+          "  webfox search --provider brave --help",
+        ].join("\n"),
+      );
+      expect(result.stdout).not.toMatch(/^(Start:|Save:|Run )/m);
+      const styled = await cli(args, "", {}, { stdout: true, stderr: false });
+      expect(styled.stdout).toContain("\u001b[1mExamples:\u001b[22m");
+      expect(styled.stdout).toContain(
+        '\u001b[33m"Node.js release notes"\u001b[39m',
+      );
+      expect(stripVTControlCharacters(styled.stdout)).toBe(result.stdout);
+    },
+  );
+  it.each([
+    ["search", "brave"],
+    ["contents", "tavily"],
+    ["answer", "openai"],
+    ["research", "gemini"],
+  ])(
+    "ends %s help with styled invocations only",
+    async (capability, provider) => {
+      for (const args of [
+        [capability, "--help"],
+        [capability, "--provider", provider, "--help"],
+      ]) {
+        const plain = await cli(args);
+        expect(plain.code).toBe(0);
+        const examples = plain.stdout
+          .split("\nExamples:\n")[1]
+          ?.trimEnd()
+          .split("\n");
+        expect(examples).toHaveLength(2);
+        for (const line of examples ?? [])
+          expect(line).toMatch(new RegExp(`^  webfox ${capability} `));
+        expect(examples?.[1]).toBe(
+          `  webfox ${capability} --provider ${provider} --help`,
+        );
+        const styled = await cli(args, "", {}, { stdout: true, stderr: false });
+        expect(styled.stdout).toContain("\u001b[1mExamples:\u001b[22m");
+        expect(styled.stdout).toContain(
+          `  \u001b[36mwebfox ${capability}\u001b[39m`,
+        );
+        expect(stripVTControlCharacters(styled.stdout)).toBe(plain.stdout);
+      }
+    },
+  );
   it("uses webfox in help, examples, and provider guidance", async () => {
     const root = await cli(["--help"]);
     expect(root.code).toBe(0);
@@ -54,7 +160,7 @@ describe("CLI contracts", () => {
     expect(root.stdout).toContain("webfox config default");
     const search = await cli(["search", "--help"]);
     expect(search.stdout).toContain("Usage: webfox search");
-    expect(search.stdout).toContain("Provider options: webfox search");
+    expect(search.stdout).toContain("  webfox search --provider brave --help");
     const invalid = await cli(["search", "query", "--provider", "invalid"]);
     expect(invalid.stderr).toContain("See webfox providers");
     const missing = await cli(["search", "query"], "", {
@@ -106,20 +212,23 @@ describe("CLI contracts", () => {
     expect(help.code).toBe(0);
     expect(help.stdout).toContain("--url");
   });
-  it("keeps common help small and exposes provider and advanced options progressively", async () => {
-    const common = await cli(["search", "--help"]);
-    expect(common.code).toBe(0);
-    expect(common.stdout).toContain("--format");
-    expect(common.stdout).not.toContain("--model");
-    expect(common.stdout).not.toContain("--options-json");
-    expect(common.stdout).not.toContain("--retries");
-    const provider = await cli(["search", "--provider", "openai", "--help"]);
-    expect(provider.code).toBe(0);
-    expect(provider.stdout).toContain("--search-context-size");
-    expect((await cli(["search", "--help-advanced"])).stdout).toContain(
-      "--options-json",
-    );
-  });
+  it.each(["search", "contents", "answer", "research"])(
+    "shows all controls in %s help and adds explicit provider options",
+    async (capability) => {
+      const common = await cli([capability, "--help"]);
+      expect(common.code).toBe(0);
+      expect(common.stdout).toContain("--format");
+      expect(common.stdout).not.toContain("--model");
+      for (const flag of ["--config", "--cwd", "--options-json", "--no-color"])
+        expect(common.stdout).toContain(flag);
+      expect(common.stdout).not.toContain("--retries");
+      const provider = await cli(["search", "--provider", "openai", "--help"]);
+      expect(provider.code).toBe(0);
+      expect(provider.stdout).toContain("--search-context-size");
+      for (const flag of ["--config", "--cwd", "--options-json", "--no-color"])
+        expect(provider.stdout).toContain(flag);
+    },
+  );
   it("uses quoted positionals, explicit stdin, and one stable format selector", async () => {
     const text = await cli(["search", "first", "second", "--quiet"]);
     expect(text.code).toBe(0);

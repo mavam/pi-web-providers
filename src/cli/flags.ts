@@ -8,7 +8,6 @@ const RESERVED_FLAGS = new Set([
   "options-json",
   "quiet",
   "help",
-  "help-advanced",
   "max-results",
   "version",
   "color",
