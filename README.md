@@ -170,7 +170,7 @@ never run credential commands or initialize provider SDKs.
 
 ## ⚙️ Configuration
 
-JSON is for advanced setups. You don’t need to learn its schema to select and
+YAML configures advanced setups. You don’t need to learn its schema to select and
 save a provider. Inspect or validate the file with:
 
 ```sh
@@ -187,42 +187,53 @@ Configuration paths resolve in this order:
 
 1. `--config` or the library’s `configPath`.
 2. `WEBFOX_CONFIG`.
-3. `%APPDATA%\webfox\config.json` on Windows, when `APPDATA` is set.
-4. `$XDG_CONFIG_HOME/webfox/config.json`.
-5. `~/.config/webfox/config.json`.
+3. `%APPDATA%\webfox\config.yaml` on Windows, when `APPDATA` is set.
+4. `$XDG_CONFIG_HOME/webfox/config.yaml`.
+5. `~/.config/webfox/config.yaml`.
 
 A missing default file means no saved settings. An explicitly selected missing
 file is an error; `config default` can create it. The setter preserves unrelated
-settings and atomically replaces the file.
+settings and comments and atomically replaces the file with owner-only permissions.
+`config show` emits redacted YAML.
 
-See [example-config.json](./example-config.json). A smaller example:
+Use YAML 1.2 with string mapping keys and finite numbers. Duplicate keys,
+multiple documents, aliases, and explicit tags are rejected. Empty files are
+valid and mean no saved settings. JSON Schema validation and editor completion
+remain available for YAML.
 
-```json
-{
-  "$schema": "https://unpkg.com/webfox@4.0.0/dist/config.schema.json",
-  "defaults": {
-    "search": { "provider": "brave", "maxResults": 5 },
-    "answer": { "provider": "openai" }
-  },
-  "execution": {
-    "timeoutMs": 30000,
-    "researchTimeoutMs": 1800000,
-    "retries": 1,
-    "retryDelayMs": 2000,
-    "concurrency": 4
-  },
-  "providers": {
-    "brave": {
-      "options": { "search": { "mode": "news" } }
-    },
-    "openai": {
-      "credentials": {
-        "api": { "command": ["op", "read", "op://vault/openai/api-key"] }
-      },
-      "options": { "answer": { "model": "gpt-4.1" } }
-    }
-  }
-}
+Existing `config.json` files are no longer discovered automatically. Rename yours
+to `config.yaml`, or select it with `WEBFOX_CONFIG` or `--config`. JSON syntax is
+also valid YAML, so existing contents remain readable. JSON result output and
+`--options-json` are unchanged.
+
+See [example-config.yaml](./example-config.yaml). A smaller example:
+
+```yaml
+$schema: https://unpkg.com/webfox@4.0.0/dist/config.schema.json
+defaults:
+  search:
+    provider: brave
+    maxResults: 5
+  answer:
+    provider: openai
+execution:
+  timeoutMs: 30000
+  researchTimeoutMs: 1800000
+  retries: 1
+  retryDelayMs: 2000
+  concurrency: 4
+providers:
+  brave:
+    options:
+      search:
+        mode: news
+  openai:
+    credentials:
+      api:
+        command: [op, read, "op://vault/openai/api-key"]
+    options:
+      answer:
+        model: gpt-4.1
 ```
 
 Capability defaults contain only provider selection and portable settings
@@ -242,10 +253,10 @@ completed pages survive another page’s failure or timeout.
 
 Each credential source has exactly one form:
 
-```json
-{ "env": "OPENAI_API_KEY" }
-{ "command": ["program", "argument"] }
-{ "value": "literal-secret" }
+```yaml
+{ env: OPENAI_API_KEY }
+{ command: [program, argument] }
+{ value: "literal-secret" }
 ```
 
 Standard environment references work without a provider section. `webfox providers

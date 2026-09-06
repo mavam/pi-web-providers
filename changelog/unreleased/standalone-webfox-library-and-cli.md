@@ -5,7 +5,7 @@ authors:
   - mavam
 prs:
   - 37
-created: 2026-08-02 15:12:01.952462+00:00
+created: 2026-09-06T09:36:05.00612Z
 ---
 
 Webfox provides one toolkit for searching the web, extracting pages, getting
@@ -21,10 +21,10 @@ webfox config default search brave
 webfox search "TypeBox validation"
 ```
 
-Credentials never select providers. Advanced JSON configuration keeps provider
+Credentials never select providers. YAML configuration keeps provider
 options under `providers.<id>.options.<capability>`; capability defaults contain
 only provider selection and portable settings. Configuration uses `WEBFOX_CONFIG`
-or the platform's `webfox/config.json` configuration path.
+or the platform's `webfox/config.yaml` configuration path.
 
 Install the pi extension with `pi install npm:webfox`. Its tools are
 `web_search`, `web_contents`, `web_answer`, and `web_research`, with generic

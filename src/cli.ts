@@ -11,6 +11,7 @@ import {
   Option,
 } from "commander";
 import pc from "picocolors";
+import { stringify } from "yaml";
 import { PACKAGE_VERSION } from "./package-metadata.js";
 import {
   CAPABILITIES,
@@ -307,9 +308,7 @@ export async function runCli(
       });
     const config = root
       .command("config")
-      .description(
-        "Save provider choices or inspect advanced JSON configuration",
-      );
+      .description("Save provider choices or inspect YAML configuration");
     config
       .command("default")
       .description("Save one capability’s provider choice")
@@ -352,9 +351,7 @@ export async function runCli(
           else {
             const value = await loadConfig(options);
             if (action === "show")
-              io.stdout.write(
-                `${JSON.stringify(redactConfig(value), null, 2)}\n`,
-              );
+              io.stdout.write(stringify(redactConfig(value)));
             else {
               validateConfiguredOptions(value);
               io.stderr.write(
@@ -417,7 +414,7 @@ function addControls(command: Command, capability: Capability): void {
   command.option("--quiet", "Suppress progress on stderr");
   command.addOption(new Option("--no-color", "Disable terminal colors"));
   command.addOption(
-    new Option("--config <path>", "Read this JSON configuration file"),
+    new Option("--config <path>", "Read this YAML configuration file"),
   );
   command.addOption(
     new Option(

@@ -5,6 +5,7 @@ import { CAPABILITIES, type Capability, type ProviderId } from "../domain.js";
 import { WebfoxError } from "../errors.js";
 import {
   parseConfig,
+  parseConfigDocument,
   resolveConfigPath,
   type ConfigPathOptions,
 } from "./file.js";
@@ -38,8 +39,10 @@ export async function setCapabilityDefault(
     .catch(() => {})
     .then(async () => {
       let config: WebfoxConfig = {};
+      let text = "";
       try {
-        config = parseConfig(await readFile(path, "utf8"), path);
+        text = await readFile(path, "utf8");
+        config = parseConfig(text, path);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
@@ -48,10 +51,14 @@ export async function setCapabilityDefault(
         [capability]: { ...config.defaults?.[capability], provider },
       };
       validateConfiguredOptions(config);
+      const document = parseConfigDocument(text, path);
+      document.setIn(["defaults", capability, "provider"], provider);
+      const serialized = document.toString();
+      parseConfig(serialized, path);
       await mkdir(dirname(path), { recursive: true });
       const temporary = `${path}.${randomUUID()}.tmp`;
       try {
-        await writeFile(temporary, `${JSON.stringify(config, null, 2)}\n`, {
+        await writeFile(temporary, serialized, {
           mode: 0o600,
           flag: "wx",
         });

@@ -42,7 +42,7 @@ Options:
   --timeout <duration>  Overall deadline, including retries (for example 30s, 20m)
   --quiet              Suppress progress on stderr
   --no-color           Disable terminal colors
-  --config <path>      Read this JSON configuration file
+  --config <path>      Read this YAML configuration file
   --cwd <path>         Working directory for custom providers and option files
   --options-json <json|@file>  Complex provider options; typed flags take precedence
   -h, --help           Show help
@@ -60,7 +60,7 @@ stdin input. None of these commands accepts repeated `--query`, `--output`, or
 
 `webfox search --provider openai --help` adds schema-derived OpenAI options such as
 `--model`, `--instructions`, and `--search-context-size`. Ordinary help includes
-`--config`, `--cwd`, `--options-json`, and `--no-color`; retry tuning lives in JSON only.
+`--config`, `--cwd`, `--options-json`, and `--no-color`; retry tuning lives in YAML configuration only.
 
 ## First and second requests
 

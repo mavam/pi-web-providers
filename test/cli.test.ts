@@ -1,5 +1,6 @@
 import { Readable, Writable, PassThrough } from "node:stream";
 import { stripVTControlCharacters } from "node:util";
+import { parse, stringify } from "yaml";
 import { EventEmitter } from "node:events";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -23,8 +24,11 @@ async function cli(
 ) {
   const cwd = await mkdtemp(join(tmpdir(), "webfox-cli-"));
   directories.push(cwd);
-  const config = join(cwd, "config.json");
-  await writeFile(config, JSON.stringify(customConfig()));
+  const config = join(cwd, "config.yaml");
+  await writeFile(
+    config,
+    stringify(customConfig(), { aliasDuplicateObjects: false }),
+  );
   let stdout = "";
   let stderr = "";
   const code = await runCli(args, {
@@ -54,6 +58,13 @@ async function cli(
   return { code, stdout, stderr };
 }
 describe("CLI contracts", () => {
+  it("shows redacted YAML configuration and validates it", async () => {
+    const shown = await cli(["config", "show"]);
+    expect(shown.code).toBe(0);
+    expect(shown.stdout).toContain("defaults:\n");
+    expect(parse(shown.stdout).defaults.search.provider).toBe("custom");
+    expect((await cli(["config", "validate"])).code).toBe(0);
+  });
   it.each([
     ["--help"],
     ["search", "--help"],

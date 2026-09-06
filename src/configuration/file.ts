@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { TSchema } from "typebox";
+import { parseDocument, visit, isAlias, isMap, isScalar } from "yaml";
 import { Check, Errors } from "typebox/value";
 import { CONFIG_SCHEMA_URL } from "../package-metadata.js";
 import { WebfoxError } from "../errors.js";
@@ -23,11 +24,11 @@ export function resolveConfigPath(options: ConfigPathOptions = {}): string {
   if (options.configPath) return resolve(cwd, options.configPath);
   if (env.WEBFOX_CONFIG) return resolve(cwd, env.WEBFOX_CONFIG);
   if ((options.platform ?? process.platform) === "win32" && env.APPDATA)
-    return join(env.APPDATA, "webfox", "config.json");
+    return join(env.APPDATA, "webfox", "config.yaml");
   return join(
     env.XDG_CONFIG_HOME ?? join(options.home ?? homedir(), ".config"),
     "webfox",
-    "config.json",
+    "config.yaml",
   );
 }
 export async function loadConfig(
@@ -65,20 +66,54 @@ function readFailure(
     `Could not read configuration: ${path}. Check the path and file permissions.`,
   );
 }
-export function parseConfig(
-  text: string,
-  source = "config.json",
-): WebfoxConfig {
-  let parsed: unknown;
+// Keep the YAML document for narrow, comment-preserving updates.
+export function parseConfigDocument(text: string, source = "config.yaml") {
   try {
-    parsed = JSON.parse(text);
+    const document = parseDocument(text, { version: "1.2", schema: "core" });
+    if (
+      document.errors.length ||
+      document.warnings.length ||
+      document.directives?.yaml.version !== "1.2"
+    )
+      throw new Error("Invalid YAML 1.2");
+    visit(document, (_key, node) => {
+      if (
+        isAlias(node) ||
+        (node && typeof node === "object" && "tag" in node && node.tag)
+      )
+        throw new Error("Aliases and explicit tags are not supported");
+      if (
+        isMap(node) &&
+        node.items.some(
+          ({ key }) => !isScalar(key) || typeof key.value !== "string",
+        )
+      )
+        throw new Error("Mapping keys must be strings");
+      if (
+        isScalar(node) &&
+        typeof node.value === "number" &&
+        !Number.isFinite(node.value)
+      )
+        throw new Error("Numbers must be finite");
+    });
+    return document;
   } catch {
+    // Parser diagnostics can contain source snippets, including credentials.
     throw new WebfoxError(
       "INVALID_CONFIG",
-      `Invalid JSON in ${source}. Fix its JSON syntax and try again.`,
+      `Invalid YAML in ${source}. Use one YAML 1.2 document with unique keys, with string keys and finite numbers, without aliases or explicit tags.`,
     );
   }
-  return validateConfig(parsed, source);
+}
+export function parseConfig(
+  text: string,
+  source = "config.yaml",
+): WebfoxConfig {
+  const document = parseConfigDocument(text, source);
+  return validateConfig(
+    document.contents === null ? {} : document.toJS({ maxAliasCount: 0 }),
+    source,
+  );
 }
 export function validateConfig(
   value: unknown,

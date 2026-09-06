@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { parse } from "yaml";
 import { describe, expect, it } from "vitest";
 import {
   CONFIG_SCHEMA_URL,
@@ -24,12 +25,12 @@ describe("package metadata", () => {
     const schema = JSON.parse(
       await readFile(resolve("src/config.schema.json"), "utf8"),
     );
-    const example = JSON.parse(
-      await readFile(resolve("example-config.json"), "utf8"),
+    const example = parse(
+      await readFile(resolve("example-config.yaml"), "utf8"),
     );
     const readme = await readFile(resolve("README.md"), "utf8");
     expect(schema.$id).toBe(expectedSchemaUrl);
     expect(example.$schema).toBe(expectedSchemaUrl);
-    expect(readme).toContain(`"$schema": "${expectedSchemaUrl}"`);
+    expect(readme).toContain(`$schema: ${expectedSchemaUrl}`);
   });
 });

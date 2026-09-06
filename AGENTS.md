@@ -11,7 +11,7 @@ For the full product overview, supported capabilities, configuration, and provid
 - `src/` — extension implementation and provider integrations
 - `test/` — automated coverage for configuration, provider behavior, and tool execution
 - `examples/` — example wrapper-based setups and reference integrations
-- `example-config.json` — minimal example configuration
+- `example-config.yaml` — minimal example configuration
 - `scripts/` — project scripts such as live smoke testing
 - `changelog/` — release notes and changelog entries
 

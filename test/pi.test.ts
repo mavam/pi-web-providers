@@ -1,6 +1,7 @@
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stringify } from "yaml";
 import { afterEach, expect, it, vi } from "vitest";
 import webExtension from "../src/pi.js";
 import { customConfig } from "./helpers.js";
@@ -14,8 +15,11 @@ afterEach(async () => {
 it("uses application inspection and execution and marks partial tool results", async () => {
   const directory = await mkdtemp(join(tmpdir(), "webfox-pi-"));
   paths.push(directory);
-  const path = join(directory, "config.json");
-  await writeFile(path, JSON.stringify(customConfig()));
+  const path = join(directory, "config.yaml");
+  await writeFile(
+    path,
+    stringify(customConfig(), { aliasDuplicateObjects: false }),
+  );
   vi.stubEnv("WEBFOX_CONFIG", path);
   const tools: any[] = [];
   const events: Record<string, (...args: any[]) => any> = {};
@@ -58,8 +62,8 @@ it("uses application inspection and execution and marks partial tool results", a
 it("keeps unconfigured notifications generic", async () => {
   const directory = await mkdtemp(join(tmpdir(), "web-pi-"));
   paths.push(directory);
-  const path = join(directory, "config.json");
-  await writeFile(path, "{}");
+  const path = join(directory, "config.yaml");
+  await writeFile(path, "# No providers yet\n");
   vi.stubEnv("WEBFOX_CONFIG", path);
   const notify = vi.fn();
   const registerTool = vi.fn();

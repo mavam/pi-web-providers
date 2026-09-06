@@ -20,7 +20,7 @@ API ─┘                    └─ execution runtime ── lazy provider adap
 - `src/application.ts` snapshots configuration and environment, selects a
   provider, combines options, and exposes inspection. Credentials do not select
   providers. Inspection never resolves credential commands or initializes SDKs.
-- `src/configuration/` handles paths, JSON validation, option merging, and atomic
+- `src/configuration/` handles paths, YAML parsing and schema validation, option merging, and atomic
   default updates. Provider definitions generate the configuration schema.
   Defaults and request overrides can be incomplete; required fields are checked
   on the merged request.
