@@ -40,6 +40,22 @@ describe("Gemini capability boundaries", () => {
 });
 
 describe("Gemini provider answer", () => {
+  it("defaults to Gemini 3.8 Flash with Google Search grounding", async () => {
+    const generateContent = vi
+      .fn()
+      .mockResolvedValue({ text: "Answer", candidates: [] });
+    const provider = createProvider({ models: { generateContent } });
+    await provider.answer("Question", createConfig(), createContext());
+    expect(generateContent).toHaveBeenCalledWith({
+      model: "gemini-3.8-flash",
+      contents: "Question",
+      config: { tools: [{ googleSearch: {} }] },
+    });
+    const client = createWebfox({ config: {}, env: {} });
+    expect(
+      client.inspectCapability("answer", "gemini").defaults.options?.model,
+    ).toBe("gemini-3.8-flash");
+  });
   it("supports provider-specific request options for answers while keeping Google Search grounding enabled", async () => {
     const generateContent = vi.fn().mockResolvedValue({
       text: "Grounded answer",

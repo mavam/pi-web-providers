@@ -9,7 +9,7 @@ import type {
 } from "../contract.js";
 import type { Gemini } from "./types.js";
 
-const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
+const DEFAULT_ANSWER_MODEL = "gemini-3.8-flash";
 const DEFAULT_RESEARCH_AGENT = "deep-research-preview-04-2026";
 
 export const geminiImplementation = {

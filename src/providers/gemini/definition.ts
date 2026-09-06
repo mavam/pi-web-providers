@@ -14,7 +14,7 @@ export const geminiProvider = defineProvider({
   fields: ["credentials", "options"],
   defaults: {
     answer: {
-      model: "gemini-2.5-flash",
+      model: "gemini-3.8-flash",
     },
   },
   credentialDefaults: {},
@@ -26,7 +26,7 @@ export const geminiProvider = defineProvider({
           model: {
             type: "string",
             description:
-              "Gemini model for answers (for example 'gemini-2.5-flash').",
+              "Gemini model for answers (defaults to 'gemini-3.8-flash').",
           },
           config: {
             type: "object",

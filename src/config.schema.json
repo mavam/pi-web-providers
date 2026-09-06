@@ -2527,7 +2527,7 @@
                   "properties": {
                     "model": {
                       "type": "string",
-                      "description": "Gemini model for answers (for example 'gemini-2.5-flash')."
+                      "description": "Gemini model for answers (defaults to 'gemini-3.8-flash')."
                     },
                     "config": {
                       "type": "object",
