@@ -90,7 +90,13 @@ export default function webExtension(pi: ExtensionAPI): void {
         return call;
       },
       renderResult(result, options, theme, context) {
-        return renderWebResult(result, options, theme, context.isError);
+        return renderWebResult(
+          result,
+          options,
+          theme,
+          context.isError,
+          capability,
+        );
       },
       async execute(_id, values, signal, onUpdate, ctx) {
         const params = values as {

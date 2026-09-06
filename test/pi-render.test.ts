@@ -276,28 +276,36 @@ describe("vertical web rendering", () => {
     expect(th.fg).toHaveBeenCalledWith("accent", "same");
   });
 
-  it("renders native Markdown only after expansion", () => {
-    const doc = result("answer", [{ input: "Question", state: "done" }]);
-    expect(renderWebResult(doc, collapsed, theme(), false).render(80)).toEqual([
-      "✔︎ Question",
-    ]);
-    const text = stripVTControlCharacters(
-      renderWebResult(doc, expanded, theme(), false).render(80).join("\n"),
-    );
-    expect(text).toContain("Heading");
-    expect(text).toContain("Bold");
-    expect(text).toContain("const x = 1;");
-    expect(text).not.toContain("# Heading");
-    expect(text).not.toContain("**Bold**");
-    // Native Markdown retains themed fence borders and indents code blocks.
-    expect(text).toContain("  const x = 1;");
-    expect(doc.content[0].text).toContain("**Bold**");
-    expect(
-      renderWebResult(doc, { expanded: true, isPartial: true }, theme(), false)
-        .render(80)
-        .join("\n"),
-    ).not.toContain("Heading");
-  });
+  it.each(["contents", "answer", "research"] as const)(
+    "renders native Markdown for %s only after expansion",
+    (capability) => {
+      const doc = result(capability, [{ input: "Question", state: "done" }]);
+      expect(
+        renderWebResult(doc, collapsed, theme(), false).render(80),
+      ).toEqual(["✔︎ Question"]);
+      const text = stripVTControlCharacters(
+        renderWebResult(doc, expanded, theme(), false).render(80).join("\n"),
+      );
+      expect(text).toContain("Heading");
+      expect(text).toContain("Bold");
+      expect(text).toContain("const x = 1;");
+      expect(text).not.toContain("# Heading");
+      expect(text).not.toContain("**Bold**");
+      // Native Markdown retains themed fence borders and indents code blocks.
+      expect(text).toContain("  const x = 1;");
+      expect(doc.content[0].text).toContain("**Bold**");
+      expect(
+        renderWebResult(
+          doc,
+          { expanded: true, isPartial: true },
+          theme(),
+          false,
+        )
+          .render(80)
+          .join("\n"),
+      ).not.toContain("Heading");
+    },
+  );
 
   it("supports persisted URL status rows from older sessions", () => {
     const doc = {

@@ -4,7 +4,6 @@ import {
   Text,
   Container,
   Markdown,
-  truncateToWidth as truncate,
   visibleWidth,
   type Component,
 } from "@earendil-works/pi-tui";
@@ -12,14 +11,8 @@ import type { Capability } from "./domain.js";
 import { callParameters } from "./pi-params.js";
 import { expansionKey } from "./pi-keybindings.js";
 
-// Pi's shell owns the background. TUI truncation emits full SGR resets,
-// which otherwise clear that background for the ellipsis and trailing hint.
-function truncateToWidth(text: string, width: number): string {
-  return truncate(text, width).replaceAll(
-    "\x1b[0m",
-    "\x1b[22;23;24;25;27;28;29;39m",
-  );
-}
+import { truncateLine as truncateToWidth } from "./pi-text.js";
+import { renderSearchResult } from "./pi-search-render.js";
 
 const inputStates = {
   queued: { glyph: "●", color: "dim" },
@@ -119,11 +112,22 @@ export function renderWebResult(
   options: { expanded: boolean; isPartial: boolean },
   theme: Theme,
   isError: boolean,
+  capability?: Capability,
 ): Component {
   const text = result.content
     .filter((part) => part.type === "text")
     .map((part) => part.text ?? "")
     .join("\n");
+  const metadata = result.details as
+    | { capability?: unknown; result?: { capability?: unknown } }
+    | undefined;
+  const isSearch =
+    (capability ?? metadata?.capability ?? metadata?.result?.capability) ===
+    "search";
+  const body = () =>
+    isSearch
+      ? renderSearchResult(result.details, text, theme)
+      : new Markdown(text, 0, 0, getMarkdownTheme());
   const rows = statusRows(result.details);
   if (rows?.length) {
     const container = new Container();
@@ -145,11 +149,10 @@ export function renderWebResult(
           : [],
       invalidate() {},
     });
-    if (options.expanded && !options.isPartial)
-      container.addChild(new Markdown(text, 0, 0, getMarkdownTheme()));
+    if (options.expanded && !options.isPartial) container.addChild(body());
     return container;
   }
-  if (options.expanded) return new Markdown(text, 0, 0, getMarkdownTheme());
+  if (options.expanded) return body();
   const partialFailure =
     result.details &&
     typeof result.details === "object" &&
