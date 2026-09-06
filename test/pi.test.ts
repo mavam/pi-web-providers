@@ -102,11 +102,44 @@ it("uses application inspection and execution and marks partial tool results", a
     (update: any) => updates.push(update),
     { cwd: directory },
   );
-  expect(updates[0].details.urls[0].state).toBe("queued");
-  expect(contents.details.urls).toEqual([
-    { url: "https://ok.test", state: "done" },
-    { url: "https://error.test", state: "failed" },
+  expect(updates[0].details.inputs[0].state).toBe("queued");
+  expect(contents.details.inputs).toEqual([
+    { input: "https://ok.test", state: "done" },
+    { input: "https://error.test", state: "failed" },
   ]);
+  expect(result.details.inputs).toEqual([
+    { input: "success", state: "done" },
+    { input: "fail", state: "failed" },
+  ]);
+  for (const index of [0, 2, 3]) {
+    const updates: any[] = [];
+    const completed = await tools[index].execute(
+      `vertical-${index}`,
+      index === 3 ? { input: "question" } : { queries: ["question"] },
+      undefined,
+      (update: any) => updates.push(update),
+      { cwd: directory },
+    );
+    expect(
+      updates.some((update) => update.details.inputs[0]?.state === "running"),
+    ).toBe(true);
+    expect(updates[0].details.inputs).toEqual([
+      { input: "question", state: "queued" },
+    ]);
+    expect(completed.details.inputs).toEqual([
+      { input: "question", state: "done" },
+    ]);
+    expect(
+      tools[index]
+        .renderResult(
+          JSON.parse(JSON.stringify(completed)),
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        )
+        .render(80),
+    ).toEqual(["✔︎ question"]);
+  }
   const restored = JSON.parse(JSON.stringify(contents));
   expect(
     tools[1]
@@ -114,7 +147,7 @@ it("uses application inspection and execution and marks partial tool results", a
         isError: true,
       })
       .render(80),
-  ).toEqual(["✓ https://ok.test", "✗ https://error.test"]);
+  ).toEqual(["✔︎ https://ok.test", "✘︎ https://error.test"]);
 });
 
 it("keeps unconfigured notifications generic", async () => {

@@ -72,7 +72,7 @@ export class ExecutionRuntime {
         // Observers must not interfere with execution or completion updates.
       }
     };
-    const contentsState = (
+    const inputState = (
       input: string,
       inputIndex: number,
       state: NonNullable<ProgressEvent["state"]>,
@@ -120,6 +120,34 @@ export class ExecutionRuntime {
         input: string,
       ): Promise<InputResult<CapabilityValues[C]>> => {
         try {
+          if (capability === "contents") {
+            const response = (await this.run(
+              adapter,
+              config,
+              {
+                capability: "contents",
+                urls: [input],
+                options: plan.options,
+              },
+              plan,
+              context,
+            )) as ProviderResult<"contents">;
+            if (
+              response.answers.length !== 1 ||
+              response.answers[0].inputIndex !== 0
+            )
+              throw new WebfoxError(
+                "PROVIDER_FAILURE",
+                "Provider returned missing, duplicate, or invalid contents input indexes.",
+              );
+            const answer = response.answers[0];
+            if (answer.error)
+              throw new WebfoxError(answer.error.code, answer.error.message, {
+                retryable: answer.error.retryable,
+              });
+            const { inputIndex: _index, error: _error, ...value } = answer;
+            return { input, ok: true, value: value as CapabilityValues[C] };
+          }
           const operation: ProviderRequest =
             capability === "search"
               ? {
@@ -152,75 +180,26 @@ export class ExecutionRuntime {
           return fail(input, error);
         }
       };
-      let results: InputResult<CapabilityValues[C]>[];
-      if (capability === "contents") {
-        // Schedule URL operations individually: completed pages survive another
-        // page's timeout, and adapters cannot exceed runtime batch concurrency.
-        inputs.forEach((input, index) => contentsState(input, index, "queued"));
-        results = await orderedMap(
-          inputs,
-          plan.policy.concurrency ?? 4,
-          async (input, inputIndex) => {
-            if (!scope.signal.aborted)
-              contentsState(input, inputIndex, "running");
-            const result: InputResult<CapabilityValues[C]> =
-              await (async () => {
-                try {
-                  const response = (await this.run(
-                    adapter,
-                    config,
-                    {
-                      capability: "contents",
-                      urls: [input],
-                      options: plan.options,
-                    },
-                    plan,
-                    context,
-                  )) as ProviderResult<"contents">;
-                  if (
-                    response.answers.length !== 1 ||
-                    response.answers[0].inputIndex !== 0
-                  )
-                    throw new WebfoxError(
-                      "PROVIDER_FAILURE",
-                      "Provider returned missing, duplicate, or invalid contents input indexes.",
-                    );
-                  const answer = response.answers[0];
-                  if (answer.error)
-                    return fail(
-                      input,
-                      new WebfoxError(answer.error.code, answer.error.message, {
-                        retryable: answer.error.retryable,
-                      }),
-                    );
-                  const {
-                    inputIndex: _index,
-                    error: _error,
-                    ...value
-                  } = answer;
-                  return {
-                    input,
-                    ok: true,
-                    value: value as CapabilityValues[C],
-                  };
-                } catch (error) {
-                  return fail(input, error);
-                }
-              })();
-            contentsState(
-              input,
-              inputIndex,
-              result.ok
-                ? "done"
-                : result.error.code === "CANCELLED"
-                  ? "cancelled"
-                  : "failed",
-            );
-            return result;
-          },
-        );
-      } else
-        results = await orderedMap(inputs, plan.policy.concurrency ?? 4, run);
+      // Schedule all inputs individually, preserving completed work and order.
+      inputs.forEach((input, index) => inputState(input, index, "queued"));
+      const results = await orderedMap(
+        inputs,
+        plan.policy.concurrency ?? 4,
+        async (input, inputIndex) => {
+          if (!scope.signal.aborted) inputState(input, inputIndex, "running");
+          const result = await run(input);
+          inputState(
+            input,
+            inputIndex,
+            result.ok
+              ? "done"
+              : result.error.code === "CANCELLED"
+                ? "cancelled"
+                : "failed",
+          );
+          return result;
+        },
+      );
       return outward.value({
         schemaVersion: 1,
         capability,

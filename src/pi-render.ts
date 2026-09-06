@@ -1,50 +1,66 @@
 import { stripVTControlCharacters } from "node:util";
-import { keyText, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+  keyText,
+  getMarkdownTheme,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   Text,
   Container,
+  Markdown,
   truncateToWidth,
   visibleWidth,
   type Component,
 } from "@earendil-works/pi-tui";
 import type { Capability } from "./domain.js";
 
-const urlStates = {
+const inputStates = {
   queued: { glyph: "○", color: "dim" },
   running: { glyph: "◌", color: "accent" },
-  done: { glyph: "✓", color: "success" },
-  failed: { glyph: "✗", color: "error" },
+  done: { glyph: "✔︎", color: "success" },
+  failed: { glyph: "✘︎", color: "error" },
   cancelled: { glyph: "−", color: "warning" },
 } as const;
-export interface UrlStatus {
-  url: string;
-  state: keyof typeof urlStates;
+export interface InputStatus {
+  input: string;
+  state: keyof typeof inputStates;
 }
 
-function statusRows(details: unknown): UrlStatus[] | undefined {
+function statusRows(details: unknown): InputStatus[] | undefined {
+  if (!details || typeof details !== "object") return;
+  let rows: unknown[];
   if (
-    !details ||
-    typeof details !== "object" ||
-    !("webContentsStatus" in details) ||
-    details.webContentsStatus !== true ||
-    !("urls" in details) ||
-    !Array.isArray(details.urls)
-  )
-    return;
-  return details.urls.filter(
-    (row): row is UrlStatus =>
-      row &&
+    "webInputStatus" in details &&
+    details.webInputStatus === true &&
+    "inputs" in details &&
+    Array.isArray(details.inputs)
+  ) {
+    rows = details.inputs;
+  } else if (
+    "webContentsStatus" in details &&
+    details.webContentsStatus === true &&
+    "urls" in details &&
+    Array.isArray(details.urls)
+  ) {
+    // Restore status rows persisted by earlier versions of the extension.
+    rows = details.urls.map((row) => ({ input: row?.url, state: row?.state }));
+  } else return;
+  const inputs = rows.filter(
+    (row): row is InputStatus =>
+      !!row &&
       typeof row === "object" &&
-      typeof row.url === "string" &&
+      "input" in row &&
+      typeof row.input === "string" &&
+      "state" in row &&
       typeof row.state === "string" &&
-      Object.hasOwn(urlStates, row.state),
+      Object.hasOwn(inputStates, row.state),
   );
+  return inputs;
 }
 
 /** Display-only input formatting; never interpret input as terminal markup. */
-function displayInput(value: string, url: boolean): string {
-  const quoted = JSON.stringify(stripVTControlCharacters(value));
-  return url ? quoted.slice(1, -1) : quoted;
+function displayInput(value: string): string {
+  return JSON.stringify(stripVTControlCharacters(value)).slice(1, -1);
 }
 
 export class WebCall implements Component {
@@ -65,33 +81,13 @@ export class WebCall implements Component {
     if (width <= 0) return [];
     const { args, theme, capability } = this;
     const title = theme.fg("toolTitle", theme.bold(`web ${capability}`));
-    const raw =
-      capability === "research"
-        ? [args.input]
-        : capability === "contents"
-          ? args.urls
-          : args.queries;
-    const inputs = Array.isArray(raw)
-      ? raw.filter((value): value is string => typeof value === "string")
-      : [];
     let text = title;
-    if (inputs.length && (capability !== "contents" || this.expanded))
-      text +=
-        " " +
-        theme.fg(
-          "accent",
-          inputs
-            .map((value) => displayInput(value, capability === "contents"))
-            .join(" "),
-        );
     if (
       capability === "search" &&
       typeof args.maxResults === "number" &&
       Number.isFinite(args.maxResults)
     )
-      text +=
-        theme.fg("dim", " limit ") +
-        theme.fg("warning", String(args.maxResults));
+      text += theme.fg("dim", ` · limit ${args.maxResults}`);
     if (this.expanded)
       return visibleWidth(text) <= width
         ? [text]
@@ -126,24 +122,26 @@ export function renderWebResult(
     container.addChild({
       render: (width) =>
         width > 0
-          ? rows.map((row) => {
-              const { glyph, color } = urlStates[row.state];
-              return truncateToWidth(
+          ? rows.flatMap((row) => {
+              const { glyph, color } = inputStates[row.state];
+              const line =
                 theme.fg(color, glyph) +
-                  " " +
-                  theme.fg("accent", displayInput(row.url, true)),
-                width,
-              );
+                " " +
+                theme.fg("accent", displayInput(row.input));
+              return options.expanded
+                ? new Text(line, 0, 0)
+                    .render(width)
+                    .map((wrapped) => truncateToWidth(wrapped, width))
+                : [truncateToWidth(line, width)];
             })
           : [],
       invalidate() {},
     });
     if (options.expanded && !options.isPartial)
-      container.addChild(new Text(theme.fg("toolOutput", text), 0, 0));
+      container.addChild(new Markdown(text, 0, 0, getMarkdownTheme()));
     return container;
   }
-  if (options.expanded)
-    return new Text(theme.fg(isError ? "error" : "toolOutput", text), 0, 0);
+  if (options.expanded) return new Markdown(text, 0, 0, getMarkdownTheme());
   const partialFailure =
     result.details &&
     typeof result.details === "object" &&
@@ -164,7 +162,7 @@ export function renderWebResult(
             truncateToWidth(
               theme.fg(
                 isError || partialFailure ? "error" : "muted",
-                `${isError || partialFailure ? "✗" : "◌"} ${safe}`,
+                `${isError || partialFailure ? "✘︎" : "◌"} ${safe}`,
               ),
               width,
             ),

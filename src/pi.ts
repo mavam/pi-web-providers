@@ -7,7 +7,7 @@ import {
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type TObject, type TProperties } from "typebox";
-import { WebCall, renderWebResult, type UrlStatus } from "./pi-render.js";
+import { WebCall, renderWebResult, type InputStatus } from "./pi-render.js";
 import {
   CAPABILITIES,
   createWebfox as createWebClient,
@@ -93,35 +93,32 @@ export default function webExtension(pi: ExtensionAPI): void {
           options?: Record<string, unknown>;
         };
         const client = clientFor(ctx.cwd);
-        const urlStatuses: UrlStatus[] = [];
+        const inputStatuses: InputStatus[] = [];
         const request = {
           provider,
           signal: signal ?? ctx.signal,
           options: params.options as Record<string, unknown> | undefined,
           onProgress: (event: ProgressEvent) => {
-            if (capability === "contents") {
-              if (
-                event.inputIndex === undefined ||
-                event.input === undefined ||
-                !event.state
-              )
-                return;
-              urlStatuses[event.inputIndex] = {
-                url: event.input,
+            if (
+              event.inputIndex !== undefined &&
+              event.input !== undefined &&
+              event.state
+            ) {
+              inputStatuses[event.inputIndex] = {
+                input: event.input,
                 state: event.state,
               };
-              onUpdate?.({
-                content: [{ type: "text", text: event.message }],
-                details: {
-                  webContentsStatus: true,
-                  urls: urlStatuses.filter(Boolean).map((row) => ({ ...row })),
-                },
-              });
-            } else
-              onUpdate?.({
-                content: [{ type: "text", text: event.message }],
-                details: {},
-              });
+            }
+            onUpdate?.({
+              content: [{ type: "text", text: event.message }],
+              details: {
+                webInputStatus: true,
+                capability,
+                inputs: inputStatuses
+                  .filter(Boolean)
+                  .map((row) => ({ ...row })),
+              },
+            });
           },
         };
         const result =
@@ -157,19 +154,16 @@ export default function webExtension(pi: ExtensionAPI): void {
           details: {
             webProviderResult: true,
             status: result.status,
-            ...(capability === "contents"
-              ? {
-                  webContentsStatus: true,
-                  urls: result.results.map((entry) => ({
-                    url: entry.input,
-                    state: entry.ok
-                      ? "done"
-                      : entry.error.code === "CANCELLED"
-                        ? "cancelled"
-                        : "failed",
-                  })),
-                }
-              : {}),
+            webInputStatus: true,
+            capability,
+            inputs: result.results.map((entry) => ({
+              input: entry.input,
+              state: entry.ok
+                ? "done"
+                : entry.error.code === "CANCELLED"
+                  ? "cancelled"
+                  : "failed",
+            })),
             ...(fullOutputPath ? { fullOutputPath } : { result }),
           },
         };

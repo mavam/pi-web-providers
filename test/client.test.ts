@@ -4,53 +4,74 @@ import { customConfig } from "./helpers.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("application contracts", () => {
-  it("reports ordered per-URL lifecycle updates including duplicate inputs and failures", async () => {
-    const config = customConfig();
-    config.execution = { concurrency: 1 };
-    const events: ProgressEvent[] = [];
-    const urls = ["https://ok.test", "https://error.test", "https://ok.test"];
-    await createWebfox({ config }).contents({
-      urls,
-      onProgress: (event) => {
-        if (event.state) events.push(event);
-      },
-    });
-    expect(events.map(({ inputIndex, state }) => [inputIndex, state])).toEqual([
-      [0, "queued"],
-      [1, "queued"],
-      [2, "queued"],
-      [0, "running"],
-      [0, "done"],
-      [1, "running"],
-      [1, "failed"],
-      [2, "running"],
-      [2, "done"],
-    ]);
-    for (const event of events)
-      expect(event.input).toBe(urls[event.inputIndex!]);
-  });
-  it("keeps completed URLs done and marks queued URLs cancelled", async () => {
-    const config = customConfig();
-    config.execution = { concurrency: 1 };
-    const controller = new AbortController();
-    const events: ProgressEvent[] = [];
-    const result = await createWebfox({ config }).contents({
-      urls: ["https://ok.test", "https://slow.test"],
-      signal: controller.signal,
-      onProgress(event) {
-        if (event.state) events.push(event);
-        if (event.state === "done") controller.abort();
-      },
-    });
-    expect(result.results.map((entry) => entry.ok)).toEqual([true, false]);
-    expect(events.map(({ state }) => state)).toEqual([
-      "queued",
-      "queued",
-      "running",
-      "done",
-      "cancelled",
-    ]);
-  });
+  it.each(["search", "answer", "contents"] as const)(
+    "reports ordered %s lifecycle updates including duplicate inputs and failures",
+    async (capability) => {
+      const config = customConfig();
+      config.execution = { concurrency: 1 };
+      const events: ProgressEvent[] = [];
+      const inputs =
+        capability === "contents"
+          ? ["https://ok.test", "https://error.test", "https://ok.test"]
+          : ["ok", "fail", "ok"];
+      const client = createWebfox({ config });
+      const request = {
+        onProgress: (event: ProgressEvent) => {
+          if (event.state) events.push(event);
+        },
+      };
+      if (capability === "contents")
+        await client.contents({ ...request, urls: inputs });
+      else await client[capability]({ ...request, queries: inputs });
+      expect(
+        events.map(({ inputIndex, state }) => [inputIndex, state]),
+      ).toEqual([
+        [0, "queued"],
+        [1, "queued"],
+        [2, "queued"],
+        [0, "running"],
+        [0, "done"],
+        [1, "running"],
+        [1, "failed"],
+        [2, "running"],
+        [2, "done"],
+      ]);
+      for (const event of events)
+        expect(event.input).toBe(inputs[event.inputIndex!]);
+    },
+  );
+  it.each(["search", "answer", "contents"] as const)(
+    "keeps completed %s inputs done and marks queued inputs cancelled",
+    async (capability) => {
+      const config = customConfig();
+      config.execution = { concurrency: 1 };
+      const controller = new AbortController();
+      const events: ProgressEvent[] = [];
+      const client = createWebfox({ config });
+      const request = {
+        signal: controller.signal,
+        onProgress(event: ProgressEvent) {
+          if (event.state) events.push(event);
+          if (event.state === "done") controller.abort();
+        },
+      };
+      const result =
+        capability === "contents"
+          ? await client.contents({
+              ...request,
+              urls: ["https://ok.test", "https://slow.test"],
+            })
+          : await client[capability]({ ...request, queries: ["ok", "slow"] });
+      expect(result.results.map((entry) => entry.ok)).toEqual([true, false]);
+      expect(events.map(({ state }) => state)).toEqual([
+        "queued",
+        "queued",
+        "running",
+        "done",
+        "cancelled",
+      ]);
+    },
+  );
   it("redacts URL lifecycle events and ignores observer exceptions", async () => {
     const config = customConfig();
     config.providers!.custom!.commands!.contents!.env = {
@@ -68,6 +89,29 @@ describe("application contracts", () => {
     expect(events.some((event) => event.state === "done")).toBe(true);
     expect(JSON.stringify(events)).not.toContain("private-key");
   });
+  it.each(["ok", "fail"])(
+    "reports research lifecycle for %s",
+    async (input) => {
+      const events: ProgressEvent[] = [];
+      await createWebfox({ config: customConfig() }).research({
+        input,
+        onProgress: (event) => {
+          if (event.state) events.push(event);
+        },
+      });
+      expect(events.map(({ state }) => state)).toEqual([
+        "queued",
+        "running",
+        input === "ok" ? "done" : "failed",
+      ]);
+      for (const event of events)
+        expect(event).toMatchObject({
+          inputIndex: 0,
+          input,
+          capability: "research",
+        });
+    },
+  );
   it("never selects a provider from credentials", async () => {
     const client = createWebfox({
       config: {},
@@ -156,7 +200,12 @@ describe("application contracts", () => {
       queries: ["configured-secret"],
       onProgress: (event) => progress.push(event.message),
     });
-    expect(progress).toEqual(["[redacted]"]);
+    expect(progress).toEqual([
+      "queued: [redacted]",
+      "running: [redacted]",
+      "[redacted]",
+      "done: [redacted]",
+    ]);
     expect(JSON.stringify(result)).not.toContain("configured-secret");
     expect(JSON.stringify(result)).not.toContain("hidden");
     expect(result).not.toHaveProperty("raw");
