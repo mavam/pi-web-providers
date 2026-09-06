@@ -1,5 +1,23 @@
 import { defineProvider } from "../definition.js";
 
+const toolControl = {
+  anyOf: [
+    { type: "boolean" },
+    {
+      type: "object",
+      properties: {
+        enabled: { type: "boolean" },
+        max_calls: {
+          type: "integer",
+          minimum: 0,
+          description: "Lower the tool's call limit; 0 disables it.",
+        },
+      },
+      additionalProperties: false,
+    },
+  ],
+};
+
 export const valyuProvider = defineProvider({
   id: "valyu",
   label: "Valyu",
@@ -438,58 +456,10 @@ export const valyuProvider = defineProvider({
           tools: {
             type: "object",
             properties: {
-              code_execution: {
-                anyOf: [
-                  {
-                    type: "boolean",
-                  },
-                  {
-                    type: "object",
-                    patternProperties: {
-                      "^.*$": {},
-                    },
-                  },
-                ],
-              },
-              screenshots: {
-                anyOf: [
-                  {
-                    type: "boolean",
-                  },
-                  {
-                    type: "object",
-                    patternProperties: {
-                      "^.*$": {},
-                    },
-                  },
-                ],
-              },
-              browser_use: {
-                anyOf: [
-                  {
-                    type: "boolean",
-                  },
-                  {
-                    type: "object",
-                    patternProperties: {
-                      "^.*$": {},
-                    },
-                  },
-                ],
-              },
-              charts: {
-                anyOf: [
-                  {
-                    type: "boolean",
-                  },
-                  {
-                    type: "object",
-                    patternProperties: {
-                      "^.*$": {},
-                    },
-                  },
-                ],
-              },
+              code_execution: toolControl,
+              screenshots: toolControl,
+              browser_use: toolControl,
+              charts: toolControl,
             },
             additionalProperties: false,
             description: "Valyu deep research tool configuration.",

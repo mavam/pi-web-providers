@@ -1,5 +1,6 @@
 import type { Provider } from "../contract.js";
 export interface OpenAIWebSearchToolOptions {
+  externalWebAccess?: boolean;
   searchContextSize?: "low" | "medium" | "high";
   allowedDomains?: string[];
   userLocation?: {

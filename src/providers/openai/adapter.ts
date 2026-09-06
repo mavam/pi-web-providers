@@ -208,6 +208,27 @@ function createClient(config: OpenAIConfig): OpenAI {
   });
 }
 
+function generationControls(options?: Record<string, unknown>) {
+  const reasoning = options?.reasoning as { effort?: unknown } | undefined;
+  const effort = readStringUnion(reasoning?.effort, [
+    "none",
+    "minimal",
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
+  const maxTokens = readPositiveInteger(options?.max_output_tokens);
+  return {
+    ...(effort ? { reasoning: { effort } } : {}),
+    ...(maxTokens ? { max_output_tokens: maxTokens } : {}),
+  } satisfies Pick<
+    OpenAI.Responses.ResponseCreateParamsNonStreaming,
+    "reasoning" | "max_output_tokens"
+  >;
+}
+
 function buildOpenAISearchRequest(
   query: string,
   maxResults: number,
@@ -220,6 +241,7 @@ function buildOpenAISearchRequest(
 
   return {
     model,
+    ...generationControls(options),
     input: [
       "Search the public web and return only the most relevant sources for the user's query.",
       `Return at most ${maxResults} sources.`,
@@ -253,6 +275,7 @@ function buildOpenAIAnswerRequest(
 
   return {
     model,
+    ...generationControls(options),
     input: query,
     tools: [buildOpenAIWebSearchTool(mergedOptions)],
     ...(instructions ? { instructions } : {}),
@@ -271,6 +294,7 @@ function buildOpenAIResearchRequest(
 
   return {
     model,
+    ...generationControls(options),
     input,
     background: true,
     tools: [buildOpenAIWebSearchTool(mergedOptions)],
@@ -282,6 +306,7 @@ function buildOpenAIResearchRequest(
 function buildOpenAIWebSearchTool(options: OpenAIWebSearchToolOptions) {
   const tool: {
     type: "web_search";
+    external_web_access?: boolean;
     search_context_size?: "low" | "medium" | "high";
     filters?: { allowed_domains: string[] };
     user_location?: {
@@ -292,6 +317,8 @@ function buildOpenAIWebSearchTool(options: OpenAIWebSearchToolOptions) {
       timezone?: string;
     };
   } = { type: "web_search" };
+  if (options.externalWebAccess !== undefined)
+    tool.external_web_access = options.externalWebAccess;
   if (options.searchContextSize) {
     tool.search_context_size = options.searchContextSize;
   }
@@ -318,6 +345,9 @@ function resolveOpenAIWebSearchToolOptions(
   const allowedDomains = readStringArray(merged.allowedDomains);
   const userLocation = readUserLocation(merged.userLocation);
   return {
+    ...(typeof merged.externalWebAccess === "boolean"
+      ? { externalWebAccess: merged.externalWebAccess }
+      : {}),
     ...(searchContextSize ? { searchContextSize } : {}),
     ...(allowedDomains ? { allowedDomains } : {}),
     ...(userLocation ? { userLocation } : {}),

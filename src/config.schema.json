@@ -782,25 +782,9 @@
                       "description": "Claude model override."
                     },
                     "effort": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "low"
-                        },
-                        {
-                          "type": "string",
-                          "const": "medium"
-                        },
-                        {
-                          "type": "string",
-                          "const": "high"
-                        },
-                        {
-                          "type": "string",
-                          "const": "max"
-                        }
-                      ],
-                      "description": "How much effort Claude should use."
+                      "type": "string",
+                      "enum": ["low", "medium", "high", "xhigh", "max"],
+                      "description": "Reasoning effort. Supported levels depend on the selected model."
                     },
                     "maxTurns": {
                       "type": "integer",
@@ -810,7 +794,8 @@
                     "maxThinkingTokens": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "Maximum thinking tokens."
+                      "deprecated": true,
+                      "description": "Legacy thinking budget. Prefer thinking; thinking takes precedence."
                     },
                     "maxBudgetUsd": {
                       "type": "number",
@@ -818,15 +803,52 @@
                       "description": "Maximum budget in USD."
                     },
                     "thinking": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string",
-                          "description": "Claude thinking mode."
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "adaptive"
+                            },
+                            "display": {
+                              "type": "string",
+                              "enum": ["summarized", "omitted"]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "enabled"
+                            },
+                            "budgetTokens": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Fixed thinking budget for models supporting budgeted thinking."
+                            },
+                            "display": {
+                              "type": "string",
+                              "enum": ["summarized", "omitted"]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "disabled"
+                            }
+                          },
+                          "additionalProperties": false
                         }
-                      },
-                      "description": "Claude thinking configuration.",
-                      "additionalProperties": false
+                      ],
+                      "description": "Model-specific thinking configuration. Adaptive thinking is preferred on newer models."
                     }
                   },
                   "description": "Claude options.",
@@ -840,25 +862,9 @@
                       "description": "Claude model override."
                     },
                     "effort": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "low"
-                        },
-                        {
-                          "type": "string",
-                          "const": "medium"
-                        },
-                        {
-                          "type": "string",
-                          "const": "high"
-                        },
-                        {
-                          "type": "string",
-                          "const": "max"
-                        }
-                      ],
-                      "description": "How much effort Claude should use."
+                      "type": "string",
+                      "enum": ["low", "medium", "high", "xhigh", "max"],
+                      "description": "Reasoning effort. Supported levels depend on the selected model."
                     },
                     "maxTurns": {
                       "type": "integer",
@@ -868,7 +874,8 @@
                     "maxThinkingTokens": {
                       "type": "integer",
                       "minimum": 0,
-                      "description": "Maximum thinking tokens."
+                      "deprecated": true,
+                      "description": "Legacy thinking budget. Prefer thinking; thinking takes precedence."
                     },
                     "maxBudgetUsd": {
                       "type": "number",
@@ -876,15 +883,52 @@
                       "description": "Maximum budget in USD."
                     },
                     "thinking": {
-                      "type": "object",
-                      "properties": {
-                        "type": {
-                          "type": "string",
-                          "description": "Claude thinking mode."
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "adaptive"
+                            },
+                            "display": {
+                              "type": "string",
+                              "enum": ["summarized", "omitted"]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "enabled"
+                            },
+                            "budgetTokens": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "description": "Fixed thinking budget for models supporting budgeted thinking."
+                            },
+                            "display": {
+                              "type": "string",
+                              "enum": ["summarized", "omitted"]
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "const": "disabled"
+                            }
+                          },
+                          "additionalProperties": false
                         }
-                      },
-                      "description": "Claude thinking configuration.",
-                      "additionalProperties": false
+                      ],
+                      "description": "Model-specific thinking configuration. Adaptive thinking is preferred on newer models."
                     }
                   },
                   "description": "Claude options.",
@@ -993,9 +1037,60 @@
                 "contents": {
                   "type": "object",
                   "properties": {
+                    "cacheTTL": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Cache lifetime in seconds; 0 disables caching."
+                    },
+                    "actionTimeout": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Post-navigation action timeout in milliseconds."
+                    },
+                    "waitForTimeout": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Milliseconds to wait before extraction."
+                    },
+                    "waitForSelector": {
+                      "type": "object",
+                      "properties": {
+                        "selector": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "timeout": {
+                          "type": "number",
+                          "minimum": 0
+                        },
+                        "visible": {
+                          "type": "boolean",
+                          "const": true
+                        },
+                        "hidden": {
+                          "type": "boolean",
+                          "const": true
+                        }
+                      },
+                      "description": "Wait for a page element.",
+                      "additionalProperties": false
+                    },
+                    "userAgent": {
+                      "type": "string",
+                      "description": "Browser user agent."
+                    },
+                    "setJavaScriptEnabled": {
+                      "type": "boolean",
+                      "description": "Enable page JavaScript."
+                    },
                     "gotoOptions": {
                       "type": "object",
                       "properties": {
+                        "timeout": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Navigation timeout in milliseconds."
+                        },
                         "waitUntil": {
                           "anyOf": [
                             {
@@ -1116,9 +1211,21 @@
                         {
                           "type": "string",
                           "const": "xhigh"
+                        },
+                        {
+                          "type": "string",
+                          "const": "max"
+                        },
+                        {
+                          "type": "string",
+                          "const": "ultra"
+                        },
+                        {
+                          "type": "string",
+                          "const": "persistent"
                         }
                       ],
-                      "description": "Reasoning depth for Codex."
+                      "description": "Reasoning depth for Codex. Available levels depend on the selected model."
                     },
                     "webSearchMode": {
                       "anyOf": [
@@ -1862,27 +1969,21 @@
                 "search": {
                   "type": "object",
                   "properties": {
-                    "lang": {
-                      "type": "string",
-                      "description": "Language code for search results (for example 'en')."
-                    },
-                    "country": {
-                      "type": "string",
-                      "description": "Country code for search results (for example 'us')."
-                    },
                     "sources": {
                       "type": "array",
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": ["web", "news", "images"]
                       },
-                      "description": "Search source groups to include."
+                      "description": "Search source groups."
                     },
                     "categories": {
                       "type": "array",
                       "items": {
-                        "type": "string"
+                        "type": "string",
+                        "enum": ["github", "research", "pdf", "developer"]
                       },
-                      "description": "Search categories to include."
+                      "description": "Search categories."
                     },
                     "includeDomains": {
                       "type": "array",
@@ -1904,31 +2005,20 @@
                     },
                     "ignoreInvalidURLs": {
                       "type": "boolean",
-                      "description": "Ignore invalid result URLs returned by search."
+                      "description": "Ignore invalid result URLs."
                     },
                     "location": {
-                      "type": "object",
-                      "properties": {
-                        "country": {
-                          "type": "string",
-                          "description": "Country hint."
-                        },
-                        "region": {
-                          "type": "string",
-                          "description": "Region hint."
-                        },
-                        "city": {
-                          "type": "string",
-                          "description": "City hint."
-                        }
-                      },
-                      "description": "Location hint for search.",
-                      "additionalProperties": false
+                      "type": "string",
+                      "description": "Search location, for example 'Berlin, Germany'. Not a scrape location object."
                     },
                     "timeout": {
                       "type": "integer",
-                      "minimum": 0,
+                      "minimum": 1,
                       "description": "Request timeout in milliseconds."
+                    },
+                    "highlights": {
+                      "type": "boolean",
+                      "description": "Generate query-relevant highlights."
                     },
                     "scrapeOptions": {
                       "type": "object",
@@ -1936,50 +2026,146 @@
                         "formats": {
                           "type": "array",
                           "items": {
-                            "anyOf": [
-                              {
-                                "type": "string",
-                                "const": "markdown"
-                              },
-                              {
-                                "type": "string",
-                                "const": "html"
-                              },
-                              {
-                                "type": "string",
-                                "const": "rawHtml"
-                              },
-                              {
-                                "type": "string",
-                                "const": "links"
-                              },
-                              {
-                                "type": "string",
-                                "const": "images"
-                              },
-                              {
-                                "type": "string",
-                                "const": "screenshot"
-                              },
-                              {
-                                "type": "string",
-                                "const": "summary"
-                              },
-                              {
-                                "type": "string",
-                                "const": "json"
-                              },
-                              {
-                                "type": "string",
-                                "const": "attributes"
-                              }
+                            "type": "string",
+                            "enum": [
+                              "markdown",
+                              "html",
+                              "rawHtml",
+                              "links",
+                              "images",
+                              "screenshot",
+                              "summary",
+                              "json",
+                              "attributes",
+                              "changeTracking"
                             ]
                           },
-                          "description": "Output formats."
+                          "description": "Output formats for scraping."
+                        },
+                        "timeout": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "description": "Request timeout in milliseconds."
                         },
                         "onlyMainContent": {
                           "type": "boolean",
                           "description": "Extract only the main content."
+                        },
+                        "includeTags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "CSS selectors to include."
+                        },
+                        "excludeTags": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "CSS selectors to exclude."
+                        },
+                        "waitFor": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Milliseconds to wait before scraping."
+                        },
+                        "headers": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.*$": {
+                              "type": "string"
+                            }
+                          },
+                          "description": "Headers to send when scraping."
+                        },
+                        "location": {
+                          "type": "object",
+                          "properties": {
+                            "country": {
+                              "type": "string",
+                              "description": "Country code."
+                            },
+                            "languages": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              },
+                              "description": "Preferred languages."
+                            }
+                          },
+                          "description": "Scrape location; unlike search location, this is an object.",
+                          "additionalProperties": false
+                        },
+                        "mobile": {
+                          "type": "boolean",
+                          "description": "Use a mobile browser profile."
+                        },
+                        "proxy": {
+                          "type": "string",
+                          "description": "Proxy mode supported by your Firecrawl deployment."
+                        },
+                        "fastMode": {
+                          "type": "boolean",
+                          "description": "Use Firecrawl fast mode."
+                        },
+                        "blockAds": {
+                          "type": "boolean",
+                          "description": "Block ads while scraping."
+                        },
+                        "removeBase64Images": {
+                          "type": "boolean",
+                          "description": "Remove base64 image data from output."
+                        },
+                        "redactPII": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "entities": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "PERSON",
+                                      "EMAIL",
+                                      "PHONE",
+                                      "LOCATION",
+                                      "FINANCIAL",
+                                      "SECRET"
+                                    ]
+                                  }
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "enum": ["accurate", "aggressive", "fast"]
+                                }
+                              },
+                              "additionalProperties": false
+                            }
+                          ],
+                          "description": "Redact personal or sensitive data from output."
+                        },
+                        "maxAge": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
+                        },
+                        "minAge": {
+                          "type": "number",
+                          "minimum": 0,
+                          "description": "Minimum cached scrape age in milliseconds."
+                        },
+                        "storeInCache": {
+                          "type": "boolean",
+                          "description": "Store the scrape result in cache."
+                        },
+                        "skipTlsVerification": {
+                          "type": "boolean",
+                          "description": "Skip TLS certificate verification."
                         }
                       },
                       "description": "Options for scraping each search result.",
@@ -1995,54 +2181,25 @@
                     "formats": {
                       "type": "array",
                       "items": {
-                        "anyOf": [
-                          {
-                            "type": "string",
-                            "const": "markdown"
-                          },
-                          {
-                            "type": "string",
-                            "const": "html"
-                          },
-                          {
-                            "type": "string",
-                            "const": "rawHtml"
-                          },
-                          {
-                            "type": "string",
-                            "const": "links"
-                          },
-                          {
-                            "type": "string",
-                            "const": "images"
-                          },
-                          {
-                            "type": "string",
-                            "const": "screenshot"
-                          },
-                          {
-                            "type": "string",
-                            "const": "summary"
-                          },
-                          {
-                            "type": "string",
-                            "const": "json"
-                          },
-                          {
-                            "type": "string",
-                            "const": "attributes"
-                          },
-                          {
-                            "type": "string",
-                            "const": "changeTracking"
-                          }
+                        "type": "string",
+                        "enum": [
+                          "markdown",
+                          "html",
+                          "rawHtml",
+                          "links",
+                          "images",
+                          "screenshot",
+                          "summary",
+                          "json",
+                          "attributes",
+                          "changeTracking"
                         ]
                       },
                       "description": "Output formats for scraping."
                     },
                     "timeout": {
                       "type": "integer",
-                      "minimum": 0,
+                      "minimum": 1,
                       "description": "Request timeout in milliseconds."
                     },
                     "onlyMainContent": {
@@ -2082,18 +2239,17 @@
                       "properties": {
                         "country": {
                           "type": "string",
-                          "description": "Country hint."
+                          "description": "Country code."
                         },
-                        "region": {
-                          "type": "string",
-                          "description": "Region hint."
-                        },
-                        "city": {
-                          "type": "string",
-                          "description": "City hint."
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Preferred languages."
                         }
                       },
-                      "description": "Location hint for scraping.",
+                      "description": "Scrape location; unlike search location, this is an object.",
                       "additionalProperties": false
                     },
                     "mobile": {
@@ -2102,7 +2258,7 @@
                     },
                     "proxy": {
                       "type": "string",
-                      "description": "Proxy mode passed through to the Firecrawl SDK."
+                      "description": "Proxy mode supported by your Firecrawl deployment."
                     },
                     "fastMode": {
                       "type": "boolean",
@@ -2114,7 +2270,7 @@
                     },
                     "removeBase64Images": {
                       "type": "boolean",
-                      "description": "Remove base64 image data from scraped output."
+                      "description": "Remove base64 image data from output."
                     },
                     "redactPII": {
                       "anyOf": [
@@ -2127,33 +2283,20 @@
                             "entities": {
                               "type": "array",
                               "items": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "const": "PERSON"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "EMAIL"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "PHONE"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "LOCATION"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "FINANCIAL"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "SECRET"
-                                  }
+                                "type": "string",
+                                "enum": [
+                                  "PERSON",
+                                  "EMAIL",
+                                  "PHONE",
+                                  "LOCATION",
+                                  "FINANCIAL",
+                                  "SECRET"
                                 ]
                               }
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": ["accurate", "aggressive", "fast"]
                             }
                           },
                           "additionalProperties": false
@@ -2163,15 +2306,17 @@
                     },
                     "maxAge": {
                       "type": "number",
-                      "description": "Maximum age of cached scrape data in milliseconds."
+                      "minimum": 0,
+                      "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
                     },
                     "minAge": {
                       "type": "number",
-                      "description": "Minimum age of cached scrape data in milliseconds."
+                      "minimum": 0,
+                      "description": "Minimum cached scrape age in milliseconds."
                     },
                     "storeInCache": {
                       "type": "boolean",
-                      "description": "Store scrape result in Firecrawl cache."
+                      "description": "Store the scrape result in cache."
                     },
                     "skipTlsVerification": {
                       "type": "boolean",
@@ -2189,6 +2334,11 @@
                       "minLength": 1,
                       "description": "URL of the page to ask about."
                     },
+                    "timeout": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Request timeout in milliseconds."
+                    },
                     "onlyMainContent": {
                       "type": "boolean",
                       "description": "Extract only the main content."
@@ -2226,18 +2376,17 @@
                       "properties": {
                         "country": {
                           "type": "string",
-                          "description": "Country hint."
+                          "description": "Country code."
                         },
-                        "region": {
-                          "type": "string",
-                          "description": "Region hint."
-                        },
-                        "city": {
-                          "type": "string",
-                          "description": "City hint."
+                        "languages": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Preferred languages."
                         }
                       },
-                      "description": "Location hint for scraping.",
+                      "description": "Scrape location; unlike search location, this is an object.",
                       "additionalProperties": false
                     },
                     "mobile": {
@@ -2246,7 +2395,7 @@
                     },
                     "proxy": {
                       "type": "string",
-                      "description": "Proxy mode passed through to the Firecrawl SDK."
+                      "description": "Proxy mode supported by your Firecrawl deployment."
                     },
                     "fastMode": {
                       "type": "boolean",
@@ -2258,7 +2407,7 @@
                     },
                     "removeBase64Images": {
                       "type": "boolean",
-                      "description": "Remove base64 image data from scraped output."
+                      "description": "Remove base64 image data from output."
                     },
                     "redactPII": {
                       "anyOf": [
@@ -2271,33 +2420,20 @@
                             "entities": {
                               "type": "array",
                               "items": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "const": "PERSON"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "EMAIL"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "PHONE"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "LOCATION"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "FINANCIAL"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "const": "SECRET"
-                                  }
+                                "type": "string",
+                                "enum": [
+                                  "PERSON",
+                                  "EMAIL",
+                                  "PHONE",
+                                  "LOCATION",
+                                  "FINANCIAL",
+                                  "SECRET"
                                 ]
                               }
+                            },
+                            "mode": {
+                              "type": "string",
+                              "enum": ["accurate", "aggressive", "fast"]
                             }
                           },
                           "additionalProperties": false
@@ -2307,15 +2443,17 @@
                     },
                     "maxAge": {
                       "type": "number",
-                      "description": "Maximum age of cached scrape data in milliseconds."
+                      "minimum": 0,
+                      "description": "Maximum cached scrape age in milliseconds; 0 bypasses reuse."
                     },
                     "minAge": {
                       "type": "number",
-                      "description": "Minimum age of cached scrape data in milliseconds."
+                      "minimum": 0,
+                      "description": "Minimum cached scrape age in milliseconds."
                     },
                     "storeInCache": {
                       "type": "boolean",
-                      "description": "Store scrape result in Firecrawl cache."
+                      "description": "Store the scrape result in cache."
                     },
                     "skipTlsVerification": {
                       "type": "boolean",
@@ -2394,6 +2532,27 @@
                     "config": {
                       "type": "object",
                       "properties": {
+                        "thinkingConfig": {
+                          "type": "object",
+                          "properties": {
+                            "thinkingLevel": {
+                              "type": "string",
+                              "enum": ["MINIMAL", "LOW", "MEDIUM", "HIGH"],
+                              "description": "Model-specific thinking depth."
+                            },
+                            "thinkingBudget": {
+                              "type": "integer",
+                              "minimum": -1,
+                              "description": "Legacy thinking budget; -1 automatic, 0 disabled. Not supported by newer models that require thinkingLevel."
+                            },
+                            "includeThoughts": {
+                              "type": "boolean",
+                              "description": "Include available thought summaries."
+                            }
+                          },
+                          "description": "Generate-content thinking settings; choose controls supported by the selected model.",
+                          "additionalProperties": false
+                        },
                         "labels": {
                           "type": "object",
                           "patternProperties": {
@@ -2573,13 +2732,23 @@
                 "contents": {
                   "type": "object",
                   "properties": {
+                    "mode": {
+                      "type": "string",
+                      "enum": ["standard", "pro"],
+                      "description": "Fetch strategy; pro improves retrieval of difficult pages."
+                    },
+                    "includeRawContent": {
+                      "type": "boolean",
+                      "description": "Include raw page content and its content type."
+                    },
                     "renderJs": {
                       "type": "boolean",
                       "description": "Render JavaScript before extracting content."
                     },
                     "includeRawHtml": {
                       "type": "boolean",
-                      "description": "Include raw HTML in the response."
+                      "deprecated": true,
+                      "description": "Legacy raw HTML output. Prefer includeRawContent."
                     },
                     "extractImages": {
                       "type": "boolean",
@@ -2819,57 +2988,71 @@
                   "properties": {
                     "model": {
                       "type": "string",
-                      "description": "OpenAI model to use for web search (for example 'gpt-4.1')."
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
                     },
                     "instructions": {
                       "type": "string",
-                      "description": "Optional instructions that shape source selection and result style."
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
                     },
                     "searchContextSize": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "low"
-                        },
-                        {
-                          "type": "string",
-                          "const": "medium"
-                        },
-                        {
-                          "type": "string",
-                          "const": "high"
-                        }
-                      ],
-                      "description": "Amount of context OpenAI web search should retrieve per search."
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
                     },
                     "allowedDomains": {
                       "type": "array",
+                      "maxItems": 100,
                       "items": {
                         "type": "string"
                       },
-                      "description": "Restrict OpenAI web search to these domains."
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
                     },
                     "userLocation": {
                       "type": "object",
                       "properties": {
                         "city": {
-                          "type": "string",
-                          "description": "User city hint."
+                          "type": "string"
                         },
                         "country": {
-                          "type": "string",
-                          "description": "Two-letter user country code."
+                          "type": "string"
                         },
                         "region": {
-                          "type": "string",
-                          "description": "User region hint."
+                          "type": "string"
                         },
                         "timezone": {
-                          "type": "string",
-                          "description": "IANA timezone hint."
+                          "type": "string"
                         }
                       },
-                      "description": "Approximate user location for OpenAI web search.",
+                      "description": "Approximate location. Not supported by deep research models.",
                       "additionalProperties": false
                     }
                   },
@@ -2881,57 +3064,71 @@
                   "properties": {
                     "model": {
                       "type": "string",
-                      "description": "OpenAI model to use for grounded answers (for example 'gpt-4.1')."
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
                     },
                     "instructions": {
                       "type": "string",
-                      "description": "Optional instructions that shape the answer structure, tone, and source selection."
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
                     },
                     "searchContextSize": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "low"
-                        },
-                        {
-                          "type": "string",
-                          "const": "medium"
-                        },
-                        {
-                          "type": "string",
-                          "const": "high"
-                        }
-                      ],
-                      "description": "Amount of context OpenAI web search should retrieve per search."
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
                     },
                     "allowedDomains": {
                       "type": "array",
+                      "maxItems": 100,
                       "items": {
                         "type": "string"
                       },
-                      "description": "Restrict OpenAI web search to these domains."
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
                     },
                     "userLocation": {
                       "type": "object",
                       "properties": {
                         "city": {
-                          "type": "string",
-                          "description": "User city hint."
+                          "type": "string"
                         },
                         "country": {
-                          "type": "string",
-                          "description": "Two-letter user country code."
+                          "type": "string"
                         },
                         "region": {
-                          "type": "string",
-                          "description": "User region hint."
+                          "type": "string"
                         },
                         "timezone": {
-                          "type": "string",
-                          "description": "IANA timezone hint."
+                          "type": "string"
                         }
                       },
-                      "description": "Approximate user location for OpenAI web search.",
+                      "description": "Approximate location. Not supported by deep research models.",
                       "additionalProperties": false
                     }
                   },
@@ -2943,66 +3140,61 @@
                   "properties": {
                     "model": {
                       "type": "string",
-                      "description": "OpenAI deep research model to use (for example 'o4-mini-deep-research')."
+                      "description": "OpenAI model override. Tool and reasoning support depends on the model."
                     },
                     "instructions": {
                       "type": "string",
-                      "description": "Optional instructions that shape the report structure, tone, and source selection."
+                      "description": "Instructions for the answer and source selection."
+                    },
+                    "reasoning": {
+                      "type": "object",
+                      "properties": {
+                        "effort": {
+                          "type": "string",
+                          "enum": [
+                            "none",
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max"
+                          ],
+                          "description": "Use a level supported by the model; some levels do not support web search."
+                        }
+                      },
+                      "description": "Model reasoning controls.",
+                      "additionalProperties": false
+                    },
+                    "max_output_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens, including reasoning."
+                    },
+                    "searchContextSize": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of web search context."
+                    },
+                    "allowedDomains": {
+                      "type": "array",
+                      "maxItems": 100,
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Restrict search to these domains."
+                    },
+                    "externalWebAccess": {
+                      "type": "boolean",
+                      "description": "Allow live fetching; false uses cached/indexed content only."
                     },
                     "max_tool_calls": {
                       "type": "integer",
                       "minimum": 1,
-                      "description": "Maximum number of built-in tool calls the model may make during the research run."
-                    },
-                    "searchContextSize": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "const": "low"
-                        },
-                        {
-                          "type": "string",
-                          "const": "medium"
-                        },
-                        {
-                          "type": "string",
-                          "const": "high"
-                        }
-                      ],
-                      "description": "Amount of context OpenAI web search should retrieve per search."
-                    },
-                    "allowedDomains": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "Restrict OpenAI web search to these domains."
-                    },
-                    "userLocation": {
-                      "type": "object",
-                      "properties": {
-                        "city": {
-                          "type": "string",
-                          "description": "User city hint."
-                        },
-                        "country": {
-                          "type": "string",
-                          "description": "Two-letter user country code."
-                        },
-                        "region": {
-                          "type": "string",
-                          "description": "User region hint."
-                        },
-                        "timezone": {
-                          "type": "string",
-                          "description": "IANA timezone hint."
-                        }
-                      },
-                      "description": "Approximate user location for OpenAI web search.",
-                      "additionalProperties": false
+                      "description": "Maximum built-in tool calls during research."
                     }
                   },
-                  "description": "OpenAI deep research options.",
+                  "description": "OpenAI research options. Deep research models do not support userLocation.",
                   "additionalProperties": false
                 }
               }
@@ -3071,6 +3263,89 @@
                 "search": {
                   "type": "object",
                   "properties": {
+                    "objective": {
+                      "type": "string",
+                      "description": "Underlying question or goal guiding retrieval."
+                    },
+                    "max_chars_total": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total excerpt character budget."
+                    },
+                    "client_model": {
+                      "type": "string",
+                      "description": "Model consuming the results."
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "description": "Session ID for related search and extraction calls."
+                    },
+                    "advanced_settings": {
+                      "type": "object",
+                      "properties": {
+                        "excerpt_settings": {
+                          "type": "object",
+                          "properties": {
+                            "max_chars_per_result": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "fetch_policy": {
+                          "type": "object",
+                          "properties": {
+                            "max_age_seconds": {
+                              "type": "number",
+                              "minimum": 600,
+                              "description": "Cache age threshold for live fetching, in seconds."
+                            },
+                            "timeout_seconds": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "description": "Live fetch timeout in seconds."
+                            },
+                            "disable_cache_fallback": {
+                              "type": "boolean",
+                              "description": "Fail instead of falling back to stale content."
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "source_policy": {
+                          "type": "object",
+                          "properties": {
+                            "include_domains": {
+                              "type": "array",
+                              "maxItems": 200,
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "exclude_domains": {
+                              "type": "array",
+                              "maxItems": 200,
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "after_date": {
+                              "type": "string",
+                              "description": "Earliest publication date (YYYY-MM-DD)."
+                            }
+                          },
+                          "description": "Source constraints; include and exclude lists may contain at most 200 domains combined.",
+                          "additionalProperties": false
+                        },
+                        "location": {
+                          "type": "string",
+                          "description": "Two-letter country code."
+                        }
+                      },
+                      "description": "Advanced retrieval settings. Result count comes from maxResults.",
+                      "additionalProperties": false
+                    },
                     "mode": {
                       "anyOf": [
                         {
@@ -3084,6 +3359,10 @@
                         {
                           "type": "string",
                           "const": "turbo"
+                        },
+                        {
+                          "type": "string",
+                          "const": "fast"
                         }
                       ],
                       "description": "Parallel search mode. Use 'advanced' for higher quality, 'basic' for lower latency, or 'turbo' for the fastest responses."
@@ -3095,6 +3374,60 @@
                 "contents": {
                   "type": "object",
                   "properties": {
+                    "objective": {
+                      "type": "string",
+                      "description": "Underlying question or goal guiding retrieval."
+                    },
+                    "max_chars_total": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total excerpt character budget."
+                    },
+                    "client_model": {
+                      "type": "string",
+                      "description": "Model consuming the results."
+                    },
+                    "session_id": {
+                      "type": "string",
+                      "description": "Session ID for related search and extraction calls."
+                    },
+                    "advanced_settings": {
+                      "type": "object",
+                      "properties": {
+                        "excerpt_settings": {
+                          "type": "object",
+                          "properties": {
+                            "max_chars_per_result": {
+                              "type": "integer",
+                              "minimum": 0
+                            }
+                          },
+                          "additionalProperties": false
+                        },
+                        "fetch_policy": {
+                          "type": "object",
+                          "properties": {
+                            "max_age_seconds": {
+                              "type": "number",
+                              "minimum": 600,
+                              "description": "Cache age threshold for live fetching, in seconds."
+                            },
+                            "timeout_seconds": {
+                              "type": "number",
+                              "exclusiveMinimum": 0,
+                              "description": "Live fetch timeout in seconds."
+                            },
+                            "disable_cache_fallback": {
+                              "type": "boolean",
+                              "description": "Fail instead of falling back to stale content."
+                            }
+                          },
+                          "additionalProperties": false
+                        }
+                      },
+                      "description": "Advanced extraction settings.",
+                      "additionalProperties": false
+                    },
                     "excerpts": {
                       "type": "boolean",
                       "description": "Include excerpts in extraction results."
@@ -3175,22 +3508,62 @@
                   "properties": {
                     "country": {
                       "type": "string",
-                      "description": "Country hint for search results."
+                      "description": "Two-letter country hint."
                     },
                     "search_mode": {
                       "type": "string",
-                      "description": "Perplexity search mode. Choose the provider mode that best matches the user's intent, such as broad web search versus academic or other specialized retrieval modes supported by Perplexity."
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
                     },
                     "search_domain_filter": {
                       "type": "array",
                       "items": {
                         "type": "string"
                       },
-                      "description": "Restrict search results to these domains."
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
                     },
                     "search_recency_filter": {
                       "type": "string",
-                      "description": "Recency filter for search results."
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
+                    "search_context_size": {
+                      "type": "string",
+                      "enum": ["low", "medium", "high"],
+                      "description": "Amount of search context."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Total search content token budget."
+                    },
+                    "max_tokens_per_page": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Per-page content token budget."
                     }
                   },
                   "description": "Perplexity search options.",
@@ -3199,23 +3572,167 @@
                 "answer": {
                   "type": "object",
                   "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Two-letter country hint."
+                    },
+                    "search_mode": {
+                      "type": "string",
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
+                    },
+                    "search_domain_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
+                    },
+                    "search_recency_filter": {
+                      "type": "string",
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
                     "model": {
                       "type": "string",
-                      "description": "Perplexity model to use (for example 'sonar' or 'sonar-pro')."
+                      "description": "Perplexity model override."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens."
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "enum": ["minimal", "low", "medium", "high"],
+                      "description": "Reasoning effort, where supported by the selected model."
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature, where supported by the model."
+                    },
+                    "web_search_options": {
+                      "type": "object",
+                      "properties": {
+                        "search_context_size": {
+                          "type": "string",
+                          "enum": ["low", "medium", "high"],
+                          "description": "Amount of search context."
+                        }
+                      },
+                      "description": "Sonar web retrieval controls; distinct from standalone search options.",
+                      "additionalProperties": false
                     }
                   },
-                  "description": "Perplexity answer options.",
+                  "description": "Perplexity grounded generation options.",
                   "additionalProperties": false
                 },
                 "research": {
                   "type": "object",
                   "properties": {
+                    "country": {
+                      "type": "string",
+                      "description": "Two-letter country hint."
+                    },
+                    "search_mode": {
+                      "type": "string",
+                      "enum": ["web", "academic", "sec"],
+                      "description": "Search source pool."
+                    },
+                    "search_domain_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Domain filters; prefix excluded domains with '-'."
+                    },
+                    "search_language_filter": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Result languages."
+                    },
+                    "search_recency_filter": {
+                      "type": "string",
+                      "enum": ["hour", "day", "week", "month", "year"],
+                      "description": "Result recency."
+                    },
+                    "search_after_date_filter": {
+                      "type": "string",
+                      "description": "Earliest publication date (MM/DD/YYYY)."
+                    },
+                    "search_before_date_filter": {
+                      "type": "string",
+                      "description": "Latest publication date (MM/DD/YYYY)."
+                    },
+                    "last_updated_after_filter": {
+                      "type": "string",
+                      "description": "Earliest update date (MM/DD/YYYY)."
+                    },
+                    "last_updated_before_filter": {
+                      "type": "string",
+                      "description": "Latest update date (MM/DD/YYYY)."
+                    },
                     "model": {
                       "type": "string",
-                      "description": "Perplexity model to use (for example 'sonar-deep-research')."
+                      "description": "Perplexity model override."
+                    },
+                    "max_tokens": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "description": "Maximum generated tokens."
+                    },
+                    "reasoning_effort": {
+                      "type": "string",
+                      "enum": ["minimal", "low", "medium", "high"],
+                      "description": "Reasoning effort, where supported by the selected model."
+                    },
+                    "temperature": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 2,
+                      "description": "Sampling temperature, where supported by the model."
+                    },
+                    "web_search_options": {
+                      "type": "object",
+                      "properties": {
+                        "search_context_size": {
+                          "type": "string",
+                          "enum": ["low", "medium", "high"],
+                          "description": "Amount of search context."
+                        }
+                      },
+                      "description": "Sonar web retrieval controls; distinct from standalone search options.",
+                      "additionalProperties": false
                     }
                   },
-                  "description": "Perplexity research options.",
+                  "description": "Perplexity grounded generation options.",
                   "additionalProperties": false
                 }
               }
@@ -3477,13 +3994,49 @@
                         {
                           "type": "string",
                           "const": "advanced"
+                        },
+                        {
+                          "type": "string",
+                          "const": "fast"
+                        },
+                        {
+                          "type": "string",
+                          "const": "ultra-fast"
                         }
                       ],
                       "description": "Depth of the search. 'advanced' is slower but more thorough."
                     },
                     "timeRange": {
                       "type": "string",
+                      "enum": [
+                        "year",
+                        "month",
+                        "week",
+                        "day",
+                        "y",
+                        "m",
+                        "w",
+                        "d"
+                      ],
                       "description": "Named time range filter."
+                    },
+                    "startDate": {
+                      "type": "string",
+                      "description": "Earliest result date (YYYY-MM-DD)."
+                    },
+                    "endDate": {
+                      "type": "string",
+                      "description": "Latest result date (YYYY-MM-DD)."
+                    },
+                    "chunksPerSource": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 3,
+                      "description": "Chunks per source for advanced search."
+                    },
+                    "autoParameters": {
+                      "type": "boolean",
+                      "description": "Let Tavily choose retrieval parameters; may increase cost."
                     },
                     "country": {
                       "type": "string",
@@ -3494,12 +4047,29 @@
                       "description": "Prefer exact matches."
                     },
                     "includeAnswer": {
-                      "type": "boolean",
+                      "anyOf": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["basic", "advanced"]
+                        }
+                      ],
                       "description": "Include a short AI-generated answer."
                     },
                     "includeRawContent": {
-                      "type": "boolean",
-                      "description": "Include raw page content in results."
+                      "anyOf": [
+                        {
+                          "type": "boolean",
+                          "const": false
+                        },
+                        {
+                          "type": "string",
+                          "enum": ["markdown", "text"]
+                        }
+                      ],
+                      "description": "Return raw page content as markdown or text, or disable it with false."
                     },
                     "includeImages": {
                       "type": "boolean",
@@ -3537,7 +4107,14 @@
                   "properties": {
                     "extractDepth": {
                       "type": "string",
+                      "enum": ["basic", "advanced"],
                       "description": "Depth setting for extraction."
+                    },
+                    "timeout": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 60,
+                      "description": "Extraction timeout in seconds."
                     },
                     "format": {
                       "anyOf": [
@@ -3563,7 +4140,8 @@
                     "chunksPerSource": {
                       "type": "integer",
                       "minimum": 1,
-                      "description": "Maximum chunks per source."
+                      "maximum": 5,
+                      "description": "Maximum chunks per source (1–5). Used with query."
                     },
                     "includeFavicon": {
                       "type": "boolean",
@@ -4043,9 +4621,17 @@
                             },
                             {
                               "type": "object",
-                              "patternProperties": {
-                                "^.*$": {}
-                              }
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           ]
                         },
@@ -4056,9 +4642,17 @@
                             },
                             {
                               "type": "object",
-                              "patternProperties": {
-                                "^.*$": {}
-                              }
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           ]
                         },
@@ -4069,9 +4663,17 @@
                             },
                             {
                               "type": "object",
-                              "patternProperties": {
-                                "^.*$": {}
-                              }
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           ]
                         },
@@ -4082,9 +4684,17 @@
                             },
                             {
                               "type": "object",
-                              "patternProperties": {
-                                "^.*$": {}
-                              }
+                              "properties": {
+                                "enabled": {
+                                  "type": "boolean"
+                                },
+                                "max_calls": {
+                                  "type": "integer",
+                                  "minimum": 0,
+                                  "description": "Lower the tool's call limit; 0 disables it."
+                                }
+                              },
+                              "additionalProperties": false
                             }
                           ]
                         }

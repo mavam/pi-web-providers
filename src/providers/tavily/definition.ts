@@ -51,17 +51,36 @@ export const tavilyProvider = defineProvider({
                 type: "string",
                 const: "basic",
               },
-              {
-                type: "string",
-                const: "advanced",
-              },
+              { type: "string", const: "advanced" },
+              { type: "string", const: "fast" },
+              { type: "string", const: "ultra-fast" },
             ],
             description:
               "Depth of the search. 'advanced' is slower but more thorough.",
           },
           timeRange: {
             type: "string",
+            enum: ["year", "month", "week", "day", "y", "m", "w", "d"],
             description: "Named time range filter.",
+          },
+          startDate: {
+            type: "string",
+            description: "Earliest result date (YYYY-MM-DD).",
+          },
+          endDate: {
+            type: "string",
+            description: "Latest result date (YYYY-MM-DD).",
+          },
+          chunksPerSource: {
+            type: "integer",
+            minimum: 1,
+            maximum: 3,
+            description: "Chunks per source for advanced search.",
+          },
+          autoParameters: {
+            type: "boolean",
+            description:
+              "Let Tavily choose retrieval parameters; may increase cost.",
           },
           country: {
             type: "string",
@@ -72,12 +91,19 @@ export const tavilyProvider = defineProvider({
             description: "Prefer exact matches.",
           },
           includeAnswer: {
-            type: "boolean",
+            anyOf: [
+              { type: "boolean" },
+              { type: "string", enum: ["basic", "advanced"] },
+            ],
             description: "Include a short AI-generated answer.",
           },
           includeRawContent: {
-            type: "boolean",
-            description: "Include raw page content in results.",
+            anyOf: [
+              { type: "boolean", const: false },
+              { type: "string", enum: ["markdown", "text"] },
+            ],
+            description:
+              "Return raw page content as markdown or text, or disable it with false.",
           },
           includeImages: {
             type: "boolean",
@@ -123,7 +149,14 @@ export const tavilyProvider = defineProvider({
         properties: {
           extractDepth: {
             type: "string",
+            enum: ["basic", "advanced"],
             description: "Depth setting for extraction.",
+          },
+          timeout: {
+            type: "number",
+            minimum: 1,
+            maximum: 60,
+            description: "Extraction timeout in seconds.",
           },
           format: {
             anyOf: [
@@ -149,7 +182,8 @@ export const tavilyProvider = defineProvider({
           chunksPerSource: {
             type: "integer",
             minimum: 1,
-            description: "Maximum chunks per source.",
+            maximum: 5,
+            description: "Maximum chunks per source (1–5). Used with query.",
           },
           includeFavicon: {
             type: "boolean",

@@ -109,10 +109,23 @@ const linkupImplementation = {
               }),
             );
 
+            const metadata = Object.fromEntries(
+              Object.entries(response).filter(
+                ([key, value]) =>
+                  [
+                    "rawContent",
+                    "rawHtml",
+                    "contentType",
+                    "images",
+                    "favicon",
+                  ].includes(key) && value !== undefined,
+              ),
+            );
             return response.markdown
               ? {
                   url,
                   content: response.markdown,
+                  ...(Object.keys(metadata).length ? { metadata } : {}),
                 }
               : {
                   url,
@@ -263,6 +276,10 @@ function buildFetchParams(
 
   return {
     url,
+    ...(fetchOptions.mode !== undefined ? { mode: fetchOptions.mode } : {}),
+    ...(fetchOptions.includeRawContent !== undefined
+      ? { includeRawContent: fetchOptions.includeRawContent }
+      : {}),
     ...(fetchOptions.renderJs !== undefined
       ? { renderJs: fetchOptions.renderJs }
       : {}),

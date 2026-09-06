@@ -112,64 +112,75 @@ describe("providerHarness(claudeProvider)", () => {
     );
   });
 
-  it("forwards only allowed runtime options for Claude search", async () => {
-    queryMock.mockImplementation(() =>
-      createQueryResult({
-        sources: [
-          {
-            title: "Claude docs",
-            url: "https://docs.anthropic.com",
-            snippet: "Official docs",
+  it.each(["xhigh", "max"])(
+    "forwards Claude %s effort and budgeted thinking without host controls",
+    async (effort) => {
+      queryMock.mockImplementation(() =>
+        createQueryResult({
+          sources: [
+            {
+              title: "Claude docs",
+              url: "https://docs.anthropic.com",
+              snippet: "Official docs",
+            },
+          ],
+        }),
+      );
+
+      const provider = providerHarness(claudeProvider);
+      await provider.search(
+        "latest Claude docs",
+        1,
+        {},
+        {
+          cwd: process.cwd(),
+        },
+        {
+          ...{
+            model: "claude-sonnet-4-6",
+            effort: "medium",
+            maxTurns: 3,
           },
-        ],
-      }),
-    );
+          ...{
+            model: "claude-opus-4-6",
+            thinking: {
+              type: "enabled",
+              budgetTokens: 2048,
+              display: "summarized",
+            },
+            effort,
+            maxThinkingTokens: 1234,
+            maxTurns: 7,
+            maxBudgetUsd: 3.5,
+            cwd: "/tmp/override",
+            permissionMode: "default",
+            plugins: [{ type: "local", path: "/tmp/plugin" }],
+          },
+        },
+      );
 
-    const provider = providerHarness(claudeProvider);
-    await provider.search(
-      "latest Claude docs",
-      1,
-      {},
-      {
+      const [searchCall] = queryMock.mock.calls;
+      expect(searchCall[0].prompt).toContain("User query: latest Claude docs");
+      expect(searchCall[0].options).toMatchObject({
+        model: "claude-opus-4-6",
+        thinking: {
+          type: "enabled",
+          budgetTokens: 2048,
+          display: "summarized",
+        },
+        effort,
+        maxThinkingTokens: 1234,
+        maxTurns: 7,
+        maxBudgetUsd: 3.5,
+        allowedTools: ["WebSearch"],
         cwd: process.cwd(),
-      },
-      {
-        ...{
-          model: "claude-sonnet-4-6",
-          effort: "medium",
-          maxTurns: 3,
-        },
-        ...{
-          model: "claude-opus-4-6",
-          thinking: { type: "adaptive" },
-          effort: "max",
-          maxThinkingTokens: 1234,
-          maxTurns: 7,
-          maxBudgetUsd: 3.5,
-          cwd: "/tmp/override",
-          permissionMode: "default",
-          plugins: [{ type: "local", path: "/tmp/plugin" }],
-        },
-      },
-    );
-
-    const [searchCall] = queryMock.mock.calls;
-    expect(searchCall[0].prompt).toContain("User query: latest Claude docs");
-    expect(searchCall[0].options).toMatchObject({
-      model: "claude-opus-4-6",
-      thinking: { type: "adaptive" },
-      effort: "max",
-      maxThinkingTokens: 1234,
-      maxTurns: 7,
-      maxBudgetUsd: 3.5,
-      allowedTools: ["WebSearch"],
-      cwd: process.cwd(),
-      permissionMode: "dontAsk",
-      persistSession: false,
-      tools: ["WebSearch"],
-    });
-    expect(searchCall[0].options).not.toHaveProperty("plugins");
-  });
+        permissionMode: "dontAsk",
+        persistSession: false,
+        tools: ["WebSearch"],
+      });
+      expect(searchCall[0].options).not.toHaveProperty("plugins");
+    },
+  );
 
   it("uses real Claude SDK options for answer calls instead of prompt text", async () => {
     queryMock.mockImplementation(() =>

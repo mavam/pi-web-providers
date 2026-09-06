@@ -46,12 +46,13 @@ export const codexProvider = defineProvider({
                 type: "string",
                 const: "high",
               },
-              {
-                type: "string",
-                const: "xhigh",
-              },
+              { type: "string", const: "xhigh" },
+              { type: "string", const: "max" },
+              { type: "string", const: "ultra" },
+              { type: "string", const: "persistent" },
             ],
-            description: "Reasoning depth for Codex.",
+            description:
+              "Reasoning depth for Codex. Available levels depend on the selected model.",
           },
           webSearchMode: {
             anyOf: [

@@ -29,9 +29,45 @@ export const cloudflareProvider = defineProvider({
       options: {
         type: "object",
         properties: {
+          cacheTTL: {
+            type: "number",
+            minimum: 0,
+            description: "Cache lifetime in seconds; 0 disables caching.",
+          },
+          actionTimeout: {
+            type: "number",
+            minimum: 0,
+            description: "Post-navigation action timeout in milliseconds.",
+          },
+          waitForTimeout: {
+            type: "number",
+            minimum: 0,
+            description: "Milliseconds to wait before extraction.",
+          },
+          waitForSelector: {
+            type: "object",
+            required: ["selector"],
+            properties: {
+              selector: { type: "string", minLength: 1 },
+              timeout: { type: "number", minimum: 0 },
+              visible: { type: "boolean", const: true },
+              hidden: { type: "boolean", const: true },
+            },
+            description: "Wait for a page element.",
+          },
+          userAgent: { type: "string", description: "Browser user agent." },
+          setJavaScriptEnabled: {
+            type: "boolean",
+            description: "Enable page JavaScript.",
+          },
           gotoOptions: {
             type: "object",
             properties: {
+              timeout: {
+                type: "number",
+                minimum: 0,
+                description: "Navigation timeout in milliseconds.",
+              },
               waitUntil: {
                 anyOf: [
                   {

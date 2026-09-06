@@ -73,13 +73,24 @@ export const linkupProvider = defineProvider({
       options: {
         type: "object",
         properties: {
+          mode: {
+            type: "string",
+            enum: ["standard", "pro"],
+            description:
+              "Fetch strategy; pro improves retrieval of difficult pages.",
+          },
+          includeRawContent: {
+            type: "boolean",
+            description: "Include raw page content and its content type.",
+          },
           renderJs: {
             type: "boolean",
             description: "Render JavaScript before extracting content.",
           },
           includeRawHtml: {
             type: "boolean",
-            description: "Include raw HTML in the response.",
+            deprecated: true,
+            description: "Legacy raw HTML output. Prefer includeRawContent.",
           },
           extractImages: {
             type: "boolean",

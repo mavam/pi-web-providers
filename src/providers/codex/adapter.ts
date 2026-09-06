@@ -111,7 +111,7 @@ function getCodexSearchCallOptions(
   options: Record<string, unknown> | undefined,
 ): {
   model?: string;
-  modelReasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh";
+  modelReasoningEffort?: import("@openai/codex-sdk").ModelReasoningEffort;
   webSearchMode?: "disabled" | "cached" | "live";
 } {
   if (!options) {
@@ -125,6 +125,9 @@ function getCodexSearchCallOptions(
     "medium",
     "high",
     "xhigh",
+    "max",
+    "ultra",
+    "persistent",
   ]);
   const webSearchMode = readEnum(options.webSearchMode, [
     "disabled",

@@ -95,7 +95,8 @@ terminal, including examples. Piped help stays plain; `NO_COLOR` or `--no-color`
 `--help` shows all command controls. Explicit provider help adds that
 provider’s exact schema-derived flags. For example, OpenAI exposes `--model`,
 `--search-context-size`, and `--user-location-country`. Arrays use repeatable
-flags; booleans provide `--foo` and `--no-foo`.
+flags; booleans provide `--foo` and `--no-foo`. Available options include
+provider-supported reasoning, source filtering, and page-loading controls.
 
 Help includes `--config <path>`, `--cwd <path>`, and
 `--options-json <json|@file>`. Complex objects and colliding flag names remain

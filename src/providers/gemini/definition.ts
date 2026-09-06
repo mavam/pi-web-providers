@@ -31,6 +31,28 @@ export const geminiProvider = defineProvider({
           config: {
             type: "object",
             properties: {
+              thinkingConfig: {
+                type: "object",
+                properties: {
+                  thinkingLevel: {
+                    type: "string",
+                    enum: ["MINIMAL", "LOW", "MEDIUM", "HIGH"],
+                    description: "Model-specific thinking depth.",
+                  },
+                  thinkingBudget: {
+                    type: "integer",
+                    minimum: -1,
+                    description:
+                      "Legacy thinking budget; -1 automatic, 0 disabled. Not supported by newer models that require thinkingLevel.",
+                  },
+                  includeThoughts: {
+                    type: "boolean",
+                    description: "Include available thought summaries.",
+                  },
+                },
+                description:
+                  "Generate-content thinking settings; choose controls supported by the selected model.",
+              },
               labels: {
                 type: "object",
                 patternProperties: {

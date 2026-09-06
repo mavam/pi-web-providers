@@ -1,4 +1,8 @@
-import { query, type SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
+import {
+  query,
+  type SDKResultMessage,
+  type EffortLevel,
+} from "@anthropic-ai/claude-agent-sdk";
 
 import type {
   ProviderContext,
@@ -263,7 +267,13 @@ function getClaudeRuntimeOptions(
   options: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
   const model = readNonEmptyString(options?.model);
-  const effort = readEnum(options?.effort, ["low", "medium", "high", "max"]);
+  const effort: EffortLevel | undefined = readEnum(options?.effort, [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+  ]);
   const maxTurns = readPositiveInteger(options?.maxTurns);
   const maxThinkingTokens = readNonNegativeInteger(options?.maxThinkingTokens);
   const maxBudgetUsd = readPositiveNumber(options?.maxBudgetUsd);

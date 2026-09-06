@@ -114,6 +114,8 @@ function buildSearchMetadata(
   result: TavilySearchResponse["results"][number],
 ): Record<string, unknown> | undefined {
   const metadata: Record<string, unknown> = {
+    ...(response.answer ? { answer: response.answer } : {}),
+    ...(response.images?.length ? { images: response.images } : {}),
     ...(result.publishedDate ? { publishedDate: result.publishedDate } : {}),
     ...(result.favicon ? { favicon: result.favicon } : {}),
     ...(result.rawContent ? { rawContent: result.rawContent } : {}),

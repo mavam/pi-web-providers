@@ -92,7 +92,9 @@ const parallelImplementation = {
   },
 };
 
-type ParallelSearchMode = "advanced" | "basic" | "turbo";
+type ParallelSearchMode = NonNullable<
+  import("parallel-web/resources/top-level").SearchParams["mode"]
+>;
 
 interface ParallelSearchResponse {
   results: Array<{
@@ -182,6 +184,7 @@ function normalizeParallelSearchMode(
   switch (value) {
     case "advanced":
     case "basic":
+    case "fast":
     case "turbo":
       return value;
     default:
