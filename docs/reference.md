@@ -30,11 +30,8 @@ rejected. Empty files are valid and mean no saved settings. The published JSON
 Schema supports validation and editor completion and is available as
 `webfox/config.schema.json`.
 
-Existing `config.json` files are no longer discovered automatically. Rename yours
-to `config.yaml`, or select it with `WEBFOX_CONFIG` or `--config`. JSON syntax is
-also valid YAML, so existing contents remain readable. This file-discovery change
-is separate from the executable rename; JSON output and `--options-json` are
-unchanged.
+JSON syntax is also valid YAML. To use a JSON configuration file, select it
+explicitly with `WEBFOX_CONFIG` or `--config`.
 
 See the [example configuration](../example-config.yaml).
 
@@ -68,7 +65,7 @@ providers:
         command: [op, read, "op://vault/openai/api-key"]
     options:
       answer:
-        model: gpt-4.1
+        model: gpt-6-astra
 ```
 
 Options have one precedence order, from lowest to highest:

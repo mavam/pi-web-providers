@@ -16,11 +16,7 @@ and a Pi extension. All three share provider
 selection, configuration, credentials, and execution. The library exposes
 `createWebfox()`; using the CLI or library does not require Pi.
 
-Install the `webfox` package to get the `web` command. If you used a preview with
-the `webfox` executable, replace it with `web` in scripts and remove any
-`alias web=webfox`. There is no compatibility executable. The package name,
-library API, `WEBFOX_CONFIG`, and Webfox configuration directory are unchanged
-by the command rename. An existing command named `web` can conflict.
+Install the `webfox` package to get the `web` command.
 
 ```sh
 web search "Node.js release notes" --provider brave

@@ -25,19 +25,17 @@ configuration in your terminal, TypeScript applications, and pi.
 
 ## 🚀 Installation
 
-Requires Node.js 22 or newer.
+- **Terminal:** Install the `web` command:
 
-- **Terminal:** Install the `webfox` package globally with your preferred package
-  manager. It provides the `web` executable.
+  ```sh
+  npm install -g webfox
+  ```
 - **TypeScript:** Add `webfox` as an application dependency.
 - **pi:** Install the extension:
 
   ```sh
   pi install npm:webfox
   ```
-
-The package is **`webfox`**, not `web`. The pi extension doesn't require a globally
-installed CLI.
 
 ## ✨ Usage
 
@@ -63,7 +61,7 @@ alone never select a provider.
 ```sh
 web search "Node.js cancellation" "Bun cancellation"
 web contents https://example.com/a https://example.com/b --provider tavily
-web answer "What is MCP?" --provider openai
+web answer "What is MCP?" --provider openai --model gpt-6-astra
 web research "Compare databases for an analytics service" --provider gemini --timeout 20m
 ```
 
@@ -182,7 +180,7 @@ providers:
   openai:
     options:
       answer:
-        model: gpt-4.1
+        model: gpt-6-astra
 ```
 
 Standard API key environment variables work without a credentials section. Run
@@ -193,18 +191,18 @@ See the [example configuration](./example-config.yaml) and
 [configuration reference](./docs/reference.md#configuration) for credential
 commands, timeouts, retries, and provider defaults.
 
-## 🤖 Use with pi
+## 🤖 Use with Pi
 
-The extension exposes `web_search`, `web_contents`, `web_answer`, and
-`web_research`. Each tool needs a saved default provider in the shared Webfox
-configuration. Use the YAML example above, or the CLI if installed:
+The [Pi](https://pi.dev) extension exposes `web_search`, `web_contents`,
+`web_answer`, and `web_research`. Each tool needs a saved default provider in the
+shared Webfox configuration. Use the YAML example above, or the CLI if installed:
 
 ```sh
 web config default search brave
 web config default answer openai
 ```
 
-Make your provider credentials available to pi and restart it after changing
+Make your provider credentials available to Pi and restart it after changing
 configuration. Only tools with a selected provider appear; each tool offers that
 provider's supported options.
 
@@ -242,10 +240,6 @@ configuration, progress, and errors.
   names, or see the [provider guide](./docs/provider.md).
 - **No pi tools:** Select default providers in the shared configuration and
   restart pi. Installing the extension or setting keys alone isn't enough.
-- **Upgrading from the `webfox` executable:** Use `web` in commands and scripts,
-  and remove any `alias web=webfox`. The package, API, and configuration paths
-  still use `webfox`; no configuration migration is needed for this command
-  rename. An existing command named `web` can conflict.
 
 ## 📄 License
 

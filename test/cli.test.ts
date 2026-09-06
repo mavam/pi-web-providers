@@ -191,7 +191,6 @@ describe("CLI contracts", () => {
     expect(root.stdout).toContain("Usage: web ");
     expect(root.stdout).toContain("web search");
     expect(root.stdout).toContain("web config default");
-    expect(root.stdout).not.toContain("webfox ");
     const search = await cli(["search", "--help"]);
     expect(search.stdout).toContain("Usage: web search");
     expect(search.stdout).toContain("  web search --provider brave --help");

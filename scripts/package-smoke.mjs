@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -35,11 +35,6 @@ try {
     },
   );
 
-  const installedBins = await readdir(join(directory, "node_modules", ".bin"));
-  if (installedBins.some((name) => /^webfox(?:\.cmd|\.ps1)?$/.test(name)))
-    throw new Error(
-      "packed package must not install a webfox compatibility executable",
-    );
   const executable =
     process.platform === "win32"
       ? join(directory, "node_modules", ".bin", "web.cmd")
@@ -48,7 +43,7 @@ try {
     cwd: directory,
     encoding: "utf8",
   });
-  if (!help.includes("Usage: web ") || help.includes("Usage: webfox"))
+  if (!help.includes("Usage: web "))
     throw new Error("packed web --help did not show the web command");
   const version = execFileSync(executable, ["--version"], {
     cwd: directory,

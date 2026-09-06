@@ -27,6 +27,9 @@ providers:
     credentials:
       api:
         env: OPENAI_API_KEY
+    options:
+      answer:
+        model: gpt-6-astra
   gemini:
     credentials:
       api:

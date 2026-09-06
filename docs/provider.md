@@ -132,7 +132,7 @@ does not turn the local inference API into a web search service.
 Supports search, grounded answers, and research. Set `OPENAI_API_KEY`.
 
 ```sh
-web answer "What is MCP?" --provider openai
+web answer "What is MCP?" --provider openai --model gpt-6-astra
 web search --provider openai --help
 ```
 
