@@ -85,24 +85,6 @@ jobs:
       - name: Type-check and build
         run: npm run check && npm run build
 
-  release-smoke:
-    name: Release preparation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Test isolated release preparation
-        run: bash scripts/release-smoke.sh
-
   package-smoke:
     name: Installed CLI & Pi extension
     runs-on: ubuntu-latest

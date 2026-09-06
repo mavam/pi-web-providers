@@ -24,8 +24,3 @@ Pushing runs the quality gates automatically. No need to run checks manually.
 - Add changelog entries for user facing changes
 - Before releasing, ensure `main` is in sync with `origin/main`
 - To release, dispatch .github/workflows/release.yaml with a title & intro
-- Webfox uses `webfox-v…` Git tags; never use `tenzir-ship release publish`
-  directly because its `v…` tags belong to the old pi-web-providers series
-- Preserve `archive/` as published history; only `changelog/`
-  participates in Webfox version selection
-- See `docs/releases.md` for the release process and offline smoke test

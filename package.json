@@ -1,6 +1,6 @@
 {
   "name": "webfox",
-  "version": "0.1.0",
+  "version": "3.5.1",
   "description": "Search the web, extract pages, get grounded answers, and run deep research with the web CLI, a TypeScript library, and a pi extension. Bring your own providers and API keys.",
   "type": "module",
   "files": [
@@ -84,7 +84,6 @@
     "format:check": "biome format .",
     "smoke:live": "npm run build && node scripts/live-smoke.mjs",
     "smoke:package": "node scripts/package-smoke.mjs",
-    "smoke:release": "bash scripts/release-smoke.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },

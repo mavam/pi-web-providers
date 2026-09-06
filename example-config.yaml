@@ -1,4 +1,4 @@
-$schema: https://unpkg.com/webfox@0.1.0/dist/config.schema.json
+$schema: https://unpkg.com/webfox@3.5.1/dist/config.schema.json
 defaults:
   search:
     provider: brave

@@ -4,89 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       intro:
-        description: "One or two sentences introducing the release"
+        description: |
+          Intro of the release
+
+          The intro should be 1-2 sentences long, must be written in active
+          voice, and should clearly communicate the theme of the release to the
+          user. Use full sentences and avoid abbreviations.
         required: true
         type: string
       title:
-        description: "User-facing release title (auto-generated if omitted)"
+        description: |
+          User-facing release title (auto-generated if omitted)
         required: false
         type: string
-
-concurrency:
-  group: webfox-release
-  cancel-in-progress: false
 
 jobs:
   release:
     name: Create GitHub release
-    runs-on: ubuntu-latest
+    uses: tenzir/ship/.github/workflows/release.yaml@main
     permissions:
       contents: write
-    outputs:
-      tag: ${{ steps.prepare.outputs.tag }}
-      version: ${{ steps.prepare.outputs.version }}
-    steps:
-      - name: Require main
-        run: test "$GITHUB_REF" = refs/heads/main
-
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Verify main is current
-        run: |
-          git fetch origin main
-          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          cache: npm
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@v7
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Prepare release
-        id: prepare
-        env:
-          RELEASE_INTRO: ${{ inputs.intro }}
-          RELEASE_TITLE: ${{ inputs.title }}
-        run: bash scripts/prepare-release.sh
-
-      - name: Validate release
-        run: |
-          npm run build
-          npm run check
-          npm test
-          npm run format:check
-          uvx tenzir-ship==2.2.0 validate
-
-      - name: Commit and tag release
-        env:
-          RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
-          RELEASE_TAG: ${{ steps.prepare.outputs.tag }}
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add changelog package.json package-lock.json README.md example-config.yaml src/config.schema.json
-          git commit -m "Release Webfox $RELEASE_VERSION"
-          git tag -a "$RELEASE_TAG" -m "Webfox $RELEASE_VERSION"
-          git push --atomic origin HEAD:refs/heads/main "refs/tags/$RELEASE_TAG"
-
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_VERSION: ${{ steps.prepare.outputs.version }}
-          RELEASE_TAG: ${{ steps.prepare.outputs.tag }}
-        run: |
-          gh release create "$RELEASE_TAG" --verify-tag --latest \
-            --title "Webfox $RELEASE_VERSION" \
-            --notes-file "changelog/releases/$RELEASE_VERSION/notes.md"
+    with:
+      intro: ${{ inputs.intro }}
+      title: ${{ inputs.title }}
 
   publish:
     name: Publish package to npm
@@ -95,11 +35,12 @@ jobs:
     permissions:
       id-token: write
       contents: read
+
     steps:
       - name: Check out release tag
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.release.outputs.tag }}
+          ref: refs/tags/${{ needs.release.outputs.version }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6

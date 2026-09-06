@@ -12,8 +12,8 @@ one command: `web`. Choose your providers, bring your API keys, and use the same
 configuration in your terminal, TypeScript applications, and pi.
 
 > [!IMPORTANT]
-> **Coming from pi-web-providers?** Webfox is its successor, starting fresh at
-> **v0.1.0**. Replace the old pi package:
+> **Coming from pi-web-providers?** Webfox continues the project as **v4.0.0**.
+> Replace the old Pi package:
 >
 > ```sh
 > pi remove npm:pi-web-providers
@@ -171,7 +171,7 @@ or, on Windows, `APPDATA`. Override it with `WEBFOX_CONFIG` or `--config <path>`
 For example:
 
 ```yaml
-$schema: https://unpkg.com/webfox@0.1.0/dist/config.schema.json
+$schema: https://unpkg.com/webfox@3.5.1/dist/config.schema.json
 defaults:
   search:
     provider: brave
