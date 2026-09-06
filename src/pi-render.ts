@@ -13,6 +13,7 @@ import {
   type Component,
 } from "@earendil-works/pi-tui";
 import type { Capability } from "./domain.js";
+import { callParameters } from "./pi-params.js";
 
 const inputStates = {
   queued: { glyph: "●", color: "dim" },
@@ -82,16 +83,14 @@ export class WebCall implements Component {
     const { args, theme, capability } = this;
     const title = theme.fg("toolTitle", theme.bold(`web ${capability}`));
     let text = title;
-    if (
-      capability === "search" &&
-      typeof args.maxResults === "number" &&
-      Number.isFinite(args.maxResults)
-    )
-      text += theme.fg("dim", ` · limit ${args.maxResults}`);
+    const parameters = callParameters(capability, args);
+    if (parameters) text += theme.fg("dim", ` · ${parameters}`);
     if (this.expanded)
       return visibleWidth(text) <= width
         ? [text]
-        : new Text(text, 0, 0).render(width);
+        : new Text(text, 0, 0)
+            .render(width)
+            .map((line) => truncateToWidth(line, width));
     const key = keyText("app.tools.expand");
     const hint = theme.fg(
       "dim",

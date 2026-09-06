@@ -57,7 +57,7 @@ describe("vertical web rendering", () => {
     [
       "search",
       { queries: ["Node.js release notes"], maxResults: 5 },
-      "web search · limit 5",
+      "web search · limit=5",
     ],
     ["contents", { urls: ["https://example.com"] }, "web contents"],
     ["answer", { queries: ["What is MCP?"] }, "web answer"],
@@ -71,7 +71,7 @@ describe("vertical web rendering", () => {
       expect(call.render(120)).toEqual([`${expected} (ctrl+o to expand)`]);
       expect(th.bold).toHaveBeenCalledWith(`web ${capability}`);
       if (capability === "search")
-        expect(th.fg).toHaveBeenCalledWith("dim", " · limit 5");
+        expect(th.fg).toHaveBeenCalledWith("dim", " · limit=5");
       call.update(args, th, true);
       expect(call.render(120)).toEqual([expected]);
     },
@@ -93,6 +93,38 @@ describe("vertical web rendering", () => {
       expect(th.fg).toHaveBeenCalledWith("accent", "https://example.com");
     },
   );
+
+  it("shows explicit provider choices in a gray header, with full details on expansion", () => {
+    const call = new WebCall("search");
+    const th = theme();
+    const args = {
+      queries: ["not in header"],
+      maxResults: 2,
+      options: {
+        type: "neural",
+        contents: { text: true },
+        includeDomains: ["example.com", "docs.example.com"],
+      },
+    };
+    const parameters =
+      ' · limit=2 type=neural contents.text=true includeDomains=["example.com","docs.example.com"]';
+    call.update(args, th, false);
+    expect(call.render(200)).toEqual([
+      `web search${parameters} (ctrl+o to expand)`,
+    ]);
+    expect(th.fg).toHaveBeenCalledWith("dim", parameters);
+    expect(call.render(60)).toHaveLength(1);
+    expect(call.render(60)[0]).toContain("ctrl+o to expand");
+    expect(call.render(60)[0]).not.toContain("docs.example.com");
+    call.update(args, th, true);
+    expect(call.render(60).length).toBeGreaterThan(1);
+    expect(call.render(60).join("\n")).toContain("docs.example.com");
+    for (const width of [1, 6, 20, 80])
+      for (const line of call.render(width))
+        expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+    call.update({}, th, false);
+    expect(call.render(200)).toEqual(["web search (ctrl+o to expand)"]);
+  });
 
   it("uses text-style glyphs for all terminal states and preserves duplicates", () => {
     const doc = result(

@@ -373,8 +373,20 @@ objects. See the deterministic [custom-provider example](./examples/custom/READM
 The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
 `web_research`, with labels such as “Web Search.” Tool-call headers display
 lowercase, space-separated names: `web search`, `web contents`, `web answer`,
-and `web research`. Search headers include a gray `· limit 2` annotation when
-an explicit limit is set. All four tools show one status row per input, without
+and `web research`. Headers show explicit call parameters as a gray `key=value`
+sequence, including provider-specific choices from `options`. For example:
+
+```text
+web search · limit=2 type=neural contents.text=true
+web answer · model=<model-id> config.temperature=0
+```
+
+Nested options use dotted names; arrays stay compact and values with spaces are
+quoted. Only supplied arguments appear, not inherited defaults. Credential-bearing
+options are redacted. Long parameter sequences truncate while collapsed and wrap
+when expanded.
+
+All four tools show one status row per input, without
 surrounding quotes, in the theme’s accent color: `●` queued, `▶︎` running,
 `✔︎` done, `✘︎` failed, and `■` cancelled. Rows update in place, preserve input
 order, and remain visible after completion. Long inputs stay on one line until
