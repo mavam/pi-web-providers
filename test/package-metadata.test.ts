@@ -9,6 +9,23 @@ import {
 } from "../src/package-metadata.js";
 
 describe("package metadata", () => {
+  it("keeps Pi runtime packages optional for standalone consumers", async () => {
+    const packageJson = JSON.parse(
+      await readFile(resolve("package.json"), "utf8"),
+    );
+    for (const peer of [
+      "@earendil-works/pi-coding-agent",
+      "@earendil-works/pi-tui",
+    ]) {
+      expect(packageJson.peerDependencies[peer]).toBe("*");
+      expect(packageJson.peerDependenciesMeta[peer]).toEqual({
+        optional: true,
+      });
+      expect(packageJson.dependencies).not.toHaveProperty(peer);
+      expect(packageJson.optionalDependencies ?? {}).not.toHaveProperty(peer);
+      expect(packageJson.bundledDependencies ?? []).not.toContain(peer);
+    }
+  });
   it("keeps runtime and static schema URLs aligned with package.json", async () => {
     const packageJson = JSON.parse(
       await readFile(resolve("package.json"), "utf8"),

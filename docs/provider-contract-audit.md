@@ -67,9 +67,11 @@ credentials, subscription permissions, result quality, or billing.
   a promise that every model supports every level. Proxy/custom model names make
   a universal hardcoded model-to-level table inappropriate.
 - A bounded live smoke pass is still needed before asserting production API
-  compatibility. The earlier packaging failure involving an absent optional
-  `pi-tui` peer and the reported Claude 30-second deadline are separate unresolved
-  checks, not fixed by this parameter audit.
+  compatibility. The reported Claude 30-second deadline remains a separate
+  unresolved check. The earlier missing-`pi-tui` smoke failure was subsequently
+  traced to a plain Node import bypassing Pi's extension loader. The package
+  smoke test now loads and executes the installed extension through Pi with
+  nested host dependencies; standalone consumers still need no Pi packages.
 
 ## Official references
 

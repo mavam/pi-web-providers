@@ -104,6 +104,12 @@ try {
   await writeFile(
     configPath,
     JSON.stringify({
+      defaults: Object.fromEntries(
+        ["search", "contents", "answer", "research"].map((capability) => [
+          capability,
+          { provider: "custom" },
+        ]),
+      ),
       providers: {
         custom: {
           commands: Object.fromEntries(
@@ -156,8 +162,9 @@ try {
     )
       throw new Error(`packed ${capability} failed`);
   }
-  // Optional pi peers must not be required by standalone library/CLI users.
-  // Install the host separately before checking the extension entry point.
+  // Optional Pi peers must not be required by standalone library/CLI users.
+  // Install only the host, then use its real loader. npm may keep pi-tui
+  // nested under the host; native import bypasses Pi's module aliases.
   execFileSync(
     "npm",
     [
@@ -165,6 +172,7 @@ try {
       "--ignore-scripts",
       "--no-audit",
       "--no-fund",
+      "--install-strategy=nested",
       `@earendil-works/pi-coding-agent@${sourcePackageJson.devDependencies["@earendil-works/pi-coding-agent"]}`,
     ],
     { cwd: directory, stdio: "inherit" },
@@ -174,9 +182,40 @@ try {
     [
       "--input-type=module",
       "--eval",
-      'if (typeof (await import("webfox/pi")).default !== "function") throw new Error("missing pi extension")',
+      [
+        'import { DefaultResourceLoader, SettingsManager } from "@earendil-works/pi-coding-agent";',
+        'import { fileURLToPath } from "node:url";',
+        "const loader = new DefaultResourceLoader({",
+        "  cwd: process.cwd(), agentDir: process.env.PI_CODING_AGENT_DIR,",
+        "  settingsManager: SettingsManager.inMemory(),",
+        "  noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,",
+        '  additionalExtensionPaths: [fileURLToPath(import.meta.resolve("webfox/pi"))],',
+        "});",
+        "await loader.reload();",
+        "const { extensions, errors } = loader.getExtensions();",
+        "if (errors.length) throw new Error(JSON.stringify(errors));",
+        'if (extensions.length !== 1) throw new Error("expected one packed extension");',
+        "const names = [...extensions[0].tools.keys()].sort();",
+        'if (JSON.stringify(names) !== JSON.stringify(["web_answer", "web_contents", "web_research", "web_search"])) throw new Error(`missing packed tools: ${names}`);',
+        "for (const name of names) {",
+        '  const params = name === "web_contents" ? { urls: ["https://example.com"] } : name === "web_research" ? { input: "example" } : { queries: ["example"] };',
+        "  const tool = extensions[0].tools.get(name).definition;",
+        '  const result = await tool.execute("package-smoke", params, undefined, undefined, { cwd: process.cwd() });',
+        '  if (result.details?.status !== "ok") throw new Error(`packed ${name} execution failed`);',
+        "}",
+      ].join("\n"),
     ],
-    { cwd: directory, stdio: "inherit" },
+    {
+      cwd: directory,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        WEBFOX_CONFIG: configPath,
+        PI_CODING_AGENT_DIR: join(directory, "agent"),
+        PI_OFFLINE: "1",
+      },
+      timeout: 60_000,
+    },
   );
   console.log("Packed package and custom-provider smoke tests passed.");
 } finally {
