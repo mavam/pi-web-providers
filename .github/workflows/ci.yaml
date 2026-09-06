@@ -3,11 +3,38 @@ name: CI
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      live-provider:
+        description: Optional provider for a live test (blank runs offline CI only)
+        default: ""
+        type: string
+      live-capability:
+        description: Capability to test with the selected live provider
+        default: search
+        type: choice
+        options: [search, contents, answer, research]
+      live-options-json:
+        description: Provider-specific request options as JSON (not credentials)
+        default: "{}"
+        type: string
+      include-research:
+        description: Allow a potentially billable research job
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
+  live-smoke:
+    if: github.event_name == 'workflow_dispatch' && inputs.live-provider != ''
+    uses: ./.github/workflows/live-smoke.yaml
+    with:
+      provider: ${{ inputs.live-provider }}
+      capability: ${{ inputs.live-capability }}
+      options-json: ${{ inputs.live-options-json }}
+      include-research: ${{ inputs.include-research }}
+
   format:
     runs-on: ubuntu-latest
 

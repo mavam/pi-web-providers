@@ -92,12 +92,34 @@ Research requires separate consent and can incur charges. Cancelling the caller
 does not necessarily cancel an already-created remote research job. The script
 also accepts an explicit advanced `--config` path.
 
-`.github/workflows/live-smoke.yaml` runs only on manual dispatch. Store test keys
-as encrypted secrets in the `live-provider-tests` GitHub environment, using the
-standard names shown by `web providers <id>`; Cloudflare also needs
-`CLOUDFLARE_ACCOUNT_ID`. Configure environment approval rules as appropriate.
-Only the selected provider’s secrets are exposed to the test step. Do not put
-credentials in workflow inputs, configuration examples, or committed files.
+Store test keys as encrypted secrets in the **Live provider tests** GitHub
+environment, using the standard names shown by `web providers <id>`; Cloudflare
+also needs `CLOUDFLARE_ACCOUNT_ID`. Configure environment approval rules as
+appropriate. The workflow binds this environment by its exact name; no local
+credential file is uploaded. Only the selected provider’s secrets are exposed
+to the test step. Do not put credentials in workflow inputs, configuration
+examples, or committed files.
+
+Run Brave search on the PR branch through the existing **CI** workflow:
+
+```sh
+gh workflow run ci.yaml --repo mavam/pi-web-providers --ref topic/web-mux \
+  -f live-provider=brave -f live-capability=search
+```
+
+Repeat with `live-capability=answer` to test the Brave answers key. Research
+requires both `live-capability=research` and `include-research=true`.
+
+Regular pull-request CI and manual runs with a blank `live-provider` perform
+only offline checks. Explicit live selections invoke the reusable
+`.github/workflows/live-smoke.yaml` at the same revision as the caller. This
+also works before GitHub registers the new standalone workflow on the default
+branch. Once registered, you can dispatch **Live provider smoke test** directly.
+
+To add another provider, store its named secret in the same environment and
+select that provider and a supported capability. The reusable workflow already
+maps all built-in provider credential names. It never selects providers based
+on which secrets exist. Custom providers require a separate command setup.
 
 An offline check of the same harness uses the deterministic custom example:
 

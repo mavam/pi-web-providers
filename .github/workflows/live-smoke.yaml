@@ -1,6 +1,20 @@
 name: Live provider smoke test
 
 on:
+  workflow_call:
+    inputs:
+      provider:
+        required: true
+        type: string
+      capability:
+        default: search
+        type: string
+      options-json:
+        default: "{}"
+        type: string
+      include-research:
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       provider:
@@ -29,7 +43,7 @@ jobs:
   live-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: live-provider-tests
+    environment: Live provider tests
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
