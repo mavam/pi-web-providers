@@ -1,6 +1,6 @@
 id: webfox
 name: Webfox
-repository: mavam/pi-web-providers
+repository: mavam/webfox
 release:
   version_files:
     - ../package.json

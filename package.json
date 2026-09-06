@@ -46,7 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mavam/pi-web-providers.git"
+    "url": "git+https://github.com/mavam/webfox.git"
   },
   "engines": {
     "node": ">=22.0.0"
