@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from "node:util";
 import { keyText, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   Text,
+  Container,
   truncateToWidth,
   visibleWidth,
   type Component,
@@ -59,9 +60,15 @@ export class WebCall implements Component {
       text +=
         theme.fg("dim", " limit ") +
         theme.fg("warning", String(args.maxResults));
-    if (this.expanded) return new Text(text, 0, 0).render(width);
-    if (visibleWidth(text) <= width) return [text];
-    const hint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
+    if (this.expanded)
+      return visibleWidth(text) <= width
+        ? [text]
+        : new Text(text, 0, 0).render(width);
+    const key = keyText("app.tools.expand");
+    const hint = theme.fg(
+      "dim",
+      key ? ` (${key} to expand)` : " (expand for details)",
+    );
     if (width >= visibleWidth(title) + visibleWidth(hint) + 3)
       return [truncateToWidth(text, width - visibleWidth(hint)) + hint];
     return [truncateToWidth(text, width)];
@@ -69,4 +76,43 @@ export class WebCall implements Component {
 
   // Rendering is stateless so width and theme changes never retain stale styling.
   invalidate(): void {}
+}
+
+export function renderWebResult(
+  result: { content: { type: string; text?: string }[]; details?: unknown },
+  options: { expanded: boolean; isPartial: boolean },
+  theme: Theme,
+  isError: boolean,
+): Component {
+  const text = result.content
+    .filter((part) => part.type === "text")
+    .map((part) => part.text ?? "")
+    .join("\n");
+  if (options.expanded)
+    return new Text(theme.fg(isError ? "error" : "toolOutput", text), 0, 0);
+  const partialFailure =
+    result.details &&
+    typeof result.details === "object" &&
+    "status" in result.details &&
+    result.details.status === "partial";
+  if (!options.isPartial && !isError && !partialFailure) return new Container();
+  const summary = partialFailure
+    ? "One or more inputs failed; expand for details."
+    : (stripVTControlCharacters(text)
+        .split(/\r?\n/)
+        .find((line) => line.trim()) ??
+      (options.isPartial ? "Working…" : "Tool failed; expand for details."));
+  const safe = JSON.stringify(summary).slice(1, -1);
+  return {
+    render: (width) =>
+      width > 0
+        ? [
+            truncateToWidth(
+              theme.fg(isError || partialFailure ? "error" : "muted", safe),
+              width,
+            ),
+          ]
+        : [],
+    invalidate() {},
+  };
 }

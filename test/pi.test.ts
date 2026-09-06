@@ -6,6 +6,11 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { afterEach, expect, it, vi } from "vitest";
 import webExtension from "../src/pi.js";
 import { customConfig } from "./helpers.js";
+
+vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
+  keyText: () => "ctrl+o",
+}));
 const paths: string[] = [];
 afterEach(async () => {
   vi.unstubAllEnvs();
@@ -50,7 +55,9 @@ it("uses application inspection and execution and marks partial tool results", a
   for (const tool of tools) {
     const expected = tool.name.replace("_", " ");
     const component = tool.renderCall({}, theme, {});
-    expect(component.render(80).join("\n").trimEnd()).toBe(expected);
+    expect(component.render(80).join("\n").trimEnd()).toMatch(
+      new RegExp(`^${expected} \\(.+ to expand\\)$`),
+    );
     expect(theme.fg).toHaveBeenCalledWith("toolTitle", expected);
     expect(theme.bold).toHaveBeenCalledWith(expected);
     expect(tool.renderCall({}, theme, { lastComponent: component })).toBe(
@@ -58,7 +65,19 @@ it("uses application inspection and execution and marks partial tool results", a
     );
     for (const line of component.render(6))
       expect(visibleWidth(line)).toBeLessThanOrEqual(6);
-    expect(tool.renderResult).toBeUndefined();
+    expect(
+      tool
+        .renderResult(
+          {
+            content: [{ type: "text", text: "Results" }],
+            details: { status: "ok" },
+          },
+          { expanded: false, isPartial: false },
+          theme,
+          { isError: false },
+        )
+        .render(80),
+    ).toEqual([]);
   }
   const result = await tools[0].execute(
     "id",

@@ -364,7 +364,9 @@ The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
 lowercase, space-separated names: `web search`, `web contents`, `web answer`,
 and `web research`. Headers show quoted queries and briefs or bare URLs in the
 theme’s accent color, with search limits highlighted separately. Long previews
-stay on one line until expanded with Pi’s tool-expansion shortcut.
+stay on one line until expanded with Pi’s tool-expansion shortcut. Successful
+result bodies are hidden while collapsed; expand to read them. Progress stays
+compact, and failures remain visible even when collapsed.
 
 The extension uses the same inspection and execution API, binds only explicitly
 selected capability defaults, and exposes each provider’s option schema. Restart

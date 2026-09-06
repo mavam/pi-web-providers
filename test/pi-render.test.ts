@@ -2,10 +2,15 @@ import { stripVTControlCharacters } from "node:util";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import { WebCall } from "../src/pi-render.js";
+import { WebCall, renderWebResult } from "../src/pi-render.js";
 import type { Capability } from "../src/domain.js";
 
-function setup(capability: Capability, args: unknown, expanded = false) {
+vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@earendil-works/pi-coding-agent")>()),
+  keyText: () => "ctrl+o",
+}));
+
+function setup(capability: Capability, args: unknown, expanded = true) {
   const theme = {
     fg: vi.fn((_color: string, text: string) => text),
     bold: vi.fn((text: string) => text),
@@ -14,6 +19,87 @@ function setup(capability: Capability, args: unknown, expanded = false) {
   call.update(args, theme as unknown as Theme, expanded);
   return { call, theme };
 }
+
+describe("web result rendering", () => {
+  const theme = {
+    fg: (_color: string, text: string) => text,
+  } as unknown as Theme;
+  const result = {
+    content: [{ type: "text", text: "First result\nSecond result" }],
+    details: { status: "ok" },
+  };
+  it("hides successful bodies until expanded without changing the result", () => {
+    expect(
+      renderWebResult(
+        result,
+        { expanded: false, isPartial: false },
+        theme,
+        false,
+      ).render(80),
+    ).toEqual([]);
+    expect(
+      renderWebResult(
+        result,
+        { expanded: true, isPartial: false },
+        theme,
+        false,
+      )
+        .render(80)
+        .map((line) => line.trimEnd()),
+    ).toEqual(["First result", "Second result"]);
+    expect(result.content[0].text).toBe("First result\nSecond result");
+  });
+  it("keeps errors and partial failures visible when collapsed", () => {
+    const error = {
+      content: [
+        { type: "text", text: "Exa needs a credential.\nMore details" },
+      ],
+    };
+    expect(
+      renderWebResult(
+        error,
+        { expanded: false, isPartial: false },
+        theme,
+        true,
+      ).render(80),
+    ).toEqual(["Exa needs a credential."]);
+    const partial = { ...result, details: { status: "partial" } };
+    expect(
+      renderWebResult(
+        partial,
+        { expanded: false, isPartial: false },
+        theme,
+        false,
+      ).render(80)[0],
+    ).toContain("inputs failed");
+  });
+  it("shows bounded progress and preserves full expanded progress", () => {
+    const progress = {
+      content: [
+        { type: "text", text: "Working ".repeat(100) + "\nMore progress" },
+      ],
+    };
+    const component = renderWebResult(
+      progress,
+      { expanded: false, isPartial: true },
+      theme,
+      false,
+    );
+    expect(component.render(40)).toHaveLength(1);
+    expect(visibleWidth(component.render(40)[0])).toBeLessThanOrEqual(40);
+    expect(component.render(0)).toEqual([]);
+    expect(
+      renderWebResult(
+        progress,
+        { expanded: true, isPartial: true },
+        theme,
+        false,
+      )
+        .render(80)
+        .join("\n"),
+    ).toContain("More progress");
+  });
+});
 
 describe("web call rendering", () => {
   it.each([
@@ -72,7 +158,7 @@ describe("web call rendering", () => {
 
   it("clips collapsed previews with a hint and reveals inputs when expanded", () => {
     const args = { queries: ["Long query ".repeat(25), "Second query"] };
-    const { call, theme } = setup("search", args);
+    const { call, theme } = setup("search", args, false);
     const collapsed = call.render(80);
     expect(collapsed).toHaveLength(1);
     expect(stripVTControlCharacters(collapsed[0])).toContain("to expand");
@@ -88,7 +174,11 @@ describe("web call rendering", () => {
   });
 
   it("fits Unicode previews and updates themes without stale styles", () => {
-    const { call } = setup("search", { queries: ["🔎 日本語 ".repeat(40)] });
+    const { call } = setup(
+      "search",
+      { queries: ["🔎 日本語 ".repeat(40)] },
+      false,
+    );
     for (const width of [1, 6, 20, 80]) {
       for (const line of call.render(width))
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
@@ -104,6 +194,8 @@ describe("web call rendering", () => {
     call.invalidate();
     const line = call.render(80)[0];
     expect(line).toContain("\u001b[34m");
-    expect(stripVTControlCharacters(line)).toBe('web search "new"');
+    expect(stripVTControlCharacters(line)).toMatch(
+      /^web search "new" \(.+ to expand\)$/,
+    );
   });
 });
