@@ -4,7 +4,7 @@ export const ollamaProvider = defineProvider({
   id: "ollama",
   label: "Ollama",
   docsUrl: "https://docs.ollama.com/capabilities/web-search",
-  local: true,
+  local: false,
   credentials: [
     {
       name: "api",

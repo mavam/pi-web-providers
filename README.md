@@ -371,6 +371,21 @@ answer and present its sources as ordinary search results. If you previously
 selected Gemini for search, choose a search-capable provider and remove
 `providers.gemini.options.search` from your configuration.
 
+### Ollama web APIs
+
+Ollama provides hosted search and page extraction at `https://ollama.com`, not
+through the local Ollama model server. Set `OLLAMA_API_KEY` from your Ollama
+account; no model download or local daemon is required.
+
+```sh
+webfox search "Node.js streams documentation" --provider ollama --max-results 5
+webfox contents https://example.com --provider ollama
+```
+
+Search supports up to 10 results. The `contents` capability uses Ollama's web
+fetch endpoint. `providers.ollama.baseUrl` can point to a compatible proxy; it
+does not turn the local inference API into a web search service.
+
 ### Gemini research
 
 Gemini research uses `deep-research-preview-04-2026`, Google's standard

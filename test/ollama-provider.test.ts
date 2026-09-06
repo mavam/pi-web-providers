@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ContentsResponse } from "../src/contents.js";
 import { adapter } from "../src/providers/ollama/adapter.js";
 import { ollamaProvider } from "../src/providers/ollama/definition.js";
+import { createWebfox } from "../src/index.js";
 import type { Ollama } from "../src/providers/ollama/types.js";
 import type {
   ProviderContext,
@@ -11,7 +12,6 @@ import type {
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
-  delete process.env.OLLAMA_API_KEY;
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
@@ -38,8 +38,50 @@ async function fetchOllama(
 }
 
 describe("ollamaProvider", () => {
+  it("advertises hosted web capabilities and requires an API key", () => {
+    const client = createWebfox({ config: {}, env: {} });
+    expect(client.getProvider("ollama")).toMatchObject({
+      local: false,
+      capabilities: ["search", "contents"],
+      configured: [],
+    });
+    const configured = createWebfox({
+      config: {},
+      env: { OLLAMA_API_KEY: "test-key" },
+    });
+    expect(configured.getProvider("ollama")?.configured).toEqual([
+      "search",
+      "contents",
+    ]);
+  });
+
+  it("passes cancellation signals to both web endpoints", async () => {
+    const signal = new AbortController().signal;
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ results: [] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ content: "page" })));
+    globalThis.fetch = fetchMock as typeof fetch;
+    const config = { credentials: { api: "test-key" } };
+    const context = { cwd: process.cwd(), signal };
+    await searchOllama("test", 5, config, context);
+    await fetchOllama(["https://example.com"], config, context);
+    for (const [, options] of fetchMock.mock.calls)
+      expect(options.signal).toBe(signal);
+  });
+
+  it("fails before making requests when credentials are missing", async () => {
+    const fetchMock = vi.fn();
+    globalThis.fetch = fetchMock as typeof fetch;
+    await expect(
+      searchOllama("test", 5, {}, { cwd: process.cwd() }),
+    ).rejects.toThrow("missing an API key");
+    await expect(
+      fetchOllama(["https://example.com"], {}, { cwd: process.cwd() }),
+    ).rejects.toThrow("missing an API key");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("returns search results from the Ollama web search API", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -100,7 +142,6 @@ describe("ollamaProvider", () => {
   });
 
   it("clamps web search result counts to Ollama's 1-10 range", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -126,7 +167,6 @@ describe("ollamaProvider", () => {
   });
 
   it("returns contents from the Ollama web fetch API", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -177,7 +217,6 @@ describe("ollamaProvider", () => {
   });
 
   it("builds Ollama endpoints from a configurable base URL", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi
       .fn()
       .mockResolvedValue(
@@ -202,7 +241,6 @@ describe("ollamaProvider", () => {
   });
 
   it("handles failed fetch requests per URL", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ message: "invalid key" }), {
         status: 401,
@@ -236,7 +274,6 @@ describe("ollamaProvider", () => {
   });
 
   it("surfaces Ollama HTTP errors with response details", async () => {
-    process.env.OLLAMA_API_KEY = "test-key";
     globalThis.fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ message: "invalid key" }), {
         status: 401,
