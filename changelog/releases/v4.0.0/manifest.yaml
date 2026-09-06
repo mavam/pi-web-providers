@@ -1,0 +1,9 @@
+created: 2026-09-06
+title: 'Webfox: standalone web access'
+intro: >-
+  Pi Web Providers becomes Webfox, a standalone web-access toolkit with a TypeScript
+  library, the web CLI, and a Pi extension. This release unifies provider configuration
+  and execution, updates provider controls, and adds one-dispatch live testing.
+source:
+  mode: sync-stable-queue
+  previous_stable: v3.5.1

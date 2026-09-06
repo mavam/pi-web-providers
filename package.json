@@ -1,6 +1,6 @@
 {
   "name": "webfox",
-  "version": "3.5.1",
+  "version": "4.0.0",
   "description": "Search the web, extract pages, get grounded answers, and run deep research with the web CLI, a TypeScript library, and a pi extension. Bring your own providers and API keys.",
   "type": "module",
   "files": [
