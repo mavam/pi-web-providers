@@ -279,9 +279,8 @@ Each credential source has exactly one form:
 Standard environment references work without a provider section. `webfox providers
 <id>` lists credential names. Brave uses `BRAVE_SEARCH_API_KEY` for search and
 `BRAVE_ANSWERS_API_KEY` for answers/research. Cloudflare additionally requires
-`CLOUDFLARE_ACCOUNT_ID`. Claude and Codex can use their local SDK authentication.
-Claude also accepts `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN`. A self-hosted
-Firecrawl `baseUrl` can work without an API key.
+`CLOUDFLARE_ACCOUNT_ID`. A self-hosted Firecrawl `baseUrl` can work without an
+API key.
 
 Credential commands run asynchronously as argv arrays, never through a shell.
 They inherit the client’s environment and working directory and obey its request
@@ -339,9 +338,7 @@ remain in the document. Provider registration is deliberately not public.
 | Provider | Search | Contents | Answer | Research |
 | --- | :---: | :---: | :---: | :---: |
 | Brave | ✓ | | ✓ | ✓ |
-| Claude | ✓ | | ✓ | |
 | Cloudflare | | ✓ | | |
-| Codex | ✓ | | | |
 | Custom | ✓ | ✓ | ✓ | ✓ |
 | Exa | ✓ | ✓ | ✓ | ✓ |
 | Firecrawl | ✓ | ✓ | ✓ | |

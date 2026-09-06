@@ -92,9 +92,7 @@ export type {
 
 export interface ProviderConfigMap {
   brave: import("./brave/types.js").Brave;
-  claude: import("./claude/types.js").Claude;
   cloudflare: import("./cloudflare/types.js").Cloudflare;
-  codex: import("./codex/types.js").Codex;
   custom: import("./custom/types.js").Custom;
   exa: import("./exa/types.js").Exa;
   firecrawl: import("./firecrawl/types.js").Firecrawl;

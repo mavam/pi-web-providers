@@ -33,10 +33,6 @@ const fields: Record<string, unknown> = {
   credentials: sourceMap,
   baseUrl: text,
   accountId: source,
-  codexPath: text,
-  pathToClaudeCodeExecutable: text,
-  env: sourceMap,
-  config: { type: "object" },
   commands: object(
     Object.fromEntries(CAPABILITIES.map((capability) => [capability, command])),
   ),

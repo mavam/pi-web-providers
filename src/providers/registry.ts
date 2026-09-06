@@ -1,7 +1,5 @@
 import { braveProvider } from "./brave/definition.js";
-import { claudeProvider } from "./claude/definition.js";
 import { cloudflareProvider } from "./cloudflare/definition.js";
-import { codexProvider } from "./codex/definition.js";
 import { customProvider } from "./custom/definition.js";
 import { exaProvider } from "./exa/definition.js";
 import { firecrawlProvider } from "./firecrawl/definition.js";
@@ -17,9 +15,7 @@ import { valyuProvider } from "./valyu/definition.js";
 
 export const providers = {
   brave: braveProvider,
-  claude: claudeProvider,
   cloudflare: cloudflareProvider,
-  codex: codexProvider,
   custom: customProvider,
   exa: exaProvider,
   firecrawl: firecrawlProvider,

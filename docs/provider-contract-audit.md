@@ -4,12 +4,13 @@ Snapshot: 2026-09-06. This is an engineering record, not a provider usage guide.
 
 ## Scope and evidence
 
-Triaged all 16 registered providers and 40 currently registered capability
-surfaces, including providers that use HTTP or local executables rather than an
-SDK. Inspected definitions, adapter option handling, and installed SDK types;
+The remaining audit scope covers all 14 registered providers and 37 capability
+surfaces after removing the Claude and Codex agent-backed integrations,
+including providers that use HTTP or local executables rather than an SDK.
+Inspected definitions, adapter option handling, and installed SDK types;
 consulted the official references linked below for relevant API behavior.
 
-All 12 installed provider SDKs matched the npm registry's latest release at the
+All 10 remaining provider SDKs matched the npm registry's latest release at the
 time of this check. SDK currency alone did not prevent schema drift.
 
 This is not a claim of complete upstream API coverage or production compatibility.
@@ -21,9 +22,7 @@ permissively than their HTTP APIs, and model-specific support still varies.
 | Provider | Capabilities | SDK | Disposition |
 | --- | --- | --- | --- |
 | Brave | Search, answer, research | HTTP | Reviewed mode routing and field allowlists against existing fixtures and the Answers reference. No changes in this pass; no live validation of every search mode. |
-| Claude | Search, answer | Agent SDK 0.3.263 | Added `xhigh`; replaced the open-ended thinking-mode string with adaptive/enabled/disabled variants, including budget and display controls. Retained the deprecated legacy budget with guidance. |
 | Cloudflare | Contents | 7.1.0 | Existing navigation setting matched the SDK. Added navigation/action timeouts, cache TTL, element waits, JavaScript, and user-agent controls. Credential-bearing browser state and script injection remain unexposed. |
-| Codex | Search | 0.153.4 | Added SDK effort levels `max`, `ultra`, and `persistent`; adapter uses the SDK's reasoning type. Sandbox and approval settings remain host-managed. |
 | Custom | All four | Subprocess protocol | No upstream SDK. Arbitrary provider options remain intentional; managed command configuration is separate. |
 | Exa | All four | 2.19.0 | Previous repair replaced retired research calls and corrected freshness controls. Existing real-SDK local HTTP tests retained. This pass did not attempt exhaustive Exa search-feature parity. |
 | Firecrawl | Search, contents, answer | 4.38.0 | Search location was incorrectly an object; now a string. Scrape location now exposes country/languages rather than unsupported city/region. Removed obsolete search language/country fields; added current source/category enums, highlights, nested scrape tuning, and redaction mode. Page-question answers remain URL-scoped. |
@@ -40,14 +39,13 @@ permissively than their HTTP APIs, and model-specific support still varies.
 ## Regression coverage
 
 - `test/provider-option-contracts.test.ts`: SDK-typed examples validated against
-  actual capability schemas; exhaustive named Claude/Codex reasoning levels;
-  invalid combinations and rejection of host-managed/foreign options across
-  all non-custom capability surfaces.
+  actual capability schemas; invalid combinations and rejection of
+  host-managed/foreign options across all non-custom capability surfaces.
 - `test/provider-sdk-wire.test.ts`: real SDKs against a local HTTP server for
   Firecrawl, Parallel, Tavily, Perplexity, OpenAI, and Linkup. Checks actual
   request paths, serialization, nested settings, and selected result metadata.
-- Existing Exa local-wire tests, Claude/Codex mocked-agent tests, Gemini native
-  capability tests, and remaining provider fixtures continue to run.
+- Existing Exa local-wire tests, Gemini native capability tests, and remaining
+  provider fixtures continue to run.
 - Generated configuration schema rebuilt from the same definitions used for
   dynamic CLI and Pi options.
 
@@ -67,16 +65,13 @@ credentials, subscription permissions, result quality, or billing.
   a promise that every model supports every level. Proxy/custom model names make
   a universal hardcoded model-to-level table inappropriate.
 - A bounded live smoke pass is still needed before asserting production API
-  compatibility. The reported Claude 30-second deadline remains a separate
-  unresolved check. The earlier missing-`pi-tui` smoke failure was subsequently
+  compatibility. The earlier missing-`pi-tui` smoke failure was subsequently
   traced to a plain Node import bypassing Pi's extension loader. The package
   smoke test now loads and executes the installed extension through Pi with
   nested host dependencies; standalone consumers still need no Pi packages.
 
 ## Official references
 
-- [Claude Agent SDK](https://code.claude.com/docs/en/agent-sdk/typescript)
-- [Codex TypeScript SDK](https://github.com/openai/codex/tree/main/sdk/typescript)
 - [Cloudflare markdown API](https://developers.cloudflare.com/api/resources/browser_rendering/subresources/markdown/methods/create/)
 - [Firecrawl search](https://docs.firecrawl.dev/api-reference/endpoint/search)
 - [Firecrawl scrape](https://docs.firecrawl.dev/api-reference/endpoint/scrape)

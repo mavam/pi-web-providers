@@ -24,10 +24,6 @@ export interface ProviderConfiguration {
   credentials?: Record<string, CredentialSource>;
   baseUrl?: string;
   accountId?: CredentialSource;
-  codexPath?: string;
-  pathToClaudeCodeExecutable?: string;
-  env?: Record<string, CredentialSource>;
-  config?: Record<string, unknown>;
   options?: Partial<Record<Capability, Record<string, unknown>>>;
   commands?: Partial<Record<Capability, CustomCommand>>;
 }

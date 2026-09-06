@@ -5,14 +5,13 @@ authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T14:16:56.374317Z
+created: 2026-09-06 14:16:56.374317+00:00
 ---
 
 Provider-specific options now more closely match the services they configure.
-Claude and Codex accept additional reasoning levels, Gemini answers expose
-thinking settings, and OpenAI supports reasoning budgets and cache-only web
-access. Parallel and Perplexity expose more source and retrieval controls;
-Cloudflare and Linkup offer more page-loading options.
+Gemini answers expose thinking settings, and OpenAI supports reasoning budgets
+and cache-only web access. Parallel and Perplexity expose more source and
+retrieval controls; Cloudflare and Linkup offer more page-loading options.
 
 Incorrect Firecrawl location shapes and outdated Tavily option types are fixed.
 Unsupported OpenAI research location settings and invalid Valyu research tool

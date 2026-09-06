@@ -407,7 +407,13 @@ export async function runCli(
     await root.parseAsync(argv, { from: "user" });
     return exitCode;
   } catch (error) {
-    if (error instanceof CommanderError) return error.exitCode === 0 ? 0 : 2;
+    // Parser errors are already printed, but argument errors thrown directly
+    // by command actions still need a diagnostic.
+    if (
+      error instanceof CommanderError &&
+      !(error instanceof InvalidArgumentError)
+    )
+      return error.exitCode === 0 ? 0 : 2;
     const normalized =
       error instanceof WebfoxError
         ? error

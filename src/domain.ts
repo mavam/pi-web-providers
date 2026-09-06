@@ -7,9 +7,7 @@ export const CAPABILITIES = [
 export type Capability = (typeof CAPABILITIES)[number];
 export const PROVIDER_IDS = [
   "brave",
-  "claude",
   "cloudflare",
-  "codex",
   "custom",
   "exa",
   "firecrawl",

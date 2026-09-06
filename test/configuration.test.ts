@@ -26,6 +26,22 @@ async function directory() {
 }
 
 describe("configuration and credential boundaries", () => {
+  it.each(["claude", "codex"])(
+    "rejects removed %s configurations",
+    (provider) => {
+      expect(() =>
+        parseConfig(JSON.stringify({ providers: { [provider]: {} } })),
+      ).toThrow(/Invalid config.yaml:.*\/providers/);
+      for (const capability of ["search", "answer"])
+        expect(() =>
+          parseConfig(
+            JSON.stringify({
+              defaults: { [capability]: { provider } },
+            }),
+          ),
+        ).toThrow(/Invalid config.yaml:.*\/defaults/);
+    },
+  );
   it("loads YAML through both library loaders and the XDG default", async () => {
     const home = await directory();
     const env = { XDG_CONFIG_HOME: home };

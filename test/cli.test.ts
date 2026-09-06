@@ -58,6 +58,24 @@ async function cli(
   return { code, stdout, stderr };
 }
 describe("CLI contracts", () => {
+  it.each(["claude", "codex"])(
+    "rejects removed provider %s instead of falling back",
+    async (provider) => {
+      for (const args of [
+        ["search", "example", "--provider", provider],
+        ["providers", provider],
+        ["config", "default", "search", provider],
+      ]) {
+        const result = await cli(args);
+        expect(result.code).not.toBe(0);
+        expect(result.stdout).toBe("");
+        expect(result.stderr).toContain(`Unknown provider '${provider}'`);
+      }
+      const listed = await cli(["providers"]);
+      expect(listed.code).toBe(0);
+      expect(listed.stdout.toLowerCase()).not.toContain(provider);
+    },
+  );
   it("shows redacted YAML configuration and validates it", async () => {
     const shown = await cli(["config", "show"]);
     expect(shown.code).toBe(0);

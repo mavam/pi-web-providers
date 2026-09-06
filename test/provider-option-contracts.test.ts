@@ -1,9 +1,4 @@
 import { expect, it } from "vitest";
-import type {
-  EffortLevel,
-  Options as ClaudeOptions,
-} from "@anthropic-ai/claude-agent-sdk";
-import type { ModelReasoningEffort, ThreadOptions } from "@openai/codex-sdk";
 import type { GenerateContentConfig } from "@google/genai";
 import { ThinkingLevel } from "@google/genai";
 import type { SearchRequest, ScrapeOptions } from "@mendable/firecrawl-js";
@@ -24,22 +19,6 @@ const samples: Array<{
   capability: Capability;
   options: Record<string, unknown>;
 }> = [
-  {
-    provider: "claude",
-    capability: "search",
-    options: {
-      effort: "xhigh",
-      thinking: { type: "enabled", budgetTokens: 1024, display: "summarized" },
-    } satisfies Pick<ClaudeOptions, "effort" | "thinking">,
-  },
-  {
-    provider: "codex",
-    capability: "search",
-    options: {
-      modelReasoningEffort: "persistent",
-      webSearchMode: "cached",
-    } satisfies Pick<ThreadOptions, "modelReasoningEffort" | "webSearchMode">,
-  },
   {
     provider: "gemini",
     capability: "answer",
@@ -152,36 +131,6 @@ it.each(samples)(
   },
 );
 
-const claudeLevels: Record<EffortLevel, true> = {
-  low: true,
-  medium: true,
-  high: true,
-  xhigh: true,
-  max: true,
-};
-const codexLevels: Record<ModelReasoningEffort, true> = {
-  minimal: true,
-  low: true,
-  medium: true,
-  high: true,
-  xhigh: true,
-  max: true,
-  ultra: true,
-  persistent: true,
-};
-it("exposes all named reasoning levels in the installed Claude and Codex SDKs", () => {
-  for (const effort of Object.keys(claudeLevels)) {
-    for (const capability of ["search", "answer"] as const)
-      expect(() =>
-        validateOptions(providers.claude, capability, { effort }),
-      ).not.toThrow();
-  }
-  for (const modelReasoningEffort of Object.keys(codexLevels))
-    expect(() =>
-      validateOptions(providers.codex, "search", { modelReasoningEffort }),
-    ).not.toThrow();
-});
-
 it("isolates provider schemas and keeps host-managed controls unavailable", () => {
   for (const definition of Object.values(providers)) {
     if (definition.id === "custom") continue;
@@ -202,8 +151,6 @@ it("isolates provider schemas and keeps host-managed controls unavailable", () =
   }
 });
 it.each([
-  ["claude", "answer", { thinking: { type: "invented" } }],
-  ["claude", "answer", { thinking: { type: "disabled", budgetTokens: 1000 } }],
   ["firecrawl", "search", { location: { country: "US" } }],
   ["firecrawl", "contents", { location: { city: "Boston" } }],
   ["tavily", "contents", { extractDepth: "deep" }],

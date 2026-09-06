@@ -23,9 +23,7 @@
     "web-research",
     "provider-routing",
     "brave",
-    "claude",
     "cloudflare",
-    "codex",
     "custom",
     "exa",
     "firecrawl",
@@ -85,10 +83,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.263",
     "@google/genai": "^2.21.0",
     "@mendable/firecrawl-js": "^4.38.0",
-    "@openai/codex-sdk": "^0.153.4",
     "@perplexity-ai/perplexity_ai": "^0.38.5",
     "@tavily/core": "^0.7.9",
     "cloudflare": "^7.1.0",

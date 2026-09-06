@@ -28,7 +28,6 @@ export class CredentialResolver {
   ): Promise<ProviderConfigMap[ProviderId]> {
     const {
       credentials: sources,
-      env: envSources,
       commands,
       options: _options,
       accountId,
@@ -69,7 +68,6 @@ export class CredentialResolver {
         );
       extra[key] = value;
     }
-    const env = await this.resolveMap(envSources, signal, outward);
     const command = commands?.[capability];
     if (definition.fields.includes("commands") && !command)
       throw new WebfoxError(
@@ -91,7 +89,6 @@ export class CredentialResolver {
       ...settings,
       ...extra,
       credentials,
-      env,
       ...(resolvedCommands ? { commands: resolvedCommands } : {}),
     } as ProviderConfigMap[ProviderId];
   }

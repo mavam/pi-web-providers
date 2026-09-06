@@ -1,9 +1,28 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createWebfox, type ProgressEvent } from "../src/index.js";
+import {
+  createWebfox,
+  type ProgressEvent,
+  type ProviderId,
+} from "../src/index.js";
 import { customConfig } from "./helpers.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("application contracts", () => {
+  it.each(["claude", "codex"])(
+    "rejects removed %s request overrides",
+    async (provider) => {
+      const client = createWebfox({ config: customConfig() });
+      await expect(
+        client.search({
+          queries: ["example"],
+          provider: provider as ProviderId,
+        }),
+      ).rejects.toMatchObject({ code: "PROVIDER_UNAVAILABLE" });
+      expect(client.listProviders().map(({ id }) => id)).not.toContain(
+        provider,
+      );
+    },
+  );
   it.each(["search", "answer", "contents"] as const)(
     "reports ordered %s lifecycle updates including duplicate inputs and failures",
     async (capability) => {
