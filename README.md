@@ -31,11 +31,14 @@ configuration in your terminal, TypeScript applications, and pi.
   npm install -g webfox
   ```
 - **TypeScript:** Add `webfox` as an application dependency.
-- **pi:** Install the extension:
+- **Pi:** Install the extension:
 
   ```sh
   pi install npm:webfox
   ```
+
+  Then follow [Use with Pi](#-use-with-pi) to select a web provider and supply its
+  API key.
 
 ## ✨ Usage
 
@@ -193,22 +196,31 @@ commands, timeouts, retries, and provider defaults.
 
 ## 🤖 Use with Pi
 
-The [Pi](https://pi.dev) extension exposes `web_search`, `web_contents`,
-`web_answer`, and `web_research`. Each tool needs a saved default provider in the
-shared Webfox configuration. Use the YAML example above, or the CLI if installed:
+Install the [Pi](https://pi.dev) extension:
 
 ```sh
-web config default search brave
-web config default answer openai
+pi install npm:webfox
 ```
 
-Make your provider credentials available to Pi and restart it after changing
-configuration. Only tools with a selected provider appear; each tool offers that
-provider's supported options.
+Add to `~/.config/webfox/config.yaml`:
 
-Long results are saved to a temporary file, with a shortened preview shown to
-the agent. The extension shares configuration with the CLI, but doesn't need the
-`web` command installed.
+```yaml
+defaults:
+  search:
+    provider: brave
+```
+
+Start Pi with your API key:
+
+```sh
+export BRAVE_SEARCH_API_KEY=…
+pi
+```
+
+Ask Pi: **Search the web for the latest Node.js release notes.**
+
+Add `contents`, `answer`, or `research` defaults for more tools.
+Restart Pi after changing defaults.
 
 ## 📚 Use with TypeScript
 
