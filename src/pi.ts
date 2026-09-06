@@ -7,6 +7,7 @@ import {
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type TObject, type TProperties } from "typebox";
+import { WebCall } from "./pi-render.js";
 import {
   CAPABILITIES,
   createWebfox as createWebClient,
@@ -71,6 +72,14 @@ export default function webExtension(pi: ExtensionAPI): void {
         },
         { additionalProperties: false },
       ),
+      renderCall(args, theme, context) {
+        const call =
+          context.lastComponent instanceof WebCall
+            ? context.lastComponent
+            : new WebCall(capability);
+        call.update(args, theme, context.expanded);
+        return call;
+      },
       async execute(_id, values, signal, onUpdate, ctx) {
         const params = values as {
           queries?: string[];

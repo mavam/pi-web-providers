@@ -2,6 +2,7 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { stringify } from "yaml";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { afterEach, expect, it, vi } from "vitest";
 import webExtension from "../src/pi.js";
 import { customConfig } from "./helpers.js";
@@ -42,6 +43,23 @@ it("uses application inspection and execution and marks partial tool results", a
     "Web Research",
   ]);
   expect(JSON.stringify(tools)).not.toMatch(/fox|mux/i);
+  const theme = {
+    fg: vi.fn((_color, text) => text),
+    bold: vi.fn((text) => text),
+  };
+  for (const tool of tools) {
+    const expected = tool.name.replace("_", " ");
+    const component = tool.renderCall({}, theme, {});
+    expect(component.render(80).join("\n").trimEnd()).toBe(expected);
+    expect(theme.fg).toHaveBeenCalledWith("toolTitle", expected);
+    expect(theme.bold).toHaveBeenCalledWith(expected);
+    expect(tool.renderCall({}, theme, { lastComponent: component })).toBe(
+      component,
+    );
+    for (const line of component.render(6))
+      expect(visibleWidth(line)).toBeLessThanOrEqual(6);
+    expect(tool.renderResult).toBeUndefined();
+  }
   const result = await tools[0].execute(
     "id",
     { queries: ["success", "fail"] },

@@ -360,7 +360,11 @@ objects. See the deterministic [custom-provider example](./examples/custom/READM
 ### pi extension
 
 The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
-`web_research`, with labels such as “Web Search.”
+`web_research`, with labels such as “Web Search.” Tool-call headers display
+lowercase, space-separated names: `web search`, `web contents`, `web answer`,
+and `web research`. Headers show quoted queries and briefs or bare URLs in the
+theme’s accent color, with search limits highlighted separately. Long previews
+stay on one line until expanded with Pi’s tool-expansion shortcut.
 
 The extension uses the same inspection and execution API, binds only explicitly
 selected capability defaults, and exposes each provider’s option schema. Restart
