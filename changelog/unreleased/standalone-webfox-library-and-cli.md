@@ -9,6 +9,9 @@ created: 2026-09-06 15:08:59.411277+00:00
 ---
 
 **pi-web-providers is now Webfox**, starting a new version series at **v0.1.0**.
+Webfox releases use `webfox-v…` Git tags, beginning with `webfox-v0.1.0`.
+The old pi-web-providers tags and published release history are preserved.
+
 It is a standalone web-access toolkit with a TypeScript library, the `web` CLI,
 and a Pi extension. All three share provider
 selection, configuration, credentials, and execution. The library exposes

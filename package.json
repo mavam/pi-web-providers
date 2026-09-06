@@ -84,6 +84,7 @@
     "format:check": "biome format .",
     "smoke:live": "npm run build && node scripts/live-smoke.mjs",
     "smoke:package": "node scripts/package-smoke.mjs",
+    "smoke:release": "bash scripts/release-smoke.sh",
     "test": "vitest run",
     "test:watch": "vitest"
   },
