@@ -93,7 +93,7 @@ does not necessarily cancel an already-created remote research job. The script
 also accepts an explicit advanced `--config` path.
 
 Store test keys as encrypted secrets in the **Live provider tests** GitHub
-environment, using the standard names shown by `webfox providers <id>`; Cloudflare
+environment, using the standard names shown by `web providers <id>`; Cloudflare
 also needs `CLOUDFLARE_ACCOUNT_ID`. Configure environment approval rules as
 appropriate. The workflow binds this environment by its exact name; no local
 credential file is uploaded. Only the selected provider’s secrets are exposed

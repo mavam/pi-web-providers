@@ -137,7 +137,7 @@ describe("application contracts", () => {
       env: { BRAVE_SEARCH_API_KEY: "present" },
     });
     await expect(client.search({ queries: ["hello"] })).rejects.toThrow(
-      "webfox config default search brave",
+      "web config default search brave",
     );
   });
   it("preserves ordered partial results and provider option precedence", async () => {

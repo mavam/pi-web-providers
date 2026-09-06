@@ -22,13 +22,13 @@ export function selectProvider(
   if (!id)
     throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
-      `No ${capability} provider selected.\n\nRun with --provider ${example}, or save a default:\n  webfox config default ${capability} ${example}\n\nSee available providers: webfox providers`,
+      `No ${capability} provider selected.\n\nRun with --provider ${example}, or save a default:\n  web config default ${capability} ${example}\n\nSee available providers: web providers`,
     );
   const definition = Object.hasOwn(providers, id) ? providers[id] : undefined;
   if (!definition?.capabilities[capability])
     throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
-      `Provider '${id}' does not support ${capability}. See available providers: webfox providers`,
+      `Provider '${id}' does not support ${capability}. See available providers: web providers`,
     );
   return definition;
 }

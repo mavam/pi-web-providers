@@ -24,8 +24,8 @@ settings are no longer accepted:
 For example:
 
 ```sh
-webfox search "current release notes" --provider exa --contents-max-age-hours 0
-webfox search --provider firecrawl --help
+web search "current release notes" --provider exa --contents-max-age-hours 0
+web search --provider firecrawl --help
 ```
 
 Exa research works again and returns a synthesized report with source links.

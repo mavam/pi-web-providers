@@ -124,9 +124,9 @@ export async function runCli(
     while (argv[0] === "--no-color") argv = argv.slice(1);
     if (argv[0] === "help" && CAPABILITIES.includes(argv[1] as Capability))
       argv = [argv[1], "--help", ...argv.slice(2)];
-    const root = output(new Command("webfox"))
+    const root = output(new Command("web"))
       .description(
-        "webfox: search, extract pages, answer questions, and research with an explicit provider.",
+        "Webfox: search, extract pages, answer questions, and research with your chosen provider.",
       )
       .version(PACKAGE_VERSION, "--version")
       .helpCommand(false);
@@ -134,10 +134,10 @@ export async function runCli(
       "after",
       [
         `\n${helpColors.bold("Examples:")}`,
-        `  ${helpColors.cyan("webfox search")} ${helpColors.yellow('"Node.js release notes"')} ${helpColors.cyan("--provider")} ${helpColors.yellow("brave")}`,
-        `  ${helpColors.cyan("webfox config default")} ${helpColors.yellow("search brave")}`,
-        `  ${helpColors.cyan("webfox search --help")}`,
-        `  ${helpColors.cyan("webfox search --provider")} ${helpColors.yellow("brave")} ${helpColors.cyan("--help")}`,
+        `  ${helpColors.cyan("web search")} ${helpColors.yellow('"Node.js release notes"')} ${helpColors.cyan("--provider")} ${helpColors.yellow("brave")}`,
+        `  ${helpColors.cyan("web config default")} ${helpColors.yellow("search brave")}`,
+        `  ${helpColors.cyan("web search --help")}`,
+        `  ${helpColors.cyan("web search --provider")} ${helpColors.yellow("brave")} ${helpColors.cyan("--help")}`,
       ].join("\n"),
     );
     for (const capability of CAPABILITIES) {
@@ -356,7 +356,7 @@ export async function runCli(
             io.stdout.write(`${key}: ${env}\n`);
           for (const capability of entry.capabilities)
             io.stdout.write(
-              `\n${capability} defaults: ${JSON.stringify(client.inspectCapability(capability, entry.id).defaults)}\nOptions: webfox ${capability} --provider ${entry.id} --help\n`,
+              `\n${capability} defaults: ${JSON.stringify(client.inspectCapability(capability, entry.id).defaults)}\nOptions: web ${capability} --provider ${entry.id} --help\n`,
             );
         }
       });
@@ -531,15 +531,15 @@ function capabilityHelp(
       research: { input: '"Compare databases"', provider: "gemini" },
     };
   const { input, provider } = examples[capability];
-  const command = colors.cyan(`webfox ${capability}`);
+  const command = colors.cyan(`web ${capability}`);
   const providerFlag = `${colors.cyan("--provider")} ${colors.yellow(provider)}`;
   return [
     "",
     capability === "contents"
-      ? "Use '-' alone for newline-separated URLs on stdin."
+      ? "Omit URLs to read newline-separated URLs from piped or redirected stdin."
       : capability === "research"
-        ? "Provide exactly one brief, or '-' for one complete stdin input."
-        : "Quote each independent input (up to ten). Use '-' alone for one complete stdin input.",
+        ? "Provide exactly one brief, or omit it to read piped or redirected stdin."
+        : "Quote each independent input (up to ten), or omit inputs to read piped or redirected stdin.",
     "Results preserve input order. Progress and errors go to stderr.",
     "",
     colors.bold("Examples:"),
@@ -567,7 +567,7 @@ function positiveInteger(value: string, flag: string): number {
 function parseProvider(value: string): ProviderId {
   if (!PROVIDER_IDS.includes(value as ProviderId))
     throw new InvalidArgumentError(
-      `Unknown provider '${value}'. See webfox providers.`,
+      `Unknown provider '${value}'. See web providers.`,
     );
   return value as ProviderId;
 }
@@ -577,13 +577,16 @@ async function readInputs(
   stdin: NodeJS.ReadableStream,
   signal: AbortSignal,
 ): Promise<string[]> {
-  if (!inputs.length || (capability === "research" && inputs.length !== 1))
+  if (
+    (!inputs.length && (stdin as NodeJS.ReadStream).isTTY) ||
+    (capability === "research" && inputs.length > 1)
+  )
     throw new WebfoxError(
       "INVALID_INPUT",
-      `${capability} requires ${capability === "research" ? "exactly one brief" : "one or more inputs"} or '-'.`,
+      `${capability} requires ${capability === "research" ? "exactly one brief" : "one or more inputs"}. Supply arguments or pipe input to stdin.`,
     );
-  if (!inputs.includes("-")) return inputs;
-  if (inputs.length !== 1)
+  if (inputs.length && !inputs.includes("-")) return inputs;
+  if (inputs.includes("-") && inputs.length !== 1)
     throw new WebfoxError("INVALID_INPUT", "Use '-' by itself for stdin.");
   const text = await new Promise<string>((resolvePromise, reject) => {
     let text = "";
@@ -613,12 +616,21 @@ async function readInputs(
       abort();
       return;
     }
+    if ((stdin as NodeJS.ReadStream).readableEnded) {
+      end();
+      return;
+    }
     stdin.setEncoding?.("utf8");
     stdin.on("data", data);
     stdin.once("end", end);
     stdin.once("error", error);
     signal.addEventListener("abort", abort, { once: true });
   });
+  if (!text)
+    throw new WebfoxError(
+      "INVALID_INPUT",
+      "Stdin must contain non-empty input.",
+    );
   return capability === "contents"
     ? text
         .split(/\r?\n/)

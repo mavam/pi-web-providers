@@ -4,8 +4,8 @@
 example from the repository root using the included `webfox.json`:
 
 ```sh
-webfox search "example query" --config examples/custom/webfox.json
-webfox contents https://example.com --config examples/custom/webfox.json --format json
+web search "example query" --config examples/custom/webfox.json
+web contents https://example.com --config examples/custom/webfox.json --format json
 ```
 
 The configuration defines explicit custom commands and saved defaults. In your

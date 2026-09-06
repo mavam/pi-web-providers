@@ -137,10 +137,10 @@ describe("CLI contracts", () => {
       expect(result.code).toBe(0);
       expect(result.stdout.split("\nExamples:\n")[1]?.trimEnd()).toBe(
         [
-          '  webfox search "Node.js release notes" --provider brave',
-          "  webfox config default search brave",
-          "  webfox search --help",
-          "  webfox search --provider brave --help",
+          '  web search "Node.js release notes" --provider brave',
+          "  web config default search brave",
+          "  web search --help",
+          "  web search --provider brave --help",
         ].join("\n"),
       );
       expect(result.stdout).not.toMatch(/^(Start:|Save:|Run )/m);
@@ -172,34 +172,48 @@ describe("CLI contracts", () => {
           .split("\n");
         expect(examples).toHaveLength(2);
         for (const line of examples ?? [])
-          expect(line).toMatch(new RegExp(`^  webfox ${capability} `));
+          expect(line).toMatch(new RegExp(`^  web ${capability} `));
         expect(examples?.[1]).toBe(
-          `  webfox ${capability} --provider ${provider} --help`,
+          `  web ${capability} --provider ${provider} --help`,
         );
         const styled = await cli(args, "", {}, { stdout: true, stderr: false });
         expect(styled.stdout).toContain("\u001b[1mExamples:\u001b[22m");
         expect(styled.stdout).toContain(
-          `  \u001b[36mwebfox ${capability}\u001b[39m`,
+          `  \u001b[36mweb ${capability}\u001b[39m`,
         );
         expect(stripVTControlCharacters(styled.stdout)).toBe(plain.stdout);
       }
     },
   );
-  it("uses webfox in help, examples, and provider guidance", async () => {
+  it("uses web in help, examples, and provider guidance", async () => {
     const root = await cli(["--help"]);
     expect(root.code).toBe(0);
-    expect(root.stdout).toContain("Usage: webfox");
-    expect(root.stdout).toContain("webfox search");
-    expect(root.stdout).toContain("webfox config default");
+    expect(root.stdout).toContain("Usage: web ");
+    expect(root.stdout).toContain("web search");
+    expect(root.stdout).toContain("web config default");
+    expect(root.stdout).not.toContain("webfox ");
     const search = await cli(["search", "--help"]);
-    expect(search.stdout).toContain("Usage: webfox search");
-    expect(search.stdout).toContain("  webfox search --provider brave --help");
+    expect(search.stdout).toContain("Usage: web search");
+    expect(search.stdout).toContain("  web search --provider brave --help");
     const invalid = await cli(["search", "query", "--provider", "invalid"]);
-    expect(invalid.stderr).toContain("See webfox providers");
+    expect(invalid.stderr).toContain("See web providers");
     const missing = await cli(["search", "query"], "", {
       env: { XDG_CONFIG_HOME: directories[0] },
     });
-    expect(missing.stderr).toContain("webfox config default search");
+    expect(missing.stderr).toContain("web config default search");
+    const unsupported = await cli([
+      "contents",
+      "https://example.com",
+      "--provider",
+      "brave",
+    ]);
+    expect(unsupported.stderr).toContain(
+      "See available providers: web providers",
+    );
+    const provider = await cli(["providers", "openai"]);
+    expect(provider.stdout).toContain(
+      "Options: web search --provider openai --help",
+    );
   });
   it("keeps execution errors on stderr even with quiet text output", async () => {
     const failure = await cli(["search", "fail", "--quiet"]);
@@ -354,6 +368,73 @@ describe("CLI contracts", () => {
     expect((await cli(["search", "-", "other"], "stdin")).code).toBe(2);
     for (const flag of ["--raw", "--output", "--query", "--retries"])
       expect((await cli(["search", "x", flag, "json"])).code).toBe(2);
+  });
+  it.each(["search", "answer", "research", "contents"])(
+    "reads implicit and explicit stdin for %s",
+    async (capability) => {
+      const input =
+        capability === "contents"
+          ? "https://example.com/a\r\n\r\nhttps://example.com/b\n"
+          : "one\ncomplete input\n";
+      const expected =
+        capability === "contents"
+          ? ["https://example.com/a", "https://example.com/b"]
+          : ["one\ncomplete input"];
+      for (const positionals of [[], ["-"]]) {
+        const result = await cli(
+          [capability, ...positionals, "--format", "json"],
+          input,
+        );
+        expect(result.code).toBe(0);
+        expect(
+          JSON.parse(result.stdout).results.map(
+            (entry: { input: string }) => entry.input,
+          ),
+        ).toEqual(expected);
+      }
+    },
+  );
+  it.each(["search", "answer", "research", "contents"])(
+    "rejects empty stdin and missing terminal input for %s",
+    async (capability) => {
+      for (const positionals of [[], ["-"]]) {
+        const result = await cli([capability, ...positionals], " \n\t");
+        expect(result.code).toBe(2);
+        expect(result.stderr).toContain("Stdin must contain non-empty input");
+      }
+      const stdin = Object.assign(new PassThrough(), { isTTY: true });
+      const missing = await cli([capability], "", { stdin });
+      expect(missing.code).toBe(2);
+      expect(missing.stderr).toContain("Supply arguments or pipe input");
+      expect(stdin.readableFlowing).not.toBe(true);
+    },
+  );
+  it.each(["search", "answer", "research", "contents"])(
+    "does not consume stdin with positional input or help for %s",
+    async (capability) => {
+      const stdin = new PassThrough();
+      const input =
+        capability === "contents" ? "https://example.com" : "explicit input";
+      const result = await cli([capability, input, "--format", "json"], "", {
+        stdin,
+      });
+      expect(result.code).toBe(0);
+      expect(JSON.parse(result.stdout).results[0].input).toBe(input);
+      const help = await cli([capability, "--help"], "", { stdin });
+      expect(help.code).toBe(0);
+      expect(help.stdout).toContain("piped or redirected stdin");
+      expect(stdin.readableFlowing).not.toBe(true);
+    },
+  );
+  it("rejects already-ended stdin without waiting for another end event", async () => {
+    const stdin = Readable.from([]);
+    await new Promise<void>((resolve) => {
+      stdin.once("end", resolve);
+      stdin.resume();
+    });
+    const result = await cli(["search"], "", { stdin });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("Stdin must contain non-empty input");
   });
   it("keeps route selection consistent with option values and separators", async () => {
     const result = await cli([
@@ -577,23 +658,26 @@ describe("CLI contracts", () => {
     expect(saved.stdout).toBe("");
     expect(saved.stderr).toBe("✔︎ Saved search default: brave\n");
   });
-  it("cancels pending stdin and unregisters signal listeners", async () => {
-    const signalSource = new EventEmitter();
-    const pending = cli(["search", "-"], "", {
-      stdin: new PassThrough(),
-      signalSource,
-    });
-    const timer = setInterval(() => {
-      if (signalSource.listenerCount("SIGINT")) signalSource.emit("SIGINT");
-    }, 10);
-    try {
-      const result = await pending;
-      expect(result.code).toBe(130);
-      expect(result.stderr).toBe("■ CANCELLED: Operation cancelled.\n");
-    } finally {
-      clearInterval(timer);
-    }
-    expect(signalSource.listenerCount("SIGINT")).toBe(0);
-    expect(signalSource.listenerCount("SIGTERM")).toBe(0);
-  });
+  it.each([["search"], ["search", "-"]])(
+    "cancels pending stdin for %j and unregisters signal listeners",
+    async (...args) => {
+      const signalSource = new EventEmitter();
+      const pending = cli(args, "", {
+        stdin: new PassThrough(),
+        signalSource,
+      });
+      const timer = setInterval(() => {
+        if (signalSource.listenerCount("SIGINT")) signalSource.emit("SIGINT");
+      }, 10);
+      try {
+        const result = await pending;
+        expect(result.code).toBe(130);
+        expect(result.stderr).toBe("■ CANCELLED: Operation cancelled.\n");
+      } finally {
+        clearInterval(timer);
+      }
+      expect(signalSource.listenerCount("SIGINT")).toBe(0);
+      expect(signalSource.listenerCount("SIGTERM")).toBe(0);
+    },
+  );
 });

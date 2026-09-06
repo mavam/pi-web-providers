@@ -8,10 +8,24 @@ prs:
 created: 2026-09-06 15:08:59.411277+00:00
 ---
 
-**pi-web-providers is now Webfox**, a standalone web-access toolkit with a
-TypeScript library, a `webfox` CLI, and a Pi extension. All three share provider
+**pi-web-providers is now Webfox**, starting a new version series at **v0.1.0**.
+It is a standalone web-access toolkit with a TypeScript library, the `web` CLI,
+and a Pi extension. All three share provider
 selection, configuration, credentials, and execution. The library exposes
 `createWebfox()`; using the CLI or library does not require Pi.
+
+Install the `webfox` package to get the `web` command. If you used a preview with
+the `webfox` executable, replace it with `web` in scripts and remove any
+`alias web=webfox`. There is no compatibility executable. The package name,
+library API, `WEBFOX_CONFIG`, and Webfox configuration directory are unchanged
+by the command rename. An existing command named `web` can conflict.
+
+```sh
+web search "Node.js release notes" --provider brave
+```
+
+The README now focuses on setup and everyday use, with provider setup and caveats,
+advanced configuration, scripting contracts, and library details in linked guides.
 
 Replace the old Pi package:
 
@@ -51,7 +65,7 @@ retries, and concurrency under `execution`. Credentials use explicit `env`,
 `value`, or `command` sources; command sources are argv arrays, not shell strings.
 Standard environment credentials need no provider section.
 
-Use `webfox config default search exa` to save a selection and `webfox config
+Use `web config default search exa` to save a selection and `web config
 validate` to check the file without resolving credentials or making requests.
 Updates preserve YAML comments; configuration display redacts secrets. Restart
 Pi after changing defaults to refresh its tools.

@@ -12,7 +12,7 @@ Gemini no longer offers standalone search. Use its Google Search-grounded answer
 capability instead:
 
 ```sh
-webfox answer "your question" --provider gemini
+web answer "your question" --provider gemini
 ```
 
 If Gemini was your search default, select a search-capable provider and remove

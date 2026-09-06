@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -35,22 +35,27 @@ try {
     },
   );
 
+  const installedBins = await readdir(join(directory, "node_modules", ".bin"));
+  if (installedBins.some((name) => /^webfox(?:\.cmd|\.ps1)?$/.test(name)))
+    throw new Error(
+      "packed package must not install a webfox compatibility executable",
+    );
   const executable =
     process.platform === "win32"
-      ? join(directory, "node_modules", ".bin", "webfox.cmd")
-      : join(directory, "node_modules", ".bin", "webfox");
+      ? join(directory, "node_modules", ".bin", "web.cmd")
+      : join(directory, "node_modules", ".bin", "web");
   const help = execFileSync(executable, ["--help"], {
     cwd: directory,
     encoding: "utf8",
   });
-  if (!help.includes("webfox"))
-    throw new Error("packed webfox --help did not run");
+  if (!help.includes("Usage: web ") || help.includes("Usage: webfox"))
+    throw new Error("packed web --help did not show the web command");
   const version = execFileSync(executable, ["--version"], {
     cwd: directory,
     encoding: "utf8",
   }).trim();
   if (version !== sourcePackageJson.version)
-    throw new Error("packed webfox --version does not match package metadata");
+    throw new Error("packed web --version does not match package metadata");
 
   execFileSync(
     process.execPath,
@@ -79,11 +84,10 @@ try {
     throw new Error("packed metadata is incorrect");
   }
   if (
-    JSON.stringify(Object.keys(packageJson.bin)) !==
-      JSON.stringify(["webfox"]) ||
-    packageJson.bin.webfox.replace(/^\.\//, "") !== "dist/cli.js"
+    JSON.stringify(Object.keys(packageJson.bin)) !== JSON.stringify(["web"]) ||
+    packageJson.bin.web.replace(/^\.\//, "") !== "dist/cli.js"
   )
-    throw new Error("packed package must expose only the webfox executable");
+    throw new Error("packed package must expose only the web executable");
   const schema = JSON.parse(
     await readFile(
       join(directory, "node_modules", "webfox", "dist", "config.schema.json"),
@@ -92,6 +96,16 @@ try {
   );
   if (schema.$id !== expectedSchemaUrl)
     throw new Error("packed schema version does not match package metadata");
+  for (const reference of [
+    "reference.md",
+    "cli-experience.md",
+    "provider.md",
+  ]) {
+    await readFile(
+      join(directory, "node_modules", "webfox", "docs", reference),
+      "utf8",
+    );
+  }
   const configPath = join(directory, "webfox.json");
   const sample = join(
     directory,
@@ -145,6 +159,10 @@ try {
       undefined,
       2,
     ],
+    ["search", [], "one complete\nquery", 1],
+    ["contents", [], "https://example.com/a\nhttps://example.com/b\n", 2],
+    ["answer", [], "one complete\nquestion", 1],
+    ["research", [], "one complete\nbrief", 1],
     ["answer", ["-"], "one complete\nquestion", 1],
     ["research", ["-"], "one complete\nbrief", 1],
   ];

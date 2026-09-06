@@ -1,11 +1,14 @@
 {
   "name": "webfox",
-  "version": "4.0.0",
-  "description": "Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, webfox CLI, and pi extension.",
+  "version": "0.1.0",
+  "description": "Search the web, extract pages, get grounded answers, and run deep research with the web CLI, a TypeScript library, and a pi extension. Bring your own providers and API keys.",
   "type": "module",
   "files": [
     "dist",
     "README.md",
+    "docs/cli-experience.md",
+    "docs/provider.md",
+    "docs/reference.md",
     "LICENSE",
     "example-config.yaml",
     "examples"
@@ -55,7 +58,7 @@
     ]
   },
   "bin": {
-    "webfox": "./dist/cli.js"
+    "web": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

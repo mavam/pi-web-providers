@@ -17,10 +17,10 @@ them, and update explicit provider selections in scripts and library calls.
 For example, with Exa credentials configured:
 
 ```sh
-webfox search "your query" --provider exa
-webfox config default search exa
-webfox config default answer exa
+web search "your query" --provider exa
+web config default search exa
+web config default answer exa
 ```
 
 Old provider selections and configuration sections are rejected, not silently
-routed elsewhere. Run `webfox providers` to see supported alternatives.
+routed elsewhere. Run `web providers` to see supported alternatives.
