@@ -9,6 +9,7 @@ vi.mock("cloudflare", () => ({
   },
 }));
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -70,24 +71,36 @@ it("applies the runtime retry policy to polling without restarting jobs", async 
   expect(poll).toHaveBeenCalledTimes(3);
 });
 it("bounds retries and backoff by one overall deadline", async () => {
-  const fetch = vi
-    .fn()
-    .mockImplementation(async () => new Response("busy", { status: 503 }));
+  vi.useFakeTimers();
+  let notifyFirstFetch!: () => void;
+  const firstFetch = new Promise<void>((resolve) => {
+    notifyFirstFetch = resolve;
+  });
+  const fetch = vi.fn().mockImplementation(async () => {
+    notifyFirstFetch();
+    return new Response("busy", { status: 503 });
+  });
   vi.stubGlobal("fetch", fetch);
   const client = createWebfox({
     config: { execution: { retries: 10, retryDelayMs: 60 } },
     env: { BRAVE_SEARCH_API_KEY: "key" },
   });
   const started = Date.now();
-  const result = await client.search({
+  const pending = client.search({
     provider: "brave",
     queries: ["test"],
     timeoutMs: 100,
   });
+  // Wait for lazy adapter loading before advancing the simulated clock.
+  await firstFetch;
+  await vi.advanceTimersByTimeAsync(60);
+  expect(fetch).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(40);
+  const result = await pending;
   expect(result.results[0]).toMatchObject({ error: { code: "TIMEOUT" } });
-  expect(Date.now() - started).toBeLessThan(500);
-  expect(fetch.mock.calls.length).toBeGreaterThan(1);
-  expect(fetch.mock.calls.length).toBeLessThan(4);
+  expect(Date.now() - started).toBe(100);
+  await vi.advanceTimersByTimeAsync(500);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });
 it("never retries research creation and preserves explicit terminal errors", async () => {
   const start = vi
