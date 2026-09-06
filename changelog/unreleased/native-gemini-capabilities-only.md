@@ -1,11 +1,21 @@
 ---
-title: Native Gemini capabilities only
+title: Gemini grounded answers and research only
 type: breaking
 authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T14:12:00.391153Z
+created: 2026-09-06 14:12:00.391153+00:00
 ---
 
-Gemini now offers grounded answers and deep research without advertising standalone search. The former search integration ran a model interaction and discarded its generated answer, exposing only discovered sources. Use `webfox answer "your question" --provider gemini` for Google Search-grounded answers. If Gemini was your search default, select a search-capable provider with `webfox config default search <provider>` and remove `providers.gemini.options.search` from your configuration.
+Gemini no longer offers standalone search. Use its Google Search-grounded answer
+capability instead:
+
+```sh
+webfox answer "your question" --provider gemini
+```
+
+If Gemini was your search default, select a search-capable provider and remove
+`providers.gemini.options.search` from your configuration. Grounded answers now
+use `gemini-3.8-flash` by default; explicit model overrides remain supported.
+Deep research uses the dedicated `deep-research-preview-04-2026` agent.

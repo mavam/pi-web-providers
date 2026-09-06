@@ -1,21 +1,32 @@
 ---
-title: Unified vertical web tool rendering
+title: Compact Pi results with per-input progress
 type: change
 authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T09:59:11.442231Z
+created: 2026-09-06 09:59:11.442231+00:00
 ---
 
-All four Pi web tools now show one unquoted status row per input, rather than mixing horizontal query previews with vertical URL lists:
+All four Pi web tools show one status row per input, in request order. Rows
+update in place and preserve completed work when another input fails or the
+request is cancelled. Successful result bodies stay collapsed; errors remain
+visible. Expansion hints respect configured shortcuts.
+
+Headers show explicit parameter choices rather than inherited defaults:
 
 ```text
-web search · limit 2
-✔︎ example.com example domain
-◌ IANA reserved example domains
+web search limit=2 type=neural contents.text=true
+✔︎ first query
+▶︎ second query
 ```
 
-Rows update in place, stay in input order, and use text-style `✔︎` and `✘︎` glyphs for completion and failure. The entire search-limit annotation is gray. Results stay collapsed until expanded, then use Pi’s native Markdown rendering for headings, links, lists, and syntax-highlighted code blocks.
+Expanded search titles and snippets remain literal text with clickable source
+links. Extracted contents, answers, and research reports render as Markdown.
+Credential-bearing options are redacted and terminal control sequences are
+removed from displayed inputs. Model-facing result content is unchanged.
 
-Library `onProgress` callbacks now expose indexed, credential-redacted lifecycle events for every capability, not just contents. CLI progress logs remain unchanged.
+Invalid tool parameters report their exact paths and suggest an unambiguous
+valid location when possible, rather than dumping the full argument payload or
+silently moving options. Library progress callbacks expose indexed input
+lifecycle events for every capability.

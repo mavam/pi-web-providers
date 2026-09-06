@@ -1,5 +1,5 @@
 ---
-title: Predictable CLI output
+title: Standalone CLI with explicit routing and predictable output
 type: feature
 authors:
   - mavam
@@ -8,22 +8,26 @@ prs:
 created: 2026-08-03 05:34:07.693607+00:00
 ---
 
-The CLI defaults to readable text, including when piped. Use `--format json`
-for a versioned result document. Stdout contains results only; progress and
-errors go to stderr. Terminal error colors respect `NO_COLOR` and `--no-color`.
+Use `webfox` to search, extract pages, answer questions, and run research from
+scripts or a terminal. Provider-aware help exposes only relevant options, and
+provider discovery separates capability support, configuration, and selected
+defaults without running credential commands or claiming connectivity is verified.
 
 ```sh
-webfox search "first query" "second query" --format json
-webfox answer - < question.txt
-webfox contents - < urls.txt
-webfox research "Compare databases" --timeout 20m
+webfox providers
+webfox search --provider exa --help
+webfox search "first query" "second query" --provider exa --format json
+webfox contents - --provider tavily < urls.txt
 ```
 
-Queries and questions are quoted positional inputs. Explicit `-` reads one
-complete text input, or newline-separated URLs for contents; stdin is never
-consumed implicitly.
+Results go to stdout; progress, completion notices, and errors go to stderr.
+Text is the default even when piped; `--format json` returns a versioned result
+document. Explicit `-` reads stdin: one complete query, question, or research
+brief, or newline-separated URLs for contents.
 
-Partial results preserve input order and completed successes. Structured errors
-and exit codes distinguish invalid input, provider failures, timeouts, and
-cancellation. Deadlines include credential commands, retries, and polling;
-research polling retries do not create duplicate jobs.
+Batches preserve input order and completed results on partial failure. Error
+codes distinguish invalid input, provider failures, timeouts, and cancellation;
+deadlines include credential resolution and retries. Research polling reports
+acceptance, elapsed time, and retry delays without submitting duplicate jobs.
+`--quiet` hides progress and success notices but never errors. Colors respect
+terminal detection, `NO_COLOR`, and `--no-color`.

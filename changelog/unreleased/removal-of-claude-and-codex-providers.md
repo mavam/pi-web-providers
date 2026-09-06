@@ -5,19 +5,22 @@ authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T14:47:15.919508Z
+created: 2026-09-06 14:47:15.919508+00:00
 ---
 
-Claude and Codex are no longer available as Webfox providers. Webfox supplies web capabilities; the calling agent owns orchestration rather than launching another coding agent for web access.
+Claude and Codex are no longer Webfox providers. Webfox supplies web capabilities;
+the calling agent owns orchestration rather than launching another coding agent
+for web access.
 
-Remove `providers.claude` and `providers.codex` from your configuration and replace any defaults that select them. For example, after configuring Exa credentials:
+Remove `providers.claude` and `providers.codex`, replace defaults that select
+them, and update explicit provider selections in scripts and library calls.
+For example, with Exa credentials configured:
 
-```yaml
-defaults:
-  search:
-    provider: exa
-  answer:
-    provider: exa
+```sh
+webfox search "your query" --provider exa
+webfox config default search exa
+webfox config default answer exa
 ```
 
-Replace `--provider claude` and `--provider codex` in scripts and library calls with a supported provider. Old provider selections and configuration sections are rejected rather than silently routed elsewhere. Run `webfox providers` to see the remaining providers.
+Old provider selections and configuration sections are rejected, not silently
+routed elsewhere. Run `webfox providers` to see supported alternatives.

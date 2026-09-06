@@ -1,35 +1,61 @@
 ---
-title: Webfox 4.0
+title: 'A new name and standalone architecture: Webfox'
 type: breaking
 authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T09:36:05.00612Z
+created: 2026-09-06 15:08:59.411277+00:00
 ---
 
-Webfox provides one toolkit for searching the web, extracting pages, getting
-grounded answers, and running research. Use it through the `webfox` CLI, a
-TypeScript library, or pi—all sharing the same provider configuration.
+**pi-web-providers is now Webfox**, a standalone web-access toolkit with a
+TypeScript library, a `webfox` CLI, and a Pi extension. All three share provider
+selection, configuration, credentials, and execution. The library exposes
+`createWebfox()`; using the CLI or library does not require Pi.
 
-Use a provider directly with its standard environment credentials, then save a
-capability default when you want to reuse that choice:
+Replace the old Pi package:
 
 ```sh
-webfox search "Node.js release notes" --provider brave
-webfox config default search brave
-webfox search "TypeBox validation"
+pi remove npm:pi-web-providers
+pi install npm:webfox
 ```
 
-Credentials never select providers. YAML configuration keeps provider
-options under `providers.<id>.options.<capability>`; capability defaults contain
-only provider selection and portable settings. Configuration uses `WEBFOX_CONFIG`
-or the platform's `webfox/config.yaml` configuration path.
+The four Pi tool names remain `web_search`, `web_contents`, `web_answer`, and
+`web_research`. Tools are registered only for capabilities with a saved default;
+credentials alone never select a provider. The model sees only the selected
+provider's options.
 
-Install the pi extension with `pi install npm:webfox`. Its tools are
-`web_search`, `web_contents`, `web_answer`, and `web_research`, with generic
-labels such as “Web Search.”
+**Recreate your configuration** at `~/.config/webfox/config.yaml` (respecting
+`XDG_CONFIG_HOME`, or `APPDATA` on Windows), or select a file with `WEBFOX_CONFIG`.
+The old `~/.pi/agent/web-providers.json` file and `/web-providers` settings UI are
+no longer used. The old `tools`, `settings`, and credential-reference syntax are
+not compatible with the new schema; renaming the old file is not a migration.
 
-The library exposes `createWebfox()` with execution and inspection methods,
-`WebfoxConfig` and `WebfoxClient` types, and `setCapabilityDefault()` for saving a
-choice.
+```yaml
+defaults:
+  search:
+    provider: exa
+    maxResults: 5
+providers:
+  exa:
+    credentials:
+      api:
+        env: EXA_API_KEY
+    options:
+      search:
+        type: auto
+```
+
+Put provider options under `providers.<id>.options.<capability>` and timeouts,
+retries, and concurrency under `execution`. Credentials use explicit `env`,
+`value`, or `command` sources; command sources are argv arrays, not shell strings.
+Standard environment credentials need no provider section.
+
+Use `webfox config default search exa` to save a selection and `webfox config
+validate` to check the file without resolving credentials or making requests.
+Updates preserve YAML comments; configuration display redacts secrets. Restart
+Pi after changing defaults to refresh its tools.
+
+Research now runs in the foreground with progress and cancellation. Automatic
+search-result contents prefetch is removed; call `web_contents` explicitly.
+Custom wrappers must follow the new versioned JSON stdin/stdout contract.

@@ -1,6 +1,6 @@
 ---
-title: Correct provider-specific controls
-type: bugfix
+title: Updated provider options and working Exa research
+type: breaking
 authors:
   - mavam
 prs:
@@ -8,24 +8,29 @@ prs:
 created: 2026-09-06 14:16:56.374317+00:00
 ---
 
-Provider-specific options now more closely match the services they configure.
-Gemini answers expose thinking settings, and OpenAI supports reasoning budgets
-and cache-only web access. Parallel and Perplexity expose more source and
-retrieval controls; Cloudflare and Linkup offer more page-loading options.
+Provider options now more closely match the underlying services. Some old
+settings are no longer accepted:
 
-Incorrect Firecrawl location shapes and outdated Tavily option types are fixed.
-Unsupported OpenAI research location settings and invalid Valyu research tool
-settings are rejected locally. Requested Tavily answers/images and Linkup raw
-content are preserved in result metadata instead of being discarded.
+- **Exa:** remove `livecrawl`, `startCrawlDate`, and `endCrawlDate`. Set
+  `options.contents.maxAgeHours` for freshness, using `0` to fetch fresh content.
+- **Firecrawl:** search `location` is a string; scrape location uses `country`
+  and `languages`, not `city` or `region`. Remove obsolete search language and
+  country settings.
+- **Tavily:** use `markdown` or `text` for raw content, rather than `true`.
+- **OpenAI:** remove `userLocation` from research options.
+- **Valyu:** research tool settings accept a boolean or supported
+  `enabled`/`max_calls` controls, not arbitrary objects.
 
-Use provider-specific help to see the current options:
+For example:
 
 ```sh
-webfox search --provider parallel --help
-webfox answer --provider openai --help
+webfox search "current release notes" --provider exa --contents-max-age-hours 0
+webfox search --provider firecrawl --help
 ```
 
-Existing settings may need adjustment: Firecrawl search location is a string,
-while scrape location uses `country` and `languages`. For Tavily raw content,
-use `markdown` or `text`, rather than `true`. Reasoning support still depends on
-the selected model.
+Exa research works again and returns a synthesized report with source links.
+Gemini and OpenAI expose more thinking and generation controls; OpenAI also
+supports cache-only web access. Parallel and Perplexity expose more retrieval
+controls, while Cloudflare and Linkup offer more page-loading options.
+Requested Tavily answers/images and Linkup raw content are retained in results.
+Supported reasoning settings still depend on the selected model.
