@@ -411,20 +411,23 @@ describe("CLI contracts", () => {
     const table = result.stdout.split("\n\n")[0];
     const rows = table.split("\n").map((row) => row.split(/ {2,}/));
     expect(rows[0]).toEqual([
+      "",
       "Provider",
       "search",
       "contents",
       "answer",
       "research",
     ]);
-    expect(rows.find((row) => row[0] === "custom")).toEqual([
+    expect(rows.find((row) => row[1] === "custom")).toEqual([
+      "★",
       "custom",
-      "✔︎ ★",
-      "✔︎ ★",
-      "✔︎ ★",
-      "✔︎ ★",
+      "◉",
+      "◉",
+      "◉",
+      "◉",
     ]);
-    expect(rows.find((row) => row[0] === "brave")).toEqual([
+    expect(rows.find((row) => row[1] === "brave")).toEqual([
+      "☆",
       "brave",
       "✔︎",
       "✘︎",
@@ -439,10 +442,10 @@ describe("CLI contracts", () => {
         ),
       );
     const expectedStarts = columnStarts[0].map((start, i) =>
-      i === 0 ? start : start + Math.floor((rows[0][i].length - 3) / 2),
+      i === 0 ? start : start + Math.floor((rows[0][i + 1].length - 1) / 2),
     );
     for (const starts of columnStarts.slice(1)) {
-      expect(starts).toEqual(expectedStarts);
+      expect(starts).toEqual([0, ...expectedStarts]);
     }
     const filtered = await cli(["providers", "custom"]);
     expect(filtered.stdout.split("\n\n")[0].split("\n")).toHaveLength(2);
@@ -462,7 +465,7 @@ describe("CLI contracts", () => {
     );
     expect(noColor.stdout).toBe(result.stdout);
   });
-  it("uses hollow stars for configured capabilities and no star for unconfigured defaults", async () => {
+  it("separates provider configuration from selected defaults", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "webfox-provider-stars-"));
     directories.push(cwd);
     const config = customConfig();
@@ -480,16 +483,18 @@ describe("CLI contracts", () => {
       .split("\n\n")[0]
       .split("\n")
       .map((row) => row.split(/ {2,}/));
-    expect(rows.find((row) => row[0] === "custom")).toEqual([
+    expect(rows.find((row) => row[1] === "custom")).toEqual([
+      "★",
       "custom",
-      "✔︎ ☆",
-      "✔︎ ★",
-      "✔︎ ★",
-      "✔︎ ★",
-    ]);
-    expect(rows.find((row) => row[0] === "brave")).toEqual([
-      "brave",
       "✔︎",
+      "◉",
+      "◉",
+      "◉",
+    ]);
+    expect(rows.find((row) => row[1] === "brave")).toEqual([
+      "☆",
+      "brave",
+      "◉",
       "✘︎",
       "✔︎",
       "✔︎",
@@ -498,12 +503,11 @@ describe("CLI contracts", () => {
       env: {
         WEBFOX_CONFIG: configPath,
         BRAVE_SEARCH_API_KEY: "test-key",
-        BRAVE_ANSWERS_API_KEY: "test-key",
       },
     });
     expect(
-      configured.stdout.split("\n").find((row) => row.startsWith("brave ")),
-    ).toMatch(/brave +✔︎ ★ +✘︎ +✔︎ ☆ +✔︎ ☆$/);
+      configured.stdout.split("\n").find((row) => row.includes("  brave ")),
+    ).toMatch(/^★ +brave +◉ +✘︎ +✔︎ +✔︎$/);
   });
   it("reports discovery honestly and saves defaults with no stdout banner", async () => {
     const result = await cli(["providers"]);

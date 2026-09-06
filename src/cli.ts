@@ -283,17 +283,16 @@ export async function runCli(
           ? [client.getProvider(parseProvider(id))!]
           : client.listProviders();
         const rows = [
-          ["Provider", ...CAPABILITIES],
+          ["", "Provider", ...CAPABILITIES],
           ...entries.map((entry) => [
+            entry.configured.length > 0 ? "★" : "☆",
             entry.id,
-            ...CAPABILITIES.map(
-              (capability) =>
-                (entry.capabilities.includes(capability) ? "✔︎" : "✘︎") +
-                (entry.configured.includes(capability)
-                  ? entry.selectedDefaults.includes(capability)
-                    ? " ★"
-                    : " ☆"
-                  : ""),
+            ...CAPABILITIES.map((capability) =>
+              entry.selectedDefaults.includes(capability)
+                ? "◉"
+                : entry.capabilities.includes(capability)
+                  ? "✔︎"
+                  : "✘︎",
             ),
           ]),
         ];
@@ -307,10 +306,10 @@ export async function runCli(
             .map((row, rowIndex) =>
               row
                 .map((value, i) => {
-                  // Center a three-column status slot, including room for a star,
-                  // so bare checks and crosses align with starred ones.
                   const left =
-                    rowIndex > 0 && i > 0 ? Math.floor((widths[i] - 3) / 2) : 0;
+                    rowIndex > 0 && i > 1
+                      ? Math.floor((widths[i] - width(value)) / 2)
+                      : 0;
                   const padded =
                     " ".repeat(left) +
                     value +
@@ -321,6 +320,7 @@ export async function runCli(
                   return padded
                     .replace("✔︎", helpColors.green("✔︎"))
                     .replace("✘︎", helpColors.dim("✘︎"))
+                    .replace("◉", helpColors.cyan("◉"))
                     .replace("★", helpColors.yellow("★"))
                     .replace("☆", helpColors.dim("☆"));
                 })
@@ -328,7 +328,7 @@ export async function runCli(
                 .trimEnd(),
             )
             .join("\n") +
-            "\n\n✔︎ Supported  ✘︎ Unsupported  ☆ Configured  ★ Selected default and configured\n",
+            "\n\n☆ Unconfigured  ★ Configured  ✔︎ Supported  ✘︎ Unsupported  ◉ Selected default\n",
         );
         if (id) {
           const entry = entries[0];

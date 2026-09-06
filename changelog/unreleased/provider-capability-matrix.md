@@ -5,7 +5,7 @@ authors:
   - mavam
 prs:
   - 37
-created: 2026-09-06T13:46:52.482205Z
+created: 2026-09-06T14:59:41.582497Z
 ---
 
-`webfox providers` now displays providers as rows and capabilities as columns, using `✔︎` and `✘︎` for support. A hollow star (`☆`) marks configured capabilities; a filled star (`★`) marks capabilities that are both configured and selected as the default. Unconfigured capabilities have no star. A compact legend replaces the configuration disclaimer. Terminal colors respect `NO_COLOR` and `--no-color`.
+`webfox providers` now displays providers as rows and capabilities as centered columns. Leading stars distinguish unconfigured providers (`☆`) from those with at least one configured capability (`★`). Capability cells show support (`✔︎`), lack of support (`✘︎`), or the selected default (`◉`), independently of credentials. A compact legend replaces the configuration disclaimer. Terminal colors respect `NO_COLOR` and `--no-color`.

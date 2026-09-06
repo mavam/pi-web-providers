@@ -177,9 +177,11 @@ webfox providers openai
 ```
 
 The table shows left-aligned providers as rows and centered capability cells:
-`✔︎` means supported and `✘︎` means unsupported. A star beside the support glyph means
-configured (`☆`) or configured and selected as the default (`★`). Unconfigured
-capabilities have no star, even if selected as the default.
+The leading star marks an unconfigured provider (`☆`) or a provider with at least
+one configured capability (`★`). Providers with separate credentials might still
+need configuration for other capabilities. Cells show supported (`✔︎`), unsupported
+(`✘︎`), or selected as the default for that tool (`◉`). Selection is independent of
+configuration, so an unconfigured provider can still show `◉`.
 
 Configured means that local settings or credential sources exist—not that
 credentials, executables, or connectivity have been verified. Inspection and help
