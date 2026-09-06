@@ -29,6 +29,8 @@ jobs:
   live-smoke:
     if: github.event_name == 'workflow_dispatch' && inputs.live-provider != ''
     uses: ./.github/workflows/live-smoke.yaml
+    # Required for the called job to resolve its environment-scoped secrets.
+    secrets: inherit
     with:
       provider: ${{ inputs.live-provider }}
       capability: ${{ inputs.live-capability }}
