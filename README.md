@@ -127,6 +127,15 @@ cancellation. Errors include a stable error code and, for per-input failures,
 the affected input. Use `--quiet` to suppress progress and success notices.
 Status colors follow terminal detection, `NO_COLOR`, and the `--no-color` flag;
 JSON never acquires terminal styling.
+
+For background research jobs, progress confirms submission and acceptance,
+then reports provider status changes or elapsed time roughly every 30 seconds
+while polling. Transient status-check failures show the retry delay and count;
+they do not start a new research job. Opaque job IDs and duplicate completion
+messages are omitted. One success line gives the total elapsed time; the report
+itself goes to stdout. These updates describe provider status, not estimated
+completion percentages or inferred research stages.
+
 In text mode, failed-input diagnostics go only to stderr. JSON retains structured
 errors in the result document as well. Results are not truncated by the CLI or
 library.

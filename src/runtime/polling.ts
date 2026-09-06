@@ -7,6 +7,7 @@ import type {
   ToolOutput,
 } from "../providers/contract.js";
 import { sleep, withSignal } from "./lifecycle.js";
+import { formatDuration } from "./duration.js";
 export { sleep } from "./lifecycle.js";
 
 /** Shared provider polling mechanics. The runtime supplies the overall signal.
@@ -28,16 +29,20 @@ export async function executeAsyncResearch({
   poll: (id: string, context: ProviderContext) => Promise<ResearchPollResult>;
 }): Promise<ToolOutput> {
   context.signal?.throwIfAborted();
-  context.onProgress?.(`Starting research via ${providerLabel}`);
+  const startedAt = Date.now();
+  context.onProgress?.(`Submitting research to ${providerLabel}.`);
   const job = await withSignal(start(context), context.signal);
   if (!job.id)
     throw new WebfoxError(
       "PROVIDER_FAILURE",
       `${providerLabel} returned no research job id.`,
     );
-  context.onProgress?.(`${providerLabel} research started: ${job.id}`);
+  context.onProgress?.(
+    `${providerLabel} accepted the request; waiting for the report.`,
+  );
   let errors = 0;
-  let lastStatus = "";
+  let lastStatus = "in_progress";
+  let lastUpdate = Date.now();
   while (true) {
     context.signal?.throwIfAborted();
     let result: ResearchPollResult;
@@ -52,23 +57,18 @@ export async function executeAsyncResearch({
         ++errors > (context.retryPolicy?.retries ?? 0)
       )
         throw normalized;
+      const delayMs = Math.min(
+        (context.retryPolicy?.delayMs ?? 2000) * 2 ** (errors - 1),
+        30_000,
+      );
       context.onProgress?.(
-        `${providerLabel} research poll retry ${errors}; job ${job.id}.`,
+        `${providerLabel} status check failed; retrying in ${formatDuration(delayMs)} (retry ${errors}/${context.retryPolicy?.retries ?? 0}).`,
       );
-      await sleep(
-        Math.min(
-          (context.retryPolicy?.delayMs ?? 2000) * 2 ** (errors - 1),
-          30_000,
-        ),
-        context.signal,
-      );
+      await sleep(delayMs, context.signal);
       continue;
     }
-    const status = result.statusText ?? result.status;
-    if (status !== lastStatus) {
-      context.onProgress?.(`Research via ${providerLabel}: ${status}`);
-      lastStatus = status;
-    }
+    // Terminal status is represented by the final result, not another
+    // running/progress line immediately before a success or error message.
     if (result.status === "completed")
       return (
         result.output ?? {
@@ -82,6 +82,19 @@ export async function executeAsyncResearch({
         `${providerLabel} research ${result.status}${result.error ? `: ${result.error}` : "."}`,
         { retryable: false },
       );
+    const status = result.statusText ?? result.status;
+    const now = Date.now();
+    if (status !== lastStatus || now - lastUpdate >= 30_000) {
+      const detail =
+        status === "in_progress"
+          ? "is still running"
+          : `status: ${status.replaceAll("_", " ")}`;
+      context.onProgress?.(
+        `${providerLabel} research ${detail} (${formatDuration(now - startedAt)} elapsed).`,
+      );
+      lastStatus = status;
+      lastUpdate = now;
+    }
     await sleep(pollIntervalMs, context.signal);
   }
 }

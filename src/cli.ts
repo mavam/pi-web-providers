@@ -29,6 +29,7 @@ import {
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
 import { createDiagnostics } from "./cli/diagnostics.js";
+import { formatDuration } from "./runtime/duration.js";
 import {
   buildOptionFlags,
   parseTypedValue,
@@ -229,6 +230,7 @@ export async function runCli(
                   if (!event.state) diagnostics.progress(event.message);
                 },
           };
+          const startedAt = Date.now();
           const result =
             capability === "search"
               ? await client!.search({
@@ -243,7 +245,12 @@ export async function runCli(
                   : await client!.research({ ...request, input: inputs[0] });
           for (const entry of result.results) {
             if (!entry.ok) diagnostics.error(entry.error, entry.input);
-            else if (!parsed.quiet) diagnostics.success(entry.input);
+            else if (!parsed.quiet)
+              diagnostics.success(
+                capability === "research"
+                  ? `Research via ${client!.getProvider(result.provider)!.label} completed in ${formatDuration(Date.now() - startedAt)}.`
+                  : entry.input,
+              );
           }
           const rendered =
             parsed.format === "json"

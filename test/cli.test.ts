@@ -221,7 +221,11 @@ describe("CLI contracts", () => {
       const input = capability === "contents" ? "https://one.test" : "query";
       const result = await cli([capability, input, "--format", "json"]);
       expect(result.code).toBe(0);
-      expect(result.stderr).toContain(`✔︎ ${input}\n`);
+      if (capability === "research")
+        expect(result.stderr).toMatch(
+          /✔︎ Research via Custom completed in \d+s\.\n/,
+        );
+      else expect(result.stderr).toContain(`✔︎ ${input}\n`);
       expect(JSON.parse(result.stdout).status).toBe("ok");
       expect(result.stdout).not.toMatch(/[✔✘▶■]/);
     },
