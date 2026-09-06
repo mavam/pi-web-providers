@@ -16,10 +16,10 @@ import type { Capability } from "./domain.js";
 
 const inputStates = {
   queued: { glyph: "●", color: "dim" },
-  running: { glyph: "▶︎", color: "accent" },
+  running: { glyph: "▶︎", color: "warning" },
   done: { glyph: "✔︎", color: "success" },
   failed: { glyph: "✘︎", color: "error" },
-  cancelled: { glyph: "■", color: "warning" },
+  cancelled: { glyph: "■", color: "dim" },
 } as const;
 export interface InputStatus {
   input: string;
@@ -155,15 +155,15 @@ export function renderWebResult(
         .find((line) => line.trim()) ??
       (options.isPartial ? "Working…" : "Tool failed; expand for details."));
   const safe = JSON.stringify(summary).slice(1, -1);
+  const status = inputStates[isError || partialFailure ? "failed" : "running"];
   return {
     render: (width) =>
       width > 0
         ? [
             truncateToWidth(
-              theme.fg(
-                isError || partialFailure ? "error" : "muted",
-                `${isError || partialFailure ? inputStates.failed.glyph : inputStates.running.glyph} ${safe}`,
-              ),
+              theme.fg(status.color, status.glyph) +
+                " " +
+                theme.fg(isError || partialFailure ? "error" : "muted", safe),
               width,
             ),
           ]

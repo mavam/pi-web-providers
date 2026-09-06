@@ -380,7 +380,9 @@ surrounding quotes, in the theme’s accent color: `●` queued, `▶︎` runnin
 order, and remain visible after completion. Long inputs stay on one line until
 expanded with Pi’s tool-expansion shortcut. Result bodies stay collapsed;
 expand to read them with Pi’s native Markdown rendering, including headings,
-links, lists, and syntax-highlighted code blocks.
+links, lists, and syntax-highlighted code blocks. Status glyphs use the theme’s
+warning color (typically amber) for running, green for success, red for failure,
+and dim gray for queued or cancelled inputs. Input text keeps the accent color.
 
 The extension uses the same inspection and execution API, binds only explicitly
 selected capability defaults, and exposes each provider’s option schema. Restart

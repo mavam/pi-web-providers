@@ -102,13 +102,23 @@ describe("vertical web rendering", () => {
         state,
       })),
     );
-    expect(renderWebResult(doc, collapsed, theme(), false).render(80)).toEqual([
+    const th = theme();
+    expect(renderWebResult(doc, collapsed, th, false).render(80)).toEqual([
       "● same",
       "▶︎ same",
       "✔︎ same",
       "✘︎ same",
       "■ same",
     ]);
+    for (const [color, glyph] of [
+      ["dim", "●"],
+      ["warning", "▶︎"],
+      ["success", "✔︎"],
+      ["error", "✘︎"],
+      ["dim", "■"],
+    ])
+      expect(th.fg).toHaveBeenCalledWith(color, glyph);
+    expect(th.fg).toHaveBeenCalledWith("accent", "same");
   });
 
   it("renders native Markdown only after expansion", () => {
@@ -201,14 +211,17 @@ describe("vertical web rendering", () => {
     expect(renderWebResult(error, collapsed, theme(), true).render(80)).toEqual(
       ["✘︎ Exa needs a credential."],
     );
+    const progressTheme = theme();
     expect(
       renderWebResult(
         { content: [{ type: "text", text: "Working…" }] },
         { expanded: false, isPartial: true },
-        theme(),
+        progressTheme,
         false,
       ).render(80),
     ).toEqual(["▶︎ Working…"]);
+    expect(progressTheme.fg).toHaveBeenCalledWith("warning", "▶︎");
+    expect(progressTheme.fg).toHaveBeenCalledWith("muted", "Working…");
     const legacy = { content: [{ type: "text", text: "# Legacy heading" }] };
     expect(
       renderWebResult(legacy, collapsed, theme(), false).render(80),
