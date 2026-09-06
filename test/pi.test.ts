@@ -150,6 +150,38 @@ it("uses application inspection and execution and marks partial tool results", a
   ).toEqual(["✔︎ https://ok.test", "✘︎ https://error.test"]);
 });
 
+it("rejects misplaced provider parameters before execution with a repair hint", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "webfox-validation-"));
+  paths.push(directory);
+  const path = join(directory, "config.yaml");
+  await writeFile(
+    path,
+    stringify({ defaults: { search: { provider: "exa" } } }),
+  );
+  vi.stubEnv("WEBFOX_CONFIG", path);
+  const tools: any[] = [];
+  webExtension({
+    registerTool: (tool: any) => tools.push(tool),
+    on() {},
+  } as any);
+  const tool = tools.find((tool) => tool.name === "web_search");
+  const execute = vi.spyOn(tool, "execute");
+  const args = {
+    queries: ["private query"],
+    options: { highlights: { query: "private value" } },
+  };
+  const attempt = async () => {
+    const prepared = tool.prepareArguments(args);
+    return tool.execute("invalid", prepared, undefined, undefined, {
+      cwd: directory,
+    });
+  };
+  await expect(attempt()).rejects.toThrow(
+    "Invalid parameter: options.highlights. Use options.contents.highlights instead.",
+  );
+  expect(execute).not.toHaveBeenCalled();
+});
+
 it("keeps unconfigured notifications generic", async () => {
   const directory = await mkdtemp(join(tmpdir(), "web-pi-"));
   paths.push(directory);

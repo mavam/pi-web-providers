@@ -374,7 +374,9 @@ Webfox exposes `web_search`, `web_contents`, `web_answer`, and `web_research`
 for capabilities with an explicitly configured default provider. Each tool’s
 parameter schema is built dynamically from that provider: the model sees its
 supported options, including provider-specific model settings, search controls,
-and extraction options, rather than parameters for every backend.
+and extraction options, rather than parameters for every backend. Unsupported
+parameters are rejected with their exact paths and, when unambiguous, a suggested
+valid location.
 
 The extension shares configuration and execution with the CLI and library.
 Restart pi after changing configuration to refresh the tool schemas. It forwards

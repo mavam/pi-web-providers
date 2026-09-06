@@ -6,7 +6,7 @@ import {
   truncateHead,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
-import { Type, type TObject, type TProperties } from "typebox";
+import { Type, type Static, type TObject, type TProperties } from "typebox";
 import { WebCall, renderWebResult, type InputStatus } from "./pi-render.js";
 import {
   CAPABILITIES,
@@ -16,6 +16,7 @@ import {
   type WebfoxClient as WebClient,
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
+import { prepareToolArguments } from "./pi-validation.js";
 
 export default function webExtension(pi: ExtensionAPI): void {
   const clients = new Map<string, WebClient>();
@@ -56,23 +57,30 @@ export default function webExtension(pi: ExtensionAPI): void {
                 ? { maxResults: Type.Optional(Type.Integer({ minimum: 1 })) }
                 : {}),
             };
+    const parameters = Type.Object(
+      {
+        ...fields,
+        ...(inspection.optionSchema
+          ? {
+              options: Type.Optional(
+                inspection.optionSchema as unknown as TObject,
+              ),
+            }
+          : {}),
+      },
+      { additionalProperties: false },
+    );
     pi.registerTool({
       name: `web_${capability}`,
       label: `Web ${capability[0].toUpperCase()}${capability.slice(1)}`,
       description: `${descriptions[capability]} Output is truncated to 2000 lines or 50 KiB; full results are saved to a file when truncated.`,
-      parameters: Type.Object(
-        {
-          ...fields,
-          ...(inspection.optionSchema
-            ? {
-                options: Type.Optional(
-                  inspection.optionSchema as unknown as TObject,
-                ),
-              }
-            : {}),
-        },
-        { additionalProperties: false },
-      ),
+      parameters,
+      prepareArguments(args) {
+        // Pi still validates and coerces the returned arguments before execute.
+        return prepareToolArguments(parameters, args) as Static<
+          typeof parameters
+        >;
+      },
       renderCall(args, theme, context) {
         const call =
           context.lastComponent instanceof WebCall
