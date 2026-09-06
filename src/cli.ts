@@ -283,27 +283,52 @@ export async function runCli(
           ? [client.getProvider(parseProvider(id))!]
           : client.listProviders();
         const rows = [
-          ["Provider", "Supported", "Configured", "Selected default"],
+          ["Provider", ...CAPABILITIES],
           ...entries.map((entry) => [
             entry.id,
-            entry.capabilities.join(", "),
-            entry.configured.join(", ") || "—",
-            entry.selectedDefaults.join(", ") || "—",
+            ...CAPABILITIES.map(
+              (capability) =>
+                (entry.capabilities.includes(capability) ? "✔︎" : "✘︎") +
+                (entry.configured.includes(capability)
+                  ? entry.selectedDefaults.includes(capability)
+                    ? " ★"
+                    : " ☆"
+                  : ""),
+            ),
           ]),
         ];
+        // Text-presentation selectors in the status glyphs occupy no columns.
+        const width = (value: string) => value.replaceAll("\uFE0E", "").length;
         const widths = rows[0].map((_, index) =>
-          Math.max(...rows.map((row) => row[index].length)),
+          Math.max(...rows.map((row) => width(row[index]))),
         );
         io.stdout.write(
           rows
-            .map((row) =>
+            .map((row, rowIndex) =>
               row
-                .map((value, i) => value.padEnd(widths[i]))
+                .map((value, i) => {
+                  // Center a three-column status slot, including room for a star,
+                  // so bare checks and crosses align with starred ones.
+                  const left =
+                    rowIndex > 0 && i > 0 ? Math.floor((widths[i] - 3) / 2) : 0;
+                  const padded =
+                    " ".repeat(left) +
+                    value +
+                    (i === row.length - 1
+                      ? ""
+                      : " ".repeat(widths[i] - left - width(value)));
+                  if (rowIndex === 0) return helpColors.bold(padded);
+                  return padded
+                    .replace("✔︎", helpColors.green("✔︎"))
+                    .replace("✘︎", helpColors.dim("✘︎"))
+                    .replace("★", helpColors.yellow("★"))
+                    .replace("☆", helpColors.dim("☆"));
+                })
                 .join("  ")
                 .trimEnd(),
             )
             .join("\n") +
-            "\n\nConfigured means local settings or credential sources exist. Credentials, executables, and connectivity have not been verified.\n",
+            "\n\n✔︎ Supported  ✘︎ Unsupported  ☆ Configured  ★ Selected default and configured\n",
         );
         if (id) {
           const entry = entries[0];

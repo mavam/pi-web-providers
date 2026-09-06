@@ -387,12 +387,113 @@ describe("CLI contracts", () => {
     );
     expect(JSON.parse(contents.stdout).results).toHaveLength(2);
   });
+  it("renders a capability matrix with aligned glyphs and selected defaults", async () => {
+    const result = await cli(["providers"]);
+    expect(result.code).toBe(0);
+    const table = result.stdout.split("\n\n")[0];
+    const rows = table.split("\n").map((row) => row.split(/ {2,}/));
+    expect(rows[0]).toEqual([
+      "Provider",
+      "search",
+      "contents",
+      "answer",
+      "research",
+    ]);
+    expect(rows.find((row) => row[0] === "custom")).toEqual([
+      "custom",
+      "✔︎ ★",
+      "✔︎ ★",
+      "✔︎ ★",
+      "✔︎ ★",
+    ]);
+    expect(rows.find((row) => row[0] === "brave")).toEqual([
+      "brave",
+      "✔︎",
+      "✘︎",
+      "✔︎",
+      "✔︎",
+    ]);
+    const columnStarts = table
+      .split("\n")
+      .map((row) =>
+        [...row.replaceAll("\uFE0E", "").matchAll(/\S.*?(?= {2,}|$)/g)].map(
+          (match) => match.index,
+        ),
+      );
+    const expectedStarts = columnStarts[0].map((start, i) =>
+      i === 0 ? start : start + Math.floor((rows[0][i].length - 3) / 2),
+    );
+    for (const starts of columnStarts.slice(1)) {
+      expect(starts).toEqual(expectedStarts);
+    }
+    const filtered = await cli(["providers", "custom"]);
+    expect(filtered.stdout.split("\n\n")[0].split("\n")).toHaveLength(2);
+    const styled = await cli(
+      ["providers"],
+      "",
+      {},
+      { stdout: true, stderr: false },
+    );
+    expect(styled.stdout).toContain("\u001b[");
+    expect(stripVTControlCharacters(styled.stdout)).toBe(result.stdout);
+    const noColor = await cli(
+      ["--no-color", "providers"],
+      "",
+      {},
+      { stdout: true, stderr: true },
+    );
+    expect(noColor.stdout).toBe(result.stdout);
+  });
+  it("uses hollow stars for configured capabilities and no star for unconfigured defaults", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "webfox-provider-stars-"));
+    directories.push(cwd);
+    const config = customConfig();
+    config.defaults!.search = { provider: "brave" };
+    const configPath = join(cwd, "config.yaml");
+    await writeFile(
+      configPath,
+      stringify(config, { aliasDuplicateObjects: false }),
+    );
+    const result = await cli(["providers"], "", {
+      env: { WEBFOX_CONFIG: configPath },
+    });
+    expect(result.code).toBe(0);
+    const rows = result.stdout
+      .split("\n\n")[0]
+      .split("\n")
+      .map((row) => row.split(/ {2,}/));
+    expect(rows.find((row) => row[0] === "custom")).toEqual([
+      "custom",
+      "✔︎ ☆",
+      "✔︎ ★",
+      "✔︎ ★",
+      "✔︎ ★",
+    ]);
+    expect(rows.find((row) => row[0] === "brave")).toEqual([
+      "brave",
+      "✔︎",
+      "✘︎",
+      "✔︎",
+      "✔︎",
+    ]);
+    const configured = await cli(["providers"], "", {
+      env: {
+        WEBFOX_CONFIG: configPath,
+        BRAVE_SEARCH_API_KEY: "test-key",
+        BRAVE_ANSWERS_API_KEY: "test-key",
+      },
+    });
+    expect(
+      configured.stdout.split("\n").find((row) => row.startsWith("brave ")),
+    ).toMatch(/brave +✔︎ ★ +✘︎ +✔︎ ☆ +✔︎ ☆$/);
+  });
   it("reports discovery honestly and saves defaults with no stdout banner", async () => {
     const result = await cli(["providers"]);
     expect(result.stdout).toContain("Supported");
     expect(result.stdout).toContain("Configured");
     expect(result.stdout).toContain("Selected default");
-    expect(result.stdout).toContain("have not been verified");
+    expect(result.stdout).not.toContain("Configured means");
+    expect(result.stdout).not.toContain("have not been verified");
     const saved = await cli(["config", "default", "search", "brave"]);
     expect(saved.code).toBe(0);
     expect(saved.stdout).toBe("");
