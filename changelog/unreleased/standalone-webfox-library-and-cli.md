@@ -26,6 +26,8 @@ web search "Node.js release notes" --provider brave
 
 The README now focuses on setup and everyday use, with provider setup and caveats,
 advanced configuration, scripting contracts, and library details in linked guides.
+Webfox also has a new fox logo, with light and dark versions that switch
+automatically in the README.
 
 Replace the old Pi package:
 

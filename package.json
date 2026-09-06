@@ -6,6 +6,8 @@
   "files": [
     "dist",
     "README.md",
+    "assets/webfox-lockup.png",
+    "assets/webfox-lockup-dark.png",
     "docs/cli-experience.md",
     "docs/provider.md",
     "docs/reference.md",

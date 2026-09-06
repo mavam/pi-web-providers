@@ -1,4 +1,9 @@
-# webfox
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/webfox-lockup-dark.png">
+    <img src="./assets/webfox-lockup.png" alt="webfox" width="520">
+  </picture>
+</h1>
 
 **The web, from your terminal.**
 
