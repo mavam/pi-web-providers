@@ -2,8 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const {
   exaCtorMock,
-  exaResearchCreateMock,
-  exaResearchGetMock,
+  exaSearchMock,
   openaiCtorMock,
   openaiResponsesCreateMock,
   openaiResponsesRetrieveMock,
@@ -12,8 +11,7 @@ const {
   valyuDeepResearchStatusMock,
 } = vi.hoisted(() => ({
   exaCtorMock: vi.fn(),
-  exaResearchCreateMock: vi.fn(),
-  exaResearchGetMock: vi.fn(),
+  exaSearchMock: vi.fn(),
   openaiCtorMock: vi.fn(),
   openaiResponsesCreateMock: vi.fn(),
   openaiResponsesRetrieveMock: vi.fn(),
@@ -25,10 +23,7 @@ const {
 vi.mock("exa-js", () => ({
   Exa: exaCtorMock.mockImplementation(function MockExa() {
     return {
-      research: {
-        create: exaResearchCreateMock,
-        get: exaResearchGetMock,
-      },
+      search: exaSearchMock,
     };
   }),
 }));
@@ -65,8 +60,7 @@ import { createWebfox, type WebfoxConfig } from "../src/index.js";
 afterEach(() => {
   vi.useRealTimers();
   exaCtorMock.mockClear();
-  exaResearchCreateMock.mockReset();
-  exaResearchGetMock.mockReset();
+  exaSearchMock.mockReset();
   openaiCtorMock.mockClear();
   openaiResponsesCreateMock.mockReset();
   openaiResponsesRetrieveMock.mockReset();
@@ -269,20 +263,11 @@ describe("OpenAI provider", () => {
 });
 
 describe("async research providers", () => {
-  it("uses Exa polling so transient errors do not create duplicate jobs", async () => {
-    vi.useFakeTimers();
-
-    exaResearchCreateMock.mockResolvedValue({ researchId: "exa-job-1" });
-    exaResearchGetMock
-      .mockRejectedValueOnce(
-        Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
-      )
-      .mockResolvedValueOnce({
-        status: "completed",
-        output: {
-          content: "Exa research result",
-        },
-      });
+  it("uses Exa deep-reasoning search to synthesize research", async () => {
+    exaSearchMock.mockResolvedValue({
+      output: { content: "Exa research result" },
+      results: [],
+    });
 
     const promise = createWebfox({
       config: {
@@ -299,16 +284,17 @@ describe("async research providers", () => {
       input: "Investigate Exa research polling",
     });
 
-    await vi.dynamicImportSettled();
-    await vi.advanceTimersByTimeAsync(3000);
     const result = await promise;
 
     expect(exaCtorMock).toHaveBeenCalledWith("literal-key", undefined);
-    expect(exaResearchCreateMock).toHaveBeenCalledTimes(1);
-    expect(exaResearchGetMock).toHaveBeenCalledTimes(2);
-    expect(exaResearchGetMock).toHaveBeenNthCalledWith(1, "exa-job-1", {
-      events: false,
-    });
+    expect(exaSearchMock).toHaveBeenCalledTimes(1);
+    expect(exaSearchMock).toHaveBeenCalledWith(
+      "Investigate Exa research polling",
+      {
+        type: "deep-reasoning",
+        outputSchema: { type: "text", description: expect.any(String) },
+      },
+    );
     expect(successful(result.results[0])?.text).toBe("Exa research result");
   });
 

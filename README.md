@@ -352,6 +352,7 @@ remain in the document. Provider registration is deliberately not public.
 
 SDKs are dependencies but load only when executing their provider. Lightweight
 provider definitions supply discovery, help, defaults, and validation.
+Exa research returns a synthesized report with source links.
 
 ### Gemini research
 

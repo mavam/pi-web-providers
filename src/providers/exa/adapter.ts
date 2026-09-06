@@ -2,11 +2,9 @@ import { orderedContents } from "../../contents.js";
 import { Exa as ExaClient } from "exa-js";
 
 import type { ContentsResponse } from "../../contents.js";
-import { executeAsyncResearch } from "../../runtime/polling.js";
+import { WebfoxError } from "../../errors.js";
 import type {
   ProviderContext,
-  ResearchJob,
-  ResearchPollResult,
   SearchResponse,
   ToolOutput,
 } from "../contract.js";
@@ -124,77 +122,39 @@ const exaImplementation = {
     context: ProviderContext,
     options?: Record<string, unknown>,
   ): Promise<ToolOutput> {
-    return await executeAsyncResearch({
-      providerLabel: "Exa",
-      providerId: "exa",
-      context,
-      start: (researchContext) =>
-        exaImplementation.startResearch(
-          input,
-          config,
-          researchContext,
-          options,
-        ),
-      poll: (id, researchContext) =>
-        exaImplementation.pollResearch(id, config, researchContext, options),
-    });
-  },
-
-  async startResearch(
-    input: string,
-    config: Exa,
-    _context: ProviderContext,
-    options?: Record<string, unknown>,
-  ): Promise<ResearchJob> {
+    context.signal?.throwIfAborted();
+    context.onProgress?.("Exa is researching and synthesizing the report.");
     const client = createClient(config);
-    const task = await client.research.create({
-      instructions: input,
+    const result = await client.search(input, {
       ...(options ?? {}),
+      type: "deep-reasoning",
+      outputSchema: {
+        type: "text",
+        description:
+          "A detailed Markdown research report answering the query. Cite sources with links, distinguish evidence from uncertainty, and include a conclusion.",
+      },
     });
-
-    return { id: task.researchId };
-  },
-
-  async pollResearch(
-    id: string,
-    config: Exa,
-    _context: ProviderContext,
-    _options?: Record<string, unknown>,
-  ): Promise<ResearchPollResult> {
-    const client = createClient(config);
-    const result = await client.research.get(id, { events: false });
-
-    if (result.status === "completed") {
-      const content = result.output?.content;
-      return {
-        status: "completed",
-        output: {
-          provider: "exa",
-          text:
-            typeof content === "string"
-              ? content
-              : content !== undefined
-                ? formatJson(content)
-                : "Exa research completed without textual output.",
-        },
-      };
+    const content = result.output?.content;
+    if (typeof content !== "string" || !content.trim())
+      throw new WebfoxError(
+        "PROVIDER_FAILURE",
+        "Exa returned no research report.",
+      );
+    const sources = result.results ?? [];
+    const lines = [content.trim()];
+    if (sources.length) {
+      lines.push("", "Sources:");
+      for (const [index, source] of sources.entries())
+        lines.push(
+          `${index + 1}. ${source.title || source.url}`,
+          `   ${source.url}`,
+        );
     }
-
-    if (result.status === "failed") {
-      return {
-        status: "failed",
-        error: result.error ?? "research failed",
-      };
-    }
-
-    if (result.status === "canceled") {
-      return {
-        status: "cancelled",
-        error: "research was canceled",
-      };
-    }
-
-    return { status: "in_progress" };
+    return {
+      provider: "exa",
+      text: lines.join("\n"),
+      itemCount: sources.length,
+    };
   },
 };
 

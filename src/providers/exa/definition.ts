@@ -86,14 +86,6 @@ export const exaProvider = defineProvider({
             },
             description: "Exclude these domains.",
           },
-          startCrawlDate: {
-            type: "string",
-            description: "ISO date string for earliest crawl date.",
-          },
-          endCrawlDate: {
-            type: "string",
-            description: "ISO date string for latest crawl date.",
-          },
           startPublishedDate: {
             type: "string",
             description: "ISO date string for earliest publish date.",
@@ -221,40 +213,19 @@ export const exaProvider = defineProvider({
                 ],
                 description: "Include AI-generated summary.",
               },
-              livecrawl: {
-                anyOf: [
-                  {
-                    type: "string",
-                    const: "never",
-                  },
-                  {
-                    type: "string",
-                    const: "fallback",
-                  },
-                  {
-                    type: "string",
-                    const: "always",
-                  },
-                  {
-                    type: "string",
-                    const: "auto",
-                  },
-                  {
-                    type: "string",
-                    const: "preferred",
-                  },
-                ],
-                description: "Livecrawl mode for fetching fresh content.",
-              },
               livecrawlTimeout: {
                 type: "integer",
-                minimum: 0,
-                description: "Livecrawl timeout in milliseconds.",
+                minimum: 1,
+                maximum: 90_000,
+                description:
+                  "Content-fetch timeout in milliseconds (1–90000). Does not select a freshness policy.",
               },
               maxAgeHours: {
-                type: "number",
+                type: "integer",
+                minimum: -1,
+                maximum: 720,
                 description:
-                  "Maximum age of cached content in hours. Use 0 to always fetch fresh content.",
+                  "Content freshness in whole hours: 0 fetches fresh, -1 uses cache only, 1–720 bounds cache age. Omit for fallback fetching. Set only inside options.contents; do not also send deprecated livecrawl.",
               },
               filterEmptyResults: {
                 type: "boolean",
@@ -297,7 +268,8 @@ export const exaProvider = defineProvider({
               },
             },
             additionalProperties: false,
-            description: "What content to include in results.",
+            description:
+              "Content extraction and freshness controls. Put text, highlights, summary, maxAgeHours, and livecrawlTimeout here, not directly in options.",
           },
         },
         description: "Exa search options.",
@@ -306,7 +278,8 @@ export const exaProvider = defineProvider({
         "Use Exa's neural/auto search modes for semantic source discovery where exact keywords are uncertain; use keyword mode when exact terms, names, or identifiers matter.",
         "Use Exa category filters such as 'research paper' or 'company' when the user asks for a specific source type.",
         "Set includeDomains or excludeDomains when the task names preferred sources, requires primary sources, or needs noisy domains filtered out.",
-        "Use startCrawlDate/endCrawlDate or contents.maxAgeHours when freshness of Exa's crawled content matters.",
+        "For fresh Exa search content, use options.contents.maxAgeHours=0; for cache-only retrieval use -1. Never put maxAgeHours at the top level of options.",
+        "Do not send deprecated livecrawl, even alongside maxAgeHours. Remove livecrawl rather than moving it into contents. Exa ignores startCrawlDate/endCrawlDate; use startPublishedDate/endPublishedDate to filter publication dates, not cache freshness.",
         "Use includeText/excludeText for short required or forbidden phrases in page text.",
         "Request contents.text, contents.highlights, or contents.summary only when snippets are insufficient and richer source context is needed directly in search results.",
       ],

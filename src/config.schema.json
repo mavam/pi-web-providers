@@ -1604,14 +1604,6 @@
                       },
                       "description": "Exclude these domains."
                     },
-                    "startCrawlDate": {
-                      "type": "string",
-                      "description": "ISO date string for earliest crawl date."
-                    },
-                    "endCrawlDate": {
-                      "type": "string",
-                      "description": "ISO date string for latest crawl date."
-                    },
                     "startPublishedDate": {
                       "type": "string",
                       "description": "ISO date string for earliest publish date."
@@ -1734,39 +1726,17 @@
                           ],
                           "description": "Include AI-generated summary."
                         },
-                        "livecrawl": {
-                          "anyOf": [
-                            {
-                              "type": "string",
-                              "const": "never"
-                            },
-                            {
-                              "type": "string",
-                              "const": "fallback"
-                            },
-                            {
-                              "type": "string",
-                              "const": "always"
-                            },
-                            {
-                              "type": "string",
-                              "const": "auto"
-                            },
-                            {
-                              "type": "string",
-                              "const": "preferred"
-                            }
-                          ],
-                          "description": "Livecrawl mode for fetching fresh content."
-                        },
                         "livecrawlTimeout": {
                           "type": "integer",
-                          "minimum": 0,
-                          "description": "Livecrawl timeout in milliseconds."
+                          "minimum": 1,
+                          "maximum": 90000,
+                          "description": "Content-fetch timeout in milliseconds (1–90000). Does not select a freshness policy."
                         },
                         "maxAgeHours": {
-                          "type": "number",
-                          "description": "Maximum age of cached content in hours. Use 0 to always fetch fresh content."
+                          "type": "integer",
+                          "minimum": -1,
+                          "maximum": 720,
+                          "description": "Content freshness in whole hours: 0 fetches fresh, -1 uses cache only, 1–720 bounds cache age. Omit for fallback fetching. Set only inside options.contents; do not also send deprecated livecrawl."
                         },
                         "filterEmptyResults": {
                           "type": "boolean",
@@ -1809,7 +1779,7 @@
                         }
                       },
                       "additionalProperties": false,
-                      "description": "What content to include in results."
+                      "description": "Content extraction and freshness controls. Put text, highlights, summary, maxAgeHours, and livecrawlTimeout here, not directly in options."
                     }
                   },
                   "description": "Exa search options.",
