@@ -10,7 +10,11 @@ import {
 export function expansionKey(): string {
   const id = "app.tools.expand";
   const key = keyText(id);
-  if (key || getKeybindings().getDefinition(id)) return key;
+  if (key) return key;
+  const manager = getKeybindings();
+  // Package managers may resolve the helper and this import to separate TUI
+  // copies. Read an initialized local manager before falling back to disk.
+  if (manager.getDefinition(id)) return formatKeys(manager.getKeys(id));
   // A native-loaded bundle can see a separate, TUI-only singleton. In that
   // case use Pi's documented configuration, including legacy key names.
   let configured: unknown;
@@ -31,6 +35,10 @@ export function expansionKey(): string {
   const keys = new KeybindingsManager({ [id]: { defaultKeys: "ctrl+o" } }, {
     [id]: binding,
   } as KeybindingsConfig).getKeys(id);
+  return formatKeys(keys);
+}
+
+function formatKeys(keys: string[]): string {
   return keys
     .map((key) =>
       key
