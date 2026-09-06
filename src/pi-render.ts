@@ -9,6 +9,38 @@ import {
 } from "@earendil-works/pi-tui";
 import type { Capability } from "./domain.js";
 
+const urlStates = {
+  queued: { glyph: "○", color: "dim" },
+  running: { glyph: "◌", color: "accent" },
+  done: { glyph: "✓", color: "success" },
+  failed: { glyph: "✗", color: "error" },
+  cancelled: { glyph: "−", color: "warning" },
+} as const;
+export interface UrlStatus {
+  url: string;
+  state: keyof typeof urlStates;
+}
+
+function statusRows(details: unknown): UrlStatus[] | undefined {
+  if (
+    !details ||
+    typeof details !== "object" ||
+    !("webContentsStatus" in details) ||
+    details.webContentsStatus !== true ||
+    !("urls" in details) ||
+    !Array.isArray(details.urls)
+  )
+    return;
+  return details.urls.filter(
+    (row): row is UrlStatus =>
+      row &&
+      typeof row === "object" &&
+      typeof row.url === "string" &&
+      typeof row.state === "string" &&
+      Object.hasOwn(urlStates, row.state),
+  );
+}
+
 /** Display-only input formatting; never interpret input as terminal markup. */
 function displayInput(value: string, url: boolean): string {
   const quoted = JSON.stringify(stripVTControlCharacters(value));
@@ -43,7 +75,7 @@ export class WebCall implements Component {
       ? raw.filter((value): value is string => typeof value === "string")
       : [];
     let text = title;
-    if (inputs.length)
+    if (inputs.length && (capability !== "contents" || this.expanded))
       text +=
         " " +
         theme.fg(
@@ -88,6 +120,28 @@ export function renderWebResult(
     .filter((part) => part.type === "text")
     .map((part) => part.text ?? "")
     .join("\n");
+  const rows = statusRows(result.details);
+  if (rows?.length) {
+    const container = new Container();
+    container.addChild({
+      render: (width) =>
+        width > 0
+          ? rows.map((row) => {
+              const { glyph, color } = urlStates[row.state];
+              return truncateToWidth(
+                theme.fg(color, glyph) +
+                  " " +
+                  theme.fg("accent", displayInput(row.url, true)),
+                width,
+              );
+            })
+          : [],
+      invalidate() {},
+    });
+    if (options.expanded && !options.isPartial)
+      container.addChild(new Text(theme.fg("toolOutput", text), 0, 0));
+    return container;
+  }
   if (options.expanded)
     return new Text(theme.fg(isError ? "error" : "toolOutput", text), 0, 0);
   const partialFailure =
@@ -108,7 +162,10 @@ export function renderWebResult(
       width > 0
         ? [
             truncateToWidth(
-              theme.fg(isError || partialFailure ? "error" : "muted", safe),
+              theme.fg(
+                isError || partialFailure ? "error" : "muted",
+                `${isError || partialFailure ? "✗" : "◌"} ${safe}`,
+              ),
               width,
             ),
           ]

@@ -92,6 +92,10 @@ export interface ProgressEvent {
   capability: Capability;
   provider: ProviderId;
   message: string;
+  /** Per-URL lifecycle updates for contents, indexed by original input order. */
+  inputIndex?: number;
+  input?: string;
+  state?: "queued" | "running" | "done" | "failed" | "cancelled";
 }
 export interface RequestOptions {
   provider?: ProviderId;

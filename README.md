@@ -277,6 +277,11 @@ also redacted. This policy is not a sandbox for untrusted adapters or commands.
 
 ## 📚 Library
 
+For contents requests, `onProgress` includes per-URL lifecycle events with
+`inputIndex`, `input`, and `state` (`queued`, `running`, `done`, `failed`, or
+`cancelled`). Indexes refer to the original input order, including duplicate
+URLs. Provider progress messages may omit these fields.
+
 ```ts
 import { createWebfox } from "webfox";
 
@@ -365,8 +370,11 @@ lowercase, space-separated names: `web search`, `web contents`, `web answer`,
 and `web research`. Headers show quoted queries and briefs or bare URLs in the
 theme’s accent color, with search limits highlighted separately. Long previews
 stay on one line until expanded with Pi’s tool-expansion shortcut. Successful
-result bodies are hidden while collapsed; expand to read them. Progress stays
-compact, and failures remain visible even when collapsed.
+result bodies are hidden while collapsed; expand to read them. For `web contents`,
+URLs appear on separate status rows in input order: `○` queued, `◌` running,
+`✓` done, `✗` failed, and `−` cancelled. Rows update in place and remain visible
+after completion; page bodies stay collapsed. Other tools use compact
+`◌` progress and `✗` failure lines.
 
 The extension uses the same inspection and execution API, binds only explicitly
 selected capability defaults, and exposes each provider’s option schema. Restart

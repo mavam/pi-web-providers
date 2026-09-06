@@ -7,11 +7,12 @@ import {
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type TObject, type TProperties } from "typebox";
-import { WebCall, renderWebResult } from "./pi-render.js";
+import { WebCall, renderWebResult, type UrlStatus } from "./pi-render.js";
 import {
   CAPABILITIES,
   createWebfox as createWebClient,
   type Capability,
+  type ProgressEvent,
   type WebfoxClient as WebClient,
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
@@ -92,15 +93,36 @@ export default function webExtension(pi: ExtensionAPI): void {
           options?: Record<string, unknown>;
         };
         const client = clientFor(ctx.cwd);
+        const urlStatuses: UrlStatus[] = [];
         const request = {
           provider,
           signal: signal ?? ctx.signal,
           options: params.options as Record<string, unknown> | undefined,
-          onProgress: (event: { message: string }) =>
-            onUpdate?.({
-              content: [{ type: "text", text: event.message }],
-              details: {},
-            }),
+          onProgress: (event: ProgressEvent) => {
+            if (capability === "contents") {
+              if (
+                event.inputIndex === undefined ||
+                event.input === undefined ||
+                !event.state
+              )
+                return;
+              urlStatuses[event.inputIndex] = {
+                url: event.input,
+                state: event.state,
+              };
+              onUpdate?.({
+                content: [{ type: "text", text: event.message }],
+                details: {
+                  webContentsStatus: true,
+                  urls: urlStatuses.filter(Boolean).map((row) => ({ ...row })),
+                },
+              });
+            } else
+              onUpdate?.({
+                content: [{ type: "text", text: event.message }],
+                details: {},
+              });
+          },
         };
         const result =
           capability === "search"
@@ -135,6 +157,19 @@ export default function webExtension(pi: ExtensionAPI): void {
           details: {
             webProviderResult: true,
             status: result.status,
+            ...(capability === "contents"
+              ? {
+                  webContentsStatus: true,
+                  urls: result.results.map((entry) => ({
+                    url: entry.input,
+                    state: entry.ok
+                      ? "done"
+                      : entry.error.code === "CANCELLED"
+                        ? "cancelled"
+                        : "failed",
+                  })),
+                }
+              : {}),
             ...(fullOutputPath ? { fullOutputPath } : { result }),
           },
         };

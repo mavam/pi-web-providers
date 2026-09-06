@@ -4,6 +4,7 @@ import type {
   CapabilityValues,
   InputResult,
   RequestOptions,
+  ProgressEvent,
 } from "../domain.js";
 import type {
   ExecutionConfig,
@@ -63,6 +64,27 @@ export class ExecutionRuntime {
     const scope = deadline(timeoutMs, request.signal);
     const outward = new OutwardBoundary();
     let active = true;
+    const notify = (event: ProgressEvent) => {
+      if (!active) return;
+      try {
+        request.onProgress?.(outward.value(event));
+      } catch {
+        // Observers must not interfere with execution or completion updates.
+      }
+    };
+    const contentsState = (
+      input: string,
+      inputIndex: number,
+      state: NonNullable<ProgressEvent["state"]>,
+    ) =>
+      notify({
+        capability,
+        provider: definition.id,
+        message: `${state}: ${input}`,
+        input,
+        inputIndex,
+        state,
+      });
     const context: ProviderContext = {
       cwd: this.cwd,
       env: this.env,
@@ -72,15 +94,8 @@ export class ExecutionRuntime {
         delayMs: plan.policy.retryDelayMs ?? 2000,
       },
       onProgress: (message) => {
-        if (active && !scope.signal.aborted) {
-          try {
-            request.onProgress?.(
-              outward.value({ capability, provider: definition.id, message }),
-            );
-          } catch {
-            /* A notification callback must not crash SDK/subprocess handlers. */
-          }
-        }
+        if (!scope.signal.aborted)
+          notify({ capability, provider: definition.id, message });
       },
     };
     const fail = (input: string, error: unknown): InputResult<never> => ({
@@ -141,43 +156,67 @@ export class ExecutionRuntime {
       if (capability === "contents") {
         // Schedule URL operations individually: completed pages survive another
         // page's timeout, and adapters cannot exceed runtime batch concurrency.
+        inputs.forEach((input, index) => contentsState(input, index, "queued"));
         results = await orderedMap(
           inputs,
           plan.policy.concurrency ?? 4,
-          async (input) => {
-            try {
-              const response = (await this.run(
-                adapter,
-                config,
-                {
-                  capability: "contents",
-                  urls: [input],
-                  options: plan.options,
-                },
-                plan,
-                context,
-              )) as ProviderResult<"contents">;
-              if (
-                response.answers.length !== 1 ||
-                response.answers[0].inputIndex !== 0
-              )
-                throw new WebfoxError(
-                  "PROVIDER_FAILURE",
-                  "Provider returned missing, duplicate, or invalid contents input indexes.",
-                );
-              const answer = response.answers[0];
-              if (answer.error)
-                return fail(
-                  input,
-                  new WebfoxError(answer.error.code, answer.error.message, {
-                    retryable: answer.error.retryable,
-                  }),
-                );
-              const { inputIndex: _index, error: _error, ...value } = answer;
-              return { input, ok: true, value: value as CapabilityValues[C] };
-            } catch (error) {
-              return fail(input, error);
-            }
+          async (input, inputIndex) => {
+            if (!scope.signal.aborted)
+              contentsState(input, inputIndex, "running");
+            const result: InputResult<CapabilityValues[C]> =
+              await (async () => {
+                try {
+                  const response = (await this.run(
+                    adapter,
+                    config,
+                    {
+                      capability: "contents",
+                      urls: [input],
+                      options: plan.options,
+                    },
+                    plan,
+                    context,
+                  )) as ProviderResult<"contents">;
+                  if (
+                    response.answers.length !== 1 ||
+                    response.answers[0].inputIndex !== 0
+                  )
+                    throw new WebfoxError(
+                      "PROVIDER_FAILURE",
+                      "Provider returned missing, duplicate, or invalid contents input indexes.",
+                    );
+                  const answer = response.answers[0];
+                  if (answer.error)
+                    return fail(
+                      input,
+                      new WebfoxError(answer.error.code, answer.error.message, {
+                        retryable: answer.error.retryable,
+                      }),
+                    );
+                  const {
+                    inputIndex: _index,
+                    error: _error,
+                    ...value
+                  } = answer;
+                  return {
+                    input,
+                    ok: true,
+                    value: value as CapabilityValues[C],
+                  };
+                } catch (error) {
+                  return fail(input, error);
+                }
+              })();
+            contentsState(
+              input,
+              inputIndex,
+              result.ok
+                ? "done"
+                : result.error.code === "CANCELLED"
+                  ? "cancelled"
+                  : "failed",
+            );
+            return result;
           },
         );
       } else

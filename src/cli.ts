@@ -24,6 +24,7 @@ import {
   validateConfiguredOptions,
   WebfoxError,
   type Capability,
+  type ProgressEvent,
   type ProviderId,
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
@@ -216,8 +217,9 @@ export async function runCli(
             signal: controller.signal,
             onProgress: parsed.quiet
               ? undefined
-              : (event: { message: string }) => {
-                  io.stderr.write(`${event.message}\n`);
+              : (event: ProgressEvent) => {
+                  // Per-URL lifecycle events drive Pi status rows, not CLI logs.
+                  if (!event.state) io.stderr.write(`${event.message}\n`);
                 },
           };
           const result =

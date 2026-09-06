@@ -28,6 +28,45 @@ describe("web result rendering", () => {
     content: [{ type: "text", text: "First result\nSecond result" }],
     details: { status: "ok" },
   };
+  it("renders stable URL rows with status glyphs while keeping page bodies collapsed", () => {
+    const urls = ["queued", "running", "done", "failed", "cancelled"].map(
+      (state) => ({ url: "https://example.test/" + state, state }),
+    );
+    const contents = { ...result, details: { webContentsStatus: true, urls } };
+    const component = renderWebResult(
+      contents,
+      { expanded: false, isPartial: false },
+      theme,
+      false,
+    );
+    expect(component.render(80)).toEqual([
+      "○ https://example.test/queued",
+      "◌ https://example.test/running",
+      "✓ https://example.test/done",
+      "✗ https://example.test/failed",
+      "− https://example.test/cancelled",
+    ]);
+    for (const line of component.render(12))
+      expect(visibleWidth(line)).toBeLessThanOrEqual(12);
+    expect(
+      renderWebResult(
+        contents,
+        { expanded: true, isPartial: false },
+        theme,
+        false,
+      )
+        .render(80)
+        .join("\n"),
+    ).toContain("First result");
+    expect(
+      renderWebResult(
+        contents,
+        { expanded: true, isPartial: true },
+        theme,
+        false,
+      ).render(80),
+    ).toHaveLength(5);
+  });
   it("hides successful bodies until expanded without changing the result", () => {
     expect(
       renderWebResult(
@@ -62,7 +101,7 @@ describe("web result rendering", () => {
         theme,
         true,
       ).render(80),
-    ).toEqual(["Exa needs a credential."]);
+    ).toEqual(["✗ Exa needs a credential."]);
     const partial = { ...result, details: { status: "partial" } };
     expect(
       renderWebResult(

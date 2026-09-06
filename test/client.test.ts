@@ -1,9 +1,73 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createWebfox } from "../src/index.js";
+import { createWebfox, type ProgressEvent } from "../src/index.js";
 import { customConfig } from "./helpers.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("application contracts", () => {
+  it("reports ordered per-URL lifecycle updates including duplicate inputs and failures", async () => {
+    const config = customConfig();
+    config.execution = { concurrency: 1 };
+    const events: ProgressEvent[] = [];
+    const urls = ["https://ok.test", "https://error.test", "https://ok.test"];
+    await createWebfox({ config }).contents({
+      urls,
+      onProgress: (event) => {
+        if (event.state) events.push(event);
+      },
+    });
+    expect(events.map(({ inputIndex, state }) => [inputIndex, state])).toEqual([
+      [0, "queued"],
+      [1, "queued"],
+      [2, "queued"],
+      [0, "running"],
+      [0, "done"],
+      [1, "running"],
+      [1, "failed"],
+      [2, "running"],
+      [2, "done"],
+    ]);
+    for (const event of events)
+      expect(event.input).toBe(urls[event.inputIndex!]);
+  });
+  it("keeps completed URLs done and marks queued URLs cancelled", async () => {
+    const config = customConfig();
+    config.execution = { concurrency: 1 };
+    const controller = new AbortController();
+    const events: ProgressEvent[] = [];
+    const result = await createWebfox({ config }).contents({
+      urls: ["https://ok.test", "https://slow.test"],
+      signal: controller.signal,
+      onProgress(event) {
+        if (event.state) events.push(event);
+        if (event.state === "done") controller.abort();
+      },
+    });
+    expect(result.results.map((entry) => entry.ok)).toEqual([true, false]);
+    expect(events.map(({ state }) => state)).toEqual([
+      "queued",
+      "queued",
+      "running",
+      "done",
+      "cancelled",
+    ]);
+  });
+  it("redacts URL lifecycle events and ignores observer exceptions", async () => {
+    const config = customConfig();
+    config.providers!.custom!.commands!.contents!.env = {
+      SAFE_SECRET: { value: "private-key" },
+    };
+    const events: ProgressEvent[] = [];
+    const result = await createWebfox({ config }).contents({
+      urls: ["https://ok.test/private-key"],
+      onProgress(event) {
+        events.push(event);
+        throw new Error("observer failure");
+      },
+    });
+    expect(result.status).toBe("ok");
+    expect(events.some((event) => event.state === "done")).toBe(true);
+    expect(JSON.stringify(events)).not.toContain("private-key");
+  });
   it("never selects a provider from credentials", async () => {
     const client = createWebfox({
       config: {},

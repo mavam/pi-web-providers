@@ -94,6 +94,27 @@ it("uses application inspection and execution and marks partial tool results", a
   expect(events.tool_result({ details: result.details })).toEqual({
     isError: true,
   });
+  const updates: any[] = [];
+  const contents = await tools[1].execute(
+    "urls",
+    { urls: ["https://ok.test", "https://error.test"] },
+    undefined,
+    (update: any) => updates.push(update),
+    { cwd: directory },
+  );
+  expect(updates[0].details.urls[0].state).toBe("queued");
+  expect(contents.details.urls).toEqual([
+    { url: "https://ok.test", state: "done" },
+    { url: "https://error.test", state: "failed" },
+  ]);
+  const restored = JSON.parse(JSON.stringify(contents));
+  expect(
+    tools[1]
+      .renderResult(restored, { expanded: false, isPartial: false }, theme, {
+        isError: true,
+      })
+      .render(80),
+  ).toEqual(["✓ https://ok.test", "✗ https://error.test"]);
 });
 
 it("keeps unconfigured notifications generic", async () => {
