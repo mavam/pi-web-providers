@@ -77,9 +77,11 @@ than a paid exhaustive provider matrix.
 
 ### Opt-in live tests
 
-Build first, then select one provider explicitly. Available credentials never
-select a provider. Missing credentials, empty results, and failed or partial
-documents fail the smoke test rather than producing a misleading skip/pass.
+Build first, then run `node scripts/live-smoke.mjs` to test all configured
+providers and their supported non-research capabilities. The smoke runner reports
+unconfigured capabilities as skips and fails if no tests run. Empty results and
+failed or partial documents fail the run. You can narrow the selection explicitly;
+missing credentials for an explicitly selected provider fail rather than skip.
 
 ```sh
 node scripts/live-smoke.mjs --provider brave --capability search
@@ -96,11 +98,17 @@ Store test keys as encrypted secrets in the **Live provider tests** GitHub
 environment, using the standard names shown by `web providers <id>`; Cloudflare
 also needs `CLOUDFLARE_ACCOUNT_ID`. Configure environment approval rules as
 appropriate. The workflow binds this environment by its exact name; no local
-credential file is uploaded. Only the selected provider’s secrets are exposed
-to the test step. Do not put credentials in workflow inputs, configuration
+credential file is uploaded. Provider secrets are exposed only to the live
+test step. Do not put credentials in workflow inputs, configuration
 examples, or committed files.
 
-Run Brave search on the PR branch through the existing **CI** workflow:
+Dispatch **CI** without inputs to run offline checks and all configured live tests:
+
+```sh
+gh workflow run ci.yaml
+```
+
+To narrow the run to Brave search on a branch:
 
 ```sh
 gh workflow run ci.yaml --repo mavam/pi-web-providers --ref "$(git branch --show-current)" \
@@ -111,15 +119,16 @@ Repeat with `live-capability=answer` to test the Brave answers key. Research
 requires both `live-capability=research` and `include-research=true`.
 
 Regular pull-request CI and manual runs with a blank `live-provider` perform
-only offline checks. Explicit live selections invoke the reusable
+only offline checks. Manual live runs invoke the reusable
 `.github/workflows/live-smoke.yaml` at the same revision as the caller. This
 also works before GitHub registers the new standalone workflow on the default
 branch. Once registered, you can dispatch **Live provider smoke test** directly.
 
-To add another provider, store its named secret in the same environment and
-select that provider and a supported capability. The reusable workflow already
-maps all built-in provider credential names. It never selects providers based
-on which secrets exist. Custom providers require a separate command setup.
+To include another built-in provider, store its named secret in the same
+environment. The default selection includes it automatically. The reusable
+workflow maps all built-in provider credential names. This automatic selection
+applies only to the smoke runner, not normal client routing. Custom providers
+require a separate command setup.
 
 An offline check of the same harness uses the deterministic custom example:
 

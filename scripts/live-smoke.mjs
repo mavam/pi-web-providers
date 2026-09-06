@@ -2,6 +2,7 @@
 
 import { parseArgs } from "node:util";
 import { CAPABILITIES, createWebfox } from "../dist/index.js";
+import { selectLiveTests } from "./live-selection.mjs";
 
 const controller = new AbortController();
 const cancel = () => controller.abort();
@@ -10,7 +11,7 @@ process.once("SIGINT", cancel);
 try {
   const { values } = parseArgs({
     options: {
-      provider: { type: "string" },
+      provider: { type: "string", default: "all" },
       capability: { type: "string" },
       config: { type: "string" },
       "options-json": { type: "string", default: "{}" },
@@ -20,17 +21,17 @@ try {
   });
   if (values.help) {
     console.log(
-      "Usage: node scripts/live-smoke.mjs --provider <id> [--capability <name>] [--config <path>] [--options-json <json>] [--include-research]",
+      "Usage: node scripts/live-smoke.mjs [--provider <id|all>] [--capability <name|all>] [--config <path>] [--options-json <json>] [--include-research]",
     );
     console.log(
-      "Provider selection is required. Research needs explicit additional consent and can incur charges.",
+      "Defaults to all configured providers and capabilities except research. Research needs explicit additional consent and can incur charges.",
     );
   } else {
-    if (!values.provider)
-      throw new Error(
-        "Choose exactly one provider with --provider; credentials never select providers.",
-      );
-    if (values.capability && !CAPABILITIES.includes(values.capability))
+    if (
+      values.capability &&
+      values.capability !== "all" &&
+      !CAPABILITIES.includes(values.capability)
+    )
       throw new Error(`Unknown capability: ${values.capability}`);
     if (values.capability === "research" && !values["include-research"])
       throw new Error(
@@ -41,23 +42,28 @@ try {
     if (!options || typeof options !== "object" || Array.isArray(options))
       throw new Error("--options-json must be a JSON object.");
     const client = createWebfox({ configPath: values.config });
-    const provider = client.getProvider(values.provider);
-    if (!provider) throw new Error(`Unknown provider: ${values.provider}`);
-    const capabilities = values.capability
-      ? [values.capability]
-      : provider.capabilities.filter(
-          (capability) =>
-            capability !== "research" || values["include-research"],
-        );
-    if (!capabilities.length) throw new Error("No capabilities selected.");
+    const { tests, skipped } = selectLiveTests(
+      client.listProviders(),
+      values.provider,
+      values.capability ?? "all",
+      values["include-research"],
+    );
+    for (const reason of skipped) console.log(`SKIP ${reason}`);
+    if (!tests.length)
+      throw new Error(
+        "No live tests selected. Configure provider credentials first.",
+      );
     let failed = 0;
-    for (const capability of capabilities) {
+    for (const { provider, capability } of tests) {
       controller.signal.throwIfAborted();
       try {
         client.inspectCapability(capability, provider.id);
         const controls = {
           provider: provider.id,
-          options,
+          options:
+            provider.id === "firecrawl" && capability === "answer"
+              ? { url: "https://nodejs.org/api/globals.html", ...options }
+              : options,
           timeoutMs: capability === "research" ? 1_200_000 : 90_000,
           signal: controller.signal,
           onProgress: ({ message }) => console.error(message),
@@ -117,6 +123,9 @@ try {
         );
       }
     }
+    console.log(
+      `Live tests: ${tests.length - failed} passed, ${failed} failed, ${skipped.length} skipped.`,
+    );
     process.exitCode = failed ? 1 : 0;
   }
 } catch (error) {

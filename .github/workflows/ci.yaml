@@ -5,14 +5,14 @@ on:
   workflow_dispatch:
     inputs:
       live-provider:
-        description: Optional provider for a live test (blank runs offline CI only)
-        default: ""
+        description: Provider ID, or all configured providers (blank skips live tests)
+        default: all
         type: string
       live-capability:
         description: Capability to test with the selected live provider
-        default: search
+        default: all
         type: choice
-        options: [search, contents, answer, research]
+        options: [all, search, contents, answer, research]
       live-options-json:
         description: Provider-specific request options as JSON (not credentials)
         default: "{}"
