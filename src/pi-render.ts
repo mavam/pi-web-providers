@@ -11,7 +11,7 @@ import type { Capability } from "./domain.js";
 import { callParameters } from "./pi-params.js";
 import { expansionKey } from "./pi-keybindings.js";
 
-import { truncateLine as truncateToWidth } from "./pi-text.js";
+import { plainText, truncateLine as truncateToWidth } from "./pi-text.js";
 import { renderSearchResult } from "./pi-search-render.js";
 
 const inputStates = {
@@ -60,7 +60,7 @@ function statusRows(details: unknown): InputStatus[] | undefined {
 
 /** Display-only input formatting; never interpret input as terminal markup. */
 function displayInput(value: string): string {
-  return JSON.stringify(stripVTControlCharacters(value)).slice(1, -1);
+  return JSON.stringify(plainText(value)).slice(1, -1);
 }
 
 export class WebCall implements Component {

@@ -27,6 +27,7 @@ permissions:
 
 jobs:
   live-smoke:
+    name: Live provider check (manual)
     if: github.event_name == 'workflow_dispatch' && inputs.live-provider != ''
     uses: ./.github/workflows/live-smoke.yaml
     # Required for the called job to resolve its environment-scoped secrets.
@@ -38,6 +39,7 @@ jobs:
       include-research: ${{ inputs.include-research }}
 
   format:
+    name: Code formatting
     runs-on: ubuntu-latest
 
     steps:
@@ -57,7 +59,9 @@ jobs:
         run: npm run format:check
 
   test:
+    name: Tests, types & build (Node.js ${{ matrix.node-version }})
     strategy:
+      fail-fast: false
       matrix:
         node-version: [22, 24, 26]
     runs-on: ubuntu-latest
@@ -82,6 +86,7 @@ jobs:
         run: npm run check && npm run build
 
   package-smoke:
+    name: Installed CLI & Pi extension
     runs-on: ubuntu-latest
 
     steps:

@@ -104,13 +104,13 @@ it("guides misplaced freshness into contents and omits deprecated controls", () 
   ).toThrow(
     "Invalid parameter: options.maxAgeHours. Use options.contents.maxAgeHours instead.",
   );
-  expect((options.properties.contents as TObject).properties).not.toHaveProperty(
-    "livecrawl",
-  );
+  expect(
+    (options.properties.contents as TObject).properties,
+  ).not.toHaveProperty("livecrawl");
   expect(options.properties).not.toHaveProperty("startCrawlDate");
-  expect(exaProvider.capabilities.search!.promptGuidelines!.join(" ")).toContain(
-    "Remove livecrawl rather than moving it",
-  );
+  expect(
+    exaProvider.capabilities.search!.promptGuidelines!.join(" "),
+  ).toContain("Remove livecrawl rather than moving it");
 });
 
 it("uses /search, not retired /research, and preserves the synthesized report and sources", async () => {
