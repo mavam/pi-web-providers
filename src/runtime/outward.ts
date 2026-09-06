@@ -1,4 +1,4 @@
-import { asWebMuxError, WebMuxError } from "../errors.js";
+import { asWebfoxError, WebfoxError } from "../errors.js";
 import type { SerializedError } from "../domain.js";
 
 /** The only boundary through which internal provider data reaches a caller. */
@@ -37,12 +37,12 @@ export class OutwardBoundary {
     return visit(value) as T;
   }
   error(error: unknown): SerializedError {
-    return this.value(asWebMuxError(error).toJSON());
+    return this.value(asWebfoxError(error).toJSON());
   }
-  exception(error: unknown): WebMuxError {
+  exception(error: unknown): WebfoxError {
     const safe = this.error(error);
     // Do not expose an unredacted cause through the public exception.
-    return new WebMuxError(safe.code, safe.message, {
+    return new WebfoxError(safe.code, safe.message, {
       retryable: safe.retryable,
     });
   }

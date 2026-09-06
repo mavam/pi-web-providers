@@ -7,7 +7,7 @@ ordinary help.
 ## Root help
 
 ```text
-Usage: web <command>
+Usage: webfox <command>
 
 Search, extract pages, answer questions, and research with an explicit provider.
 
@@ -20,15 +20,15 @@ Commands:
   config default <capability> <provider>  Save a provider choice
   config path|show|validate              Inspect advanced configuration
 
-Run web <command> --help for common controls.
-Run web <command> --provider <id> --help for provider options.
-Run web <command> --help-advanced for configuration and complex options.
+Run webfox <command> --help for common controls.
+Run webfox <command> --provider <id> --help for provider options.
+Run webfox <command> --help-advanced for configuration and complex options.
 ```
 
 ## Common capability help
 
 ```text
-Usage: web search <query...> [options]
+Usage: webfox search <query...> [options]
 
 Search up to ten independent queries. Quote each query; results keep input order.
 Use '-' alone to read one complete query from stdin.
@@ -42,9 +42,9 @@ Options:
   -h, --help           Show help
 
 Examples:
-  web search "Node.js release notes" --provider brave
-  web search "Node.js cancellation" "Bun cancellation"
-  web search - --format json < query.txt
+  webfox search "Node.js release notes" --provider brave
+  webfox search "Node.js cancellation" "Bun cancellation"
+  webfox search - --format json < query.txt
 ```
 
 Contents takes newline-separated URLs with `-`. Answer takes quoted questions
@@ -52,7 +52,7 @@ or one complete stdin question. Research takes exactly one brief or complete
 stdin input. None of these commands accepts repeated `--query`, `--output`, or
 `--raw`. Only search has `--max-results`.
 
-`web search --provider openai --help` adds schema-derived OpenAI options such as
+`webfox search --provider openai --help` adds schema-derived OpenAI options such as
 `--model`, `--instructions`, and `--search-context-size`. Advanced help adds
 `--config`, `--cwd`, and `--options-json`; retry tuning lives in JSON only.
 
@@ -60,11 +60,11 @@ stdin input. None of these commands accepts repeated `--query`, `--output`, or
 
 ```sh
 export BRAVE_SEARCH_API_KEY=…
-web search "Node.js release notes" --provider brave
+webfox search "Node.js release notes" --provider brave
 # stdout: numbered titles, URLs, and snippets; no execution banner
-web config default search brave
+webfox config default search brave
 # stderr: Saved search default: brave
-web search "TypeBox validation"
+webfox search "TypeBox validation"
 ```
 
 With no selection, fail without inspecting credentials:
@@ -73,14 +73,14 @@ With no selection, fail without inspecting credentials:
 No search provider selected.
 
 Run with --provider brave, or save a default:
-  web config default search brave
+  webfox config default search brave
 
-See available providers: web providers
+See available providers: webfox providers
 ```
 
 ## Discovery and output
 
-`web providers` has separate Supported, Configured, and Selected default columns.
+`webfox providers` has separate Supported, Configured, and Selected default columns.
 Configured means local settings or credential sources exist, not that credentials,
 executables, or connectivity were verified. Inspection never runs credential
 commands or initializes SDKs.

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
-  "title": "web-mux configuration",
+  "$id": "https://unpkg.com/webfox@4.0.0/dist/config.schema.json",
+  "title": "webfox configuration",
   "type": "object",
   "additionalProperties": false,
   "properties": {

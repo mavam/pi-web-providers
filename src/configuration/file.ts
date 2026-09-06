@@ -5,9 +5,9 @@ import { join, resolve } from "node:path";
 import type { TSchema } from "typebox";
 import { Check, Errors } from "typebox/value";
 import { CONFIG_SCHEMA_URL } from "../package-metadata.js";
-import { WebMuxError } from "../errors.js";
+import { WebfoxError } from "../errors.js";
 import { configurationSchema } from "./schema.js";
-import type { WebMuxConfig } from "./types.js";
+import type { WebfoxConfig } from "./types.js";
 export { CONFIG_SCHEMA_URL };
 
 export interface ConfigPathOptions {
@@ -21,18 +21,18 @@ export function resolveConfigPath(options: ConfigPathOptions = {}): string {
   const env = options.env ?? process.env;
   const cwd = options.cwd ?? process.cwd();
   if (options.configPath) return resolve(cwd, options.configPath);
-  if (env.WEB_MUX_CONFIG) return resolve(cwd, env.WEB_MUX_CONFIG);
+  if (env.WEBFOX_CONFIG) return resolve(cwd, env.WEBFOX_CONFIG);
   if ((options.platform ?? process.platform) === "win32" && env.APPDATA)
-    return join(env.APPDATA, "web-mux", "config.json");
+    return join(env.APPDATA, "webfox", "config.json");
   return join(
     env.XDG_CONFIG_HOME ?? join(options.home ?? homedir(), ".config"),
-    "web-mux",
+    "webfox",
     "config.json",
   );
 }
 export async function loadConfig(
   options: ConfigPathOptions = {},
-): Promise<WebMuxConfig> {
+): Promise<WebfoxConfig> {
   const path = resolveConfigPath(options);
   try {
     return parseConfig(await readFile(path, "utf8"), path);
@@ -40,7 +40,7 @@ export async function loadConfig(
     return readFailure(error, options, path);
   }
 }
-export function loadConfigSync(options: ConfigPathOptions = {}): WebMuxConfig {
+export function loadConfigSync(options: ConfigPathOptions = {}): WebfoxConfig {
   const path = resolveConfigPath(options);
   try {
     return parseConfig(readFileSync(path, "utf8"), path);
@@ -52,15 +52,15 @@ function readFailure(
   error: unknown,
   options: ConfigPathOptions,
   path: string,
-): WebMuxConfig {
+): WebfoxConfig {
   if (
     (error as NodeJS.ErrnoException).code === "ENOENT" &&
     !options.configPath &&
-    !(options.env ?? process.env).WEB_MUX_CONFIG
+    !(options.env ?? process.env).WEBFOX_CONFIG
   )
     return {};
-  if (error instanceof WebMuxError) throw error;
-  throw new WebMuxError(
+  if (error instanceof WebfoxError) throw error;
+  throw new WebfoxError(
     "INVALID_CONFIG",
     `Could not read configuration: ${path}. Check the path and file permissions.`,
   );
@@ -68,12 +68,12 @@ function readFailure(
 export function parseConfig(
   text: string,
   source = "config.json",
-): WebMuxConfig {
+): WebfoxConfig {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_CONFIG",
       `Invalid JSON in ${source}. Fix its JSON syntax and try again.`,
     );
@@ -83,21 +83,21 @@ export function parseConfig(
 export function validateConfig(
   value: unknown,
   source = "configuration",
-): WebMuxConfig {
+): WebfoxConfig {
   const schema = configurationSchema as unknown as TSchema;
   if (!Check(schema, value)) {
     const detail = Errors(schema, value)
       .slice(0, 3)
       .map((error) => `${error.instancePath || "/"}: ${error.message}`)
       .join("; ");
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_CONFIG",
       `Invalid ${source}: ${detail}. Provider options belong under providers.<id>.options.<capability>.`,
     );
   }
-  return structuredClone(value) as WebMuxConfig;
+  return structuredClone(value) as WebfoxConfig;
 }
-export function redactConfig(config: WebMuxConfig): unknown {
+export function redactConfig(config: WebfoxConfig): unknown {
   const visit = (entry: unknown): unknown => {
     if (Array.isArray(entry)) return entry.map(visit);
     if (!entry || typeof entry !== "object") return entry;

@@ -46,7 +46,7 @@ const fields: Record<string, unknown> = {
 export const configurationSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: CONFIG_SCHEMA_URL,
-  title: "web-mux configuration",
+  title: "webfox configuration",
   ...object({
     $schema: text,
     defaults: object(

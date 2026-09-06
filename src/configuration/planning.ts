@@ -3,12 +3,12 @@ import { Check, Errors } from "typebox/value";
 import { CAPABILITIES, type Capability, type ProviderId } from "../domain.js";
 import { providers } from "../providers/registry.js";
 import type { ProviderDefinition } from "../providers/definition.js";
-import type { WebMuxConfig } from "./types.js";
-import { WebMuxError } from "../errors.js";
+import type { WebfoxConfig } from "./types.js";
+import { WebfoxError } from "../errors.js";
 import { buildOptionSchema } from "./options-schema.js";
 
 export function selectProvider(
-  config: WebMuxConfig,
+  config: WebfoxConfig,
   capability: Capability,
   requested?: ProviderId,
 ): ProviderDefinition {
@@ -20,15 +20,15 @@ export function selectProvider(
         ? "gemini"
         : "brave";
   if (!id)
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
-      `No ${capability} provider selected.\n\nRun with --provider ${example}, or save a default:\n  web config default ${capability} ${example}\n\nSee available providers: web providers`,
+      `No ${capability} provider selected.\n\nRun with --provider ${example}, or save a default:\n  webfox config default ${capability} ${example}\n\nSee available providers: webfox providers`,
     );
   const definition = Object.hasOwn(providers, id) ? providers[id] : undefined;
   if (!definition?.capabilities[capability])
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
-      `Provider '${id}' does not support ${capability}. See available providers: web providers`,
+      `Provider '${id}' does not support ${capability}. See available providers: webfox providers`,
     );
   return definition;
 }
@@ -54,7 +54,7 @@ export function optionSchema(
   return result;
 }
 export function effectiveOptions(
-  config: WebMuxConfig,
+  config: WebfoxConfig,
   definition: ProviderDefinition,
   capability: Capability,
   options: Record<string, unknown> = {},
@@ -77,14 +77,14 @@ export function validateOptions(
   mode: "request" | "defaults" = "request",
 ): void {
   if (!definition.capabilities[capability])
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       `${definition.id} does not support ${capability}`,
     );
   const schema = optionSchema(definition, capability, mode);
   if (!schema) {
     if (definition.id !== "custom" && Object.keys(options).length)
-      throw new WebMuxError(
+      throw new WebfoxError(
         "INVALID_INPUT",
         `${definition.id} ${capability} does not accept provider options`,
       );
@@ -95,13 +95,13 @@ export function validateOptions(
       .slice(0, 3)
       .map((error) => `${error.instancePath || "options"}: ${error.message}`)
       .join("; ");
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       `Invalid ${definition.id} ${capability} options: ${detail}`,
     );
   }
 }
-export function validateConfiguredOptions(config: WebMuxConfig): void {
+export function validateConfiguredOptions(config: WebfoxConfig): void {
   try {
     for (const [id, stored] of Object.entries(config.providers ?? {})) {
       const definition = providers[id as ProviderId];
@@ -112,8 +112,8 @@ export function validateConfiguredOptions(config: WebMuxConfig): void {
       }
     }
   } catch (error) {
-    if (error instanceof WebMuxError)
-      throw new WebMuxError("INVALID_CONFIG", error.message);
+    if (error instanceof WebfoxError)
+      throw new WebfoxError("INVALID_CONFIG", error.message);
     throw error;
   }
 }
@@ -124,7 +124,7 @@ export function deepMerge(
   const result = structuredClone(base);
   for (const [key, value] of Object.entries(override)) {
     if (["__proto__", "constructor", "prototype"].includes(key))
-      throw new WebMuxError("INVALID_INPUT", `Unsafe option key: ${key}`);
+      throw new WebfoxError("INVALID_INPUT", `Unsafe option key: ${key}`);
     result[key] =
       isObject(result[key]) && isObject(value)
         ? deepMerge(result[key], value)

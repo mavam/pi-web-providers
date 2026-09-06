@@ -1,16 +1,16 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { createWebMux } from "../src/index.js";
+import { createWebfox } from "../src/index.js";
 import { customConfig } from "./helpers.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("application contracts", () => {
   it("never selects a provider from credentials", async () => {
-    const client = createWebMux({
+    const client = createWebfox({
       config: {},
       env: { BRAVE_SEARCH_API_KEY: "present" },
     });
     await expect(client.search({ queries: ["hello"] })).rejects.toThrow(
-      "web config default search brave",
+      "webfox config default search brave",
     );
   });
   it("preserves ordered partial results and provider option precedence", async () => {
@@ -18,7 +18,7 @@ describe("application contracts", () => {
     config.providers!.custom!.options = {
       search: { shared: "provider", nested: { one: 1 } },
     };
-    const result = await createWebMux({ config }).search({
+    const result = await createWebfox({ config }).search({
       queries: ["slow", "fail", "third"],
       timeoutMs: 250,
       options: { shared: "call", nested: { two: 2 } },
@@ -37,7 +37,7 @@ describe("application contracts", () => {
     });
   });
   it("uses adapter input indexes even when redirected pages are reordered", async () => {
-    const result = await createWebMux({ config: customConfig() }).contents({
+    const result = await createWebfox({ config: customConfig() }).contents({
       urls: [
         "https://redirected.test/article",
         "https://exact.test",
@@ -70,7 +70,7 @@ describe("application contracts", () => {
         new Response(JSON.stringify({ web: { results: [] } })),
       );
     vi.stubGlobal("fetch", fetch);
-    const result = await createWebMux({
+    const result = await createWebfox({
       config,
       env: { BRAVE_SEARCH_API_KEY: "secret" },
     }).search({ provider: "brave", queries: ["brave"] });
@@ -88,7 +88,7 @@ describe("application contracts", () => {
       env: { SAFE_SECRET: { value: "configured-secret" } },
     };
     const progress: string[] = [];
-    const result = await createWebMux({ config }).answer({
+    const result = await createWebfox({ config }).answer({
       queries: ["configured-secret"],
       onProgress: (event) => progress.push(event.message),
     });
@@ -99,7 +99,7 @@ describe("application contracts", () => {
   });
   it("returns cancellation without reclassifying message substrings", async () => {
     const controller = new AbortController();
-    const client = createWebMux({ config: customConfig() });
+    const client = createWebfox({ config: customConfig() });
     const pending = client.research({
       input: "slow",
       signal: controller.signal,
@@ -116,7 +116,7 @@ describe("application contracts", () => {
       'console.error("timeout cancelled but not a timeout");process.exit(1)',
     ];
     expect(
-      (await createWebMux({ config }).answer({ queries: ["x"] })).results[0],
+      (await createWebfox({ config }).answer({ queries: ["x"] })).results[0],
     ).toMatchObject({ error: { code: "PROVIDER_FAILURE", retryable: false } });
   });
 });

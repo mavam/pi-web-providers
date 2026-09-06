@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
-import type { WebMuxConfig } from "../src/index.js";
-export function customConfig(): WebMuxConfig {
+import type { WebfoxConfig } from "../src/index.js";
+export function customConfig(): WebfoxConfig {
   const command = {
     argv: [process.execPath, resolve("test/fixtures/custom-provider.mjs")] as [
       string,

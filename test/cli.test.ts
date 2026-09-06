@@ -19,7 +19,7 @@ async function cli(
   input = "",
   extra: Record<string, unknown> = {},
 ) {
-  const cwd = await mkdtemp(join(tmpdir(), "web-mux-cli-"));
+  const cwd = await mkdtemp(join(tmpdir(), "webfox-cli-"));
   directories.push(cwd);
   const config = join(cwd, "config.json");
   await writeFile(config, JSON.stringify(customConfig()));
@@ -39,13 +39,29 @@ async function cli(
         done();
       },
     }),
-    env: { WEB_MUX_CONFIG: config },
+    env: { WEBFOX_CONFIG: config },
     cwd,
     ...extra,
   });
   return { code, stdout, stderr };
 }
 describe("CLI contracts", () => {
+  it("uses webfox in help, examples, and provider guidance", async () => {
+    const root = await cli(["--help"]);
+    expect(root.code).toBe(0);
+    expect(root.stdout).toContain("Usage: webfox");
+    expect(root.stdout).toContain("webfox search");
+    expect(root.stdout).toContain("webfox config default");
+    const search = await cli(["search", "--help"]);
+    expect(search.stdout).toContain("Usage: webfox search");
+    expect(search.stdout).toContain("Provider options: webfox search");
+    const invalid = await cli(["search", "query", "--provider", "invalid"]);
+    expect(invalid.stderr).toContain("See webfox providers");
+    const missing = await cli(["search", "query"], "", {
+      env: { XDG_CONFIG_HOME: directories[0] },
+    });
+    expect(missing.stderr).toContain("webfox config default search");
+  });
   it("keeps execution errors on stderr even with quiet text output", async () => {
     const failure = await cli(["search", "fail", "--quiet"]);
     expect(failure.code).toBe(1);

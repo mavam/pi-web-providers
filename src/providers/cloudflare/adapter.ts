@@ -1,4 +1,4 @@
-import { asWebMuxError } from "../../errors.js";
+import { asWebfoxError } from "../../errors.js";
 import { orderedContents } from "../../contents.js";
 import CloudflareClient from "cloudflare";
 
@@ -38,7 +38,7 @@ const cloudflareImplementation = {
         } catch (error) {
           return {
             url,
-            error: asWebMuxError(error).toJSON(),
+            error: asWebfoxError(error).toJSON(),
           };
         }
       }),

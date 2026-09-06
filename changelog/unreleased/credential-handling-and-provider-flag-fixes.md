@@ -5,7 +5,7 @@ authors:
   - mavam
 prs:
   - 37
-created: 2026-09-05T17:32:33.466496Z
+created: 2026-09-05 17:32:33.466496+00:00
 ---
 
 Configured credentials are redacted consistently from progress, result values,
@@ -17,7 +17,7 @@ references.
 Provider-specific flags also work when `--no-color` precedes the command:
 
 ```sh
-web --no-color search --provider brave --mode web "Node.js release notes"
+webfox --no-color search --provider brave --mode web "Node.js release notes"
 ```
 
 Complex options remain available through `--options-json`; explicit typed flags

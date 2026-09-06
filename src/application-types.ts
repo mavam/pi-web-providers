@@ -10,12 +10,12 @@ import type {
   SearchDocument,
   SearchOptions,
 } from "./domain.js";
-import type { WebMuxConfig } from "./configuration/types.js";
+import type { WebfoxConfig } from "./configuration/types.js";
 import type { ProviderMetadata } from "./providers/metadata.js";
 export type { ProviderMetadata } from "./providers/metadata.js";
 
-export interface CreateWebMuxOptions {
-  config?: WebMuxConfig;
+export interface CreateWebfoxOptions {
+  config?: WebfoxConfig;
   configPath?: string;
   cwd?: string;
   env?: Record<string, string | undefined>;
@@ -32,7 +32,7 @@ export interface CapabilityInspection {
   optionSchema?: Record<string, unknown>;
   defaults: { maxResults?: number; options: Record<string, unknown> };
 }
-export interface WebMuxClient {
+export interface WebfoxClient {
   search(options: SearchOptions): Promise<SearchDocument>;
   contents(options: ContentsOptions): Promise<ContentsDocument>;
   answer(options: AnswerOptions): Promise<AnswerDocument>;

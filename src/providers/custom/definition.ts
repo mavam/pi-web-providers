@@ -3,7 +3,7 @@ import { defineProvider } from "../definition.js";
 export const customProvider = defineProvider({
   id: "custom",
   label: "Custom",
-  docsUrl: "https://github.com/mavam/web-mux#custom-providers",
+  docsUrl: "https://github.com/mavam/pi-web-providers#custom-providers",
   local: true,
   credentials: [],
   fields: ["commands", "options"],

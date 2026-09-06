@@ -1,4 +1,4 @@
-import { asWebMuxError, httpError } from "../../errors.js";
+import { asWebfoxError, httpError } from "../../errors.js";
 import { orderedContents } from "../../contents.js";
 import type { ContentsResponse } from "../../contents.js";
 import type { ProviderContext, SearchResponse } from "../contract.js";
@@ -97,7 +97,7 @@ async function fetchOllamaContents(
         } catch (error) {
           return {
             url,
-            error: asWebMuxError(error).toJSON(),
+            error: asWebfoxError(error).toJSON(),
           };
         }
       }),

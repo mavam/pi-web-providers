@@ -1,15 +1,15 @@
-import { WebMuxError } from "../errors.js";
+import { WebfoxError } from "../errors.js";
 
 export function deadline(timeoutMs: number, parent?: AbortSignal) {
   const controller = new AbortController();
   const abort = () =>
-    controller.abort(new WebMuxError("CANCELLED", "Operation cancelled."));
+    controller.abort(new WebfoxError("CANCELLED", "Operation cancelled."));
   if (parent?.aborted) abort();
   else parent?.addEventListener("abort", abort, { once: true });
   const timer = setTimeout(
     () =>
       controller.abort(
-        new WebMuxError(
+        new WebfoxError(
           "TIMEOUT",
           `Operation exceeded its ${formatDuration(timeoutMs)} overall deadline.`,
         ),
@@ -44,7 +44,7 @@ export async function withSignal<T>(
   return new Promise((resolve, reject) => {
     const abort = () =>
       reject(
-        signal.reason ?? new WebMuxError("CANCELLED", "Operation cancelled."),
+        signal.reason ?? new WebfoxError("CANCELLED", "Operation cancelled."),
       );
     if (signal.aborted) abort();
     else signal.addEventListener("abort", abort, { once: true });

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createWebMux } from "../src/index.js";
+import { createWebfox } from "../src/index.js";
 
 const { contents, getContentsJob } = vi.hoisted(() => ({
   contents: vi.fn(),
@@ -32,7 +32,7 @@ it("polls async contents without hiding work in an SDK waiter and retains report
         { status: "success", url: "https://final.test", content: "page" },
       ],
     });
-  const client = createWebMux({
+  const client = createWebfox({
     config: {},
     env: { VALYU_API_KEY: "test-key" },
   });
@@ -60,7 +60,7 @@ it("does not create a second contents job when a poll fails, even with retries e
   getContentsJob.mockRejectedValue(
     Object.assign(new Error("connection reset"), { code: "ECONNRESET" }),
   );
-  const client = createWebMux({
+  const client = createWebfox({
     config: { execution: { retries: 3, retryDelayMs: 0 } },
     env: { VALYU_API_KEY: "test-key" },
   });

@@ -1,10 +1,10 @@
 import { expect, it, vi } from "vitest";
-import { createWebMux } from "../src/index.js";
+import { createWebfox } from "../src/index.js";
 vi.mock("openai", () => {
   throw new Error("Inspection initialized an SDK");
 });
 it("validates every lightweight definition and default without SDK initialization", () => {
-  const client = createWebMux({ config: {}, env: {} });
+  const client = createWebfox({ config: {}, env: {} });
   for (const provider of client.listProviders()) {
     for (const capability of provider.capabilities) {
       expect(client.inspectCapability(capability, provider.id).provider).toBe(
@@ -17,7 +17,7 @@ it("validates every lightweight definition and default without SDK initializatio
   });
 });
 it("inspects supported providers and exact schemas without loading their SDKs", () => {
-  const client = createWebMux({
+  const client = createWebfox({
     config: { defaults: { search: { provider: "openai" } } },
     env: {},
   });

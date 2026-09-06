@@ -3,7 +3,7 @@ import type {
   ProviderId,
   SerializedError,
 } from "./domain.js";
-import { WebMuxError } from "./errors.js";
+import { WebfoxError } from "./errors.js";
 
 /** Internal normalized page, before the adapter associates its request index. */
 export interface ContentsAnswer extends DocumentContents {
@@ -33,7 +33,7 @@ export function orderedContents(
         ? {
             error:
               typeof answer.error === "string"
-                ? new WebMuxError("PROVIDER_FAILURE", answer.error).toJSON()
+                ? new WebfoxError("PROVIDER_FAILURE", answer.error).toJSON()
                 : answer.error,
           }
         : { error: undefined }),

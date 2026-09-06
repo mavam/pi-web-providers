@@ -1,4 +1,4 @@
-import { asWebMuxError } from "../../errors.js";
+import { asWebfoxError } from "../../errors.js";
 import { orderedContents } from "../../contents.js";
 import {
   type FetchParams,
@@ -121,7 +121,7 @@ const linkupImplementation = {
           } catch (error) {
             return {
               url,
-              error: asWebMuxError(error).toJSON(),
+              error: asWebfoxError(error).toJSON(),
             };
           }
         }),

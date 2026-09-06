@@ -1,11 +1,11 @@
 # Custom provider example
 
 `provider.mjs` implements all four capabilities without network access. Run the
-example from the repository root using the included `web-mux.json`:
+example from the repository root using the included `webfox.json`:
 
 ```sh
-web search "example query" --config examples/custom/web-mux.json
-web contents https://example.com --config examples/custom/web-mux.json --format json
+webfox search "example query" --config examples/custom/webfox.json
+webfox contents https://example.com --config examples/custom/webfox.json --format json
 ```
 
 The configuration defines explicit custom commands and saved defaults. In your

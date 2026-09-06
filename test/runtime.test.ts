@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createWebMux } from "../src/index.js";
+import { createWebfox } from "../src/index.js";
 import { executeAsyncResearch } from "../src/runtime/polling.js";
-import { WebMuxError } from "../src/errors.js";
+import { WebfoxError } from "../src/errors.js";
 const { markdown } = vi.hoisted(() => ({ markdown: vi.fn() }));
 vi.mock("cloudflare", () => ({
   default: class {
@@ -18,7 +18,7 @@ it("retries structurally transient per-page failures on safe adapters", async ()
       Object.assign(new Error("rate limited"), { status: 429 }),
     )
     .mockResolvedValueOnce("page");
-  const client = createWebMux({
+  const client = createWebfox({
     config: { execution: { retries: 1, retryDelayMs: 0 } },
     env: { CLOUDFLARE_API_TOKEN: "token", CLOUDFLARE_ACCOUNT_ID: "account" },
   });
@@ -74,7 +74,7 @@ it("bounds retries and backoff by one overall deadline", async () => {
     .fn()
     .mockImplementation(async () => new Response("busy", { status: 503 }));
   vi.stubGlobal("fetch", fetch);
-  const client = createWebMux({
+  const client = createWebfox({
     config: { execution: { retries: 10, retryDelayMs: 60 } },
     env: { BRAVE_SEARCH_API_KEY: "key" },
   });
@@ -93,7 +93,7 @@ it("never retries research creation and preserves explicit terminal errors", asy
   const start = vi
     .fn()
     .mockRejectedValue(
-      new WebMuxError("PROVIDER_FAILURE", "busy", { retryable: true }),
+      new WebfoxError("PROVIDER_FAILURE", "busy", { retryable: true }),
     );
   await expect(
     executeAsyncResearch({

@@ -31,7 +31,7 @@ export interface ProviderConfiguration {
   options?: Partial<Record<Capability, Record<string, unknown>>>;
   commands?: Partial<Record<Capability, CustomCommand>>;
 }
-export interface WebMuxConfig {
+export interface WebfoxConfig {
   $schema?: string;
   defaults?: Partial<Record<Capability, CapabilityDefault>>;
   execution?: ExecutionConfig;

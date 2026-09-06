@@ -10,7 +10,7 @@ const sourcePackageJson = JSON.parse(
   await readFile(join(root, "package.json"), "utf8"),
 );
 const expectedSchemaUrl = `https://unpkg.com/${sourcePackageJson.name}@${sourcePackageJson.version}/dist/config.schema.json`;
-const directory = await mkdtemp(join(tmpdir(), "web-mux-package-smoke-"));
+const directory = await mkdtemp(join(tmpdir(), "webfox-package-smoke-"));
 let archive;
 
 try {
@@ -37,20 +37,20 @@ try {
 
   const executable =
     process.platform === "win32"
-      ? join(directory, "node_modules", ".bin", "web.cmd")
-      : join(directory, "node_modules", ".bin", "web");
+      ? join(directory, "node_modules", ".bin", "webfox.cmd")
+      : join(directory, "node_modules", ".bin", "webfox");
   const help = execFileSync(executable, ["--help"], {
     cwd: directory,
     encoding: "utf8",
   });
-  if (!help.includes("web-mux"))
-    throw new Error("packed web --help did not run");
+  if (!help.includes("webfox"))
+    throw new Error("packed webfox --help did not run");
   const version = execFileSync(executable, ["--version"], {
     cwd: directory,
     encoding: "utf8",
   }).trim();
   if (version !== sourcePackageJson.version)
-    throw new Error("packed web --version does not match package metadata");
+    throw new Error("packed webfox --version does not match package metadata");
 
   execFileSync(
     process.execPath,
@@ -58,8 +58,8 @@ try {
       "--input-type=module",
       "--eval",
       [
-        'const library = await import("web-mux");',
-        'if (typeof library.createWebMux !== "function") throw new Error("missing createWebMux");',
+        'const library = await import("webfox");',
+        'if (typeof library.createWebfox !== "function") throw new Error("missing createWebfox");',
         `if (library.CONFIG_SCHEMA_URL !== ${JSON.stringify(expectedSchemaUrl)}) throw new Error("library schema version does not match package metadata");`,
       ].join("\n"),
     ],
@@ -68,7 +68,7 @@ try {
 
   const packageJson = JSON.parse(
     await readFile(
-      join(directory, "node_modules", "web-mux", "package.json"),
+      join(directory, "node_modules", "webfox", "package.json"),
       "utf8",
     ),
   );
@@ -78,19 +78,25 @@ try {
   ) {
     throw new Error("packed metadata is incorrect");
   }
+  if (
+    JSON.stringify(Object.keys(packageJson.bin)) !==
+      JSON.stringify(["webfox"]) ||
+    packageJson.bin.webfox.replace(/^\.\//, "") !== "dist/cli.js"
+  )
+    throw new Error("packed package must expose only the webfox executable");
   const schema = JSON.parse(
     await readFile(
-      join(directory, "node_modules", "web-mux", "dist", "config.schema.json"),
+      join(directory, "node_modules", "webfox", "dist", "config.schema.json"),
       "utf8",
     ),
   );
   if (schema.$id !== expectedSchemaUrl)
     throw new Error("packed schema version does not match package metadata");
-  const configPath = join(directory, "web-mux.json");
+  const configPath = join(directory, "webfox.json");
   const sample = join(
     directory,
     "node_modules",
-    "web-mux",
+    "webfox",
     "examples",
     "custom",
     "provider.mjs",
@@ -168,7 +174,7 @@ try {
     [
       "--input-type=module",
       "--eval",
-      'if (typeof (await import("web-mux/pi")).default !== "function") throw new Error("missing pi extension")',
+      'if (typeof (await import("webfox/pi")).default !== "function") throw new Error("missing pi extension")',
     ],
     { cwd: directory, stdio: "inherit" },
   );

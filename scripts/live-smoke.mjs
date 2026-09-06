@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { parseArgs } from "node:util";
-import { CAPABILITIES, createWebMux } from "../dist/index.js";
+import { CAPABILITIES, createWebfox } from "../dist/index.js";
 
 const controller = new AbortController();
 const cancel = () => controller.abort();
@@ -40,7 +40,7 @@ try {
     const options = JSON.parse(values["options-json"]);
     if (!options || typeof options !== "object" || Array.isArray(options))
       throw new Error("--options-json must be a JSON object.");
-    const client = createWebMux({ configPath: values.config });
+    const client = createWebfox({ configPath: values.config });
     const provider = client.getProvider(values.provider);
     if (!provider) throw new Error(`Unknown provider: ${values.provider}`);
     const capabilities = values.capability

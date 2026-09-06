@@ -1,4 +1,4 @@
-import { asWebMuxError, WebMuxError } from "../errors.js";
+import { asWebfoxError, WebfoxError } from "../errors.js";
 import type {
   ProviderContext,
   ProviderId,
@@ -31,7 +31,7 @@ export async function executeAsyncResearch({
   context.onProgress?.(`Starting research via ${providerLabel}`);
   const job = await withSignal(start(context), context.signal);
   if (!job.id)
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_FAILURE",
       `${providerLabel} returned no research job id.`,
     );
@@ -46,7 +46,7 @@ export async function executeAsyncResearch({
       errors = 0;
     } catch (error) {
       if (context.signal?.aborted) throw context.signal.reason;
-      const normalized = asWebMuxError(error);
+      const normalized = asWebfoxError(error);
       if (
         !normalized.options.retryable ||
         ++errors > (context.retryPolicy?.retries ?? 0)
@@ -77,7 +77,7 @@ export async function executeAsyncResearch({
         }
       );
     if (result.status === "failed" || result.status === "cancelled")
-      throw new WebMuxError(
+      throw new WebfoxError(
         result.status === "cancelled" ? "CANCELLED" : "PROVIDER_FAILURE",
         `${providerLabel} research ${result.status}${result.error ? `: ${result.error}` : "."}`,
         { retryable: false },

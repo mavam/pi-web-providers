@@ -1,4 +1,4 @@
-import { asWebMuxError, httpError, WebMuxError } from "../../errors.js";
+import { asWebfoxError, httpError, WebfoxError } from "../../errors.js";
 import { orderedContents } from "../../contents.js";
 import FirecrawlClient, {
   type Document,
@@ -82,7 +82,7 @@ const firecrawlImplementation = {
           } catch (error) {
             return {
               url,
-              error: asWebMuxError(error).toJSON(),
+              error: asWebfoxError(error).toJSON(),
             };
           }
         }),
@@ -137,7 +137,7 @@ function createClient(config: Firecrawl): FirecrawlClient {
   const apiUrl = config.baseUrl;
   const apiKey = config.credentials?.api;
   if (isFirecrawlCloudApiUrl(apiUrl) && !apiKey) {
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
       "Firecrawl cloud requires FIRECRAWL_API_KEY; self-hosted instances can use baseUrl without a key.",
     );
@@ -192,7 +192,7 @@ async function scrapeQuestion(
   const apiUrl = config.baseUrl ?? FIRECRAWL_DEFAULT_API_URL;
   const apiKey = config.credentials?.api;
   if (isFirecrawlCloudApiUrl(apiUrl) && !apiKey) {
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
       "Firecrawl cloud requires FIRECRAWL_API_KEY; self-hosted instances can use baseUrl without a key.",
     );

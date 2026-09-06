@@ -1,33 +1,43 @@
-# web-mux
+# webfox
 
-Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, `web` CLI, and pi extension.
+Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, `webfox` CLI, and pi extension.
 
 ## 🚀 Installation
 
-Install `web-mux` with your preferred package manager. A global installation
-provides the `web` executable; an application dependency provides the TypeScript
+Install `webfox` with your preferred package manager. A global installation
+provides the `webfox` executable; an application dependency provides the TypeScript
 library. Requires Node.js 22 or newer.
 
 For pi:
 
 ```sh
-pi install npm:web-mux
+pi install npm:webfox
 ```
 
 ## ✨ Usage
+
+The executable is `webfox`. If you prefer `web` interactively, add an optional
+shell alias (Bash or Zsh):
+
+```sh
+alias web=webfox
+```
+
+The package does not install a `web` executable, so it won't conflict with another
+command of that name. Use `webfox` in scripts.
 
 Make your first request without a configuration file:
 
 ```sh
 export BRAVE_SEARCH_API_KEY=…
-web search "Node.js release notes" --provider brave
+webfox search "Node.js release notes" --provider brave
 ```
 
 Save your choice for subsequent requests:
 
 ```sh
-web config default search brave
-web search "TypeBox validation"
+webfox config default search brave
+webfox search "TypeBox validation"
 ```
 
 Provider selection is always explicit: use `--provider` or a saved capability
@@ -36,20 +46,20 @@ default. Credentials never determine which provider runs.
 ### Everyday commands
 
 ```sh
-web search "Node.js cancellation" "Bun cancellation"
-web contents https://example.com/a https://example.com/b --provider tavily
-web answer "What is MCP?" "What is A2A?" --provider openai
-web research "Compare databases" --provider gemini --timeout 20m
+webfox search "Node.js cancellation" "Bun cancellation"
+webfox contents https://example.com/a https://example.com/b --provider tavily
+webfox answer "What is MCP?" "What is A2A?" --provider openai
+webfox research "Compare databases" --provider gemini --timeout 20m
 ```
 
 Quote each independent query or question. Search and answer accept up to ten
 inputs. Research accepts exactly one brief. Use `-` alone for stdin:
 
 ```sh
-web search - < query.txt
-web answer - < question.txt
-web research - --provider gemini < brief.md
-web contents - --provider tavily < urls.txt
+webfox search - < query.txt
+webfox answer - < question.txt
+webfox research - --provider gemini < brief.md
+webfox contents - --provider tavily < urls.txt
 ```
 
 Search, answer, and research read one complete text input, including newlines.
@@ -73,9 +83,9 @@ Cancelling a remote research request does not necessarily cancel its billable jo
 ### Progressive help
 
 ```sh
-web search --help
-web search --provider openai --help
-web search --help-advanced
+webfox search --help
+webfox search --provider openai --help
+webfox search --help-advanced
 ```
 
 Ordinary help contains common controls. Explicit provider help adds that
@@ -102,8 +112,8 @@ with `--url`.
 ### Predictable output
 
 ```sh
-web search "TypeBox" --format text
-web search "TypeBox" --format json
+webfox search "TypeBox" --format text
+webfox search "TypeBox" --format json
 ```
 
 Text remains the default when piped. Stdout contains results, not success banners
@@ -145,8 +155,8 @@ Exit codes: **0** success/help, **1** provider failure, partial result, or timeo
 ### Inspect providers
 
 ```sh
-web providers
-web providers openai
+webfox providers
+webfox providers openai
 ```
 
 Discovery distinguishes **Supported**, **Configured**, and **Selected default**.
@@ -160,9 +170,9 @@ JSON is for advanced setups. You don’t need to learn its schema to select and
 save a provider. Inspect or validate the file with:
 
 ```sh
-web config path
-web config show
-web config validate
+webfox config path
+webfox config show
+webfox config validate
 ```
 
 `show` redacts literal credential values and credential commands. `validate`
@@ -172,10 +182,10 @@ or making requests.
 Configuration paths resolve in this order:
 
 1. `--config` or the library’s `configPath`.
-2. `WEB_MUX_CONFIG`.
-3. `%APPDATA%\web-mux\config.json` on Windows, when `APPDATA` is set.
-4. `$XDG_CONFIG_HOME/web-mux/config.json`.
-5. `~/.config/web-mux/config.json`.
+2. `WEBFOX_CONFIG`.
+3. `%APPDATA%\webfox\config.json` on Windows, when `APPDATA` is set.
+4. `$XDG_CONFIG_HOME/webfox/config.json`.
+5. `~/.config/webfox/config.json`.
 
 A missing default file means no saved settings. An explicitly selected missing
 file is an error; `config default` can create it. The setter preserves unrelated
@@ -185,7 +195,7 @@ See [example-config.json](./example-config.json). A smaller example:
 
 ```json
 {
-  "$schema": "https://unpkg.com/web-mux@0.1.0/dist/config.schema.json",
+  "$schema": "https://unpkg.com/webfox@4.0.0/dist/config.schema.json",
   "defaults": {
     "search": { "provider": "brave", "maxResults": 5 },
     "answer": { "provider": "openai" }
@@ -214,7 +224,7 @@ See [example-config.json](./example-config.json). A smaller example:
 Capability defaults contain only provider selection and portable settings
 (currently search’s `maxResults`). Provider-specific options belong exclusively
 under that provider. Unknown configuration fields are rejected. The published
-schema is available as `web-mux/config.schema.json`.
+schema is available as `webfox/config.schema.json`.
 
 Defaults are 30 seconds for ordinary operations, 30 minutes for research, four
 concurrent inputs, and no retries. Retry backoff starts at two seconds and grows
@@ -234,7 +244,7 @@ Each credential source has exactly one form:
 { "value": "literal-secret" }
 ```
 
-Standard environment references work without a provider section. `web providers
+Standard environment references work without a provider section. `webfox providers
 <id>` lists credential names. Brave uses `BRAVE_SEARCH_API_KEY` for search and
 `BRAVE_ANSWERS_API_KEY` for answers/research. Cloudflare additionally requires
 `CLOUDFLARE_ACCOUNT_ID`. Claude and Codex can use their local SDK authentication.
@@ -253,9 +263,9 @@ also redacted. This policy is not a sandbox for untrusted adapters or commands.
 ## 📚 Library
 
 ```ts
-import { createWebMux } from "web-mux";
+import { createWebfox } from "webfox";
 
-const web = createWebMux();
+const web = createWebfox();
 const document = await web.search({
   provider: "openai",
   queries: ["TypeBox validation", "Node.js AbortSignal"],
@@ -271,7 +281,7 @@ for (const result of document.results) {
 }
 ```
 
-`createWebMux({ config?, configPath?, cwd?, env? })` snapshots configuration and
+`createWebfox({ config?, configPath?, cwd?, env? })` snapshots configuration and
 environment for one client. It exposes:
 
 - `search({ queries, maxResults?, ...controls })`.
@@ -284,7 +294,7 @@ environment for one client. It exposes:
   saved selections.
 
 Request controls are `provider`, `options`, `timeoutMs`, `signal`, and
-`onProgress`. Planning errors throw `WebMuxError`; per-input execution failures
+`onProgress`. Planning errors throw `WebfoxError`; per-input execution failures
 remain in the document. Provider registration is deliberately not public.
 
 ## 🔌 Providers
@@ -334,33 +344,23 @@ objects. See the deterministic [custom-provider example](./examples/custom/READM
 
 ### pi extension
 
+The pi interface stays generic: `web_search`, `web_contents`, `web_answer`, and
+`web_research`, with labels such as “Web Search.”
+
 The extension uses the same inspection and execution API, binds only explicitly
 selected capability defaults, and exposes each provider’s option schema. Restart
 pi after changing configuration. It forwards cancellation and progress, marks
 partial results as errors, and truncates tool output at 2,000 lines or 50 KiB,
 with full results saved to a temporary file. It needs no globally installed
-`web` command and starts no background research jobs.
-
-## 🩺 Migration
-
-The former `pi-web-providers` configuration is not auto-detected or converted.
-Save new defaults with `web config default <capability> <provider>`. Move old
-`tools.<capability>` selections to `defaults.<capability>.provider`, execution
-settings to `execution`, credentials to explicit source objects, and custom
-commands to `providers.custom.commands.<capability>`.
-
-For earlier branch versions, replace `--query` with quoted positional inputs and
-`--output` with `--format`. Provider-native output is not exposed. Move
-`defaults.<capability>.options` into `providers.<id>.options.<capability>`.
-Use `config default` instead of starter-file/editor commands.
+`webfox` command and starts no background research jobs.
 
 ## 🧹 Uninstall
 
 ```sh
-pi remove npm:web-mux
+pi remove npm:webfox
 ```
 
-For standalone installations, remove `web-mux` with your package manager.
+For standalone installations, remove `webfox` with your package manager.
 
 ## 📄 License
 

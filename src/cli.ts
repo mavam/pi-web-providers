@@ -15,13 +15,13 @@ import { PACKAGE_VERSION } from "./package-metadata.js";
 import {
   CAPABILITIES,
   PROVIDER_IDS,
-  createWebMux,
+  createWebfox,
   loadConfig,
   redactConfig,
   resolveConfigPath,
   setCapabilityDefault,
   validateConfiguredOptions,
-  WebMuxError,
+  WebfoxError,
   type Capability,
   type ProviderId,
 } from "./index.js";
@@ -82,7 +82,7 @@ export async function runCli(
   );
   const controller = new AbortController();
   const abort = () =>
-    controller.abort(new WebMuxError("CANCELLED", "Operation cancelled."));
+    controller.abort(new WebfoxError("CANCELLED", "Operation cancelled."));
   const signals = io.signalSource ?? process;
   signals.once("SIGINT", abort);
   signals.once("SIGTERM", abort);
@@ -100,15 +100,15 @@ export async function runCli(
     while (argv[0] === "--no-color") argv = argv.slice(1);
     if (argv[0] === "help" && CAPABILITIES.includes(argv[1] as Capability))
       argv = [argv[1], "--help", ...argv.slice(2)];
-    const root = output(new Command("web"))
+    const root = output(new Command("webfox"))
       .description(
-        "web-mux: search, extract pages, answer questions, and research with an explicit provider.",
+        "webfox: search, extract pages, answer questions, and research with an explicit provider.",
       )
       .version(PACKAGE_VERSION, "--version")
       .helpCommand(false);
     root.addHelpText(
       "after",
-      '\nStart: web search "Node.js release notes" --provider brave\nSave:  web config default search brave\n\nRun web <command> --help for common controls.\nRun web <command> --provider <id> --help for provider options.\nRun web <command> --help-advanced for advanced controls.',
+      '\nStart: webfox search "Node.js release notes" --provider brave\nSave:  webfox config default search brave\n\nRun webfox <command> --help for common controls.\nRun webfox <command> --provider <id> --help for provider options.\nRun webfox <command> --help-advanced for advanced controls.',
     );
     for (const capability of CAPABILITIES) {
       const command = root
@@ -146,7 +146,7 @@ export async function runCli(
       const client =
         help && !controls.provider
           ? undefined
-          : createWebMux({
+          : createWebfox({
               configPath: controls.config && resolve(io.cwd, controls.config),
               cwd,
               env: io.env,
@@ -246,7 +246,7 @@ export async function runCli(
       .argument("[id]")
       .option("--config <path>", "Advanced: read this configuration file")
       .action((id: string | undefined, controls: { config?: string }) => {
-        const client = createWebMux({
+        const client = createWebfox({
           configPath: controls.config && resolve(io.cwd, controls.config),
           cwd: io.cwd,
           env: io.env,
@@ -288,7 +288,7 @@ export async function runCli(
             io.stdout.write(`${key}: ${env}\n`);
           for (const capability of entry.capabilities)
             io.stdout.write(
-              `\n${capability} defaults: ${JSON.stringify(client.inspectCapability(capability, entry.id).defaults)}\nOptions: web ${capability} --provider ${entry.id} --help\n`,
+              `\n${capability} defaults: ${JSON.stringify(client.inspectCapability(capability, entry.id).defaults)}\nOptions: webfox ${capability} --provider ${entry.id} --help\n`,
             );
         }
       });
@@ -360,9 +360,9 @@ export async function runCli(
   } catch (error) {
     if (error instanceof CommanderError) return error.exitCode === 0 ? 0 : 2;
     const normalized =
-      error instanceof WebMuxError
+      error instanceof WebfoxError
         ? error
-        : new WebMuxError(
+        : new WebfoxError(
             "INVALID_INPUT",
             error instanceof Error ? error.message : String(error),
           );
@@ -452,7 +452,7 @@ function addProviderOption(
     );
 }
 function capabilityHelp(capability: Capability): string {
-  return `\n${capability === "contents" ? "Use '-' alone for newline-separated URLs on stdin." : capability === "research" ? "Provide exactly one brief, or '-' for one complete stdin input." : "Quote each independent input (up to ten). Use '-' alone for one complete stdin input."}\nResults preserve input order. Progress and errors go to stderr.\n\nExamples:\n  ${capability === "search" ? 'web search "Node.js cancellation" "Bun cancellation" --provider brave' : capability === "contents" ? "web contents https://example.com --provider tavily" : capability === "answer" ? 'web answer "What is MCP?" "What is A2A?" --provider openai' : 'web research "Compare databases" --provider gemini --timeout 20m'}\n\nProvider options: web ${capability} --provider <id> --help\nAdvanced controls: web ${capability} --help-advanced\nRetry tuning: execution.retries and execution.retryDelayMs in JSON configuration.\n`;
+  return `\n${capability === "contents" ? "Use '-' alone for newline-separated URLs on stdin." : capability === "research" ? "Provide exactly one brief, or '-' for one complete stdin input." : "Quote each independent input (up to ten). Use '-' alone for one complete stdin input."}\nResults preserve input order. Progress and errors go to stderr.\n\nExamples:\n  ${capability === "search" ? 'webfox search "Node.js cancellation" "Bun cancellation" --provider brave' : capability === "contents" ? "webfox contents https://example.com --provider tavily" : capability === "answer" ? 'webfox answer "What is MCP?" "What is A2A?" --provider openai' : 'webfox research "Compare databases" --provider gemini --timeout 20m'}\n\nProvider options: webfox ${capability} --provider <id> --help\nAdvanced controls: webfox ${capability} --help-advanced\nRetry tuning: execution.retries and execution.retryDelayMs in JSON configuration.\n`;
 }
 export function parseDuration(value: string): number {
   const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/.exec(value);
@@ -474,7 +474,7 @@ function positiveInteger(value: string, flag: string): number {
 function parseProvider(value: string): ProviderId {
   if (!PROVIDER_IDS.includes(value as ProviderId))
     throw new InvalidArgumentError(
-      `Unknown provider '${value}'. See web providers.`,
+      `Unknown provider '${value}'. See webfox providers.`,
     );
   return value as ProviderId;
 }
@@ -485,13 +485,13 @@ async function readInputs(
   signal: AbortSignal,
 ): Promise<string[]> {
   if (!inputs.length || (capability === "research" && inputs.length !== 1))
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       `${capability} requires ${capability === "research" ? "exactly one brief" : "one or more inputs"} or '-'.`,
     );
   if (!inputs.includes("-")) return inputs;
   if (inputs.length !== 1)
-    throw new WebMuxError("INVALID_INPUT", "Use '-' by itself for stdin.");
+    throw new WebfoxError("INVALID_INPUT", "Use '-' by itself for stdin.");
   const text = await new Promise<string>((resolvePromise, reject) => {
     let text = "";
     const cleanup = () => {
@@ -548,7 +548,7 @@ async function readOptions(
       throw new Error();
     return parsed;
   } catch {
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       "--options-json must contain a JSON object or name a readable @file.",
     );

@@ -2,14 +2,14 @@ import { readFile, mkdir, writeFile, rename, rm } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { CAPABILITIES, type Capability, type ProviderId } from "../domain.js";
-import { WebMuxError } from "../errors.js";
+import { WebfoxError } from "../errors.js";
 import {
   parseConfig,
   resolveConfigPath,
   type ConfigPathOptions,
 } from "./file.js";
 import { selectProvider, validateConfiguredOptions } from "./planning.js";
-import type { WebMuxConfig } from "./types.js";
+import type { WebfoxConfig } from "./types.js";
 
 const updates = new Map<string, Promise<unknown>>();
 export async function setCapabilityDefault(
@@ -18,16 +18,16 @@ export async function setCapabilityDefault(
   options: ConfigPathOptions = {},
 ): Promise<string> {
   if (!CAPABILITIES.includes(capability))
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       `Unknown capability '${capability}'. Choose ${CAPABILITIES.join(", ")}.`,
     );
   try {
     selectProvider({}, capability, provider);
   } catch (error) {
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
-      error instanceof WebMuxError
+      error instanceof WebfoxError
         ? error.message
         : "Invalid provider selection.",
     );
@@ -37,7 +37,7 @@ export async function setCapabilityDefault(
   const operation = previous
     .catch(() => {})
     .then(async () => {
-      let config: WebMuxConfig = {};
+      let config: WebfoxConfig = {};
       try {
         config = parseConfig(await readFile(path, "utf8"), path);
       } catch (error) {
@@ -65,8 +65,8 @@ export async function setCapabilityDefault(
   try {
     return await operation;
   } catch (error) {
-    if (error instanceof WebMuxError) throw error;
-    throw new WebMuxError(
+    if (error instanceof WebfoxError) throw error;
+    throw new WebfoxError(
       "INVALID_CONFIG",
       `Could not save provider default to ${path}. Check the path and file permissions.`,
     );

@@ -14,6 +14,9 @@ describe("package metadata", () => {
     );
     const expectedSchemaUrl = `https://unpkg.com/${packageJson.name}@${packageJson.version}/dist/config.schema.json`;
 
+    expect(packageJson.name).toBe("webfox");
+    expect(packageJson.bin).toEqual({ webfox: "./dist/cli.js" });
+    expect(packageJson.pi.extensions).toEqual(["./dist/pi.js"]);
     expect(PACKAGE_NAME).toBe(packageJson.name);
     expect(PACKAGE_VERSION).toBe(packageJson.version);
     expect(CONFIG_SCHEMA_URL).toBe(expectedSchemaUrl);

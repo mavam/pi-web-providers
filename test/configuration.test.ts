@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWebMux,
+  createWebfox,
   parseConfig,
   resolveConfigPath,
   setCapabilityDefault,
@@ -18,7 +18,7 @@ afterEach(async () => {
   );
 });
 async function directory() {
-  const path = await mkdtemp(join(tmpdir(), "web-mux-config-"));
+  const path = await mkdtemp(join(tmpdir(), "webfox-config-"));
   directories.push(path);
   return path;
 }
@@ -33,7 +33,7 @@ describe("configuration and credential boundaries", () => {
         },
       }),
     );
-    const client = createWebMux({ config, env: {} });
+    const client = createWebfox({ config, env: {} });
     expect(client.inspectCapability("answer").defaults.options).toMatchObject({
       onlyMainContent: false,
     });
@@ -50,15 +50,29 @@ describe("configuration and credential boundaries", () => {
       ),
     ).toThrow("Invalid");
   });
+  it("uses the webfox configuration directory on each platform", () => {
+    expect(
+      resolveConfigPath({ env: {}, home: "/home/test", platform: "linux" }),
+    ).toBe("/home/test/.config/webfox/config.json");
+    expect(
+      resolveConfigPath({ env: { APPDATA: "/appdata" }, platform: "win32" }),
+    ).toBe("/appdata/webfox/config.json");
+    expect(
+      resolveConfigPath({
+        env: { XDG_CONFIG_HOME: "/xdg" },
+        platform: "darwin",
+      }),
+    ).toBe("/xdg/webfox/config.json");
+  });
   it("resolves environment-selected files relative to the client working directory", async () => {
     const cwd = await directory();
     await writeFile(
       join(cwd, "relative.json"),
       JSON.stringify({ defaults: { search: { provider: "brave" } } }),
     );
-    const env = { WEB_MUX_CONFIG: "relative.json" };
+    const env = { WEBFOX_CONFIG: "relative.json" };
     expect(
-      createWebMux({ cwd, env }).inspectCapability("search").provider,
+      createWebfox({ cwd, env }).inspectCapability("search").provider,
     ).toBe("brave");
     await setCapabilityDefault("answer", "openai", { cwd, env });
     expect(
@@ -97,17 +111,17 @@ describe("configuration and credential boundaries", () => {
     expect(
       resolveConfigPath({
         configPath: "./chosen.json",
-        env: { WEB_MUX_CONFIG: "/ignored" },
+        env: { WEBFOX_CONFIG: "/ignored" },
       }),
     ).toMatch(/chosen.json$/);
     expect(
       resolveConfigPath({ env: { XDG_CONFIG_HOME: "/tmp/config-home" } }),
-    ).toBe("/tmp/config-home/web-mux/config.json");
+    ).toBe("/tmp/config-home/webfox/config.json");
     const config = customConfig();
     config.providers!.custom!.commands!.answer!.env = {
       SECRET: { command: ["never-run-this"] },
     };
-    const client = createWebMux({ config, env: {} });
+    const client = createWebfox({ config, env: {} });
     expect(client.inspectCapability("answer").configured).toBe(true);
     expect(
       client.listProviders().find((p) => p.id === "custom")?.selectedDefaults,
@@ -132,7 +146,7 @@ describe("configuration and credential boundaries", () => {
         },
       },
     };
-    const client = createWebMux({
+    const client = createWebfox({
       config,
       cwd,
       env: { TEST_SECRET: "client-one" },
@@ -142,7 +156,7 @@ describe("configuration and credential boundaries", () => {
         "[redacted]",
       );
     expect(await readFile(join(cwd, "runs"), "utf8")).toBe("x");
-    const other = createWebMux({
+    const other = createWebfox({
       config,
       cwd,
       env: { TEST_SECRET: "client-two" },
@@ -163,7 +177,7 @@ describe("configuration and credential boundaries", () => {
         ],
       },
     };
-    const result = await createWebMux({ config }).answer({
+    const result = await createWebfox({ config }).answer({
       queries: ["q"],
       timeoutMs: 40,
     });
@@ -178,10 +192,10 @@ describe("configuration and credential boundaries", () => {
       },
     };
     await expect(
-      createWebMux({ config }).answer({ queries: ["q"] }),
+      createWebfox({ config }).answer({ queries: ["q"] }),
     ).rejects.toThrow("Credential command failed");
     try {
-      await createWebMux({ config }).answer({ queries: ["q"] });
+      await createWebfox({ config }).answer({ queries: ["q"] });
     } catch (error) {
       expect(JSON.stringify(error)).not.toContain("secret-command-argument");
     }

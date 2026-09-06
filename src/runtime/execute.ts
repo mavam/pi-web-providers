@@ -19,7 +19,7 @@ import type {
   ProviderRequest,
   ProviderResult,
 } from "../providers/contract.js";
-import { asWebMuxError, WebMuxError } from "../errors.js";
+import { asWebfoxError, WebfoxError } from "../errors.js";
 import { CredentialResolver } from "./credentials.js";
 import { OutwardBoundary } from "./outward.js";
 import { deadline, orderedMap, sleep, withSignal } from "./lifecycle.js";
@@ -56,7 +56,7 @@ export class ExecutionRuntime {
       timeoutMs <= 0 ||
       timeoutMs > 2_147_483_647
     )
-      throw new WebMuxError(
+      throw new WebfoxError(
         "INVALID_INPUT",
         "timeoutMs must be a positive integer no larger than 2147483647.",
       );
@@ -161,7 +161,7 @@ export class ExecutionRuntime {
                 response.answers.length !== 1 ||
                 response.answers[0].inputIndex !== 0
               )
-                throw new WebMuxError(
+                throw new WebfoxError(
                   "PROVIDER_FAILURE",
                   "Provider returned missing, duplicate, or invalid contents input indexes.",
                 );
@@ -169,7 +169,7 @@ export class ExecutionRuntime {
               if (answer.error)
                 return fail(
                   input,
-                  new WebMuxError(answer.error.code, answer.error.message, {
+                  new WebfoxError(answer.error.code, answer.error.message, {
                     retryable: answer.error.retryable,
                   }),
                 );
@@ -214,7 +214,7 @@ export class ExecutionRuntime {
   ): Promise<ProviderResult> {
     const execute = adapter[request.capability];
     if (!execute)
-      throw new WebMuxError(
+      throw new WebfoxError(
         "PROVIDER_UNAVAILABLE",
         `Provider does not implement ${request.capability}.`,
       );
@@ -233,14 +233,14 @@ export class ExecutionRuntime {
         if (request.capability === "contents") {
           const page = (result as ProviderResult<"contents">).answers[0];
           if (page?.error)
-            throw new WebMuxError(page.error.code, page.error.message, {
+            throw new WebfoxError(page.error.code, page.error.message, {
               retryable: page.error.retryable,
             });
         }
         return result;
       } catch (error) {
         if (context.signal!.aborted) throw context.signal!.reason;
-        const normalized = asWebMuxError(error);
+        const normalized = asWebfoxError(error);
         if (!normalized.options.retryable || attempt >= retries)
           throw normalized;
         const delay = Math.min(

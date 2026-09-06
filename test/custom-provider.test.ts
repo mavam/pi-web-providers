@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createWebMux } from "../src/index.js";
+import { createWebfox } from "../src/index.js";
 import { customConfig } from "./helpers.js";
 it.each([
   [{ url: "https://test" }],
@@ -18,7 +18,7 @@ it.each([
       "-e",
       `console.log(${JSON.stringify(JSON.stringify({ answers }))})`,
     ];
-    const result = await createWebMux({ config }).contents({
+    const result = await createWebfox({ config }).contents({
       urls: ["https://test"],
     });
     expect(result.results[0]).toMatchObject({
@@ -28,7 +28,7 @@ it.each([
   },
 );
 it("keeps completed contents when another URL exceeds the deadline", async () => {
-  const result = await createWebMux({ config: customConfig() }).contents({
+  const result = await createWebfox({ config: customConfig() }).contents({
     urls: ["https://fast.test", "https://slow.test"],
     timeoutMs: 250,
   });
@@ -43,7 +43,7 @@ it("keeps completed contents when another URL exceeds the deadline", async () =>
   });
 });
 it("smokes all four custom-provider operations through the public API", async () => {
-  const client = createWebMux({ config: customConfig() });
+  const client = createWebfox({ config: customConfig() });
   expect((await client.search({ queries: ["custom"] })).status).toBe("ok");
   expect(
     (await client.contents({ urls: ["https://example.test"] })).status,

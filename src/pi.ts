@@ -9,18 +9,18 @@ import {
 import { Type, type TObject, type TProperties } from "typebox";
 import {
   CAPABILITIES,
-  createWebMux,
+  createWebfox as createWebClient,
   type Capability,
-  type WebMuxClient,
+  type WebfoxClient as WebClient,
 } from "./index.js";
 import { renderTextDocument } from "./render.js";
 
-export default function webMuxExtension(pi: ExtensionAPI): void {
-  const clients = new Map<string, WebMuxClient>();
+export default function webExtension(pi: ExtensionAPI): void {
+  const clients = new Map<string, WebClient>();
   const clientFor = (cwd: string) => {
     let client = clients.get(cwd);
     if (!client) {
-      client = createWebMux({ cwd });
+      client = createWebClient({ cwd });
       clients.set(cwd, client);
     }
     return client;
@@ -33,7 +33,7 @@ export default function webMuxExtension(pi: ExtensionAPI): void {
     pi.on("session_start", (_event, context) => {
       if (context.hasUI)
         context.ui.notify(
-          "web-mux registered no tools. Run `web config default search brave` to select a provider, then restart pi.",
+          "Web registered no tools. Select a default provider in the shared configuration, then restart pi.",
           "warning",
         );
     });
@@ -108,7 +108,7 @@ export default function webMuxExtension(pi: ExtensionAPI): void {
         let fullOutputPath: string | undefined;
         if (truncated.truncated) {
           fullOutputPath = join(
-            await mkdtemp(join(tmpdir(), "web-mux-")),
+            await mkdtemp(join(tmpdir(), "web-")),
             "result.json",
           );
           await withFileMutationQueue(fullOutputPath, () =>
@@ -121,7 +121,7 @@ export default function webMuxExtension(pi: ExtensionAPI): void {
         return {
           content: [{ type: "text" as const, text: body }],
           details: {
-            webMux: true,
+            webProviderResult: true,
             status: result.status,
             ...(fullOutputPath ? { fullOutputPath } : { result }),
           },
@@ -133,8 +133,8 @@ export default function webMuxExtension(pi: ExtensionAPI): void {
     if (
       event.details &&
       typeof event.details === "object" &&
-      "webMux" in event.details &&
-      event.details.webMux === true &&
+      "webProviderResult" in event.details &&
+      event.details.webProviderResult === true &&
       "status" in event.details &&
       event.details.status === "partial"
     )

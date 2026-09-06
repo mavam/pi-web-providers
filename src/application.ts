@@ -5,9 +5,9 @@ import {
   type RequestOptions,
 } from "./domain.js";
 import type {
-  CreateWebMuxOptions,
+  CreateWebfoxOptions,
   ProviderInspection,
-  WebMuxClient,
+  WebfoxClient,
 } from "./application-types.js";
 import { loadConfigSync, validateConfig } from "./configuration/file.js";
 import {
@@ -20,13 +20,13 @@ import { providers } from "./providers/registry.js";
 import type { ProviderDefinition } from "./providers/definition.js";
 import { ExecutionRuntime } from "./runtime/execute.js";
 import { OutwardBoundary } from "./runtime/outward.js";
-import { WebMuxError } from "./errors.js";
+import { WebfoxError } from "./errors.js";
 
-export function createWebMux(options: CreateWebMuxOptions = {}): WebMuxClient {
+export function createWebfox(options: CreateWebfoxOptions = {}): WebfoxClient {
   const cwd = resolve(options.cwd ?? process.cwd());
   const env = { ...(options.env ?? process.env) };
   const config = options.config
-    ? validateConfig(structuredClone(options.config), "createWebMux config")
+    ? validateConfig(structuredClone(options.config), "createWebfox config")
     : loadConfigSync({ configPath: options.configPath, env, cwd });
   validateConfiguredOptions(config);
   const runtime = new ExecutionRuntime(cwd, env);
@@ -130,7 +130,7 @@ export function createWebMux(options: CreateWebMuxOptions = {}): WebMuxClient {
       const maxResults =
         request.maxResults ?? config.defaults?.search?.maxResults ?? 5;
       if (!Number.isSafeInteger(maxResults) || maxResults < 1)
-        throw new WebMuxError(
+        throw new WebfoxError(
           "INVALID_INPUT",
           "maxResults must be a positive integer.",
         );
@@ -143,7 +143,7 @@ export function createWebMux(options: CreateWebMuxOptions = {}): WebMuxClient {
           if (!["http:", "https:"].includes(new URL(url).protocol))
             throw new Error();
         } catch {
-          throw new WebMuxError(
+          throw new WebfoxError(
             "INVALID_INPUT",
             "contents requires HTTP or HTTPS URLs.",
           );
@@ -201,13 +201,13 @@ export function createWebMux(options: CreateWebMuxOptions = {}): WebMuxClient {
 }
 function batch(values: unknown, name: string, max = Infinity): string[] {
   if (!Array.isArray(values) || values.length === 0 || values.length > max)
-    throw new WebMuxError(
+    throw new WebfoxError(
       "INVALID_INPUT",
       `${name} requires ${max === Infinity ? "one or more inputs" : `between 1 and ${max} inputs`}.`,
     );
   return values.map((value) => {
     if (typeof value !== "string" || !value.trim())
-      throw new WebMuxError(
+      throw new WebfoxError(
         "INVALID_INPUT",
         `${name} must contain non-empty strings.`,
       );

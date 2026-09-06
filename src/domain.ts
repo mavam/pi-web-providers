@@ -25,7 +25,7 @@ export const PROVIDER_IDS = [
 ] as const;
 export type ProviderId = (typeof PROVIDER_IDS)[number];
 
-export const WEB_MUX_ERROR_CODES = [
+export const WEBFOX_ERROR_CODES = [
   "INVALID_CONFIG",
   "INVALID_INPUT",
   "PROVIDER_UNAVAILABLE",
@@ -34,9 +34,9 @@ export const WEB_MUX_ERROR_CODES = [
   "TIMEOUT",
   "CANCELLED",
 ] as const;
-export type WebMuxErrorCode = (typeof WEB_MUX_ERROR_CODES)[number];
+export type WebfoxErrorCode = (typeof WEBFOX_ERROR_CODES)[number];
 export interface SerializedError {
-  code: WebMuxErrorCode;
+  code: WebfoxErrorCode;
   message: string;
   retryable?: boolean;
 }

@@ -60,7 +60,7 @@ vi.mock("openai", () => {
   };
 });
 
-import { createWebMux, type WebMuxConfig } from "../src/index.js";
+import { createWebfox, type WebfoxConfig } from "../src/index.js";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -95,7 +95,7 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await createWebMux({
+    const result = await createWebfox({
       config: {
         providers: {
           openai: {
@@ -107,7 +107,7 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebMuxConfig,
+      } satisfies WebfoxConfig,
     }).search({
       provider: "openai",
       options: {
@@ -225,7 +225,7 @@ describe("OpenAI provider", () => {
       incomplete_details: null,
     });
 
-    const result = await createWebMux({
+    const result = await createWebfox({
       config: {
         providers: {
           openai: {
@@ -237,7 +237,7 @@ describe("OpenAI provider", () => {
             },
           },
         },
-      } satisfies WebMuxConfig,
+      } satisfies WebfoxConfig,
     }).answer({
       provider: "openai",
       options: {
@@ -284,7 +284,7 @@ describe("async research providers", () => {
         },
       });
 
-    const promise = createWebMux({
+    const promise = createWebfox({
       config: {
         execution: { retries: 1 },
         providers: {
@@ -292,7 +292,7 @@ describe("async research providers", () => {
             credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebMuxConfig,
+      } satisfies WebfoxConfig,
     }).research({
       provider: "exa",
       options: undefined,
@@ -352,7 +352,7 @@ describe("async research providers", () => {
         incomplete_details: null,
       });
 
-    const promise = createWebMux({
+    const promise = createWebfox({
       config: {
         providers: {
           openai: {
@@ -365,7 +365,7 @@ describe("async research providers", () => {
           },
         },
         execution: { retries: 1 },
-      } satisfies WebMuxConfig,
+      } satisfies WebfoxConfig,
     }).research({
       provider: "openai",
       options: {
@@ -434,7 +434,7 @@ describe("async research providers", () => {
         ],
       });
 
-    const promise = createWebMux({
+    const promise = createWebfox({
       config: {
         execution: { retries: 1 },
         providers: {
@@ -442,7 +442,7 @@ describe("async research providers", () => {
             credentials: { api: { value: "literal-key" } },
           },
         },
-      } satisfies WebMuxConfig,
+      } satisfies WebfoxConfig,
     }).research({
       provider: "valyu",
       options: undefined,

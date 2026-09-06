@@ -7,7 +7,7 @@ import type {
 } from "../configuration/types.js";
 import type { ProviderDefinition } from "../providers/definition.js";
 import type { ProviderConfigMap } from "../providers/contract.js";
-import { WebMuxError } from "../errors.js";
+import { WebfoxError } from "../errors.js";
 import { OutwardBoundary } from "./outward.js";
 import { cancelProcessGroup, killProcessGroup } from "./process.js";
 
@@ -46,7 +46,7 @@ export class CredentialResolver {
       };
       const value = await this.resolve(source, signal, outward);
       if (!value && !requirement.optional) {
-        throw new WebMuxError(
+        throw new WebfoxError(
           "PROVIDER_UNAVAILABLE",
           `${definition.label} ${capability} needs a credential. Set ${"env" in source ? source.env : `providers.${definition.id}.credentials.${requirement.name}`} and try again.`,
         );
@@ -63,7 +63,7 @@ export class CredentialResolver {
         outward,
       );
       if (!value)
-        throw new WebMuxError(
+        throw new WebfoxError(
           "PROVIDER_UNAVAILABLE",
           `${definition.label} requires ${key}. Set ${"env" in fallback ? fallback.env : key} and try again.`,
         );
@@ -72,7 +72,7 @@ export class CredentialResolver {
     const env = await this.resolveMap(envSources, signal, outward);
     const command = commands?.[capability];
     if (definition.fields.includes("commands") && !command)
-      throw new WebMuxError(
+      throw new WebfoxError(
         "PROVIDER_UNAVAILABLE",
         `Configure providers.${definition.id}.commands.${capability}.argv before executing ${capability}.`,
       );
@@ -162,7 +162,7 @@ function credentialCommand(
       if (Buffer.byteLength(output) > 64 * 1024) {
         killProcessGroup(child, "SIGKILL");
         reject(
-          new WebMuxError(
+          new WebfoxError(
             "INVALID_CONFIG",
             "Credential command output exceeded 64 KiB. Return only the credential.",
           ),
@@ -171,7 +171,7 @@ function credentialCommand(
     });
     child.on("error", () =>
       reject(
-        new WebMuxError(
+        new WebfoxError(
           "INVALID_CONFIG",
           "Could not start credential command. Check its executable and working directory.",
         ),
@@ -182,9 +182,9 @@ function credentialCommand(
       if (signal.aborted) reject(signal.reason);
       else if (code !== 0)
         reject(
-          new WebMuxError(
+          new WebfoxError(
             "INVALID_CONFIG",
-            `Credential command failed (exit ${code}). Check the command outside web-mux.`,
+            `Credential command failed (exit ${code}). Check the credential command independently.`,
           ),
         );
       else resolvePromise(output.trim());

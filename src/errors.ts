@@ -1,9 +1,9 @@
-import type { SerializedError, WebMuxErrorCode } from "./domain.js";
+import type { SerializedError, WebfoxErrorCode } from "./domain.js";
 
-export class WebMuxError extends Error {
-  override readonly name = "WebMuxError";
+export class WebfoxError extends Error {
+  override readonly name = "WebfoxError";
   constructor(
-    public readonly code: WebMuxErrorCode,
+    public readonly code: WebfoxErrorCode,
     message: string,
     public readonly options: { cause?: unknown; retryable?: boolean } = {},
   ) {
@@ -24,8 +24,8 @@ export class WebMuxError extends Error {
 }
 
 /** Classify structured transport/SDK fields, never error-message substrings. */
-export function asWebMuxError(error: unknown): WebMuxError {
-  if (error instanceof WebMuxError) return error;
+export function asWebfoxError(error: unknown): WebfoxError {
+  if (error instanceof WebfoxError) return error;
   const record =
     error && typeof error === "object"
       ? (error as Record<string, unknown>)
@@ -33,13 +33,13 @@ export function asWebMuxError(error: unknown): WebMuxError {
   const message =
     typeof record.message === "string" ? record.message : String(error);
   if (record.name === "AbortError" || record.name === "APIUserAbortError")
-    return new WebMuxError("CANCELLED", message);
+    return new WebfoxError("CANCELLED", message);
   if (
     record.name === "TimeoutError" ||
     record.name === "RequestTimeoutError" ||
     record.name === "APIConnectionTimeoutError"
   )
-    return new WebMuxError("TIMEOUT", message, { retryable: true });
+    return new WebfoxError("TIMEOUT", message, { retryable: true });
   const status = record.status ?? record.statusCode;
   const cause =
     record.cause && typeof record.cause === "object"
@@ -57,11 +57,11 @@ export function asWebMuxError(error: unknown): WebMuxError {
       "UND_ERR_SOCKET",
     ].includes(String(record.code ?? cause.code)) ||
     record.name === "APIConnectionError";
-  return new WebMuxError("PROVIDER_FAILURE", message, { retryable });
+  return new WebfoxError("PROVIDER_FAILURE", message, { retryable });
 }
 
-export function httpError(response: Response, message: string): WebMuxError {
-  return new WebMuxError("PROVIDER_FAILURE", message, {
+export function httpError(response: Response, message: string): WebfoxError {
+  return new WebfoxError("PROVIDER_FAILURE", message, {
     retryable: [408, 429, 500, 502, 503, 504].includes(response.status),
   });
 }

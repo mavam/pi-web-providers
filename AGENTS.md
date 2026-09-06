@@ -1,8 +1,8 @@
-# pi-web-providers
+# webfox
 
-This repository contains **pi-web-providers**, a pi extension for configurable web access.
+This repository contains **webfox**, a TypeScript library, CLI, and pi extension for configurable web access.
 
-It lets pi expose web-related tools through interchangeable providers instead of tying each capability to a single backend.
+It exposes web-related capabilities through interchangeable providers instead of tying each capability to a single backend. The standalone executable is `webfox`; pi tool names and UI labels stay generic (`web_search`, “Web Search”).
 
 For the full product overview, supported capabilities, configuration, and provider-specific details, see `README.md`.
 

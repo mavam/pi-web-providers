@@ -1,7 +1,7 @@
 {
-  "name": "web-mux",
-  "version": "0.1.0",
-  "description": "Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, web CLI, and pi extension.",
+  "name": "webfox",
+  "version": "4.0.0",
+  "description": "Configurable web search, content extraction, grounded answers, and research through interchangeable providers, with a TypeScript library, webfox CLI, and pi extension.",
   "type": "module",
   "files": [
     "dist",
@@ -11,7 +11,7 @@
     "examples"
   ],
   "keywords": [
-    "web-mux",
+    "webfox",
     "web-cli",
     "typescript-library",
     "pi-package",
@@ -43,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mavam/web-mux.git"
+    "url": "git+https://github.com/mavam/pi-web-providers.git"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -57,7 +57,7 @@
     ]
   },
   "bin": {
-    "web": "./dist/cli.js"
+    "webfox": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

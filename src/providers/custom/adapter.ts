@@ -1,5 +1,5 @@
 import type { IndexedContentsResponse } from "../../contents.js";
-import { WEB_MUX_ERROR_CODES, type SerializedError } from "../../domain.js";
+import { WEBFOX_ERROR_CODES, type SerializedError } from "../../domain.js";
 import type { Custom } from "./types.js";
 import type {
   ProviderContext,
@@ -9,7 +9,7 @@ import type {
 } from "../contract.js";
 
 import { runCliJsonCommand } from "../cli-json.js";
-import { WebMuxError } from "../../errors.js";
+import { WebfoxError } from "../../errors.js";
 
 async function run(
   request: ProviderRequest,
@@ -18,7 +18,7 @@ async function run(
 ): Promise<Record<string, unknown>> {
   const command = config.commands?.[request.capability];
   if (!command)
-    throw new WebMuxError(
+    throw new WebfoxError(
       "PROVIDER_UNAVAILABLE",
       `Configure a custom ${request.capability} command.`,
     );
@@ -139,7 +139,7 @@ function parseError(value: unknown): SerializedError {
     value,
     "Custom contents errors must be structured objects with code and message.",
   );
-  if (!WEB_MUX_ERROR_CODES.includes(error.code as SerializedError["code"]))
+  if (!WEBFOX_ERROR_CODES.includes(error.code as SerializedError["code"]))
     invalid("Custom contents error has an unknown code.");
   return {
     code: error.code as SerializedError["code"],
@@ -160,5 +160,5 @@ function string(value: unknown, name: string): string {
   return value;
 }
 function invalid(message: string): never {
-  throw new WebMuxError("PROVIDER_FAILURE", message, { retryable: false });
+  throw new WebfoxError("PROVIDER_FAILURE", message, { retryable: false });
 }
