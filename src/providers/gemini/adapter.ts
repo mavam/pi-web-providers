@@ -12,7 +12,7 @@ import type { Gemini } from "./types.js";
 
 const DEFAULT_SEARCH_MODEL = "gemini-2.5-flash";
 const DEFAULT_ANSWER_MODEL = "gemini-2.5-flash";
-const DEFAULT_RESEARCH_AGENT = "deep-research-pro-preview-12-2025";
+const DEFAULT_RESEARCH_AGENT = "deep-research-preview-04-2026";
 
 export const geminiImplementation = {
   async search(

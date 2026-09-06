@@ -341,6 +341,12 @@ remain in the document. Provider registration is deliberately not public.
 SDKs are dependencies but load only when executing their provider. Lightweight
 provider definitions supply discovery, help, defaults, and validation.
 
+### Gemini research
+
+Gemini research uses `deep-research-preview-04-2026`, Google's standard
+[Deep Research agent](https://ai.google.dev/gemini-api/docs/deep-research).
+The research agent is fixed; search and answer model settings don't affect it.
+
 ### Custom providers
 
 Configure `providers.custom.commands.<capability>.argv`, optionally with `cwd`

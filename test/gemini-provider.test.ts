@@ -502,7 +502,7 @@ describe("Gemini provider research", () => {
     expect(create).toHaveBeenCalledWith(
       {
         input: "Investigate ACME platform use cases",
-        agent: "deep-research-pro-preview-12-2025",
+        agent: "deep-research-preview-04-2026",
         background: true,
       },
       { idempotencyKey: "stable-key", maxRetries: 0 },
@@ -572,7 +572,7 @@ describe("Gemini provider research", () => {
           thinking_summaries: "auto",
         },
         input: "Investigate ACME platform use cases",
-        agent: "deep-research-pro-preview-12-2025",
+        agent: "deep-research-preview-04-2026",
         background: true,
       },
       { maxRetries: 0 },
